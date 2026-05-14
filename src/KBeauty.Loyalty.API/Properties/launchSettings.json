@@ -1,0 +1,12 @@
+{
+  "profiles": {
+    "KBeauty.Loyalty.API": {
+      "commandName": "Project",
+      "launchBrowser": true,
+      "environmentVariables": {
+        "ASPNETCORE_ENVIRONMENT": "Development"
+      },
+      "applicationUrl": "https://localhost:55128;http://localhost:55131"
+    }
+  }
+}

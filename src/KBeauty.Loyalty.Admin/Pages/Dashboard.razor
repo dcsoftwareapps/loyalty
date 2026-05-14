@@ -1,0 +1,85 @@
+@page "/"
+@page "/dashboard"
+@attribute [Authorize]
+@rendermode InteractiveServer
+
+@using KBeauty.Loyalty.Application.Admin.Queries.GetAdminDashboard
+@inject ISender Sender
+
+<PageTitle>Dashboard · KBeauty</PageTitle>
+
+<h1>Hola 🌸</h1>
+
+@if (dashboard is null)
+{
+    <p>Cargando…</p>
+}
+else
+{
+    <div class="kb-grid">
+        <div class="kb-card">
+            <div class="kb-card-label">Clientas activas</div>
+            <div class="kb-card-value">@dashboard.ActiveCustomersCount</div>
+        </div>
+        <div class="kb-card">
+            <div class="kb-card-label">Puntos este mes</div>
+            <div class="kb-card-value">@dashboard.PointsIssuedThisMonth.ToString("N0")</div>
+        </div>
+        <div class="kb-card">
+            <div class="kb-card-label">Canjes este mes</div>
+            <div class="kb-card-value">@dashboard.RedemptionsThisMonth</div>
+        </div>
+        <div class="kb-card">
+            <div class="kb-card-label">Radiance activas</div>
+            <div class="kb-card-value">
+                @(dashboard.CustomersByLevel.TryGetValue(LoyaltyConstants.Levels.Radiance, out var r) ? r : 0)
+            </div>
+        </div>
+    </div>
+
+    <h2>Últimas visitas</h2>
+    @if (dashboard.RecentVisits.Count == 0)
+    {
+        <p style="color: var(--kb-ink-muted);">Aún no hay ventas registradas hoy.</p>
+    }
+    else
+    {
+        <table class="kb-table">
+            <thead>
+                <tr>
+                    <th>Clienta</th>
+                    <th>Serial</th>
+                    <th>Nivel</th>
+                    <th>Monto</th>
+                    <th>Puntos</th>
+                    <th>Cuándo</th>
+                    <th></th>
+                </tr>
+            </thead>
+            <tbody>
+            @foreach (var v in dashboard.RecentVisits)
+            {
+                <tr>
+                    <td>@v.CustomerName</td>
+                    <td><code>@v.SerialNumber</code></td>
+                    <td><LevelBadge Level="@v.Level" /></td>
+                    <td>@(v.PurchaseAmount?.ToString("C") ?? "—")</td>
+                    <td style="color: var(--kb-sage); font-weight: 600;">+@v.Points</td>
+                    <td style="color: var(--kb-ink-muted);">@v.CreatedAt.ToLocalTime().ToString("dd MMM HH:mm")</td>
+                    <td><a href="/scan?serial=@v.SerialNumber">Acción</a></td>
+                </tr>
+            }
+            </tbody>
+        </table>
+    }
+}
+
+@code {
+    private DashboardDto? dashboard;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var result = await Sender.Send(new GetAdminDashboardQuery());
+        if (result.IsSuccess) dashboard = result.Value;
+    }
+}

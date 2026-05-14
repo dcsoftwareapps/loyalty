@@ -1,0 +1,10 @@
+# Carpeta para migraciones EF Core
+#
+# Las migraciones se generan con:
+#
+#   dotnet ef migrations add Initial \
+#     -p src/KBeauty.Loyalty.Infrastructure \
+#     -s src/KBeauty.Loyalty.API \
+#     -o Persistence/Migrations
+#
+# Las clases generadas quedan aquí. NO se editan a mano.

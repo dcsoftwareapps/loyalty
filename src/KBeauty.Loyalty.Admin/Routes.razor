@@ -1,0 +1,24 @@
+@*
+  Router con autorización en cascada. Páginas no [Authorize] (Login) se
+  renderizan libremente; las demás cascada AuthState y redirigen a /login si
+  no hay cookie válida.
+*@
+<Router AppAssembly="@typeof(Program).Assembly">
+    <Found Context="routeData">
+        <AuthorizeRouteView RouteData="@routeData" DefaultLayout="@typeof(MainLayout)">
+            <NotAuthorized>
+                <RedirectToLogin />
+            </NotAuthorized>
+            <Authorizing>
+                <p>Verificando sesión…</p>
+            </Authorizing>
+        </AuthorizeRouteView>
+        <FocusOnNavigate RouteData="@routeData" Selector="h1" />
+    </Found>
+    <NotFound>
+        <LayoutView Layout="@typeof(MainLayout)">
+            <h1>No encontrado</h1>
+            <p>La página solicitada no existe.</p>
+        </LayoutView>
+    </NotFound>
+</Router>

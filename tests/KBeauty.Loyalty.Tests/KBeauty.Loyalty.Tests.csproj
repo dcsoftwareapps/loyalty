@@ -1,0 +1,38 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <RootNamespace>KBeauty.Loyalty.Tests</RootNamespace>
+    <AssemblyName>KBeauty.Loyalty.Tests</AssemblyName>
+    <IsPackable>false</IsPackable>
+    <IsTestProject>true</IsTestProject>
+    <GenerateDocumentationFile>false</GenerateDocumentationFile>
+    <NoWarn>$(NoWarn);CS8625</NoWarn>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\KBeauty.Loyalty.Common\KBeauty.Loyalty.Common.csproj" />
+    <ProjectReference Include="..\..\src\KBeauty.Loyalty.Domain\KBeauty.Loyalty.Domain.csproj" />
+    <ProjectReference Include="..\..\src\KBeauty.Loyalty.Application\KBeauty.Loyalty.Application.csproj" />
+    <ProjectReference Include="..\..\src\KBeauty.Loyalty.Infrastructure\KBeauty.Loyalty.Infrastructure.csproj" />
+    <ProjectReference Include="..\..\src\KBeauty.Loyalty.API\KBeauty.Loyalty.API.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.12.0" />
+    <PackageReference Include="xunit" Version="2.9.2" />
+    <PackageReference Include="xunit.runner.visualstudio" Version="2.8.2">
+      <PrivateAssets>all</PrivateAssets>
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+    </PackageReference>
+    <PackageReference Include="Moq" Version="4.20.72" />
+    <PackageReference Include="coverlet.collector" Version="6.0.2">
+      <PrivateAssets>all</PrivateAssets>
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+    </PackageReference>
+
+    <!-- Integration testing -->
+    <PackageReference Include="Microsoft.AspNetCore.Mvc.Testing" Version="9.0.0" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.InMemory" Version="9.0.0" />
+  </ItemGroup>
+
+</Project>

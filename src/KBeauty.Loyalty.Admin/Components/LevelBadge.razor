@@ -1,0 +1,18 @@
+@*
+  Pill con el color correspondiente al nivel. Se queda como un solo span
+  para que se pueda inline en filas de tabla / encabezados.
+*@
+
+<span class="kb-level @CssClass">@Level</span>
+
+@code {
+    /// <summary>Nombre del nivel: Mist, Glow o Radiance.</summary>
+    [Parameter, EditorRequired] public string Level { get; set; } = LoyaltyConstants.Levels.Mist;
+
+    private string CssClass => Level switch
+    {
+        LoyaltyConstants.Levels.Radiance => "kb-level--radiance",
+        LoyaltyConstants.Levels.Glow => "kb-level--glow",
+        _ => "kb-level--mist"
+    };
+}

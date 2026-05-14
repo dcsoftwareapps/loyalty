@@ -1,0 +1,153 @@
+@page "/scan"
+@attribute [Authorize]
+@rendermode InteractiveServer
+
+@using KBeauty.Loyalty.Application.Customers.Queries.GetCustomerBySerial
+@using KBeauty.Loyalty.Application.Points.Commands.AddPoints
+@using KBeauty.Loyalty.Common.Services
+@inject ISender Sender
+@inject IDateTimeProvider Dt
+@inject KBeauty.Loyalty.Application.Common.Interfaces.IDashboardReadService _
+
+<PageTitle>Sumar puntos · KBeauty</PageTitle>
+
+<div class="kb-scan">
+    <h1>Sumar puntos</h1>
+
+    @if (customer is null)
+    {
+        @* Paso 1: pedir serial *@
+        <div class="kb-form-row">
+            <div>
+                <label for="serial">Serial de la clienta (o pega del QR)</label>
+                <input id="serial" type="text" @bind="serialInput" @bind:event="oninput"
+                       @onkeydown="@(e => { if (e.Key == "Enter") SearchAsync(); })"
+                       placeholder="KB-A7B9C2X" autocomplete="off" />
+            </div>
+            <button class="kb-btn kb-btn--primary kb-btn--large kb-btn--block"
+                    @onclick="SearchAsync" disabled="@(string.IsNullOrWhiteSpace(serialInput) || busy)">
+                @(busy ? "Buscando…" : "Buscar clienta")
+            </button>
+            @if (errorMessage is not null) { <div class="kb-form-error">@errorMessage</div> }
+        </div>
+    }
+    else
+    {
+        @* Paso 2: vista clienta + monto *@
+        <CustomerCard Customer="customer" />
+
+        @if (lastSuccess is not null)
+        {
+            <div class="kb-form-success" style="margin-top:24px;">
+                <strong>+@lastSuccess.PointsAdded pts.</strong>
+                @if (lastSuccess.BirthdayBonusApplied) { <span>🎂 ¡Doble por cumple!</span> }
+                @if (lastSuccess.LeveledUp) { <span>· ✨ Nuevo nivel: @lastSuccess.Level</span> }
+            </div>
+        }
+
+        <div class="kb-form-row" style="margin-top:24px;">
+            <div>
+                <label for="amount">Monto de la compra (MXN)</label>
+                <input id="amount" type="number" inputmode="decimal" step="0.01" min="0"
+                       @bind="amount" @bind:event="oninput" placeholder="0.00" />
+            </div>
+
+            @if (amount > 0)
+            {
+                <p style="text-align:center;color:var(--kb-ink-muted);margin:0;">
+                    Sumará aprox. <strong style="color:var(--kb-ink);">@PreviewPoints pts</strong>
+                </p>
+            }
+
+            <button class="kb-btn kb-btn--primary kb-btn--large kb-btn--block"
+                    @onclick="ConfirmAsync" disabled="@(amount <= 0 || busy)">
+                @(busy ? "Procesando…" : $"Confirmar compra de ${amount:0.00}")
+            </button>
+
+            <button class="kb-btn kb-btn--ghost kb-btn--block" @onclick="Reset">
+                Buscar otra clienta
+            </button>
+
+            @if (errorMessage is not null) { <div class="kb-form-error">@errorMessage</div> }
+        </div>
+    }
+</div>
+
+@code {
+    [SupplyParameterFromQuery] public string? Serial { get; set; }
+
+    private string serialInput = string.Empty;
+    private CustomerDetailDto? customer;
+    private decimal amount;
+    private AddPointsResponse? lastSuccess;
+    private string? errorMessage;
+    private bool busy;
+
+    protected override async Task OnInitializedAsync()
+    {
+        // Si llegamos con ?serial=... (link desde dashboard), pre-cargamos.
+        if (!string.IsNullOrWhiteSpace(Serial))
+        {
+            serialInput = Serial;
+            await SearchAsync();
+        }
+    }
+
+    private int PreviewPoints
+    {
+        get
+        {
+            if (customer is null || amount <= 0) return 0;
+            var basePts = (int)(amount / 10);  // ratio default — el handler usa el snapshot real
+            return customer.IsBirthMonth ? basePts * 2 : basePts;
+        }
+    }
+
+    private async Task SearchAsync()
+    {
+        errorMessage = null;
+        busy = true;
+        var result = await Sender.Send(new GetCustomerBySerialQuery(serialInput.Trim()));
+        busy = false;
+
+        if (result.IsFailure)
+        {
+            errorMessage = result.Error;
+            return;
+        }
+        customer = result.Value;
+        lastSuccess = null;
+    }
+
+    private async Task ConfirmAsync()
+    {
+        if (customer is null) return;
+
+        errorMessage = null;
+        busy = true;
+        var cmd = new AddPointsCommand(customer.SerialNumber, amount, "admin-panel");
+        var result = await Sender.Send(cmd);
+        busy = false;
+
+        if (result.IsFailure)
+        {
+            errorMessage = result.Error;
+            return;
+        }
+
+        lastSuccess = result.Value;
+        // Refresca la card con saldo nuevo
+        var refreshed = await Sender.Send(new GetCustomerBySerialQuery(customer.SerialNumber));
+        if (refreshed.IsSuccess) customer = refreshed.Value;
+        amount = 0;
+    }
+
+    private void Reset()
+    {
+        customer = null;
+        amount = 0;
+        serialInput = string.Empty;
+        lastSuccess = null;
+        errorMessage = null;
+    }
+}

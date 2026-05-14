@@ -1,0 +1,15 @@
+@inject NavigationManager Nav
+
+@*
+  Helper invocado desde Routes.razor cuando AuthorizeRouteView determina que
+  no hay sesión. Hace force-load para que la cookie de antiforgery y el ciclo
+  de redirect funcionen correctamente.
+*@
+
+@code {
+    protected override void OnInitialized()
+    {
+        var returnUrl = Uri.EscapeDataString(new Uri(Nav.Uri).PathAndQuery);
+        Nav.NavigateTo($"/login?returnUrl={returnUrl}", forceLoad: true);
+    }
+}

@@ -1,0 +1,32 @@
+<Project>
+
+  <!--
+    Propiedades compartidas por TODOS los proyectos de la solución.
+    Cambiar aquí evita duplicación en cada .csproj.
+  -->
+  <PropertyGroup>
+    <TargetFramework>net9.0</TargetFramework>
+    <LangVersion>latest</LangVersion>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <TreatWarningsAsErrors>false</TreatWarningsAsErrors>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+
+    <!--
+      CS1591 = "Missing XML comment for publicly visible type or member".
+      Generamos archivo de documentación pero no fallamos cuando falte algún
+      comentario menor (los métodos públicos del dominio sí están documentados).
+    -->
+    <NoWarn>$(NoWarn);CS1591</NoWarn>
+
+    <Authors>KBeauty MX</Authors>
+    <Company>KBeauty MX</Company>
+    <Copyright>© $([System.DateTime]::Now.Year) KBeauty MX</Copyright>
+    <NeutralLanguage>es-MX</NeutralLanguage>
+
+    <!-- Garantiza compilación determinista -->
+    <Deterministic>true</Deterministic>
+    <ContinuousIntegrationBuild Condition="'$(GITHUB_ACTIONS)' == 'true' OR '$(TF_BUILD)' == 'true'">true</ContinuousIntegrationBuild>
+  </PropertyGroup>
+
+</Project>

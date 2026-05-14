@@ -1,0 +1,105 @@
+@host = https://localhost:7000
+@operatorId = ana@kbeautymx.com
+
+###############################################
+# 1. Registrar clienta nueva
+###############################################
+POST {{host}}/api/customers
+Content-Type: application/json
+
+{
+  "fullName": "Ana López",
+  "email": "ana.lopez@example.com",
+  "dateOfBirth": "1992-05-14",
+  "phone": "+526461234567"
+}
+
+###############################################
+# 2. Buscar clienta por serial (escaneo de QR)
+###############################################
+GET {{host}}/api/customers/KB-A7B9C2X
+
+###############################################
+# 3. Historial paginado
+###############################################
+GET {{host}}/api/customers/KB-A7B9C2X/transactions?pageNumber=1&pageSize=20
+
+###############################################
+# 4. Sumar puntos por compra (operación principal en tienda)
+###############################################
+POST {{host}}/api/points
+Content-Type: application/json
+X-Operator-Id: {{operatorId}}
+
+{
+  "serialNumber": "KB-A7B9C2X",
+  "purchaseAmount": 850.00
+}
+
+###############################################
+# 5. Catálogo de canjes filtrado por nivel de la clienta
+###############################################
+GET {{host}}/api/redemptions/catalog/KB-A7B9C2X
+
+###############################################
+# 6. Iniciar canje (la clienta solicita)
+###############################################
+POST {{host}}/api/redemptions
+Content-Type: application/json
+X-Operator-Id: {{operatorId}}
+
+{
+  "serialNumber": "KB-A7B9C2X",
+  "rewardCatalogItemId": "00000000-0000-0000-0000-000000000000"
+}
+
+###############################################
+# 7. Confirmar canje (el operador entregó)
+###############################################
+PUT {{host}}/api/redemptions/00000000-0000-0000-0000-000000000000/confirm
+Content-Type: application/json
+X-Operator-Id: {{operatorId}}
+
+{
+  "notes": "Entregado en tienda"
+}
+
+###############################################
+# 8. Dashboard
+###############################################
+GET {{host}}/api/admin/dashboard
+
+###############################################
+# 9. Obtener configuración del programa
+###############################################
+GET {{host}}/api/config
+
+###############################################
+# 10. Actualizar reglas del programa
+###############################################
+PUT {{host}}/api/config
+Content-Type: application/json
+X-Operator-Id: {{operatorId}}
+
+{
+  "entries": [
+    { "key": "welcome_bonus_points", "value": "75" },
+    { "key": "birthday_multiplier", "value": "3" }
+  ]
+}
+
+###############################################
+# Endpoints Apple Wallet (no se llaman manualmente — los llama el iPhone)
+###############################################
+### Descargar pase
+GET {{host}}/v1/passes/pass.com.kbeautymx.loyalty/KB-A7B9C2X
+Authorization: ApplePass YOUR_PASS_AUTH_TOKEN
+
+### Registrar dispositivo
+POST {{host}}/v1/devices/abc123/registrations/pass.com.kbeautymx.loyalty/KB-A7B9C2X
+Authorization: ApplePass YOUR_PASS_AUTH_TOKEN
+Content-Type: application/json
+
+{
+  "pushToken": "fake-push-token-from-apple"
+}

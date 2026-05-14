@@ -1,0 +1,10 @@
+@*
+  Número grande con animación cada vez que cambia el valor.
+  La key fuerza re-render → la animación CSS dispara de nuevo.
+*@
+
+<div class="kb-points" @key="Value">@Value.ToString("N0")</div>
+
+@code {
+    [Parameter, EditorRequired] public int Value { get; set; }
+}

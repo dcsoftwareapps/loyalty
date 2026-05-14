@@ -1,0 +1,29 @@
+@*
+  Modal de confirmación reutilizable. Patrón controlado por el padre:
+  <ConfirmModal Show="@show" Title="…" Message="…"
+                OnConfirm="HandleConfirm" OnCancel="() => show = false" />
+*@
+
+@if (Show)
+{
+    <div class="kb-modal-overlay" @onclick="OnCancel">
+        <div class="kb-modal" @onclick:stopPropagation>
+            <h3>@Title</h3>
+            <p>@Message</p>
+            <div class="kb-modal-actions">
+                <button class="kb-btn kb-btn--ghost" @onclick="OnCancel">@CancelText</button>
+                <button class="kb-btn kb-btn--primary" @onclick="OnConfirm">@ConfirmText</button>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    [Parameter] public bool Show { get; set; }
+    [Parameter, EditorRequired] public string Title { get; set; } = "";
+    [Parameter, EditorRequired] public string Message { get; set; } = "";
+    [Parameter] public string ConfirmText { get; set; } = "Confirmar";
+    [Parameter] public string CancelText { get; set; } = "Cancelar";
+    [Parameter] public EventCallback OnConfirm { get; set; }
+    [Parameter] public EventCallback OnCancel { get; set; }
+}

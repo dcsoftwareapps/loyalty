@@ -1,0 +1,85 @@
+@page "/customers/{SerialNumber}"
+@attribute [Authorize]
+@rendermode InteractiveServer
+
+@using KBeauty.Loyalty.Application.Customers.Queries.GetCustomerBySerial
+@using KBeauty.Loyalty.Application.Customers.Queries.GetCustomerTransactions
+@using KBeauty.Loyalty.Common.Results
+@inject ISender Sender
+@inject NavigationManager Nav
+
+<PageTitle>@(customer?.FullName ?? "Clienta") · KBeauty</PageTitle>
+
+@if (customer is null)
+{
+    <p>Cargando…</p>
+}
+else
+{
+    <a href="/customers" style="color: var(--kb-ink-muted);">← Volver a clientas</a>
+
+    <div style="display:grid;grid-template-columns: 360px 1fr; gap: 32px; margin-top: 16px;">
+        <div>
+            <CustomerCard Customer="customer" />
+            <button class="kb-btn kb-btn--primary kb-btn--block" style="margin-top: 16px;"
+                    @onclick="@(() => Nav.NavigateTo($"/scan?serial={customer.SerialNumber}"))">
+                Sumar puntos
+            </button>
+            <div style="margin-top: 24px; color: var(--kb-ink-muted); font-size: 0.9rem;">
+                <p>Teléfono: @(customer.Phone ?? "—")</p>
+                <p>Cumpleaños: @customer.DateOfBirth.ToString("dd MMM yyyy")</p>
+                <p>Lifetime: @customer.LifetimePoints.ToString("N0") pts</p>
+                <p>Nivel alcanzado: @customer.LevelAchievedAt.ToLocalTime().ToString("dd MMM yyyy")</p>
+            </div>
+        </div>
+
+        <div>
+            <h2>Historial</h2>
+            @if (transactions is null || transactions.Items.Count == 0)
+            {
+                <p style="color: var(--kb-ink-muted);">Sin movimientos.</p>
+            }
+            else
+            {
+                <table class="kb-table">
+                    <thead>
+                        <tr>
+                            <th></th>
+                            <th>Descripción</th>
+                            <th>Puntos</th>
+                            <th>Fecha</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                    @foreach (var t in transactions.Items)
+                    {
+                        <TransactionRow Transaction="t" />
+                    }
+                    </tbody>
+                </table>
+            }
+        </div>
+    </div>
+}
+
+@code {
+    [Parameter] public string SerialNumber { get; set; } = string.Empty;
+
+    private CustomerDetailDto? customer;
+    private PagedResult<TransactionDto>? transactions;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var customerResult = await Sender.Send(new GetCustomerBySerialQuery(SerialNumber));
+        if (customerResult.IsFailure)
+        {
+            Nav.NavigateTo("/customers");
+            return;
+        }
+        customer = customerResult.Value;
+
+        var txResult = await Sender.Send(new GetCustomerTransactionsQuery(
+            SerialNumber, new PaginationParams { PageNumber = 1, PageSize = 50 }));
+        if (txResult.IsSuccess) transactions = txResult.Value;
+    }
+}

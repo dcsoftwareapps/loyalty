@@ -1,0 +1,115 @@
+@page "/redemptions"
+@attribute [Authorize]
+@rendermode InteractiveServer
+
+@using KBeauty.Loyalty.Application.Redemptions.Commands.ConfirmRedemption
+@using KBeauty.Loyalty.Domain.Entities
+@using KBeauty.Loyalty.Domain.Repositories
+@inject ISender Sender
+@inject IRedemptionRepository RedemptionsRepo
+@inject IRewardCatalogRepository RewardsRepo
+@inject ILoyaltyCardRepository CardsRepo
+@inject ICustomerRepository CustomersRepo
+
+<PageTitle>Canjes · KBeauty</PageTitle>
+
+<h1>Canjes</h1>
+
+<h2>Pendientes</h2>
+@if (pendingView is null)
+{
+    <p>Cargando…</p>
+}
+else if (pendingView.Count == 0)
+{
+    <p style="color: var(--kb-ink-muted);">No hay canjes esperando confirmación.</p>
+}
+else
+{
+    <table class="kb-table">
+        <thead>
+            <tr>
+                <th>Clienta</th>
+                <th>Beneficio</th>
+                <th>Puntos</th>
+                <th>Solicitado</th>
+                <th></th>
+            </tr>
+        </thead>
+        <tbody>
+        @foreach (var item in pendingView)
+        {
+            <tr>
+                <td>@item.CustomerName <br/><code style="color:var(--kb-ink-muted);font-size:0.85rem;">@item.SerialNumber</code></td>
+                <td>@item.RewardName</td>
+                <td style="color: var(--kb-blush); font-weight: 600;">@item.PointsSpent</td>
+                <td style="color: var(--kb-ink-muted);">@item.RedeemedAt.ToLocalTime().ToString("dd MMM HH:mm")</td>
+                <td>
+                    <button class="kb-btn kb-btn--primary" @onclick="@(() => Confirm(item.RedemptionId))">
+                        Confirmar entrega
+                    </button>
+                </td>
+            </tr>
+        }
+        </tbody>
+    </table>
+}
+
+<ConfirmModal Show="@showModal"
+              Title="Confirmar entrega"
+              Message="¿Confirmas que entregaste el beneficio a la clienta?"
+              ConfirmText="Sí, entregado"
+              OnConfirm="DoConfirmAsync"
+              OnCancel="() => showModal = false" />
+
+@code {
+    private List<PendingRedemptionView>? pendingView;
+    private bool showModal;
+    private Guid? targetId;
+
+    protected override async Task OnInitializedAsync() => await ReloadAsync();
+
+    private async Task ReloadAsync()
+    {
+        var pending = await RedemptionsRepo.GetPendingAsync();
+        var list = new List<PendingRedemptionView>(pending.Count);
+        foreach (var r in pending)
+        {
+            var card = await CardsRepo.GetByIdAsync(r.LoyaltyCardId);
+            var customer = card is null ? null : await CustomersRepo.GetByIdAsync(card.CustomerId);
+            var reward = await RewardsRepo.GetByIdAsync(r.RewardCatalogItemId);
+            list.Add(new PendingRedemptionView(
+                r.Id,
+                customer?.FullName ?? "—",
+                card?.SerialNumber ?? "—",
+                reward?.Name ?? "—",
+                r.PointsSpent,
+                r.RedeemedAt));
+        }
+        pendingView = list;
+    }
+
+    private void Confirm(Guid id)
+    {
+        targetId = id;
+        showModal = true;
+    }
+
+    private async Task DoConfirmAsync()
+    {
+        if (targetId is null) return;
+
+        await Sender.Send(new ConfirmRedemptionCommand(targetId.Value, "admin-panel"));
+        showModal = false;
+        targetId = null;
+        await ReloadAsync();
+    }
+
+    private sealed record PendingRedemptionView(
+        Guid RedemptionId,
+        string CustomerName,
+        string SerialNumber,
+        string RewardName,
+        int PointsSpent,
+        DateTime RedeemedAt);
+}
