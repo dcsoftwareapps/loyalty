@@ -3,6 +3,7 @@ using KBeauty.Loyalty.Infrastructure.Persistence;
 using KBeauty.Loyalty.Tests.Integration.Fakes;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
+using Microsoft.AspNetCore.TestHost;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -44,6 +45,7 @@ public sealed class CustomWebApplicationFactory : WebApplicationFactory<Program>
         {
             // Reemplazar DbContext por InMemory.
             services.RemoveAll<DbContextOptions<AppDbContext>>();
+            services.RemoveAll<Microsoft.EntityFrameworkCore.Infrastructure.IDbContextOptionsConfiguration<AppDbContext>>();
             services.AddDbContext<AppDbContext>(opts => opts.UseInMemoryDatabase(_dbName));
 
             // Reemplazar servicios externos por fakes en memoria.

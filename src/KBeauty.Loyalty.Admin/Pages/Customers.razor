@@ -69,7 +69,7 @@ else
     <div class="kb-form-row kb-form-row--horizontal" style="margin-top: 20px;">
         <button class="kb-btn kb-btn--ghost" @onclick="PrevPage" disabled="@(!page.HasPrevious)">← Anterior</button>
         <span style="color: var(--kb-ink-muted);">
-            Página @page.PageNumber de @page.TotalPages (@page.TotalCount clientas)
+            Página @(page.PageNumber) de @(page.TotalPages) (@(page.TotalCount) clientas)
         </span>
         <button class="kb-btn kb-btn--ghost" @onclick="NextPage" disabled="@(!page.HasNext)">Siguiente →</button>
     </div>

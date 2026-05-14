@@ -2,6 +2,7 @@ using KBeauty.Loyalty.Common.Constants;
 using KBeauty.Loyalty.Domain.Entities;
 using KBeauty.Loyalty.Infrastructure.Persistence;
 using Microsoft.Extensions.DependencyInjection;
+using Xunit;
 
 namespace KBeauty.Loyalty.Tests.Integration;
 

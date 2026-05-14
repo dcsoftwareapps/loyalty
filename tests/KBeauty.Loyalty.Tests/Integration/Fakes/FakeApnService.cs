@@ -4,7 +4,7 @@ using KBeauty.Loyalty.Domain.Enums;
 namespace KBeauty.Loyalty.Tests.Integration.Fakes;
 
 /// <summary>APN que solo cuenta llamadas — los tests pueden inspeccionarlas.</summary>
-internal sealed class FakeApnService : IApnService
+public sealed class FakeApnService : IApnService
 {
     public List<(string Token, PassUpdateReason Reason)> Calls { get; } = new();
 

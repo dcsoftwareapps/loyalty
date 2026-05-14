@@ -3,7 +3,7 @@ using KBeauty.Loyalty.Application.Common.Interfaces;
 namespace KBeauty.Loyalty.Tests.Integration.Fakes;
 
 /// <summary>Storage en memoria — sin Azure Blob ni Azurite.</summary>
-internal sealed class FakeStorageService : IStorageService
+public sealed class FakeStorageService : IStorageService
 {
     private readonly Dictionary<string, byte[]> _store = new(StringComparer.OrdinalIgnoreCase);
 
