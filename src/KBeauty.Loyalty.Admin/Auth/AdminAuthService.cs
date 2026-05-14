@@ -8,8 +8,8 @@ namespace KBeauty.Loyalty.Admin.Auth;
 
 /// <summary>
 /// Valida credenciales contra <see cref="AdminAuthOptions"/> y firma la cookie
-/// de autenticación. Se usa desde la página <c>Login.razor</c> renderizada como
-/// Static SSR (única forma de poder setear cookies durante el ciclo de request).
+/// de autenticacion. Se usa desde la pagina <c>Login.razor</c> renderizada como
+/// Static SSR, donde todavia se pueden emitir cookies.
 /// </summary>
 public sealed class AdminAuthService
 {
@@ -22,20 +22,27 @@ public sealed class AdminAuthService
 
     /// <summary>
     /// Intenta sign-in. Devuelve true si las credenciales coinciden y la cookie
-    /// quedó emitida; false si fallaron.
+    /// quedo emitida; false si fallaron.
     /// </summary>
     public async Task<bool> TrySignInAsync(HttpContext context, string? username, string? password)
     {
         if (string.IsNullOrWhiteSpace(username) || string.IsNullOrWhiteSpace(password))
             return false;
 
-        // Comparación case-sensitive para evitar atajos accidentales.
+        // Comparacion case-sensitive para evitar atajos accidentales.
         if (!string.Equals(username, _options.Username, StringComparison.Ordinal) ||
             !string.Equals(password, _options.Password, StringComparison.Ordinal))
         {
             return false;
         }
 
+        await SignInAsync(context, username);
+        return true;
+    }
+
+    /// <summary>Emite la misma cookie de administrador para flujos controlados por el host.</summary>
+    public async Task SignInAsync(HttpContext context, string username)
+    {
         var claims = new List<Claim>
         {
             new(ClaimTypes.Name, username),
@@ -53,11 +60,9 @@ public sealed class AdminAuthService
                 IsPersistent = true,
                 ExpiresUtc = DateTimeOffset.UtcNow.AddHours(_options.SessionHours)
             });
-
-        return true;
     }
 
-    /// <summary>Borra la cookie y cierra la sesión.</summary>
+    /// <summary>Borra la cookie y cierra la sesion.</summary>
     public Task SignOutAsync(HttpContext context) =>
         context.SignOutAsync(CookieAuthenticationDefaults.AuthenticationScheme);
 }

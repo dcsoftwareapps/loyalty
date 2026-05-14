@@ -15,7 +15,7 @@ builder.Configuration.AddKBeautyKeyVault(builder.Configuration["Azure:KeyVaultUr
 // Servicios: capas Application + Infrastructure se auto-registran.
 // =============================================================================
 builder.Services.AddApplication();
-builder.Services.AddInfrastructure(builder.Configuration);
+builder.Services.AddInfrastructure(builder.Configuration, builder.Environment);
 
 // Controllers + OpenAPI/Swagger
 builder.Services.AddControllers();

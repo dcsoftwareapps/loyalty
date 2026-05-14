@@ -1,8 +1,10 @@
 @page "/login"
 @layout EmptyLayout
+@attribute [AllowAnonymous]
 @using KBeauty.Loyalty.Admin.Auth
 @inject AdminAuthService Auth
 @inject NavigationManager Nav
+@inject IHostEnvironment Env
 
 @*
   Renderizada como Static SSR (sin @rendermode). Necesario porque la firma
@@ -10,40 +12,42 @@
   empiece a fluir la response al cliente.
 *@
 
-<AuthorizeView>
-    <Authorized>
-        @{ Nav.NavigateTo("/dashboard"); }
-    </Authorized>
-    <NotAuthorized>
-        <div class="kb-login">
-            <div class="kb-login-card">
-                <h1>KBeauty</h1>
+<div class="kb-login">
+    <div class="kb-login-card">
+        <h1>KBeauty</h1>
 
-                @if (error is not null)
-                {
-                    <div class="kb-form-error">@error</div>
-                }
+        @if (error is not null)
+        {
+            <div class="kb-form-error">@error</div>
+        }
 
-                <form method="post" @formname="login" @onsubmit="HandleSubmit" @onsubmit:preventDefault="false">
-                    <AntiforgeryToken />
-                    <div class="kb-form-row">
-                        <div>
-                            <label for="username">Usuario</label>
-                            <input id="username" name="Input.Username" type="text" autocomplete="username" required />
-                        </div>
-                        <div>
-                            <label for="password">Contraseña</label>
-                            <input id="password" name="Input.Password" type="password" autocomplete="current-password" required />
-                        </div>
-                        <button type="submit" class="kb-btn kb-btn--primary kb-btn--block kb-btn--large">
-                            Entrar
-                        </button>
-                    </div>
-                </form>
+        <form method="post" @formname="login" @onsubmit="HandleSubmit" @onsubmit:preventDefault="false">
+            <AntiforgeryToken />
+            <div class="kb-form-row">
+                <div>
+                    <label for="username">Usuario</label>
+                    <input id="username" name="Input.Username" type="text" autocomplete="username" required />
+                </div>
+                <div>
+                    <label for="password">Contraseña</label>
+                    <input id="password" name="Input.Password" type="password" autocomplete="current-password" required />
+                </div>
+                <button type="submit" class="kb-btn kb-btn--primary kb-btn--block kb-btn--large">
+                    Entrar
+                </button>
             </div>
-        </div>
-    </NotAuthorized>
-</AuthorizeView>
+        </form>
+
+        @if (Env.IsDevelopment())
+        {
+            <form method="post" action="/admin/dev-login" style="margin-top: 14px;">
+                <button type="submit" class="kb-btn kb-btn--secondary kb-btn--block">
+                    Login for Dev
+                </button>
+            </form>
+        }
+    </div>
+</div>
 
 @code {
     [CascadingParameter] public HttpContext HttpContext { get; set; } = default!;
@@ -54,6 +58,13 @@
 
     protected override async Task OnInitializedAsync()
     {
+        if (HttpMethods.IsGet(HttpContext.Request.Method) &&
+            HttpContext.User.Identity?.IsAuthenticated == true)
+        {
+            HttpContext.Response.Redirect("/dashboard");
+            return;
+        }
+
         // Solo procesar POST — para GET solo renderizamos el form.
         if (HttpMethods.IsPost(HttpContext.Request.Method))
         {
@@ -61,7 +72,7 @@
             if (ok)
             {
                 var dest = string.IsNullOrWhiteSpace(ReturnUrl) ? "/dashboard" : ReturnUrl;
-                Nav.NavigateTo(dest);
+                HttpContext.Response.Redirect(dest);
             }
             else
             {

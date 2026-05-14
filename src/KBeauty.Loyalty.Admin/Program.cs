@@ -2,6 +2,7 @@ using KBeauty.Loyalty.Admin.Auth;
 using KBeauty.Loyalty.Application;
 using KBeauty.Loyalty.Infrastructure;
 using KBeauty.Loyalty.Infrastructure.KeyVault;
+using KBeauty.Loyalty.Infrastructure.Persistence;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Authorization;
 
@@ -16,7 +17,7 @@ builder.Configuration.AddKBeautyKeyVault(builder.Configuration["Azure:KeyVaultUr
 
 // Capas de negocio — Admin habla con Application/MediatR in-process, no HTTP.
 builder.Services.AddApplication();
-builder.Services.AddInfrastructure(builder.Configuration);
+builder.Services.AddInfrastructure(builder.Configuration, builder.Environment);
 
 // Blazor Web App con Interactive Server.
 builder.Services.AddRazorComponents()
@@ -56,6 +57,11 @@ builder.Services.AddCascadingAuthenticationState();
 // =============================================================================
 var app = builder.Build();
 
+if (app.Environment.IsDevelopment())
+{
+    await app.Services.SeedDevelopmentDataAsync(app.Environment);
+}
+
 if (!app.Environment.IsDevelopment())
 {
     app.UseExceptionHandler("/Error", createScopeForErrors: true);
@@ -64,6 +70,8 @@ if (!app.Environment.IsDevelopment())
 }
 
 app.UseStaticFiles();
+app.MapStaticAssets()
+    .AllowAnonymous();
 app.UseRouting();
 
 app.UseAuthentication();
@@ -72,7 +80,8 @@ app.UseAuthorization();
 app.UseAntiforgery();
 
 app.MapRazorComponents<KBeauty.Loyalty.Admin.App>()
-    .AddInteractiveServerRenderMode();
+    .AddInteractiveServerRenderMode()
+    .AllowAnonymous();
 
 // Endpoint POST para sign-out — Blazor no puede invocar SignOutAsync interactivo
 // (necesita el HttpContext durante el ciclo de response), así que va por MVC mínimo.
@@ -81,5 +90,16 @@ app.MapPost("/logout", async (HttpContext ctx, AdminAuthService auth) =>
     await auth.SignOutAsync(ctx);
     return Results.Redirect("/login");
 });
+
+if (app.Environment.IsDevelopment())
+{
+    app.MapPost("/admin/dev-login", async (HttpContext ctx, AdminAuthService auth) =>
+    {
+        await auth.SignInAsync(ctx, "dev-owner");
+        return Results.Redirect("/dashboard");
+    })
+    .AllowAnonymous()
+    .DisableAntiforgery();
+}
 
 app.Run();

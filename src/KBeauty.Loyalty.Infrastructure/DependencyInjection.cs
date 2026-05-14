@@ -10,6 +10,7 @@ using KBeauty.Loyalty.Infrastructure.Services;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
 
 namespace KBeauty.Loyalty.Infrastructure;
 
@@ -22,13 +23,14 @@ public static class DependencyInjection
 {
     public static IServiceCollection AddInfrastructure(
         this IServiceCollection services,
-        IConfiguration configuration)
+        IConfiguration configuration,
+        IHostEnvironment? environment = null)
     {
         AddPersistence(services, configuration);
         AddOptions(services, configuration);
         AddRepositories(services);
         AddCrossCuttingServices(services);
-        AddWalletServices(services, configuration);
+        AddWalletServices(services, configuration, environment);
         AddStorageService(services);
 
         return services;
@@ -82,13 +84,20 @@ public static class DependencyInjection
         services.AddScoped<ICustomerListReadService, CustomerListReadService>();
     }
 
-    private static void AddWalletServices(IServiceCollection services, IConfiguration configuration)
+    private static void AddWalletServices(
+        IServiceCollection services,
+        IConfiguration configuration,
+        IHostEnvironment? environment)
     {
         // Cliente de Key Vault para leer cert + p8 + ids en runtime.
         services.AddKBeautyKeyVaultClient(configuration["Azure:KeyVaultUri"]);
 
-        // PassGeneratorService es scoped — sus dependencias también lo son.
-        services.AddScoped<IPassGeneratorService, PassGeneratorService>();
+        // En Development usamos un .pkpass mock no firmado para no depender de
+        // Key Vault/certificados Apple durante pruebas funcionales locales.
+        if (environment?.IsDevelopment() == true)
+            services.AddScoped<IPassGeneratorService, DevelopmentPassGeneratorService>();
+        else
+            services.AddScoped<IPassGeneratorService, PassGeneratorService>();
 
         // APN cliente — HTTP/2 explícito y timeout corto (el push debe ser fire-and-forget).
         services
