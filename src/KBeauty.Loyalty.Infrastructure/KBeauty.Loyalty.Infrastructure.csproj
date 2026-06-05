@@ -47,4 +47,9 @@
     <PackageReference Include="System.Security.Cryptography.Pkcs" Version="10.0.8" />
   </ItemGroup>
 
+  <ItemGroup>
+    <Content Include="Assets\AppleWallet\*.png" CopyToOutputDirectory="PreserveNewest" />
+    <Content Include="Certificates\*.cer" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
 </Project>

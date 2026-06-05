@@ -4,116 +4,97 @@ using System.Security.Cryptography.Pkcs;
 using System.Security.Cryptography.X509Certificates;
 using System.Text;
 using System.Text.Json;
-using Azure.Security.KeyVault.Secrets;
 using KBeauty.Loyalty.Application.Common.Interfaces;
 using KBeauty.Loyalty.Common.Constants;
 using KBeauty.Loyalty.Domain.Entities;
-using KBeauty.Loyalty.Domain.ValueObjects;
 using KBeauty.Loyalty.Infrastructure.Configuration;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 
 namespace KBeauty.Loyalty.Infrastructure.Services;
 
-/// <summary>
-/// Genera el archivo <c>.pkpass</c> firmado para Apple Wallet.
-/// </summary>
-/// <remarks>
-/// Flujo:
-/// <list type="number">
-///   <item>Construye <c>pass.json</c> con campos según nivel.</item>
-///   <item>Calcula SHA-1 de pass.json + iconos → <c>manifest.json</c>.</item>
-///   <item>Firma manifest.json con PKCS#7 detached usando el cert de Key Vault.</item>
-///   <item>Empaqueta todo como ZIP <c>.pkpass</c>.</item>
-/// </list>
-/// El certificado .p12 NUNCA toca disco — siempre se lee de Key Vault.
-/// </remarks>
+/// <summary>Genera el archivo .pkpass firmado para Apple Wallet.</summary>
 internal sealed class PassGeneratorService : IPassGeneratorService
 {
-    // Nombres de secrets esperados en Key Vault.
-    private const string SecretPassCertificate = "kbeauty-pass-certificate";
-    private const string SecretPassCertificatePassword = "kbeauty-pass-certificate-password";
-
-    private readonly SecretClient _kv;
-    private readonly IStorageService _storage;
+    private readonly IAppleWalletSecretsProvider _secrets;
     private readonly ApplePassOptions _options;
     private readonly ILogger<PassGeneratorService> _logger;
 
     private static readonly JsonSerializerOptions PassJsonOpts = new()
     {
         WriteIndented = false,
-        PropertyNamingPolicy = null // dejar nombres tal como están — Apple es estricto
+        PropertyNamingPolicy = null
     };
 
+    private static readonly PassAssetSpec[] PassAssetSpecs =
+    [
+        new("icon.png", 29, 29),
+        new("icon@2x.png", 58, 58),
+        new("icon@3x.png", 87, 87),
+        new("logo.png", 160, 50),
+        new("logo@2x.png", 320, 100)
+    ];
+
     public PassGeneratorService(
-        SecretClient kv,
-        IStorageService storage,
+        IAppleWalletSecretsProvider secrets,
         IOptions<ApplePassOptions> options,
         ILogger<PassGeneratorService> logger)
     {
-        _kv = kv;
-        _storage = storage;
+        _secrets = secrets;
         _options = options.Value;
         _logger = logger;
     }
 
-    /// <inheritdoc />
     public async Task<byte[]> GeneratePassAsync(LoyaltyCard card, Customer customer, CancellationToken ct = default)
     {
         ArgumentNullException.ThrowIfNull(card);
         ArgumentNullException.ThrowIfNull(customer);
 
-        // 1. pass.json
         var passJson = BuildPassJson(card, customer);
         var passJsonBytes = JsonSerializer.SerializeToUtf8Bytes(passJson, PassJsonOpts);
+        var assets = LoadPassAssets();
 
-        // 2. Iconos (placeholders — el README explica cómo reemplazar en prod)
-        var iconBytes = PlaceholderIconPng;
-        var icon2xBytes = PlaceholderIconPng;
-        var icon3xBytes = PlaceholderIconPng;
-
-        // 3. manifest.json — diccionario nombre → SHA1 hex
         var manifest = new Dictionary<string, string>(StringComparer.Ordinal)
         {
-            ["pass.json"] = Sha1Hex(passJsonBytes),
-            ["icon.png"] = Sha1Hex(iconBytes),
-            ["icon@2x.png"] = Sha1Hex(icon2xBytes),
-            ["icon@3x.png"] = Sha1Hex(icon3xBytes)
+            ["pass.json"] = Sha1Hex(passJsonBytes)
         };
-        var manifestBytes = JsonSerializer.SerializeToUtf8Bytes(manifest, PassJsonOpts);
 
-        // 4. Firma PKCS#7 detached del manifest
+        foreach (var asset in assets)
+            manifest[asset.Name] = Sha1Hex(asset.Bytes);
+
+        var manifestBytes = JsonSerializer.SerializeToUtf8Bytes(manifest, PassJsonOpts);
         var signatureBytes = await SignManifestAsync(manifestBytes, ct);
 
-        // 5. Empaqueta como ZIP
         using var output = new MemoryStream();
         using (var zip = new ZipArchive(output, ZipArchiveMode.Create, leaveOpen: true))
         {
             AddZipEntry(zip, "pass.json", passJsonBytes);
             AddZipEntry(zip, "manifest.json", manifestBytes);
             AddZipEntry(zip, "signature", signatureBytes);
-            AddZipEntry(zip, "icon.png", iconBytes);
-            AddZipEntry(zip, "icon@2x.png", icon2xBytes);
-            AddZipEntry(zip, "icon@3x.png", icon3xBytes);
+
+            foreach (var asset in assets)
+                AddZipEntry(zip, asset.Name, asset.Bytes);
         }
 
         _logger.LogInformation(
-            "Pass .pkpass generado para serial {Serial} ({Bytes} bytes)",
-            card.SerialNumber, output.Length);
+            "Pass .pkpass generado para serial {Serial} ({Bytes} bytes). Archivos: {Files}",
+            card.SerialNumber,
+            output.Length,
+            string.Join(", ", new[] { "pass.json", "manifest.json", "signature" }.Concat(assets.Select(a => a.Name))));
 
         return output.ToArray();
     }
 
-    /// <inheritdoc />
-    public Task<string> GetPassDownloadUrlAsync(string serialNumber, CancellationToken ct = default)
-    {
-        // Delega al storage — si el blob existe genera SAS, si no devuelve null.
-        // Aquí solo retornamos la "promesa" — el caller (controller) decide qué hacer si está vacío.
-        return Task.FromResult($"/api/customers/{serialNumber}/pass");
-    }
+    public Task<string> GetPassDownloadUrlAsync(string serialNumber, CancellationToken ct = default) =>
+        Task.FromResult($"/api/customers/{serialNumber}/pass");
 
     private object BuildPassJson(LoyaltyCard card, Customer customer)
     {
+        EnsureRequiredOption(_options.PassTypeIdentifier, "Apple:PassTypeIdentifier");
+        EnsureRequiredOption(_options.TeamIdentifier, "Apple:TeamIdentifier");
+        EnsureRequiredOption(_options.WebServiceURL, "Apple:WebServiceURL");
+        EnsureRequiredOption(_options.OrganizationName, "Apple:OrganizationName");
+
         var (bg, fg, label) = ColorsForLevel(card.Level);
 
         return new
@@ -145,7 +126,7 @@ internal sealed class PassGeneratorService : IPassGeneratorService
                 secondaryFields = new object[]
                 {
                     new { key = "level", label = "NIVEL", value = card.Level },
-                    new { key = "earned", label = "ESTE AÑO", value = card.PointsEarnedThisYear }
+                    new { key = "earned", label = "ESTE ANO", value = card.PointsEarnedThisYear }
                 },
                 auxiliaryFields = new[]
                 {
@@ -157,13 +138,13 @@ internal sealed class PassGeneratorService : IPassGeneratorService
                     {
                         key = "about",
                         label = "Programa de Lealtad",
-                        value = "Acumula puntos en cada compra y canjéalos por beneficios exclusivos en KBeauty MX. Niveles: Mist · Glow · Radiance."
+                        value = "Acumula puntos en cada compra y canjealos por beneficios exclusivos en KBeauty MX. Niveles: Mist, Glow y Radiance."
                     },
                     new
                     {
                         key = "store",
                         label = "Tienda",
-                        value = "KBeauty MX — Ensenada, Baja California"
+                        value = "KBeauty MX - Ensenada, Baja California"
                     },
                     new
                     {
@@ -192,34 +173,163 @@ internal sealed class PassGeneratorService : IPassGeneratorService
         };
     }
 
+    private IReadOnlyList<PassAsset> LoadPassAssets()
+    {
+        var assetsDir = Path.Combine(AppContext.BaseDirectory, "Assets", "AppleWallet");
+        var assets = new List<PassAsset>(PassAssetSpecs.Length);
+
+        foreach (var spec in PassAssetSpecs)
+        {
+            var path = Path.Combine(assetsDir, spec.Name);
+            if (!File.Exists(path))
+                throw new FileNotFoundException(
+                    $"Asset requerido para Apple Wallet no existe. Ruta esperada: {path}. " +
+                    "Regeneralo con scripts/generate-wallet-assets.ps1.",
+                    path);
+
+            var bytes = File.ReadAllBytes(path);
+            var (width, height) = ReadPngDimensions(bytes, path);
+
+            if (width != spec.Width || height != spec.Height)
+                throw new InvalidOperationException(
+                    $"Asset Apple Wallet '{path}' tiene dimensiones {width}x{height}; " +
+                    $"se esperaba {spec.Width}x{spec.Height}. " +
+                    "Regeneralo con scripts/generate-wallet-assets.ps1.");
+
+            _logger.LogInformation(
+                "Asset Apple Wallet agregado: {File} ({Width}x{Height}, {Bytes} bytes)",
+                spec.Name,
+                width,
+                height,
+                bytes.Length);
+
+            assets.Add(new PassAsset(spec.Name, bytes));
+        }
+
+        return assets;
+    }
+
+    private async Task<byte[]> SignManifestAsync(byte[] manifestBytes, CancellationToken ct)
+    {
+        var certBytes = await _secrets.GetPassCertificateBytesAsync(ct);
+        var certPassword = await _secrets.GetPassCertificatePasswordAsync(ct);
+
+        var certCollection = X509CertificateLoader.LoadPkcs12Collection(
+            certBytes,
+            certPassword,
+            X509KeyStorageFlags.EphemeralKeySet | X509KeyStorageFlags.Exportable);
+
+        var passCert = certCollection
+            .OfType<X509Certificate2>()
+            .FirstOrDefault(c => c.HasPrivateKey)
+            ?? throw new InvalidOperationException(
+                "El .p12 de Apple Wallet no contiene un certificado con llave privada.");
+
+        var wwdrCert = certCollection
+            .OfType<X509Certificate2>()
+            .FirstOrDefault(IsWwdrG4Certificate);
+
+        wwdrCert ??= LoadBundledWwdrCertificate();
+
+        if (wwdrCert is null)
+        {
+            var wwdrBytes = await _secrets.GetWwdrCertificateBytesAsync(ct);
+            if (wwdrBytes is not null)
+                wwdrCert = LoadCertificate(wwdrBytes);
+        }
+
+        if (wwdrCert is null || !IsWwdrG4Certificate(wwdrCert))
+        {
+            throw new InvalidOperationException(
+                "No se encontro el certificado intermedio Apple WWDR G4. " +
+                "Incluyelo dentro del .p12 o configura Apple:WwdrCertificatePath con el certificado WWDR G4.");
+        }
+
+        var contentInfo = new ContentInfo(manifestBytes);
+        var cms = new SignedCms(contentInfo, detached: true);
+        var signer = new CmsSigner(SubjectIdentifierType.IssuerAndSerialNumber, passCert)
+        {
+            IncludeOption = X509IncludeOption.EndCertOnly
+        };
+        signer.Certificates.Add(wwdrCert);
+        signer.SignedAttributes.Add(new Pkcs9SigningTime(DateTime.UtcNow));
+
+        cms.ComputeSignature(signer);
+        var signatureBytes = cms.Encode();
+
+        LogSignatureDebug(signatureBytes, passCert, wwdrCert);
+        return signatureBytes;
+    }
+
+    private void LogSignatureDebug(
+        byte[] signatureBytes,
+        X509Certificate2 passCert,
+        X509Certificate2 wwdrCert)
+    {
+        var signedCms = new SignedCms();
+        signedCms.Decode(signatureBytes);
+
+        var signerInfo = signedCms.SignerInfos[0];
+        var signedAttributeOids = signerInfo.SignedAttributes
+            .Cast<CryptographicAttributeObject>()
+            .Select(a => $"{a.Oid?.FriendlyName ?? "unknown"} ({a.Oid?.Value})")
+            .ToArray();
+
+        var hasContentType = HasSignedAttribute(signerInfo, "1.2.840.113549.1.9.3");
+        var hasMessageDigest = HasSignedAttribute(signerInfo, "1.2.840.113549.1.9.4");
+        var hasSigningTime = HasSignedAttribute(signerInfo, "1.2.840.113549.1.9.5");
+
+        _logger.LogInformation(
+            "Firma PKCS#7 Apple Wallet generada. Detached={Detached}, PassCert='{PassSubject}', WWDR='{WwdrSubject}', CertsIncluidos={CertificateCount}, SignedAttributes=[{Attributes}]",
+            true,
+            passCert.Subject,
+            wwdrCert.Subject,
+            signedCms.Certificates.Count,
+            string.Join(", ", signedAttributeOids));
+
+        _logger.LogDebug(
+            "Firma PKCS#7 signed attributes: contentType={ContentType}, messageDigest={MessageDigest}, signingTime={SigningTime}",
+            hasContentType,
+            hasMessageDigest,
+            hasSigningTime);
+    }
+
+    private static bool HasSignedAttribute(SignerInfo signerInfo, string oid) =>
+        signerInfo.SignedAttributes
+            .Cast<CryptographicAttributeObject>()
+            .Any(a => string.Equals(a.Oid?.Value, oid, StringComparison.Ordinal));
+
+    private static X509Certificate2 LoadCertificate(byte[] bytes)
+    {
+        var text = Encoding.ASCII.GetString(bytes);
+        return text.Contains("-----BEGIN CERTIFICATE-----", StringComparison.Ordinal)
+            ? X509Certificate2.CreateFromPem(text)
+            : X509CertificateLoader.LoadCertificate(bytes);
+    }
+
+    private static X509Certificate2? LoadBundledWwdrCertificate()
+    {
+        var path = Path.Combine(AppContext.BaseDirectory, "Certificates", "AppleWWDRCAG4.cer");
+        return File.Exists(path)
+            ? X509CertificateLoader.LoadCertificateFromFile(path)
+            : null;
+    }
+
+    private static bool IsWwdrG4Certificate(X509Certificate2 cert) =>
+        cert.Subject.Contains("Apple Worldwide Developer Relations", StringComparison.OrdinalIgnoreCase) &&
+        (cert.Subject.Contains("G4", StringComparison.OrdinalIgnoreCase) ||
+         cert.Issuer.Contains("G4", StringComparison.OrdinalIgnoreCase));
+
     private static (string bg, string fg, string label) ColorsForLevel(string level) =>
         string.Equals(level, LoyaltyConstants.Levels.Radiance, StringComparison.Ordinal)
             ? ("rgb(44, 24, 16)", "rgb(247, 245, 240)", "rgb(184, 152, 106)")
             : ("rgb(247, 245, 240)", "rgb(28, 27, 24)", "rgb(155, 152, 136)");
 
-    private async Task<byte[]> SignManifestAsync(byte[] manifestBytes, CancellationToken ct)
+    private static void EnsureRequiredOption(string? value, string key)
     {
-        var certB64 = (await _kv.GetSecretAsync(SecretPassCertificate, cancellationToken: ct)).Value.Value;
-        var certPassword = (await _kv.GetSecretAsync(SecretPassCertificatePassword, cancellationToken: ct)).Value.Value;
-
-        var certBytes = Convert.FromBase64String(certB64);
-
-        // EphemeralKeySet = no persiste la llave en el almacén del SO — más seguro en App Service.
-        using var cert = X509CertificateLoader.LoadPkcs12(
-            certBytes,
-            certPassword,
-            X509KeyStorageFlags.EphemeralKeySet | X509KeyStorageFlags.Exportable);
-
-        var contentInfo = new ContentInfo(manifestBytes);
-        var cms = new SignedCms(contentInfo, detached: true);
-
-        var signer = new CmsSigner(cert)
-        {
-            IncludeOption = X509IncludeOption.WholeChain
-        };
-
-        cms.ComputeSignature(signer);
-        return cms.Encode();
+        if (string.IsNullOrWhiteSpace(value))
+            throw new InvalidOperationException(
+                $"Falta configuracion requerida '{key}' para generar pases Apple Wallet reales.");
     }
 
     private static string Sha1Hex(byte[] data)
@@ -237,16 +347,27 @@ internal sealed class PassGeneratorService : IPassGeneratorService
         stream.Write(content, 0, content.Length);
     }
 
-    /// <summary>
-    /// PNG 1×1 transparente — placeholder. En producción reemplazar por iconos
-    /// reales (29×29, 58×58, 87×87 px respectivamente) — el README explica cómo.
-    /// </summary>
-    private static readonly byte[] PlaceholderIconPng =
+    private static (int Width, int Height) ReadPngDimensions(byte[] bytes, string path)
     {
-        0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, 0x00, 0x00, 0x00, 0x0D, 0x49, 0x48, 0x44, 0x52,
-        0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01, 0x08, 0x06, 0x00, 0x00, 0x00, 0x1F, 0x15, 0xC4,
-        0x89, 0x00, 0x00, 0x00, 0x0D, 0x49, 0x44, 0x41, 0x54, 0x78, 0x9C, 0x63, 0xFA, 0xCF, 0x00, 0x00,
-        0x00, 0x02, 0x00, 0x01, 0xE2, 0x21, 0xBC, 0x33, 0x00, 0x00, 0x00, 0x00, 0x49, 0x45, 0x4E, 0x44,
-        0xAE, 0x42, 0x60, 0x82
-    };
+        if (bytes.Length < 24 ||
+            bytes[0] != 0x89 ||
+            bytes[1] != 0x50 ||
+            bytes[2] != 0x4E ||
+            bytes[3] != 0x47)
+        {
+            throw new InvalidOperationException($"Asset Apple Wallet '{path}' no es un PNG valido.");
+        }
+
+        return (ReadBigEndianInt32(bytes, 16), ReadBigEndianInt32(bytes, 20));
+    }
+
+    private static int ReadBigEndianInt32(byte[] bytes, int offset) =>
+        (bytes[offset] << 24) |
+        (bytes[offset + 1] << 16) |
+        (bytes[offset + 2] << 8) |
+        bytes[offset + 3];
+
+    private sealed record PassAsset(string Name, byte[] Bytes);
+
+    private sealed record PassAssetSpec(string Name, int Width, int Height);
 }

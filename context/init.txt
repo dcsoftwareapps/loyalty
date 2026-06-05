@@ -1,0 +1,315 @@
+KBeauty Loyalty - Contexto tecnico actualizado
+
+Fecha de contexto: 2026-06-05
+Workspace: C:\repos\Loyalty\loyalty
+Solucion: KBeauty.Loyalty.sln
+
+Resumen
+Se implemento y probo un modo LOCAL REAL de Apple Wallet para generar pases .pkpass firmados en Development usando archivos locales, sin Azure Key Vault. Despues se corrigieron los assets visuales de Wallet y la firma PKCS#7 para incluir signed attributes y el certificado intermedio Apple WWDR G4. La validacion con OpenSSL sobre un pass real generado localmente regreso "Verification successful".
+
+Estado verificado
+- dotnet build .\KBeauty.Loyalty.sln -v minimal: OK, 0 errores.
+- dotnet test .\KBeauty.Loyalty.sln -v minimal --no-build: OK, 38/38.
+- Se genero un pass real de prueba desde la API local: tmp\KB-STS2XLJ.pkpass.
+- Se extrajo el pass y se valido:
+  openssl smime -verify -inform DER -in signature -content manifest.json -noverify
+  Resultado: Verification successful.
+
+Modo local real Apple Wallet
+Se agrego la configuracion:
+
+Wallet:
+  UseRealPassSigning: true
+
+En Development + Wallet:UseRealPassSigning=true:
+- IPassGeneratorService -> PassGeneratorService
+- IAppleWalletSecretsProvider -> LocalAppleWalletSecretsProvider
+- IApnService -> ApnService
+- No requiere Azure:KeyVaultUri.
+- No se registra el dummy SecretClient que lanza excepcion.
+
+En Development + Wallet:UseRealPassSigning=false:
+- IPassGeneratorService -> DevelopmentPassGeneratorService
+- IApnService -> NoOpApnService
+- No depende de Key Vault ni certificados Apple.
+
+En Production/Staging/no Development:
+- IPassGeneratorService -> PassGeneratorService
+- IAppleWalletSecretsProvider -> KeyVaultAppleWalletSecretsProvider
+- IApnService -> ApnService
+- Requiere Azure:KeyVaultUri y SecretClient.
+
+Archivos locales esperados para Wallet real
+- Pass certificate .p12:
+  C:\Secrets\KBeauty\kbeauty-wallet-pass.p12
+- APN private key .p8:
+  C:\Secrets\KBeauty\AuthKey_68Z2745848.p8
+
+User-secrets esperados para API
+Proyecto: src\KBeauty.Loyalty.API
+
+Apple:PassCertificatePath = C:\Secrets\KBeauty\kbeauty-wallet-pass.p12
+Apple:PassCertificatePassword = KBeautyWallet2026!
+Apple:ApnPrivateKeyPath = C:\Secrets\KBeauty\AuthKey_68Z2745848.p8
+Apple:ApnKeyId = 68Z2745848
+Apple:TeamIdentifier = HS2XCFGQ75
+Apple:PassTypeIdentifier = pass.com.kbeautymx.loyalty
+Apple:WebServiceURL = https://goosepimply-quiana-unrudely.ngrok-free.dev
+
+Valores Apple actuales
+- Pass Type ID: pass.com.kbeautymx.loyalty
+- Team ID: HS2XCFGQ75
+- APN Key ID: 68Z2745848
+- OrganizationName: KBeauty MX
+- ApnHost: https://api.push.apple.com
+- WebServiceURL/ngrok actual:
+  https://goosepimply-quiana-unrudely.ngrok-free.dev
+- ngrok debe apuntar a:
+  https://localhost:55128
+
+Archivos creados/modificados para modo local real
+- src/KBeauty.Loyalty.Infrastructure/Configuration/WalletOptions.cs
+- src/KBeauty.Loyalty.Infrastructure/Services/IAppleWalletSecretsProvider.cs
+- src/KBeauty.Loyalty.Infrastructure/Services/LocalAppleWalletSecretsProvider.cs
+- src/KBeauty.Loyalty.Infrastructure/Services/KeyVaultAppleWalletSecretsProvider.cs
+- src/KBeauty.Loyalty.Infrastructure/Services/NoOpApnService.cs
+- src/KBeauty.Loyalty.Infrastructure/DependencyInjection.cs
+- src/KBeauty.Loyalty.Infrastructure/Services/PassGeneratorService.cs
+- src/KBeauty.Loyalty.Infrastructure/Services/ApnService.cs
+- src/KBeauty.Loyalty.API/Controllers/PassesController.cs
+- src/KBeauty.Loyalty.API/appsettings.Development.json
+
+Endpoint local/dev para descargar pass
+Se agrego:
+GET /api/dev/passes/{serialNumber}
+
+Caracteristicas:
+- Solo responde en Development.
+- Busca LoyaltyCard por serial.
+- Busca Customer por CustomerId.
+- Genera el pass con IPassGeneratorService.
+- Responde File(bytes, "application/vnd.apple.pkpass", "{serial}.pkpass").
+
+Endpoint Apple real de refresh
+GET /v1/passes/{passTypeIdentifier}/{serialNumber}
+
+Requiere header:
+Authorization: ApplePass <LoyaltyCard.AuthenticationToken>
+
+Assets Apple Wallet
+Se corrigieron los assets porque el pass instalaba con:
+"Sorry, your pass cannot be installed to passbook at this time".
+
+El logo maestro usado esta en:
+C:\Users\chave\OneDrive\K-Beauty\Pass\logo.png
+
+Script para regenerar assets:
+scripts\generate-wallet-assets.ps1
+
+Comando:
+.\scripts\generate-wallet-assets.ps1 -SourceLogo "C:\Users\chave\OneDrive\K-Beauty\Pass\logo.png"
+
+Assets generados en:
+src\KBeauty.Loyalty.Infrastructure\Assets\AppleWallet
+
+Archivos generados:
+- icon.png: 29x29
+- icon@2x.png: 58x58
+- icon@3x.png: 87x87
+- logo.png: 160x50
+- logo@2x.png: 320x100
+
+PassGeneratorService ahora:
+- carga esos assets desde AppContext.BaseDirectory\Assets\AppleWallet
+- valida existencia y dimensiones
+- agrega los cinco PNG al .pkpass
+- agrega SHA1 de todos al manifest.json
+- firma el manifest actualizado
+- registra logs por asset con archivo, dimensiones y bytes
+- registra la lista de archivos incluidos en el pass
+
+El csproj de Infrastructure copia al output:
+- Assets\AppleWallet\*.png
+- Certificates\*.cer
+
+Firma PKCS#7 Apple Wallet
+Problema detectado:
+- El .pkpass nuevo tenia assets y manifest correctos.
+- El certificado era el Pass Type ID correcto.
+- Pero la firma PKCS#7 parecia generarse sin signed attributes, especialmente sin S/MIME signing-time.
+- Apple Wallet requiere signing-time.
+
+Correccion aplicada en PassGeneratorService:
+- Usa SignedCms detached sobre manifest.json.
+- Carga la coleccion completa del .p12.
+- Usa como firmante el certificado con private key.
+- Incluye el certificado Pass Type ID.
+- Incluye certificado intermedio Apple WWDR G4.
+- Agrega explicitamente:
+  signer.SignedAttributes.Add(new Pkcs9SigningTime(DateTime.UtcNow))
+- SignedCms agrega contentType y messageDigest.
+- La salida DER se guarda como archivo signature.
+
+WWDR G4
+El .p12 local solo contiene el certificado Pass Type ID; no incluye el intermedio.
+Se agrego el certificado publico Apple WWDR G4 al proyecto:
+src\KBeauty.Loyalty.Infrastructure\Certificates\AppleWWDRCAG4.cer
+
+Fuente oficial Apple:
+https://www.apple.com/certificateauthority/
+
+PassGeneratorService busca WWDR G4 en este orden:
+1. Dentro del .p12.
+2. Certificado empaquetado en AppContext.BaseDirectory\Certificates\AppleWWDRCAG4.cer.
+3. Apple:WwdrCertificatePath si se configura.
+
+Si no encuentra WWDR G4, lanza error claro indicando incluirlo en el .p12 o configurar Apple:WwdrCertificatePath.
+
+Logging/debug de firma
+PassGeneratorService registra:
+- Detached=True
+- Subject del Pass Type ID certificate
+- Subject del WWDR
+- cantidad de certificados incluidos
+- signed attributes por OID/friendly name
+- flags:
+  contentType=True
+  messageDigest=True
+  signingTime=True
+
+Script de validacion de firma
+Se agrego:
+scripts\validate-pkpass-signature.ps1
+
+Uso:
+.\scripts\validate-pkpass-signature.ps1 -PkpassPath ".\tmp\TU_SERIAL.pkpass"
+
+El script:
+- extrae el .pkpass a tmp\pkpass-verify
+- lista archivos incluidos
+- ejecuta:
+  openssl smime -verify -inform DER -in signature -content manifest.json -noverify
+
+Resultado esperado:
+Verification successful
+
+Script para descargar pass dev
+Se agrego:
+scripts\download-dev-pass.ps1
+
+Uso:
+.\scripts\download-dev-pass.ps1 -SerialNumber "TU_SERIAL" -BaseUrl "https://localhost:55128"
+
+Guarda:
+tmp\TU_SERIAL.pkpass
+
+Tambien lista archivos dentro del .pkpass.
+
+Pasos actuales para probar desde iPhone
+
+1. En terminal 1, desde C:\repos\Loyalty\loyalty, iniciar Azurite:
+
+& "$env:APPDATA\npm\azurite.cmd" --silent --location .\.azurite
+
+Importante:
+En PowerShell se necesita el call operator &. Este es el comando correcto.
+
+2. En terminal 2, iniciar API:
+
+dotnet run --project src\KBeauty.Loyalty.API\KBeauty.Loyalty.API.csproj --launch-profile KBeauty.Loyalty.API
+
+La API usa:
+- HTTPS: https://localhost:55128
+- HTTP: http://localhost:55131
+
+3. En terminal 3, iniciar ngrok:
+
+ngrok http --url=goosepimply-quiana-unrudely.ngrok-free.dev https://localhost:55128
+
+4. Confirmar que Apple:WebServiceURL apunta a la URL ngrok:
+
+dotnet user-secrets set "Apple:WebServiceURL" "https://goosepimply-quiana-unrudely.ngrok-free.dev" --project src\KBeauty.Loyalty.API
+
+Si se cambia WebServiceURL, reiniciar la API antes de generar el pass.
+
+5. Crear customer nuevo:
+
+$body = @{
+  fullName = "Wallet Test"
+  email = "wallet.test.$([guid]::NewGuid().ToString('N'))@example.com"
+  dateOfBirth = "1992-05-14"
+  phone = "+526461234567"
+} | ConvertTo-Json
+
+Invoke-RestMethod `
+  -Method Post `
+  -Uri "https://localhost:55128/api/customers" `
+  -ContentType "application/json" `
+  -Body $body
+
+Copiar serialNumber del response, ejemplo:
+KB-STS2XLJ
+
+6. Abrir en Safari del iPhone:
+
+https://goosepimply-quiana-unrudely.ngrok-free.dev/api/dev/passes/TU_SERIAL
+
+Ejemplo:
+https://goosepimply-quiana-unrudely.ngrok-free.dev/api/dev/passes/KB-STS2XLJ
+
+Debe abrir el .pkpass y mostrar Add to Apple Wallet.
+
+7. Validacion opcional desde Windows:
+
+.\scripts\download-dev-pass.ps1 -SerialNumber "TU_SERIAL" -BaseUrl "https://localhost:55128"
+.\scripts\validate-pkpass-signature.ps1 -PkpassPath ".\tmp\TU_SERIAL.pkpass"
+
+Debe mostrar:
+Verification successful
+
+8. Probar refresh/APN despues de instalar el pass:
+
+$pointsBody = @{
+  serialNumber = "TU_SERIAL"
+  purchaseAmount = 850.00
+} | ConvertTo-Json
+
+Invoke-RestMethod `
+  -Method Post `
+  -Uri "https://localhost:55128/api/points" `
+  -ContentType "application/json" `
+  -Body $pointsBody
+
+Notas sobre APN:
+- IPhone registra device en /v1/devices/... despues de instalar el pass.
+- El registro se guarda en DeviceRegistrations.
+- Al sumar puntos, AddPointsHandler manda APN best-effort a los devices registrados.
+
+Comandos utiles
+
+Aplicar migraciones:
+dotnet ef database update --project src\KBeauty.Loyalty.Infrastructure\KBeauty.Loyalty.Infrastructure.csproj --startup-project src\KBeauty.Loyalty.API\KBeauty.Loyalty.API.csproj
+
+Build:
+dotnet build .\KBeauty.Loyalty.sln -v minimal
+
+Tests:
+dotnet test .\KBeauty.Loyalty.sln -v minimal --no-build
+
+Validacion OpenSSL manual sobre pass extraido:
+openssl smime -verify -inform DER -in signature -content manifest.json -noverify
+
+Estado importante de implementacion
+- No se modifico pass.json en la correccion de firma reciente.
+- No se modificaron assets en la correccion de firma reciente.
+- No se modifico passTypeIdentifier.
+- No se modifico teamIdentifier.
+- No se modificaron certificados privados.
+- No se modifico APN en la correccion de firma.
+- Produccion sigue soportando Key Vault.
+
+Riesgos/pendientes conocidos
+- El endpoint /api/dev/passes/{serialNumber} es solo para Development.
+- appsettings.json de API contiene Apple:PassCertificatePassword con un valor; esto venia de antes y deberia retirarse de configuracion commiteada para produccion.
+- API /api/* no tiene auth fuerte; esto no se corrigio en estas tareas.
+- Los warnings previos de Blazor Admin por llamadas no awaited aparecieron en builds anteriores, pero el build mas reciente despues de la correccion de firma quedo con 0 warnings.

@@ -22,20 +22,20 @@ public sealed class PassesController : ControllerBase
     private readonly ILoyaltyCardRepository _cards;
     private readonly ICustomerRepository _customers;
     private readonly IPassGeneratorService _passes;
-    private readonly IStorageService _storage;
+    private readonly IWebHostEnvironment _environment;
 
     public PassesController(
         ISender sender,
         ILoyaltyCardRepository cards,
         ICustomerRepository customers,
         IPassGeneratorService passes,
-        IStorageService storage)
+        IWebHostEnvironment environment)
     {
         _sender = sender;
         _cards = cards;
         _customers = customers;
         _passes = passes;
-        _storage = storage;
+        _environment = environment;
     }
 
     /// <summary>
@@ -58,6 +58,26 @@ public sealed class PassesController : ControllerBase
         var bytes = await _passes.GeneratePassAsync(card, customer, ct);
 
         Response.Headers.LastModified = card.LastActivityAt.ToString("R");
+        return File(bytes, LoyaltyConstants.ApplePass.ContentType, $"{serialNumber}.pkpass");
+    }
+
+    /// <summary>
+    /// GET /api/dev/passes/{serialNumber}
+    /// Endpoint local para descargar un .pkpass desde navegador/iPhone durante Development.
+    /// </summary>
+    [HttpGet("~/api/dev/passes/{serialNumber}")]
+    public async Task<IActionResult> GetDevelopmentPass(string serialNumber, CancellationToken ct)
+    {
+        if (!_environment.IsDevelopment())
+            return NotFound();
+
+        var card = await _cards.GetBySerialNumberAsync(serialNumber, ct);
+        if (card is null) return NotFound();
+
+        var customer = await _customers.GetByIdAsync(card.CustomerId, ct);
+        if (customer is null) return NotFound();
+
+        var bytes = await _passes.GeneratePassAsync(card, customer, ct);
         return File(bytes, LoyaltyConstants.ApplePass.ContentType, $"{serialNumber}.pkpass");
     }
 

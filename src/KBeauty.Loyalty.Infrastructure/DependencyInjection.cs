@@ -15,9 +15,8 @@ using Microsoft.Extensions.Hosting;
 namespace KBeauty.Loyalty.Infrastructure;
 
 /// <summary>
-/// Composición de raíz de Infrastructure. Una sola llamada
-/// <see cref="AddInfrastructure"/> en API/Admin registra todo el grafo:
-/// DbContext, repositorios, servicios de Wallet, storage, identidad, Key Vault.
+/// Composicion raiz de Infrastructure: DbContext, repositorios, servicios de
+/// Wallet, storage, identidad y adaptadores externos.
 /// </summary>
 public static class DependencyInjection
 {
@@ -52,7 +51,6 @@ public static class DependencyInjection
                 sql.MigrationsAssembly(typeof(AppDbContext).Assembly.FullName);
             }));
 
-        // AppDbContext también es la unidad de trabajo — un único scope por request.
         services.AddScoped<IUnitOfWork>(sp => sp.GetRequiredService<AppDbContext>());
     }
 
@@ -60,6 +58,7 @@ public static class DependencyInjection
     {
         services.Configure<ApplePassOptions>(configuration.GetSection(ApplePassOptions.SectionName));
         services.Configure<AzureStorageOptions>(configuration.GetSection(AzureStorageOptions.SectionName));
+        services.Configure<WalletOptions>(configuration.GetSection(WalletOptions.SectionName));
     }
 
     private static void AddRepositories(IServiceCollection services)
@@ -89,17 +88,39 @@ public static class DependencyInjection
         IConfiguration configuration,
         IHostEnvironment? environment)
     {
-        // Cliente de Key Vault para leer cert + p8 + ids en runtime.
-        services.AddKBeautyKeyVaultClient(configuration["Azure:KeyVaultUri"]);
+        var isDevelopment = environment?.IsDevelopment() == true;
+        var useRealPassSigning = configuration.GetValue<bool>("Wallet:UseRealPassSigning");
+        var useLocalRealWallet = isDevelopment && useRealPassSigning;
 
-        // En Development usamos un .pkpass mock no firmado para no depender de
-        // Key Vault/certificados Apple durante pruebas funcionales locales.
-        if (environment?.IsDevelopment() == true)
-            services.AddScoped<IPassGeneratorService, DevelopmentPassGeneratorService>();
-        else
+        if (useLocalRealWallet)
+        {
+            services.AddScoped<IAppleWalletSecretsProvider, LocalAppleWalletSecretsProvider>();
             services.AddScoped<IPassGeneratorService, PassGeneratorService>();
+            AddApnHttpClient(services);
+            return;
+        }
 
-        // APN cliente — HTTP/2 explícito y timeout corto (el push debe ser fire-and-forget).
+        if (isDevelopment)
+        {
+            services.AddScoped<IPassGeneratorService, DevelopmentPassGeneratorService>();
+            services.AddScoped<IApnService, NoOpApnService>();
+            return;
+        }
+
+        var keyVaultUri = configuration["Azure:KeyVaultUri"];
+        if (string.IsNullOrWhiteSpace(keyVaultUri))
+            throw new InvalidOperationException(
+                "Falta Azure:KeyVaultUri para Wallet real fuera de Development. " +
+                "Configura Key Vault o usa Development con Wallet:UseRealPassSigning=true para archivos locales.");
+
+        services.AddKBeautyKeyVaultClient(keyVaultUri);
+        services.AddScoped<IAppleWalletSecretsProvider, KeyVaultAppleWalletSecretsProvider>();
+        services.AddScoped<IPassGeneratorService, PassGeneratorService>();
+        AddApnHttpClient(services);
+    }
+
+    private static void AddApnHttpClient(IServiceCollection services)
+    {
         services
             .AddHttpClient<IApnService, ApnService>(client =>
             {

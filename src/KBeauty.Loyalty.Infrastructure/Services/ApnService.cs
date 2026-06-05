@@ -3,7 +3,6 @@ using System.Net.Http.Headers;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
-using Azure.Security.KeyVault.Secrets;
 using KBeauty.Loyalty.Application.Common.Interfaces;
 using KBeauty.Loyalty.Domain.Enums;
 using KBeauty.Loyalty.Infrastructure.Configuration;
@@ -23,12 +22,8 @@ namespace KBeauty.Loyalty.Infrastructure.Services;
 /// </remarks>
 internal sealed class ApnService : IApnService
 {
-    private const string SecretPrivateKey = "kbeauty-apn-private-key";
-    private const string SecretKeyId = "kbeauty-apn-key-id";
-    private const string SecretTeamId = "kbeauty-apn-team-id";
-
     private readonly HttpClient _http;
-    private readonly SecretClient _kv;
+    private readonly IAppleWalletSecretsProvider _secrets;
     private readonly ApplePassOptions _options;
     private readonly ILogger<ApnService> _logger;
 
@@ -41,12 +36,12 @@ internal sealed class ApnService : IApnService
 
     public ApnService(
         HttpClient http,
-        SecretClient kv,
+        IAppleWalletSecretsProvider secrets,
         IOptions<ApplePassOptions> options,
         ILogger<ApnService> logger)
     {
         _http = http;
-        _kv = kv;
+        _secrets = secrets;
         _options = options.Value;
         _logger = logger;
     }
@@ -98,9 +93,9 @@ internal sealed class ApnService : IApnService
             if (_cachedJwt is not null && DateTime.UtcNow < _jwtExpiresAt)
                 return _cachedJwt;
 
-            var keyPem = (await _kv.GetSecretAsync(SecretPrivateKey, cancellationToken: ct)).Value.Value;
-            var keyId = (await _kv.GetSecretAsync(SecretKeyId, cancellationToken: ct)).Value.Value;
-            var teamId = (await _kv.GetSecretAsync(SecretTeamId, cancellationToken: ct)).Value.Value;
+            var keyPem = await _secrets.GetApnPrivateKeyPemAsync(ct);
+            var keyId = await _secrets.GetApnKeyIdAsync(ct);
+            var teamId = await _secrets.GetApnTeamIdAsync(ct);
 
             _cachedJwt = BuildJwt(keyPem, keyId, teamId);
             _jwtExpiresAt = DateTime.UtcNow.Add(JwtLifetime);
