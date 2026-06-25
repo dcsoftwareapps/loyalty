@@ -4,8 +4,10 @@ using KBeauty.Loyalty.Application.Devices.Commands.UnregisterDevice;
 using KBeauty.Loyalty.Application.Devices.Queries.GetUpdatableSerials;
 using KBeauty.Loyalty.Common.Constants;
 using KBeauty.Loyalty.Domain.Repositories;
+using KBeauty.Loyalty.Infrastructure.Configuration;
 using MediatR;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.Options;
 
 namespace KBeauty.Loyalty.API.Controllers;
 
@@ -23,19 +25,25 @@ public sealed class PassesController : ControllerBase
     private readonly ICustomerRepository _customers;
     private readonly IPassGeneratorService _passes;
     private readonly IWebHostEnvironment _environment;
+    private readonly ApplePassOptions _options;
+    private readonly ILogger<PassesController> _logger;
 
     public PassesController(
         ISender sender,
         ILoyaltyCardRepository cards,
         ICustomerRepository customers,
         IPassGeneratorService passes,
-        IWebHostEnvironment environment)
+        IWebHostEnvironment environment,
+        IOptions<ApplePassOptions> options,
+        ILogger<PassesController> logger)
     {
         _sender = sender;
         _cards = cards;
         _customers = customers;
         _passes = passes;
         _environment = environment;
+        _options = options.Value;
+        _logger = logger;
     }
 
     /// <summary>
@@ -48,6 +56,9 @@ public sealed class PassesController : ControllerBase
         string serialNumber,
         CancellationToken ct)
     {
+        if (!IsConfiguredPassType(passTypeIdentifier))
+            return NotFound();
+
         var card = await _cards.GetBySerialNumberAsync(serialNumber, ct);
         if (card is null) return NotFound();
 
@@ -94,6 +105,9 @@ public sealed class PassesController : ControllerBase
         [FromBody] PushTokenBody body,
         CancellationToken ct)
     {
+        if (!IsConfiguredPassType(passTypeIdentifier))
+            return NotFound();
+
         if (string.IsNullOrWhiteSpace(body?.PushToken))
             return BadRequest();
 
@@ -119,6 +133,9 @@ public sealed class PassesController : ControllerBase
         string serialNumber,
         CancellationToken ct)
     {
+        if (!IsConfiguredPassType(passTypeIdentifier))
+            return NotFound();
+
         await _sender.Send(
             new UnregisterDeviceCommand(deviceLibraryIdentifier, passTypeIdentifier, serialNumber),
             ct);
@@ -137,6 +154,9 @@ public sealed class PassesController : ControllerBase
         [FromQuery] string? passesUpdatedSince,
         CancellationToken ct)
     {
+        if (!IsConfiguredPassType(passTypeIdentifier))
+            return NotFound();
+
         DateTime? since = null;
         if (long.TryParse(passesUpdatedSince, out var unixSeconds) && unixSeconds > 0)
         {
@@ -157,5 +177,53 @@ public sealed class PassesController : ControllerBase
         });
     }
 
+    /// <summary>POST /v1/log - recibe diagnósticos enviados por Apple Wallet.</summary>
+    [HttpPost("log")]
+    public IActionResult Log([FromBody] AppleLogBody? body)
+    {
+        var logs = body?.Logs?
+            .Where(message => !string.IsNullOrWhiteSpace(message))
+            .Take(50)
+            .ToList() ?? [];
+
+        if (logs.Count == 0)
+        {
+            _logger.LogDebug("Apple Wallet /v1/log received with no messages.");
+            return Ok();
+        }
+
+        foreach (var message in logs)
+        {
+            var safeMessage = message
+                .Replace('\r', ' ')
+                .Replace('\n', ' ');
+
+            if (safeMessage.Length > 2000)
+                safeMessage = safeMessage[..2000];
+
+            _logger.LogWarning("Apple Wallet client log: {WalletMessage}", safeMessage);
+        }
+
+        return Ok();
+    }
+
+    private bool IsConfiguredPassType(string passTypeIdentifier)
+    {
+        var isValid = string.Equals(
+            passTypeIdentifier,
+            _options.PassTypeIdentifier,
+            StringComparison.Ordinal);
+
+        if (!isValid)
+        {
+            _logger.LogWarning(
+                "Apple Wallet request used an unknown pass type identifier.");
+        }
+
+        return isValid;
+    }
+
     public sealed record PushTokenBody(string PushToken);
+
+    public sealed record AppleLogBody(IReadOnlyList<string>? Logs);
 }
