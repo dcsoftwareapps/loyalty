@@ -32,7 +32,8 @@ internal sealed class PassGeneratorService : IPassGeneratorService
         new("icon@2x.png", 58, 58),
         new("icon@3x.png", 87, 87),
         new("logo.png", 160, 50),
-        new("logo@2x.png", 320, 100)
+        new("logo@2x.png", 320, 100),
+        new("logo@3x.png", 480, 150)
     ];
 
     public PassGeneratorService(
@@ -95,7 +96,8 @@ internal sealed class PassGeneratorService : IPassGeneratorService
         EnsureRequiredOption(_options.WebServiceURL, "Apple:WebServiceURL");
         EnsureRequiredOption(_options.OrganizationName, "Apple:OrganizationName");
 
-        var (bg, fg, label) = ColorsForLevel(card.Level);
+        var progress = BuildLevelProgress(card);
+        var displayName = GetWalletDisplayName(customer);
 
         return new
         {
@@ -106,57 +108,48 @@ internal sealed class PassGeneratorService : IPassGeneratorService
             webServiceURL = _options.WebServiceURL,
             authenticationToken = card.AuthenticationToken,
             organizationName = _options.OrganizationName,
-            description = "Tarjeta de Lealtad KBeauty MX",
-            logoText = "KBeauty MX",
-            backgroundColor = bg,
-            foregroundColor = fg,
-            labelColor = label,
+            description = "Tarjeta de Lealtad K-Beauty",
+            backgroundColor = "rgb(250,248,244)",
+            foregroundColor = "rgb(28,28,28)",
+            labelColor = "rgb(132,124,120)",
             storeCard = new
             {
                 primaryFields = new[]
                 {
                     new
                     {
-                        key = "points",
-                        label = "PUNTOS",
-                        value = card.CurrentPoints,
+                        key = "name",
+                        label = string.Empty,
+                        value = displayName,
                         textAlignment = "PKTextAlignmentCenter"
                     }
                 },
-                secondaryFields = new object[]
-                {
-                    new { key = "level", label = "NIVEL", value = card.Level },
-                    new { key = "earned", label = "ESTE ANO", value = card.PointsEarnedThisYear }
-                },
+                secondaryFields = Array.Empty<object>(),
                 auxiliaryFields = new[]
                 {
-                    new { key = "member", label = "MIEMBRO", value = customer.FullName }
+                    new { key = "points", label = "PUNTOS", value = progress.PointsText },
+                    new { key = "level", label = "NIVEL", value = progress.LevelShortText },
+                    new { key = "next", label = "PR\u00d3XIMO", value = progress.NextLevelText }
                 },
                 backFields = new object[]
                 {
                     new
                     {
-                        key = "about",
-                        label = "Programa de Lealtad",
-                        value = "Acumula puntos en cada compra y canjealos por beneficios exclusivos en KBeauty MX. Niveles: Mist, Glow y Radiance."
+                        key = "benefits",
+                        label = "Beneficios",
+                        value = "\u2022 Acumula puntos en cada compra.\n\n\u2022 Desbloquea recompensas exclusivas.\n\n\u2022 Accede a beneficios seg\u00fan tu nivel."
                     },
                     new
                     {
-                        key = "store",
-                        label = "Tienda",
-                        value = "KBeauty MX - Ensenada, Baja California"
+                        key = "progress",
+                        label = "Progreso",
+                        value = $"Nivel actual\n{progress.LevelShortText}\n\nPr\u00f3ximo nivel\n{progress.NextLevelText}\n\nPuntos restantes\n{progress.RemainingPointsText}"
                     },
                     new
                     {
-                        key = "web",
-                        label = "Sitio web",
-                        value = "kbeautymx.com"
-                    },
-                    new
-                    {
-                        key = "serial",
-                        label = "Serial",
-                        value = card.SerialNumber
+                        key = "contact",
+                        label = string.Empty,
+                        value = "@kbeauty_mx\n\nkbeautymx.com\n\n+52 646 238 6962"
                     }
                 }
             },
@@ -167,10 +160,56 @@ internal sealed class PassGeneratorService : IPassGeneratorService
                     format = "PKBarcodeFormatQR",
                     message = card.SerialNumber,
                     messageEncoding = "iso-8859-1",
-                    altText = card.SerialNumber
+                    altText = "Presenta este c\u00f3digo en caja"
                 }
             }
         };
+    }
+
+    private static string GetWalletDisplayName(Customer customer)
+    {
+        var fullName = customer.FullName?.Trim();
+        if (string.IsNullOrWhiteSpace(fullName))
+            return "Cliente K-Beauty";
+
+        var firstName = fullName.Split(' ', StringSplitOptions.RemoveEmptyEntries).FirstOrDefault();
+        return string.IsNullOrWhiteSpace(firstName)
+            ? "Cliente K-Beauty"
+            : firstName;
+    }
+
+    private static PassProgress BuildLevelProgress(LoyaltyCard card)
+    {
+        var currentPoints = Math.Max(0, card.CurrentPoints);
+        var level = card.Level;
+        var levelDisplay = $"{level} Member \u2728";
+        var levelShortText = $"{level} \u2728";
+
+        if (string.Equals(level, LoyaltyConstants.Levels.Radiance, StringComparison.Ordinal) ||
+            currentPoints >= LoyaltyConstants.Defaults.LevelRadianceMin)
+        {
+            return new PassProgress(
+                levelDisplay,
+                levelShortText,
+                $"{currentPoints} pts",
+                "\u2b50 M\u00e1ximo",
+                "0 pts");
+        }
+
+        var nextLevel = string.Equals(level, LoyaltyConstants.Levels.Glow, StringComparison.Ordinal)
+            ? LoyaltyConstants.Levels.Radiance
+            : LoyaltyConstants.Levels.Glow;
+        var targetPoints = string.Equals(nextLevel, LoyaltyConstants.Levels.Radiance, StringComparison.Ordinal)
+            ? LoyaltyConstants.Defaults.LevelRadianceMin
+            : LoyaltyConstants.Defaults.LevelGlowMin;
+        var remainingPoints = Math.Max(0, targetPoints - currentPoints);
+
+        return new PassProgress(
+            levelDisplay,
+            levelShortText,
+            $"{currentPoints} pts",
+            nextLevel,
+            $"{remainingPoints} pts");
     }
 
     private IReadOnlyList<PassAsset> LoadPassAssets()
@@ -320,11 +359,6 @@ internal sealed class PassGeneratorService : IPassGeneratorService
         (cert.Subject.Contains("G4", StringComparison.OrdinalIgnoreCase) ||
          cert.Issuer.Contains("G4", StringComparison.OrdinalIgnoreCase));
 
-    private static (string bg, string fg, string label) ColorsForLevel(string level) =>
-        string.Equals(level, LoyaltyConstants.Levels.Radiance, StringComparison.Ordinal)
-            ? ("rgb(44, 24, 16)", "rgb(247, 245, 240)", "rgb(184, 152, 106)")
-            : ("rgb(247, 245, 240)", "rgb(28, 27, 24)", "rgb(155, 152, 136)");
-
     private static void EnsureRequiredOption(string? value, string key)
     {
         if (string.IsNullOrWhiteSpace(value))
@@ -370,4 +404,11 @@ internal sealed class PassGeneratorService : IPassGeneratorService
     private sealed record PassAsset(string Name, byte[] Bytes);
 
     private sealed record PassAssetSpec(string Name, int Width, int Height);
+
+    private sealed record PassProgress(
+        string LevelDisplay,
+        string LevelShortText,
+        string PointsText,
+        string NextLevelText,
+        string RemainingPointsText);
 }
