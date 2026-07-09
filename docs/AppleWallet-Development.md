@@ -305,6 +305,18 @@ Estado Fase 2.4:
 - ✅ Vista de operador.
 - ✅ Vista de notas.
 
+Estado Fase 2.5:
+
+- ✅ Pulido visual y UX del Admin.
+- ✅ Buscador por nombre/descripcion en `/rewards`.
+- ✅ Filtro `Todas` / `Activas` / `Inactivas` en `/rewards`.
+- ✅ Badges de estado y nivel en `/rewards`.
+- ✅ Producto del mes visual en `/rewards`.
+- ✅ Buscador por cliente, serial o recompensa en `/redemptions`.
+- ✅ Filtros `Todos` / `Pendientes` / `Confirmados` / `Cancelados` en `/redemptions`.
+- ✅ Badges de estado en `/redemptions`.
+- ✅ Notas truncadas con tooltip cuando aplica.
+
 Arquitectura de lectura:
 
 ```text

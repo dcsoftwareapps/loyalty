@@ -81,6 +81,14 @@ Fase 2.4:
 - ✅ Vista de fechas de solicitud/resolucion.
 - ✅ Vista de operador y notas.
 
+Fase 2.5:
+
+- ✅ Pulido visual y UX del Admin.
+- ✅ Buscadores simples.
+- ✅ Filtros visuales.
+- ✅ Badges de estado/nivel.
+- ✅ Tablas mas limpias.
+
 El mecanismo unico para informar cambios al Web Service de Apple Wallet es `LoyaltyCard.LastActivityAt`. Las acumulaciones de puntos lo actualizan mediante `LoyaltyCard.EarnPoints()`. Los canjes tambien lo actualizan mediante `LoyaltyCard.Touch(...)` despues de `LoyaltyCard.RedeemPoints(...)`.
 
 ## Flujo desde Customer hasta Wallet
@@ -402,6 +410,33 @@ SQL Server
 ```
 
 `RedemptionHistoryReadService` proyecta el historial con datos de cliente, tarjeta y recompensa para evitar consultas N+1 desde la pagina Admin.
+
+# Fase 2.5 - Pulido Admin
+
+El Admin tiene mejoras visuales y operativas en las pantallas de recompensas y canjes.
+
+## `/rewards`
+
+Mejoras implementadas:
+
+- Buscador por nombre/descripcion.
+- Filtro `Todas` / `Activas` / `Inactivas`.
+- Badges de estado.
+- Badges de nivel.
+- Producto del mes visual.
+- Acciones compactas.
+- Tabla mas limpia.
+
+## `/redemptions`
+
+Mejoras implementadas:
+
+- Buscador por cliente, serial o recompensa.
+- Filtros `Todos` / `Pendientes` / `Confirmados` / `Cancelados`.
+- Badges de estado.
+- Acciones compactas.
+- Notas truncadas con tooltip cuando aplica.
+- Mejor presentacion visual.
 
 ## Services involucrados
 

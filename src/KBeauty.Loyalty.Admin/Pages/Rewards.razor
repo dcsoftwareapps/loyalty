@@ -87,7 +87,7 @@
             </label>
         </div>
 
-        <div style="display:flex;gap:12px;flex-wrap:wrap;">
+        <div class="kb-actions-inline">
             <button class="kb-btn kb-btn--primary" @onclick="SaveAsync" disabled="@busy">
                 @(busy ? "Guardando..." : "Guardar")
             </button>
@@ -98,63 +98,68 @@
     </section>
 }
 
+<div class="kb-form-row kb-form-row--horizontal" style="margin-bottom:20px;">
+    <div style="flex:2;min-width:260px;">
+        <label for="reward-search">Buscar</label>
+        <input id="reward-search" type="text" value="@rewardSearch" @oninput="OnRewardSearchChanged"
+               placeholder="Nombre o descripcion" />
+    </div>
+    <div class="kb-actions-inline" style="align-self:end;">
+        <button class="@RewardFilterButtonClass(RewardFilterAll)" @onclick="ShowAllRewards">Todas</button>
+        <button class="@RewardFilterButtonClass(RewardFilterActive)" @onclick="ShowActiveRewards">Activas</button>
+        <button class="@RewardFilterButtonClass(RewardFilterInactive)" @onclick="ShowInactiveRewards">Inactivas</button>
+    </div>
+</div>
+
 @if (rewards is null)
 {
     <p>Cargando...</p>
 }
-else if (rewards.Count == 0)
+else if (VisibleRewards.Count == 0)
 {
-    <p style="color: var(--kb-ink-muted);">No hay recompensas registradas.</p>
+    <p style="color: var(--kb-ink-muted);">No hay recompensas para este filtro.</p>
 }
 else
 {
-    <table class="kb-table">
+    <table class="kb-table kb-table--compact">
         <thead>
             <tr>
                 <th>Nombre</th>
-                <th>Descripcion</th>
-                <th>Puntos</th>
+                <th class="kb-cell-number">Puntos</th>
                 <th>Nivel minimo</th>
-                <th>Producto del mes</th>
+                <th>Mes</th>
                 <th>Vigencia</th>
                 <th>Estado</th>
                 <th>Acciones</th>
             </tr>
         </thead>
         <tbody>
-        @foreach (var reward in rewards)
+        @foreach (var reward in VisibleRewards)
         {
             <tr>
-                <td><strong>@reward.Name</strong></td>
-                <td style="color: var(--kb-ink-muted); max-width: 260px;">@reward.Description</td>
-                <td style="font-weight:600;">@reward.PointsCost.ToString("N0") pts</td>
-                <td><LevelBadge Level="@reward.MinLevel" /></td>
-                <td>@(reward.IsMonthlyProduct ? "Si" : "No")</td>
-                <td style="color: var(--kb-ink-muted);">@FormatValidity(reward)</td>
                 <td>
-                    @if (reward.IsActive)
-                    {
-                        <span style="color: var(--kb-sage); font-weight:600;">Activa</span>
-                    }
-                    else
-                    {
-                        <span style="color: var(--kb-ink-muted); font-weight:600;">Inactiva</span>
-                    }
+                    <strong>@reward.Name</strong>
+                    <div class="kb-muted kb-text-truncate" title="@reward.Description">@reward.Description</div>
                 </td>
+                <td class="kb-cell-number" style="font-weight:600;">@reward.PointsCost.ToString("N0") pts</td>
+                <td><LevelBadge Level="@reward.MinLevel" /></td>
+                <td class="kb-cell-center">@(reward.IsMonthlyProduct ? "⭐" : "—")</td>
+                <td class="kb-muted">@FormatValidity(reward)</td>
+                <td><span class="@RewardStatusBadgeClass(reward.IsActive)">@(reward.IsActive ? "Activa" : "Inactiva")</span></td>
                 <td>
-                    <div style="display:flex;gap:8px;flex-wrap:wrap;">
-                        <button class="kb-btn kb-btn--ghost" @onclick="@(() => StartEdit(reward))" disabled="@busy">
+                    <div class="kb-actions-inline">
+                        <button class="kb-btn kb-btn--ghost kb-btn--small" @onclick="@(() => StartEdit(reward))" disabled="@busy">
                             Editar
                         </button>
                         @if (reward.IsActive)
                         {
-                            <button class="kb-btn kb-btn--ghost" @onclick="@(() => DeactivateAsync(reward.Id))" disabled="@busy">
+                            <button class="kb-btn kb-btn--ghost kb-btn--small" @onclick="@(() => DeactivateAsync(reward.Id))" disabled="@busy">
                                 Desactivar
                             </button>
                         }
                         else
                         {
-                            <button class="kb-btn kb-btn--primary" @onclick="@(() => ActivateAsync(reward.Id))" disabled="@busy">
+                            <button class="kb-btn kb-btn--primary kb-btn--small" @onclick="@(() => ActivateAsync(reward.Id))" disabled="@busy">
                                 Activar
                             </button>
                         }
@@ -170,11 +175,22 @@ else
     private List<RewardAdminDto>? rewards;
     private RewardFormModel form = RewardFormModel.CreateDefault();
     private readonly List<string> validationErrors = new();
+    private const string RewardFilterAll = "all";
+    private const string RewardFilterActive = "active";
+    private const string RewardFilterInactive = "inactive";
     private Guid? editingId;
+    private string rewardSearch = string.Empty;
+    private string rewardStatusFilter = RewardFilterAll;
     private string? successMsg;
     private string? errorMsg;
     private bool showForm;
     private bool busy;
+
+    private IReadOnlyList<RewardAdminDto> VisibleRewards => (rewards ?? new List<RewardAdminDto>())
+        .Where(MatchesRewardSearch)
+        .Where(MatchesRewardStatus)
+        .ToList()
+        .AsReadOnly();
 
     protected override async Task OnInitializedAsync() => await ReloadAsync();
 
@@ -307,6 +323,15 @@ else
         validationErrors.Clear();
     }
 
+    private void OnRewardSearchChanged(ChangeEventArgs e)
+    {
+        rewardSearch = e.Value?.ToString() ?? string.Empty;
+    }
+
+    private void ShowAllRewards() => rewardStatusFilter = RewardFilterAll;
+    private void ShowActiveRewards() => rewardStatusFilter = RewardFilterActive;
+    private void ShowInactiveRewards() => rewardStatusFilter = RewardFilterInactive;
+
     private bool ValidateForm()
     {
         validationErrors.Clear();
@@ -332,6 +357,29 @@ else
         errorMsg = null;
         validationErrors.Clear();
     }
+
+    private bool MatchesRewardSearch(RewardAdminDto reward)
+    {
+        if (string.IsNullOrWhiteSpace(rewardSearch))
+            return true;
+
+        var term = rewardSearch.Trim();
+        return reward.Name.Contains(term, StringComparison.OrdinalIgnoreCase) ||
+               reward.Description.Contains(term, StringComparison.OrdinalIgnoreCase);
+    }
+
+    private bool MatchesRewardStatus(RewardAdminDto reward) => rewardStatusFilter switch
+    {
+        RewardFilterActive => reward.IsActive,
+        RewardFilterInactive => !reward.IsActive,
+        _ => true
+    };
+
+    private string RewardFilterButtonClass(string value) =>
+        rewardStatusFilter == value ? "kb-btn kb-btn--primary" : "kb-btn kb-btn--ghost";
+
+    private static string RewardStatusBadgeClass(bool isActive) =>
+        isActive ? "kb-badge kb-badge--success" : "kb-badge kb-badge--muted";
 
     private static string FormatValidity(RewardAdminDto reward)
     {

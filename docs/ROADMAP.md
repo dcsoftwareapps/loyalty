@@ -4,14 +4,14 @@
 
 - ✅ Fase 2.3 - Cancelación de canjes
 - ✅ Fase 2.4 - Historial de canjes
+- ✅ Fase 2.5 - Pulido Admin
 
 ## Siguiente
 
-### Fase 2.5 - Pulido Admin
+### Fase 3 - Campañas y promociones
 
-- Buscador
-- Filtros visuales
-- Mejoras de tabla
-- UX
-- Badges
-- Limpieza visual
+- Bono de cumpleaños
+- Doble puntos
+- Producto del mes
+- Notificaciones por nivel
+- Mejoras de experiencia Wallet

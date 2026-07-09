@@ -16,6 +16,17 @@
 @if (errorMsg is not null) { <div class="kb-form-error">@errorMsg</div> }
 
 <div class="kb-form-row kb-form-row--horizontal" style="margin-bottom:24px;">
+    <div style="flex:2;min-width:260px;">
+        <label for="redemption-search">Buscar</label>
+        <input id="redemption-search" type="text" @bind="searchTerm" @bind:event="oninput"
+               @onkeydown="@(e => { if (e.Key == "Enter") ReloadAsync(); })"
+               placeholder="Cliente, serial o recompensa" />
+    </div>
+    <button class="kb-btn kb-btn--primary" style="align-self:end;" @onclick="ReloadAsync">Buscar</button>
+    <button class="kb-btn kb-btn--ghost" style="align-self:end;" @onclick="ClearSearch">Limpiar</button>
+</div>
+
+<div class="kb-form-row kb-form-row--horizontal" style="margin-bottom:24px;">
     <button class="@FilterButtonClass(null)" @onclick="@(() => SetStatusFilter(null))">Todos</button>
     <button class="@FilterButtonClass(RedemptionStatus.Pending)" @onclick="@(() => SetStatusFilter(RedemptionStatus.Pending))">Pendientes</button>
     <button class="@FilterButtonClass(RedemptionStatus.Confirmed)" @onclick="@(() => SetStatusFilter(RedemptionStatus.Confirmed))">Confirmados</button>
@@ -32,16 +43,16 @@ else if (redemptions.Count == 0)
 }
 else
 {
-    <table class="kb-table">
+    <table class="kb-table kb-table--compact">
         <thead>
             <tr>
                 <th>Cliente</th>
                 <th>Serial</th>
                 <th>Recompensa</th>
-                <th>Puntos</th>
+                <th class="kb-cell-number">Puntos</th>
                 <th>Estado</th>
-                <th>Fecha de solicitud</th>
-                <th>Fecha de resolucion</th>
+                <th>Solicitud</th>
+                <th>Resolucion</th>
                 <th>Operador</th>
                 <th>Notas</th>
                 <th>Acciones</th>
@@ -51,30 +62,32 @@ else
         @foreach (var item in redemptions)
         {
             <tr>
-                <td>@item.CustomerName</td>
+                <td><strong>@item.CustomerName</strong></td>
                 <td><code>@item.SerialNumber</code></td>
                 <td>@item.RewardName</td>
-                <td style="color: var(--kb-blush); font-weight: 600;">@item.PointsSpent.ToString("N0")</td>
-                <td>@StatusText(item.Status)</td>
-                <td style="color: var(--kb-ink-muted);">@item.RedeemedAt.ToLocalTime().ToString("dd MMM yyyy HH:mm")</td>
-                <td style="color: var(--kb-ink-muted);">@FormatDate(item.ResolvedAt)</td>
-                <td style="color: var(--kb-ink-muted);">@DisplayText(item.ResolvedBy)</td>
-                <td style="color: var(--kb-ink-muted); max-width:220px;">@DisplayText(item.Notes)</td>
+                <td class="kb-cell-number" style="color: var(--kb-blush); font-weight: 600;">@item.PointsSpent.ToString("N0")</td>
+                <td><span class="@RedemptionStatusBadgeClass(item.Status)">@item.Status</span></td>
+                <td class="kb-muted">@FormatDate(item.RedeemedAt)</td>
+                <td class="kb-muted">@FormatDate(item.ResolvedAt)</td>
+                <td class="kb-muted">@DisplayText(item.ResolvedBy)</td>
+                <td class="kb-muted kb-text-truncate" style="max-width:220px;" title="@DisplayText(item.Notes)">
+                    @DisplayText(item.Notes)
+                </td>
                 <td>
                     @if (item.Status == RedemptionStatus.Pending)
                     {
-                        <div style="display:flex;gap:8px;flex-wrap:wrap;">
-                            <button class="kb-btn kb-btn--primary" @onclick="@(() => Confirm(item.RedemptionId))">
+                        <div class="kb-actions-inline">
+                            <button class="kb-btn kb-btn--primary kb-btn--small" @onclick="@(() => Confirm(item.RedemptionId))">
                                 Confirmar
                             </button>
-                            <button class="kb-btn kb-btn--ghost" @onclick="@(() => Cancel(item.RedemptionId))">
+                            <button class="kb-btn kb-btn--ghost kb-btn--small" @onclick="@(() => Cancel(item.RedemptionId))">
                                 Cancelar
                             </button>
                         </div>
                     }
                     else
                     {
-                        <span style="color: var(--kb-ink-muted);">@StatusText(item.Status)</span>
+                        <span class="kb-muted">@StatusText(item.Status)</span>
                     }
                 </td>
             </tr>
@@ -109,6 +122,7 @@ else
 @code {
     private IReadOnlyList<RedemptionHistoryItemDto>? redemptions;
     private RedemptionStatus? statusFilter = RedemptionStatus.Pending;
+    private string searchTerm = string.Empty;
     private bool showConfirmModal;
     private bool showCancelModal;
     private Guid? confirmTargetId;
@@ -121,7 +135,10 @@ else
 
     private async Task ReloadAsync()
     {
-        var result = await Sender.Send(new ListRedemptionsQuery(statusFilter));
+        var result = await Sender.Send(new ListRedemptionsQuery(
+            statusFilter,
+            string.IsNullOrWhiteSpace(searchTerm) ? null : searchTerm.Trim()));
+
         if (result.IsSuccess)
         {
             redemptions = result.Value;
@@ -136,6 +153,12 @@ else
     {
         statusFilter = status;
         ClearMessages();
+        await ReloadAsync();
+    }
+
+    private async Task ClearSearch()
+    {
+        searchTerm = string.Empty;
         await ReloadAsync();
     }
 
@@ -221,6 +244,17 @@ else
         RedemptionStatus.Cancelled => "Cancelado",
         _ => status.ToString()
     };
+
+    private static string RedemptionStatusBadgeClass(RedemptionStatus status) => status switch
+    {
+        RedemptionStatus.Pending => "kb-badge kb-badge--warning",
+        RedemptionStatus.Confirmed => "kb-badge kb-badge--success",
+        RedemptionStatus.Cancelled => "kb-badge kb-badge--muted",
+        _ => "kb-badge"
+    };
+
+    private static string FormatDate(DateTime value) =>
+        value.ToLocalTime().ToString("dd MMM yyyy HH:mm");
 
     private static string FormatDate(DateTime? value) =>
         value.HasValue ? value.Value.ToLocalTime().ToString("dd MMM yyyy HH:mm") : "-";

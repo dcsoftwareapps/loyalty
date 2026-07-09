@@ -130,6 +130,17 @@ input:focus, select:focus, textarea:focus {
 .kb-table th { background: var(--kb-sand-50); color: var(--kb-ink-muted); font-size: 0.85rem; text-transform: uppercase; letter-spacing: 0.05em; font-weight: 500; }
 .kb-table tr:last-child td { border-bottom: none; }
 .kb-table tr:hover td { background: var(--kb-sand-50); }
+.kb-table--compact th, .kb-table--compact td { padding: 12px 14px; vertical-align: middle; }
+.kb-cell-number { text-align: right !important; white-space: nowrap; }
+.kb-cell-center { text-align: center !important; }
+.kb-muted { color: var(--kb-ink-muted); }
+.kb-text-truncate {
+    display: block;
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
 
 /* ============================================================================
    Botones
@@ -157,6 +168,8 @@ input:focus, select:focus, textarea:focus {
 .kb-btn--ghost { background: transparent; color: var(--kb-ink); border: 1px solid var(--kb-sand-100); }
 .kb-btn--large { font-size: 1.15rem; padding: 18px 32px; min-height: 56px; }
 .kb-btn--block { display: flex; width: 100%; }
+.kb-btn--small { padding: 8px 12px; font-size: 0.9rem; }
+.kb-actions-inline { display: inline-flex; align-items: center; gap: 8px; flex-wrap: nowrap; white-space: nowrap; }
 
 /* ============================================================================
    Niveles (badges)
@@ -165,6 +178,21 @@ input:focus, select:focus, textarea:focus {
 .kb-level--mist { background: #EDEAE2; color: #5C5A50; }
 .kb-level--glow { background: #E8F0FB; color: #185FA5; }
 .kb-level--radiance { background: #F2E8E5; color: #C4897A; }
+.kb-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 24px;
+    padding: 4px 10px;
+    border-radius: 999px;
+    font-size: 0.78rem;
+    font-weight: 700;
+    letter-spacing: 0.02em;
+    white-space: nowrap;
+}
+.kb-badge--success { background: #ECF3EF; color: var(--kb-sage); }
+.kb-badge--warning { background: #FFF4DF; color: var(--kb-gold); }
+.kb-badge--muted { background: var(--kb-sand-100); color: var(--kb-ink-muted); }
 
 /* ============================================================================
    PointsDisplay (animación)
