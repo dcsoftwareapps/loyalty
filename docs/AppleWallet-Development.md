@@ -277,8 +277,16 @@ Pagina:
 
 Desde esta pantalla es posible:
 
+- Ver todos los canjes.
+- Filtrar por pendientes.
+- Filtrar por confirmados.
+- Filtrar por cancelados.
 - Confirmar canjes pendientes.
 - Cancelar canjes pendientes.
+- Ver fecha de solicitud.
+- Ver fecha de resolucion.
+- Ver operador.
+- Ver notas.
 - Registrar una nota opcional de cancelacion.
 
 Estado Fase 2.3:
@@ -287,6 +295,29 @@ Estado Fase 2.3:
 - ✅ Restauracion automatica de puntos.
 - ✅ Reversa de transacciones.
 - ✅ Actualizacion automatica de Wallet despues de cancelar.
+
+Estado Fase 2.4:
+
+- ✅ Historial de canjes.
+- ✅ Filtros por estado.
+- ✅ Vista de fecha de solicitud.
+- ✅ Vista de fecha de resolucion.
+- ✅ Vista de operador.
+- ✅ Vista de notas.
+
+Arquitectura de lectura:
+
+```text
+Admin
+  ↓
+ListRedemptionsQuery
+  ↓
+IRedemptionHistoryReadService
+  ↓
+RedemptionHistoryReadService
+  ↓
+SQL Server
+```
 
 ## Descargar un pass
 

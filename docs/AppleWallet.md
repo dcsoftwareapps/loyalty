@@ -74,6 +74,13 @@ Fase 2.3:
 - ✅ Reversa de transacciones.
 - ✅ Actualizacion automatica de Wallet despues de cancelar.
 
+Fase 2.4:
+
+- ✅ Historial de canjes.
+- ✅ Filtros por estado.
+- ✅ Vista de fechas de solicitud/resolucion.
+- ✅ Vista de operador y notas.
+
 El mecanismo unico para informar cambios al Web Service de Apple Wallet es `LoyaltyCard.LastActivityAt`. Las acumulaciones de puntos lo actualizan mediante `LoyaltyCard.EarnPoints()`. Los canjes tambien lo actualizan mediante `LoyaltyCard.Touch(...)` despues de `LoyaltyCard.RedeemPoints(...)`.
 
 ## Flujo desde Customer hasta Wallet
@@ -281,8 +288,16 @@ SQL Server
 
 La pantalla de Canjes (`/redemptions`) permite:
 
+- Ver todos los canjes.
+- Filtrar por pendientes.
+- Filtrar por confirmados.
+- Filtrar por cancelados.
 - Confirmar canjes pendientes.
 - Cancelar canjes pendientes.
+- Ver fecha de solicitud.
+- Ver fecha de resolucion.
+- Ver operador.
+- Ver notas.
 - Registrar una nota opcional de cancelacion.
 
 # Fase 2.3 - Cancelación de Canjes
@@ -340,6 +355,53 @@ Apple Wallet
 La restauracion usa `LoyaltyCard.RestorePoints(...)`. Este metodo suma saldo disponible y actualiza `LastActivityAt`, pero no aumenta `LifetimePoints` ni `PointsEarnedThisYear`.
 
 La transaccion positiva de reversa queda registrada como `TransactionType.RedemptionReversal`.
+
+# Fase 2.4 - Historial de canjes
+
+La pantalla Admin `/redemptions` muestra el historial completo de canjes, no solo pendientes.
+
+Permite ver:
+
+- Todos los canjes.
+- Canjes pendientes.
+- Canjes confirmados.
+- Canjes cancelados.
+
+La tabla muestra:
+
+- Cliente.
+- Serial.
+- Recompensa.
+- Puntos.
+- Estado.
+- Fecha de solicitud.
+- Fecha de resolucion.
+- Operador.
+- Notas.
+- Acciones.
+
+Las acciones solo estan disponibles para canjes `Pending`:
+
+- Confirmar.
+- Cancelar.
+
+Los canjes `Confirmed` y `Cancelled` no permiten acciones de cambio de estado.
+
+Arquitectura de lectura:
+
+```text
+Admin
+  ↓
+ListRedemptionsQuery
+  ↓
+IRedemptionHistoryReadService
+  ↓
+RedemptionHistoryReadService
+  ↓
+SQL Server
+```
+
+`RedemptionHistoryReadService` proyecta el historial con datos de cliente, tarjeta y recompensa para evitar consultas N+1 desde la pagina Admin.
 
 ## Services involucrados
 

@@ -4,13 +4,9 @@
 
 @using KBeauty.Loyalty.Application.Redemptions.Commands.CancelRedemption
 @using KBeauty.Loyalty.Application.Redemptions.Commands.ConfirmRedemption
-@using KBeauty.Loyalty.Domain.Entities
-@using KBeauty.Loyalty.Domain.Repositories
+@using KBeauty.Loyalty.Application.Redemptions.Queries.ListRedemptions
+@using KBeauty.Loyalty.Domain.Enums
 @inject ISender Sender
-@inject IRedemptionRepository RedemptionsRepo
-@inject IRewardCatalogRepository RewardsRepo
-@inject ILoyaltyCardRepository CardsRepo
-@inject ICustomerRepository CustomersRepo
 
 <PageTitle>Canjes - KBeauty</PageTitle>
 
@@ -19,44 +15,67 @@
 @if (successMsg is not null) { <div class="kb-form-success">@successMsg</div> }
 @if (errorMsg is not null) { <div class="kb-form-error">@errorMsg</div> }
 
-<h2>Pendientes</h2>
-@if (pendingView is null)
+<div class="kb-form-row kb-form-row--horizontal" style="margin-bottom:24px;">
+    <button class="@FilterButtonClass(null)" @onclick="@(() => SetStatusFilter(null))">Todos</button>
+    <button class="@FilterButtonClass(RedemptionStatus.Pending)" @onclick="@(() => SetStatusFilter(RedemptionStatus.Pending))">Pendientes</button>
+    <button class="@FilterButtonClass(RedemptionStatus.Confirmed)" @onclick="@(() => SetStatusFilter(RedemptionStatus.Confirmed))">Confirmados</button>
+    <button class="@FilterButtonClass(RedemptionStatus.Cancelled)" @onclick="@(() => SetStatusFilter(RedemptionStatus.Cancelled))">Cancelados</button>
+</div>
+
+@if (redemptions is null)
 {
     <p>Cargando...</p>
 }
-else if (pendingView.Count == 0)
+else if (redemptions.Count == 0)
 {
-    <p style="color: var(--kb-ink-muted);">No hay canjes esperando confirmacion.</p>
+    <p style="color: var(--kb-ink-muted);">No hay canjes para este filtro.</p>
 }
 else
 {
     <table class="kb-table">
         <thead>
             <tr>
-                <th>Clienta</th>
-                <th>Beneficio</th>
+                <th>Cliente</th>
+                <th>Serial</th>
+                <th>Recompensa</th>
                 <th>Puntos</th>
-                <th>Solicitado</th>
-                <th></th>
+                <th>Estado</th>
+                <th>Fecha de solicitud</th>
+                <th>Fecha de resolucion</th>
+                <th>Operador</th>
+                <th>Notas</th>
+                <th>Acciones</th>
             </tr>
         </thead>
         <tbody>
-        @foreach (var item in pendingView)
+        @foreach (var item in redemptions)
         {
             <tr>
-                <td>@item.CustomerName <br/><code style="color:var(--kb-ink-muted);font-size:0.85rem;">@item.SerialNumber</code></td>
+                <td>@item.CustomerName</td>
+                <td><code>@item.SerialNumber</code></td>
                 <td>@item.RewardName</td>
-                <td style="color: var(--kb-blush); font-weight: 600;">@item.PointsSpent</td>
-                <td style="color: var(--kb-ink-muted);">@item.RedeemedAt.ToLocalTime().ToString("dd MMM HH:mm")</td>
+                <td style="color: var(--kb-blush); font-weight: 600;">@item.PointsSpent.ToString("N0")</td>
+                <td>@StatusText(item.Status)</td>
+                <td style="color: var(--kb-ink-muted);">@item.RedeemedAt.ToLocalTime().ToString("dd MMM yyyy HH:mm")</td>
+                <td style="color: var(--kb-ink-muted);">@FormatDate(item.ResolvedAt)</td>
+                <td style="color: var(--kb-ink-muted);">@DisplayText(item.ResolvedBy)</td>
+                <td style="color: var(--kb-ink-muted); max-width:220px;">@DisplayText(item.Notes)</td>
                 <td>
-                    <div style="display:flex;gap:8px;flex-wrap:wrap;">
-                        <button class="kb-btn kb-btn--primary" @onclick="@(() => Confirm(item.RedemptionId))">
-                            Confirmar entrega
-                        </button>
-                        <button class="kb-btn kb-btn--ghost" @onclick="@(() => Cancel(item.RedemptionId))">
-                            Cancelar
-                        </button>
-                    </div>
+                    @if (item.Status == RedemptionStatus.Pending)
+                    {
+                        <div style="display:flex;gap:8px;flex-wrap:wrap;">
+                            <button class="kb-btn kb-btn--primary" @onclick="@(() => Confirm(item.RedemptionId))">
+                                Confirmar
+                            </button>
+                            <button class="kb-btn kb-btn--ghost" @onclick="@(() => Cancel(item.RedemptionId))">
+                                Cancelar
+                            </button>
+                        </div>
+                    }
+                    else
+                    {
+                        <span style="color: var(--kb-ink-muted);">@StatusText(item.Status)</span>
+                    }
                 </td>
             </tr>
         }
@@ -69,7 +88,7 @@ else
               Message="Confirmas que entregaste el beneficio a la clienta?"
               ConfirmText="Si, entregado"
               OnConfirm="DoConfirmAsync"
-              OnCancel="() => showConfirmModal = false" />
+              OnCancel="CloseConfirmModal" />
 
 @if (showCancelModal)
 {
@@ -88,7 +107,8 @@ else
 }
 
 @code {
-    private List<PendingRedemptionView>? pendingView;
+    private IReadOnlyList<RedemptionHistoryItemDto>? redemptions;
+    private RedemptionStatus? statusFilter = RedemptionStatus.Pending;
     private bool showConfirmModal;
     private bool showCancelModal;
     private Guid? confirmTargetId;
@@ -101,22 +121,22 @@ else
 
     private async Task ReloadAsync()
     {
-        var pending = await RedemptionsRepo.GetPendingAsync();
-        var list = new List<PendingRedemptionView>(pending.Count);
-        foreach (var r in pending)
+        var result = await Sender.Send(new ListRedemptionsQuery(statusFilter));
+        if (result.IsSuccess)
         {
-            var card = await CardsRepo.GetByIdAsync(r.LoyaltyCardId);
-            var customer = card is null ? null : await CustomersRepo.GetByIdAsync(card.CustomerId);
-            var reward = await RewardsRepo.GetByIdAsync(r.RewardCatalogItemId);
-            list.Add(new PendingRedemptionView(
-                r.Id,
-                customer?.FullName ?? "-",
-                card?.SerialNumber ?? "-",
-                reward?.Name ?? "-",
-                r.PointsSpent,
-                r.RedeemedAt));
+            redemptions = result.Value;
+            return;
         }
-        pendingView = list;
+
+        errorMsg = result.Error;
+        redemptions = Array.Empty<RedemptionHistoryItemDto>();
+    }
+
+    private async Task SetStatusFilter(RedemptionStatus? status)
+    {
+        statusFilter = status;
+        ClearMessages();
+        await ReloadAsync();
     }
 
     private void Confirm(Guid id)
@@ -131,8 +151,7 @@ else
         if (confirmTargetId is null) return;
 
         var result = await Sender.Send(new ConfirmRedemptionCommand(confirmTargetId.Value, "admin-panel"));
-        showConfirmModal = false;
-        confirmTargetId = null;
+        CloseConfirmModal();
 
         if (result.IsFailure)
         {
@@ -161,9 +180,7 @@ else
             "admin-panel",
             string.IsNullOrWhiteSpace(cancelNotes) ? null : cancelNotes.Trim()));
 
-        showCancelModal = false;
-        cancelTargetId = null;
-        cancelNotes = null;
+        CloseCancelModal();
 
         if (result.IsFailure)
         {
@@ -173,6 +190,12 @@ else
 
         successMsg = $"Canje cancelado. Se restauraron {result.Value.PointsRestored:N0} pts.";
         await ReloadAsync();
+    }
+
+    private void CloseConfirmModal()
+    {
+        showConfirmModal = false;
+        confirmTargetId = null;
     }
 
     private void CloseCancelModal()
@@ -188,11 +211,20 @@ else
         errorMsg = null;
     }
 
-    private sealed record PendingRedemptionView(
-        Guid RedemptionId,
-        string CustomerName,
-        string SerialNumber,
-        string RewardName,
-        int PointsSpent,
-        DateTime RedeemedAt);
+    private string FilterButtonClass(RedemptionStatus? status) =>
+        statusFilter == status ? "kb-btn kb-btn--primary" : "kb-btn kb-btn--ghost";
+
+    private static string StatusText(RedemptionStatus status) => status switch
+    {
+        RedemptionStatus.Pending => "Pendiente",
+        RedemptionStatus.Confirmed => "Confirmado",
+        RedemptionStatus.Cancelled => "Cancelado",
+        _ => status.ToString()
+    };
+
+    private static string FormatDate(DateTime? value) =>
+        value.HasValue ? value.Value.ToLocalTime().ToString("dd MMM yyyy HH:mm") : "-";
+
+    private static string DisplayText(string? value) =>
+        string.IsNullOrWhiteSpace(value) ? "-" : value;
 }

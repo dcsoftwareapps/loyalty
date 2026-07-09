@@ -81,6 +81,7 @@ public static class DependencyInjection
 
         services.AddScoped<IDashboardReadService, DashboardReadService>();
         services.AddScoped<ICustomerListReadService, CustomerListReadService>();
+        services.AddScoped<IRedemptionHistoryReadService, RedemptionHistoryReadService>();
     }
 
     private static void AddWalletServices(
