@@ -265,6 +265,29 @@ Estado Fase 2.2:
 - ✅ Activar.
 - ✅ Desactivar.
 
+## Redemption Administration
+
+Fase 2.3 agrega cancelacion de canjes pendientes desde el panel Admin.
+
+Pagina:
+
+```text
+/redemptions
+```
+
+Desde esta pantalla es posible:
+
+- Confirmar canjes pendientes.
+- Cancelar canjes pendientes.
+- Registrar una nota opcional de cancelacion.
+
+Estado Fase 2.3:
+
+- ✅ Cancelacion de canjes.
+- ✅ Restauracion automatica de puntos.
+- ✅ Reversa de transacciones.
+- ✅ Actualizacion automatica de Wallet despues de cancelar.
+
 ## Descargar un pass
 
 Para pruebas directas en iPhone durante Development:
@@ -341,6 +364,19 @@ POST /api/redemptions
 9. Llama `IApnService.SendPassUpdateAsync`.
 10. `ApnService` envia push HTTP/2 a APNs.
 
+`CancelRedemptionHandler`:
+
+1. Busca el canje por id.
+2. Valida que este en estado `Pending`.
+3. Cambia `Redemption` a `Cancelled`.
+4. Aplica `LoyaltyCard.RestorePoints(...)`.
+5. Crea `PointTransaction` positiva de tipo `RedemptionReversal`.
+6. `RestorePoints` actualiza `LastActivityAt`.
+7. Guarda cambios.
+8. Busca registrations del serial.
+9. Llama `IApnService.SendPassUpdateAsync`.
+10. `ApnService` envia push HTTP/2 a APNs.
+
 El push es best-effort: si APNs falla, la transaccion de puntos o canje no se revierte.
 
 ## Probar actualizacion automatica
@@ -348,7 +384,7 @@ El push es best-effort: si APNs falla, la transaccion de puntos o canje no se re
 Flujo esperado:
 
 ```text
-POST /api/points o POST /api/redemptions
+POST /api/points, POST /api/redemptions o PUT /api/redemptions/{id}/cancel
   ↓
 APNs 200
   ↓
@@ -383,6 +419,26 @@ Apple descarga el nuevo pass
 Wallet se actualiza automaticamente
 ```
 
+Para cancelacion de canjes, el flujo completo es:
+
+```text
+Cancelacion
+  ↓
+Redemption Cancelled
+  ↓
+PointTransaction positiva de reversa
+  ↓
+Actualizacion de LastActivityAt
+  ↓
+APNs
+  ↓
+Apple solicita seriales modificados
+  ↓
+Apple descarga el nuevo pass
+  ↓
+Wallet se actualiza automaticamente
+```
+
 Si Wallet llama:
 
 ```text
@@ -391,7 +447,7 @@ GET /v1/devices/{device}/registrations/{passType}
 
 sin `Authorization`, la API lo acepta. Esto fue necesario porque Apple puede consultar ese endpoint agrupado sin token especifico de un pass.
 
-El mecanismo unico para detectar cambios es `LoyaltyCard.LastActivityAt`; compras y canjes lo actualizan antes de enviar APNs.
+El mecanismo unico para detectar cambios es `LoyaltyCard.LastActivityAt`; compras, canjes y cancelaciones de canjes lo actualizan antes de enviar APNs.
 
 ## Problemas conocidos
 
@@ -454,7 +510,8 @@ Estado actual:
 
 - Las compras actualizan `LastActivityAt` mediante `LoyaltyCard.EarnPoints`.
 - Los canjes actualizan `LastActivityAt` mediante `LoyaltyCard.Touch(...)` despues de descontar puntos.
-- Apple Wallet puede refrescar automaticamente despues de compras y canjes.
+- Las cancelaciones de canjes actualizan `LastActivityAt` mediante `LoyaltyCard.RestorePoints(...)` al restaurar puntos.
+- Apple Wallet puede refrescar automaticamente despues de compras, canjes y cancelaciones de canjes.
 
 ### Limitaciones visuales de Wallet
 

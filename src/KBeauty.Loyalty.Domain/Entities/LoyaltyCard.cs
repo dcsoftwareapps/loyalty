@@ -123,6 +123,20 @@ public class LoyaltyCard : Entity
     }
 
     /// <summary>
+    /// Restaura puntos por cancelacion de canje. No afecta metricas de acumulacion
+    /// como LifetimePoints ni PointsEarnedThisYear.
+    /// </summary>
+    public void RestorePoints(int points, IDateTimeProvider dt)
+    {
+        if (points <= 0)
+            throw new ArgumentOutOfRangeException(nameof(points), "Los puntos a restaurar deben ser positivos.");
+        ArgumentNullException.ThrowIfNull(dt);
+
+        CurrentPoints += points;
+        LastActivityAt = dt.UtcNow;
+    }
+
+    /// <summary>
     /// Indica si la tarjeta es Radiance y no acumuló suficientes puntos en su año
     /// vigente para mantener el nivel.
     /// </summary>

@@ -67,6 +67,13 @@ Fase 2.2:
 - ✅ Activar.
 - ✅ Desactivar.
 
+Fase 2.3:
+
+- ✅ Cancelacion de canjes.
+- ✅ Restauracion automatica de puntos.
+- ✅ Reversa de transacciones.
+- ✅ Actualizacion automatica de Wallet despues de cancelar.
+
 El mecanismo unico para informar cambios al Web Service de Apple Wallet es `LoyaltyCard.LastActivityAt`. Las acumulaciones de puntos lo actualizan mediante `LoyaltyCard.EarnPoints()`. Los canjes tambien lo actualizan mediante `LoyaltyCard.Touch(...)` despues de `LoyaltyCard.RedeemPoints(...)`.
 
 ## Flujo desde Customer hasta Wallet
@@ -271,6 +278,68 @@ Repository
   ↓
 SQL Server
 ```
+
+La pantalla de Canjes (`/redemptions`) permite:
+
+- Confirmar canjes pendientes.
+- Cancelar canjes pendientes.
+- Registrar una nota opcional de cancelacion.
+
+# Fase 2.3 - Cancelación de Canjes
+
+El sistema permite cancelar canjes pendientes desde Admin.
+
+Flujo completo:
+
+```text
+Cliente solicita canje
+  ↓
+Se descuentan puntos
+  ↓
+Se crea PointTransaction negativa
+  ↓
+Redemption queda Pending
+  ↓
+Admin puede confirmar o cancelar
+```
+
+Si se confirma:
+
+- El canje queda completado.
+- No hay cambios adicionales en puntos.
+
+Si se cancela:
+
+- `Redemption` cambia a `Cancelled`.
+- Se restauran los puntos del cliente.
+- Se crea una `PointTransaction` positiva de reversa.
+- Se actualiza `LastActivityAt`.
+- Se envia APNs.
+- Apple Wallet refresca automaticamente.
+
+Flujo tecnico:
+
+```text
+Admin
+  ↓
+CancelRedemptionCommand
+  ↓
+Domain
+  ↓
+RestorePoints
+  ↓
+PointTransaction (Reversal)
+  ↓
+LastActivityAt
+  ↓
+APNs
+  ↓
+Apple Wallet
+```
+
+La restauracion usa `LoyaltyCard.RestorePoints(...)`. Este metodo suma saldo disponible y actualiza `LastActivityAt`, pero no aumenta `LifetimePoints` ni `PointsEarnedThisYear`.
+
+La transaccion positiva de reversa queda registrada como `TransactionType.RedemptionReversal`.
 
 ## Services involucrados
 
@@ -542,6 +611,21 @@ Cuando se realiza un canje:
 10. Wallet consulta seriales actualizados.
 11. Wallet descarga el pass actualizado.
 
+Cuando se cancela un canje pendiente:
+
+1. `PUT /api/redemptions/{id}/cancel` llega a `RedemptionsController`.
+2. `CancelRedemptionHandler` valida que el canje exista y este `Pending`.
+3. `Redemption.Cancel(...)` cambia el estado a `Cancelled`.
+4. `LoyaltyCard.RestorePoints(...)` restaura los puntos gastados.
+5. Se crea `PointTransaction` positiva de tipo `RedemptionReversal`.
+6. `RestorePoints` actualiza `LastActivityAt`.
+7. Se guarda el cambio.
+8. El handler busca devices registrados por serial.
+9. Llama `IApnService.SendPassUpdateAsync` por cada push token.
+10. `ApnService` manda push background a APNs.
+11. Wallet consulta seriales actualizados.
+12. Wallet descarga el pass actualizado.
+
 Flujo resumido de refresh por canje:
 
 ```text
@@ -682,4 +766,4 @@ GET /v1/passes/{passType}/{serial}
 Wallet actualizado
 ```
 
-En ambos casos, la deteccion de cambios para Apple se basa en `LoyaltyCard.LastActivityAt`: compras/acumulaciones lo actualizan en `EarnPoints`; canjes lo actualizan con `Touch` despues de descontar puntos.
+La deteccion de cambios para Apple se basa en `LoyaltyCard.LastActivityAt`: compras/acumulaciones lo actualizan en `EarnPoints`; canjes lo actualizan con `Touch` despues de descontar puntos; cancelaciones de canjes lo actualizan con `RestorePoints` al restaurar saldo.

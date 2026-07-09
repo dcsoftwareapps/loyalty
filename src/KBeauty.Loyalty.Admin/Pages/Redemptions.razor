@@ -2,6 +2,7 @@
 @attribute [Authorize]
 @rendermode InteractiveServer
 
+@using KBeauty.Loyalty.Application.Redemptions.Commands.CancelRedemption
 @using KBeauty.Loyalty.Application.Redemptions.Commands.ConfirmRedemption
 @using KBeauty.Loyalty.Domain.Entities
 @using KBeauty.Loyalty.Domain.Repositories
@@ -11,18 +12,21 @@
 @inject ILoyaltyCardRepository CardsRepo
 @inject ICustomerRepository CustomersRepo
 
-<PageTitle>Canjes · KBeauty</PageTitle>
+<PageTitle>Canjes - KBeauty</PageTitle>
 
 <h1>Canjes</h1>
+
+@if (successMsg is not null) { <div class="kb-form-success">@successMsg</div> }
+@if (errorMsg is not null) { <div class="kb-form-error">@errorMsg</div> }
 
 <h2>Pendientes</h2>
 @if (pendingView is null)
 {
-    <p>Cargando…</p>
+    <p>Cargando...</p>
 }
 else if (pendingView.Count == 0)
 {
-    <p style="color: var(--kb-ink-muted);">No hay canjes esperando confirmación.</p>
+    <p style="color: var(--kb-ink-muted);">No hay canjes esperando confirmacion.</p>
 }
 else
 {
@@ -45,9 +49,14 @@ else
                 <td style="color: var(--kb-blush); font-weight: 600;">@item.PointsSpent</td>
                 <td style="color: var(--kb-ink-muted);">@item.RedeemedAt.ToLocalTime().ToString("dd MMM HH:mm")</td>
                 <td>
-                    <button class="kb-btn kb-btn--primary" @onclick="@(() => Confirm(item.RedemptionId))">
-                        Confirmar entrega
-                    </button>
+                    <div style="display:flex;gap:8px;flex-wrap:wrap;">
+                        <button class="kb-btn kb-btn--primary" @onclick="@(() => Confirm(item.RedemptionId))">
+                            Confirmar entrega
+                        </button>
+                        <button class="kb-btn kb-btn--ghost" @onclick="@(() => Cancel(item.RedemptionId))">
+                            Cancelar
+                        </button>
+                    </div>
                 </td>
             </tr>
         }
@@ -55,17 +64,38 @@ else
     </table>
 }
 
-<ConfirmModal Show="@showModal"
+<ConfirmModal Show="@showConfirmModal"
               Title="Confirmar entrega"
-              Message="¿Confirmas que entregaste el beneficio a la clienta?"
-              ConfirmText="Sí, entregado"
+              Message="Confirmas que entregaste el beneficio a la clienta?"
+              ConfirmText="Si, entregado"
               OnConfirm="DoConfirmAsync"
-              OnCancel="() => showModal = false" />
+              OnCancel="() => showConfirmModal = false" />
+
+@if (showCancelModal)
+{
+    <div class="kb-modal-overlay" @onclick="CloseCancelModal">
+        <div class="kb-modal" @onclick:stopPropagation>
+            <h3>Cancelar canje</h3>
+            <p>Al cancelar, los puntos se restauran a la clienta y Wallet se actualiza.</p>
+            <label for="cancel-notes">Nota opcional</label>
+            <textarea id="cancel-notes" rows="3" @bind="cancelNotes"></textarea>
+            <div class="kb-modal-actions">
+                <button class="kb-btn kb-btn--ghost" @onclick="CloseCancelModal">Volver</button>
+                <button class="kb-btn kb-btn--primary" @onclick="DoCancelAsync">Cancelar canje</button>
+            </div>
+        </div>
+    </div>
+}
 
 @code {
     private List<PendingRedemptionView>? pendingView;
-    private bool showModal;
-    private Guid? targetId;
+    private bool showConfirmModal;
+    private bool showCancelModal;
+    private Guid? confirmTargetId;
+    private Guid? cancelTargetId;
+    private string? cancelNotes;
+    private string? successMsg;
+    private string? errorMsg;
 
     protected override async Task OnInitializedAsync() => await ReloadAsync();
 
@@ -80,9 +110,9 @@ else
             var reward = await RewardsRepo.GetByIdAsync(r.RewardCatalogItemId);
             list.Add(new PendingRedemptionView(
                 r.Id,
-                customer?.FullName ?? "—",
-                card?.SerialNumber ?? "—",
-                reward?.Name ?? "—",
+                customer?.FullName ?? "-",
+                card?.SerialNumber ?? "-",
+                reward?.Name ?? "-",
                 r.PointsSpent,
                 r.RedeemedAt));
         }
@@ -91,18 +121,71 @@ else
 
     private void Confirm(Guid id)
     {
-        targetId = id;
-        showModal = true;
+        ClearMessages();
+        confirmTargetId = id;
+        showConfirmModal = true;
     }
 
     private async Task DoConfirmAsync()
     {
-        if (targetId is null) return;
+        if (confirmTargetId is null) return;
 
-        await Sender.Send(new ConfirmRedemptionCommand(targetId.Value, "admin-panel"));
-        showModal = false;
-        targetId = null;
+        var result = await Sender.Send(new ConfirmRedemptionCommand(confirmTargetId.Value, "admin-panel"));
+        showConfirmModal = false;
+        confirmTargetId = null;
+
+        if (result.IsFailure)
+        {
+            errorMsg = result.Error;
+            return;
+        }
+
+        successMsg = "Canje confirmado.";
         await ReloadAsync();
+    }
+
+    private void Cancel(Guid id)
+    {
+        ClearMessages();
+        cancelTargetId = id;
+        cancelNotes = null;
+        showCancelModal = true;
+    }
+
+    private async Task DoCancelAsync()
+    {
+        if (cancelTargetId is null) return;
+
+        var result = await Sender.Send(new CancelRedemptionCommand(
+            cancelTargetId.Value,
+            "admin-panel",
+            string.IsNullOrWhiteSpace(cancelNotes) ? null : cancelNotes.Trim()));
+
+        showCancelModal = false;
+        cancelTargetId = null;
+        cancelNotes = null;
+
+        if (result.IsFailure)
+        {
+            errorMsg = result.Error;
+            return;
+        }
+
+        successMsg = $"Canje cancelado. Se restauraron {result.Value.PointsRestored:N0} pts.";
+        await ReloadAsync();
+    }
+
+    private void CloseCancelModal()
+    {
+        showCancelModal = false;
+        cancelTargetId = null;
+        cancelNotes = null;
+    }
+
+    private void ClearMessages()
+    {
+        successMsg = null;
+        errorMsg = null;
     }
 
     private sealed record PendingRedemptionView(

@@ -19,5 +19,8 @@ public enum TransactionType
     Redemption = 4,
 
     /// <summary>Expiración o ajuste manual a la baja.</summary>
-    Expiry = 5
+    Expiry = 5,
+
+    /// <summary>Reversa positiva de puntos por cancelacion de un canje pendiente.</summary>
+    RedemptionReversal = 6
 }

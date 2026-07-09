@@ -1,4 +1,5 @@
 using KBeauty.Loyalty.Application.Redemptions.Commands.ConfirmRedemption;
+using KBeauty.Loyalty.Application.Redemptions.Commands.CancelRedemption;
 using KBeauty.Loyalty.Application.Redemptions.Commands.RedeemReward;
 using KBeauty.Loyalty.Application.Redemptions.Queries.GetRedemptionCatalog;
 using MediatR;
@@ -57,6 +58,26 @@ public sealed class RedemptionsController : ControllerBase
         return NoContent();
     }
 
+    /// <summary>PUT /api/redemptions/{id}/cancel - el operador cancela un canje pendiente y restaura puntos.</summary>
+    [HttpPut("{id:guid}/cancel")]
+    [ProducesResponseType(typeof(CancelRedemptionResponse), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
+    public async Task<IActionResult> Cancel(
+        Guid id,
+        [FromBody] CancelRedemptionRequest? body,
+        [FromHeader(Name = "X-Operator-Id")] string? operatorId,
+        CancellationToken ct)
+    {
+        var result = await _sender.Send(
+            new CancelRedemptionCommand(id, operatorId ?? "api", body?.Notes),
+            ct);
+
+        if (result.IsFailure)
+            return BadRequest(new ProblemDetails { Title = "Cancelacion", Detail = result.Error });
+
+        return Ok(result.Value);
+    }
+
     /// <summary>GET /api/redemptions/catalog/{serialNumber} — catálogo filtrado al nivel de la clienta.</summary>
     [HttpGet("catalog/{serialNumber}")]
     public async Task<IActionResult> GetCatalog(string serialNumber, CancellationToken ct)
@@ -71,4 +92,5 @@ public sealed class RedemptionsController : ControllerBase
 
     public sealed record RedeemRewardRequest(string SerialNumber, Guid RewardCatalogItemId);
     public sealed record ConfirmRedemptionRequest(string? Notes);
+    public sealed record CancelRedemptionRequest(string? Notes);
 }
