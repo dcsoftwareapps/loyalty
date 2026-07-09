@@ -23,6 +23,16 @@ internal sealed class RewardCatalogRepository : IRewardCatalogRepository
         return list.AsReadOnly();
     }
 
+    public async Task<IReadOnlyList<RewardCatalogItem>> GetAllAsync(CancellationToken ct = default)
+    {
+        var list = await _db.RewardCatalogItems
+            .AsNoTracking()
+            .OrderBy(r => r.Name)
+            .ThenBy(r => r.PointsCost)
+            .ToListAsync(ct);
+        return list.AsReadOnly();
+    }
+
     public async Task<IReadOnlyList<RewardCatalogItem>> GetByLevelAsync(
         MemberLevel level,
         ProgramConfigSnapshot config,

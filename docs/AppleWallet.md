@@ -23,6 +23,20 @@ El backend genera pases `.pkpass` reales con `PassGeneratorService`. Este servic
 
 La aplicacion usa Clean Architecture. Application depende de interfaces (`IPassGeneratorService`, `IApnService`, `IStorageService`) y Infrastructure provee las implementaciones concretas para Apple Wallet, APNs, Key Vault y Blob Storage.
 
+El catalogo de recompensas se administra con la entidad existente `RewardCatalogItem`. Para Fase 2.1, el flujo de administracion queda:
+
+```text
+RewardCatalogItem
+  ↓
+Application (CQRS)
+  ↓
+API
+  ↓
+Admin (pendiente)
+```
+
+El CRUD ya existe a nivel API mediante Commands, Queries, Validators, DTOs y repositorio. La interfaz administrativa todavia no esta implementada.
+
 ## Estado actual
 
 Apple Wallet esta completamente funcional para el flujo actual del proyecto:
@@ -33,6 +47,15 @@ Apple Wallet esta completamente funcional para el flujo actual del proyecto:
 - APNs para despertar Wallet.
 - Actualizacion automatica despues de compras/acumulacion de puntos.
 - Actualizacion automatica despues de canjes.
+
+Fase 2.1:
+
+- ✅ API CRUD de recompensas.
+- ✅ Commands.
+- ✅ Queries.
+- ✅ Validators.
+- ✅ DTOs.
+- ✅ Repository actualizado.
 
 El mecanismo unico para informar cambios al Web Service de Apple Wallet es `LoyaltyCard.LastActivityAt`. Las acumulaciones de puntos lo actualizan mediante `LoyaltyCard.EarnPoints()`. Los canjes tambien lo actualizan mediante `LoyaltyCard.Touch(...)` despues de `LoyaltyCard.RedeemPoints(...)`.
 
@@ -79,6 +102,101 @@ Expone los endpoints requeridos por Apple Wallet:
 - `DELETE /v1/devices/{deviceLibraryIdentifier}/registrations/{passTypeIdentifier}/{serialNumber}`
 - `GET /v1/devices/{deviceLibraryIdentifier}/registrations/{passTypeIdentifier}`
 - `POST /v1/log`
+
+### `RewardsController`
+
+Expone el CRUD administrativo de `RewardCatalogItem`:
+
+- `GET /api/rewards`
+- `GET /api/rewards/{id}`
+- `POST /api/rewards`
+- `PUT /api/rewards/{id}`
+- `PUT /api/rewards/{id}/activate`
+- `PUT /api/rewards/{id}/deactivate`
+
+El controller usa MediatR y no accede directamente a `AppDbContext`.
+
+# Fase 2.1 - Reward Catalog API
+
+El sistema cuenta con un CRUD administrativo para `RewardCatalogItem`.
+
+`RewardCatalogItem` es la fuente de verdad actual del catalogo de recompensas para:
+
+- `Name`
+- `Description`
+- `PointsCost`
+- `MinLevel`
+- `IsActive`
+- `IsMonthlyProduct`
+- `ValidFrom`
+- `ValidTo`
+
+Los costos del catalogo administrable viven en `RewardCatalogItem.PointsCost`; no dependen de las claves legacy `reward_*_points` de `ProgramConfig`.
+
+## Endpoints
+
+### `GET /api/rewards`
+
+Lista las recompensas para administracion.
+
+Incluye recompensas activas e inactivas. Soporta filtros por query string:
+
+- `activeOnly`
+- `includeExpired`
+- `minLevel`
+
+Devuelve una lista de `RewardAdminDto`.
+
+### `GET /api/rewards/{id}`
+
+Obtiene el detalle de una recompensa por id.
+
+Devuelve `404 Not Found` si la recompensa no existe.
+
+### `POST /api/rewards`
+
+Crea una recompensa.
+
+Valida:
+
+- `Name` obligatorio.
+- `Description` obligatorio.
+- `PointsCost` mayor a `0`.
+- `MinLevel` valido: `Mist`, `Glow` o `Radiance`.
+- `ValidTo` no menor que `ValidFrom`.
+
+Devuelve `201 Created` con `RewardAdminDto`.
+
+### `PUT /api/rewards/{id}`
+
+Edita una recompensa existente.
+
+Actualiza:
+
+- `Name`
+- `Description`
+- `PointsCost`
+- `MinLevel`
+- `IsActive`
+- `IsMonthlyProduct`
+- `ValidFrom`
+- `ValidTo`
+
+Devuelve `404 Not Found` si la recompensa no existe.
+
+### `PUT /api/rewards/{id}/activate`
+
+Activa una recompensa existente.
+
+Devuelve `RewardAdminDto`.
+
+### `PUT /api/rewards/{id}/deactivate`
+
+Desactiva una recompensa existente.
+
+Devuelve `RewardAdminDto`.
+
+No existe DELETE fisico para recompensas.
 
 ## Services involucrados
 

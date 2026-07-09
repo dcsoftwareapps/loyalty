@@ -199,6 +199,42 @@ El handler:
 
 El shape exacto del request esta definido por `RegisterCustomerCommand`.
 
+## Reward Catalog API
+
+Fase 2.1 agrega CRUD API administrativo para `RewardCatalogItem`.
+
+`RewardCatalogItem` es la fuente de verdad del catalogo de recompensas administrable.
+
+Endpoints disponibles:
+
+- `GET /api/rewards`: lista recompensas para administracion, activas e inactivas. Soporta `activeOnly`, `includeExpired` y `minLevel`.
+- `GET /api/rewards/{id}`: obtiene el detalle de una recompensa.
+- `POST /api/rewards`: crea una recompensa.
+- `PUT /api/rewards/{id}`: edita una recompensa existente.
+- `PUT /api/rewards/{id}/activate`: activa una recompensa.
+- `PUT /api/rewards/{id}/deactivate`: desactiva una recompensa.
+
+El flujo implementado es:
+
+```text
+RewardCatalogItem
+  ↓
+Application (CQRS)
+  ↓
+API
+  ↓
+Admin (pendiente)
+```
+
+Estado Fase 2.1:
+
+- ✅ API CRUD de recompensas.
+- ✅ Commands.
+- ✅ Queries.
+- ✅ Validators.
+- ✅ DTOs.
+- ✅ Repository actualizado.
+
 ## Descargar un pass
 
 Para pruebas directas en iPhone durante Development:

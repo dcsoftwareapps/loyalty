@@ -9,6 +9,9 @@ public interface IRewardCatalogRepository
     /// <summary>Todos los ítems activos (sin filtrar por nivel — útil para el panel admin).</summary>
     Task<IReadOnlyList<RewardCatalogItem>> GetAllActiveAsync(CancellationToken ct = default);
 
+    /// <summary>Todos los items del catalogo para administracion, activos e inactivos.</summary>
+    Task<IReadOnlyList<RewardCatalogItem>> GetAllAsync(CancellationToken ct = default);
+
     /// <summary>
     /// Ítems elegibles para una clienta de cierto <see cref="MemberLevel"/>:
     /// activos, dentro de vigencia, con <c>MinLevel</c> ≤ nivel de la clienta.

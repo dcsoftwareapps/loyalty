@@ -74,7 +74,14 @@ public class RewardCatalogItem : Entity
         customerLevel.IsAtLeast(MinLevel, config);
 
     /// <summary>Actualiza costo / nivel mínimo / vigencia desde el panel admin.</summary>
-    public void Update(string name, string description, int pointsCost, string minLevel, DateTime? validFrom, DateTime? validTo)
+    public void Update(
+        string name,
+        string description,
+        int pointsCost,
+        string minLevel,
+        bool isMonthlyProduct,
+        DateTime? validFrom,
+        DateTime? validTo)
     {
         if (string.IsNullOrWhiteSpace(name)) throw new ArgumentException("Nombre requerido.", nameof(name));
         if (pointsCost <= 0) throw new ArgumentOutOfRangeException(nameof(pointsCost));
@@ -84,6 +91,7 @@ public class RewardCatalogItem : Entity
         Description = description?.Trim() ?? string.Empty;
         PointsCost = pointsCost;
         MinLevel = minLevel.Trim();
+        IsMonthlyProduct = isMonthlyProduct;
         ValidFrom = validFrom;
         ValidTo = validTo;
     }
