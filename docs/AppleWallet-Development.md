@@ -244,10 +244,11 @@ Requisitos:
 - `Apple:PassTypeIdentifier` configurado.
 - `Apple:ApnHost` configurado como `https://api.push.apple.com`.
 
-El flujo APNs se dispara cuando se agregan puntos:
+El flujo APNs se dispara cuando se agregan puntos o cuando se realiza un canje:
 
 ```text
 POST /api/points
+POST /api/redemptions
 ```
 
 `AddPointsHandler`:
@@ -255,19 +256,33 @@ POST /api/points
 1. Busca la card por serial.
 2. Calcula puntos.
 3. Aplica `LoyaltyCard.EarnPoints`.
-4. Guarda cambios.
-5. Busca registrations del serial.
-6. Llama `IApnService.SendPassUpdateAsync`.
-7. `ApnService` envia push HTTP/2 a APNs.
+4. `EarnPoints` actualiza `LastActivityAt`.
+5. Guarda cambios.
+6. Busca registrations del serial.
+7. Llama `IApnService.SendPassUpdateAsync`.
+8. `ApnService` envia push HTTP/2 a APNs.
 
-El push es best-effort: si APNs falla, la transaccion de puntos no se revierte.
+`RedeemRewardHandler`:
+
+1. Busca la card por serial.
+2. Valida recompensa, vigencia, nivel y saldo.
+3. Aplica `LoyaltyCard.RedeemPoints`.
+4. Crea `Redemption` en estado `Pending`.
+5. Crea `PointTransaction` negativa.
+6. Llama `LoyaltyCard.Touch(...)` para actualizar `LastActivityAt`.
+7. Guarda cambios.
+8. Busca registrations del serial.
+9. Llama `IApnService.SendPassUpdateAsync`.
+10. `ApnService` envia push HTTP/2 a APNs.
+
+El push es best-effort: si APNs falla, la transaccion de puntos o canje no se revierte.
 
 ## Probar actualizacion automatica
 
 Flujo esperado:
 
 ```text
-POST /api/points
+POST /api/points o POST /api/redemptions
   ↓
 APNs 200
   ↓
@@ -282,6 +297,26 @@ API devuelve .pkpass actualizado
 Wallet actualiza el pass
 ```
 
+Para canjes, el flujo completo es:
+
+```text
+Canje
+  ↓
+Redemption Pending
+  ↓
+PointTransaction negativa
+  ↓
+Actualizacion de LastActivityAt
+  ↓
+APNs
+  ↓
+Apple solicita seriales modificados
+  ↓
+Apple descarga el nuevo pass
+  ↓
+Wallet se actualiza automaticamente
+```
+
 Si Wallet llama:
 
 ```text
@@ -289,6 +324,8 @@ GET /v1/devices/{device}/registrations/{passType}
 ```
 
 sin `Authorization`, la API lo acepta. Esto fue necesario porque Apple puede consultar ese endpoint agrupado sin token especifico de un pass.
+
+El mecanismo unico para detectar cambios es `LoyaltyCard.LastActivityAt`; compras y canjes lo actualizan antes de enviar APNs.
 
 ## Problemas conocidos
 
@@ -342,6 +379,16 @@ GET /v1/devices/{device}/registrations/{passType}
 ```
 
 sin Authorization. Esto ahora se acepta para permitir el refresh despues de APNs.
+
+### Wallet refresh despues de canjes
+
+Problema resuelto: los canjes enviaban APNs, pero necesitaban marcar la tarjeta como modificada para que Apple detectara el pass como actualizado.
+
+Estado actual:
+
+- Las compras actualizan `LastActivityAt` mediante `LoyaltyCard.EarnPoints`.
+- Los canjes actualizan `LastActivityAt` mediante `LoyaltyCard.Touch(...)` despues de descontar puntos.
+- Apple Wallet puede refrescar automaticamente despues de compras y canjes.
 
 ### Limitaciones visuales de Wallet
 

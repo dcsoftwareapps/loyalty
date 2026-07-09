@@ -23,6 +23,19 @@ El backend genera pases `.pkpass` reales con `PassGeneratorService`. Este servic
 
 La aplicacion usa Clean Architecture. Application depende de interfaces (`IPassGeneratorService`, `IApnService`, `IStorageService`) y Infrastructure provee las implementaciones concretas para Apple Wallet, APNs, Key Vault y Blob Storage.
 
+## Estado actual
+
+Apple Wallet esta completamente funcional para el flujo actual del proyecto:
+
+- Generacion de `.pkpass` real firmado.
+- Instalacion del pass en iPhone.
+- Registro del dispositivo en el Web Service de Apple Wallet.
+- APNs para despertar Wallet.
+- Actualizacion automatica despues de compras/acumulacion de puntos.
+- Actualizacion automatica despues de canjes.
+
+El mecanismo unico para informar cambios al Web Service de Apple Wallet es `LoyaltyCard.LastActivityAt`. Las acumulaciones de puntos lo actualizan mediante `LoyaltyCard.EarnPoints()`. Los canjes tambien lo actualizan mediante `LoyaltyCard.Touch(...)` despues de `LoyaltyCard.RedeemPoints(...)`.
+
 ## Flujo desde Customer hasta Wallet
 
 1. El cliente se registra con `POST /api/customers`.
@@ -37,7 +50,7 @@ La aplicacion usa Clean Architecture. Application depende de interfaces (`IPassG
 10. La respuesta incluye `SerialNumber`, `PassDownloadUrl`, `CurrentPoints` y `Level`.
 11. En desarrollo tambien existe `GET /api/dev/passes/{serialNumber}` para descargar un pass real directamente desde el iPhone.
 12. Al instalar el pass, Apple Wallet llama el endpoint de registro de device.
-13. Cuando cambian puntos, `AddPointsHandler` envia APNs best-effort a los devices registrados.
+13. Cuando cambian puntos o se realiza un canje, el caso de uso actualiza `LastActivityAt` y envia APNs best-effort a los devices registrados.
 14. Wallet recibe el push, consulta seriales actualizados y despues descarga el pass actualizado.
 
 ## Controllers involucrados
@@ -315,12 +328,47 @@ Cuando se agregan puntos:
 
 1. `POST /api/points` llega a `PointsController`.
 2. `AddPointsHandler` aplica puntos con `LoyaltyCard.EarnPoints`.
-3. Se guarda el cambio.
-4. El handler busca devices registrados por serial.
-5. Llama `IApnService.SendPassUpdateAsync` por cada push token.
-6. `ApnService` manda push background a APNs.
-7. Wallet consulta seriales actualizados.
-8. Wallet descarga el pass actualizado.
+3. `EarnPoints` actualiza `LastActivityAt`.
+4. Se guarda el cambio.
+5. El handler busca devices registrados por serial.
+6. Llama `IApnService.SendPassUpdateAsync` por cada push token.
+7. `ApnService` manda push background a APNs.
+8. Wallet consulta seriales actualizados.
+9. Wallet descarga el pass actualizado.
+
+Cuando se realiza un canje:
+
+1. `POST /api/redemptions` llega a `RedemptionsController`.
+2. `RedeemRewardHandler` descuenta puntos con `LoyaltyCard.RedeemPoints`.
+3. Se crea `Redemption` en estado `Pending`.
+4. Se crea `PointTransaction` negativa.
+5. El handler llama `LoyaltyCard.Touch(...)` para actualizar `LastActivityAt`.
+6. Se guarda el cambio.
+7. El handler busca devices registrados por serial.
+8. Llama `IApnService.SendPassUpdateAsync` por cada push token.
+9. `ApnService` manda push background a APNs.
+10. Wallet consulta seriales actualizados.
+11. Wallet descarga el pass actualizado.
+
+Flujo resumido de refresh por canje:
+
+```text
+Canje
+  ↓
+Redemption Pending
+  ↓
+PointTransaction negativa
+  ↓
+Actualizacion de LastActivityAt
+  ↓
+APNs
+  ↓
+Apple solicita seriales modificados
+  ↓
+Apple descarga el nuevo pass
+  ↓
+Wallet se actualiza automaticamente
+```
 
 El push APNs no contiene datos del pass. Solo despierta a Wallet para que vuelva a consultar el web service.
 
@@ -431,7 +479,7 @@ Wallet
   ↓
 Device Registration
   ↓
-POST /api/points
+POST /api/points o POST /api/redemptions
   ↓
 APNs
   ↓
@@ -441,3 +489,5 @@ GET /v1/passes/{passType}/{serial}
   ↓
 Wallet actualizado
 ```
+
+En ambos casos, la deteccion de cambios para Apple se basa en `LoyaltyCard.LastActivityAt`: compras/acumulaciones lo actualizan en `EarnPoints`; canjes lo actualizan con `Touch` despues de descontar puntos.

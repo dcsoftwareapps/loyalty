@@ -79,6 +79,7 @@ public class Redemption : Entity
     /// </summary>
     public void Cancel(string cancelledBy, DateTime nowUtc, string? reason = null)
     {
+        // TODO Phase 2.3: Implement redemption cancellation with point restoration in Application/API/Admin.
         if (Status != RedemptionStatus.Pending)
             throw new RedemptionAlreadyConfirmedException(Id);
 

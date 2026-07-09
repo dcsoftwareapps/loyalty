@@ -24,6 +24,7 @@ public sealed record ProgramConfigSnapshot(
     int LevelGlowMin,
     int LevelRadianceMin,
     int RadianceRequalificationPoints,
+    // TODO Phase 2.1: Replace ProgramConfig reward costs with RewardCatalogItem.PointsCost as the single source of truth.
     int RewardMiniProductPoints,
     int RewardFiftyOffPoints,
     int RewardFocusSkinPoints,

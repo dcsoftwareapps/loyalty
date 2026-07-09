@@ -33,6 +33,7 @@ internal static class ProgramConfigSeed
                 "Umbral inicio nivel Radiance."),
             New("a1000000-0000-0000-0000-000000000008", LoyaltyConstants.ConfigKeys.RadianceRequalificationPoints, "500",
                 "Puntos anuales para mantener Radiance."),
+            // TODO Phase 2.1: Keep reward costs only in RewardCatalogItem.PointsCost; these config keys are legacy MVP configuration.
             New("a1000000-0000-0000-0000-000000000009", LoyaltyConstants.ConfigKeys.RewardMiniProductPoints, "300",
                 "Costo del mini producto."),
             New("a1000000-0000-0000-0000-00000000000a", LoyaltyConstants.ConfigKeys.RewardFiftyOffPoints, "500",

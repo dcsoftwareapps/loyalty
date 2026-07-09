@@ -84,6 +84,7 @@ public sealed class RedeemRewardHandler : IRequestHandler<RedeemRewardCommand, R
 
         // Mutar dominio
         card.RedeemPoints(reward.PointsCost);
+        card.Touch(_dt);
         _cards.Update(card);
 
         var redemption = new Redemption(
