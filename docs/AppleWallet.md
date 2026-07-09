@@ -23,19 +23,21 @@ El backend genera pases `.pkpass` reales con `PassGeneratorService`. Este servic
 
 La aplicacion usa Clean Architecture. Application depende de interfaces (`IPassGeneratorService`, `IApnService`, `IStorageService`) y Infrastructure provee las implementaciones concretas para Apple Wallet, APNs, Key Vault y Blob Storage.
 
-El catalogo de recompensas se administra con la entidad existente `RewardCatalogItem`. Para Fase 2.1, el flujo de administracion queda:
+El catalogo de recompensas se administra con la entidad existente `RewardCatalogItem`. Para Fase 2.2, el flujo de administracion queda:
 
 ```text
-RewardCatalogItem
+Admin UI
   ↓
-Application (CQRS)
+MediatR
   ↓
-API
+Commands / Queries
   ↓
-Admin (pendiente)
+Repository
+  ↓
+SQL Server
 ```
 
-El CRUD ya existe a nivel API mediante Commands, Queries, Validators, DTOs y repositorio. La interfaz administrativa todavia no esta implementada.
+El CRUD existe a nivel API mediante Commands, Queries, Validators, DTOs y repositorio. Tambien existe una pantalla administrativa en `/rewards` que usa MediatR in-process desde `KBeauty.Loyalty.Admin`.
 
 ## Estado actual
 
@@ -56,6 +58,14 @@ Fase 2.1:
 - ✅ Validators.
 - ✅ DTOs.
 - ✅ Repository actualizado.
+
+Fase 2.2:
+
+- ✅ Administracion visual de recompensas.
+- ✅ Crear.
+- ✅ Editar.
+- ✅ Activar.
+- ✅ Desactivar.
 
 El mecanismo unico para informar cambios al Web Service de Apple Wallet es `LoyaltyCard.LastActivityAt`. Las acumulaciones de puntos lo actualizan mediante `LoyaltyCard.EarnPoints()`. Los canjes tambien lo actualizan mediante `LoyaltyCard.Touch(...)` despues de `LoyaltyCard.RedeemPoints(...)`.
 
@@ -197,6 +207,70 @@ Desactiva una recompensa existente.
 Devuelve `RewardAdminDto`.
 
 No existe DELETE fisico para recompensas.
+
+# Fase 2.2 - Reward Administration
+
+El proyecto cuenta con una interfaz administrativa para `RewardCatalogItem` en `KBeauty.Loyalty.Admin`.
+
+La pagina disponible es:
+
+```text
+/rewards
+```
+
+Desde esta pantalla ya es posible:
+
+- Listar recompensas.
+- Crear recompensas.
+- Editar recompensas.
+- Activar recompensas.
+- Desactivar recompensas.
+
+La pagina muestra una tabla con:
+
+- Nombre.
+- Descripcion.
+- Puntos.
+- Nivel minimo.
+- Producto del mes.
+- Vigencia.
+- Estado.
+- Acciones.
+
+El boton `Nueva recompensa` abre un formulario inline con:
+
+- Nombre.
+- Descripcion.
+- Puntos requeridos.
+- Nivel minimo.
+- Producto del mes.
+- Activa.
+- Vigente desde.
+- Vigente hasta.
+
+La pantalla usa MediatR directamente y reutiliza los casos de uso de Fase 2.1:
+
+- `ListRewardsQuery`
+- `CreateRewardCommand`
+- `UpdateRewardCommand`
+- `ActivateRewardCommand`
+- `DeactivateRewardCommand`
+
+No accede directo a `AppDbContext`.
+
+Flujo de administracion:
+
+```text
+Admin UI
+  ↓
+MediatR
+  ↓
+Commands / Queries
+  ↓
+Repository
+  ↓
+SQL Server
+```
 
 ## Services involucrados
 

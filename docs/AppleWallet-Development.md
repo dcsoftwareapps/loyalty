@@ -217,13 +217,15 @@ Endpoints disponibles:
 El flujo implementado es:
 
 ```text
-RewardCatalogItem
+Admin UI
   ↓
-Application (CQRS)
+MediatR
   ↓
-API
+Commands / Queries
   ↓
-Admin (pendiente)
+Repository
+  ↓
+SQL Server
 ```
 
 Estado Fase 2.1:
@@ -234,6 +236,34 @@ Estado Fase 2.1:
 - ✅ Validators.
 - ✅ DTOs.
 - ✅ Repository actualizado.
+
+## Reward Administration
+
+Fase 2.2 agrega administracion visual de recompensas en el panel Admin.
+
+Pagina:
+
+```text
+/rewards
+```
+
+Desde esta pantalla es posible:
+
+- Listar recompensas.
+- Crear recompensas.
+- Editar recompensas.
+- Activar recompensas.
+- Desactivar recompensas.
+
+La pagina usa MediatR in-process desde `KBeauty.Loyalty.Admin` y reutiliza los Commands/Queries de Fase 2.1. No accede directo a `AppDbContext`.
+
+Estado Fase 2.2:
+
+- ✅ Administracion visual de recompensas.
+- ✅ Crear.
+- ✅ Editar.
+- ✅ Activar.
+- ✅ Desactivar.
 
 ## Descargar un pass
 

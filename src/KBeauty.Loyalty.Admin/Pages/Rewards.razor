@@ -1,0 +1,359 @@
+@page "/rewards"
+@attribute [Authorize]
+@rendermode InteractiveServer
+
+@using KBeauty.Loyalty.Application.Rewards
+@using KBeauty.Loyalty.Application.Rewards.Commands.ActivateReward
+@using KBeauty.Loyalty.Application.Rewards.Commands.CreateReward
+@using KBeauty.Loyalty.Application.Rewards.Commands.DeactivateReward
+@using KBeauty.Loyalty.Application.Rewards.Commands.UpdateReward
+@using KBeauty.Loyalty.Application.Rewards.Queries.ListRewards
+@inject ISender Sender
+
+<PageTitle>Recompensas - KBeauty</PageTitle>
+
+<div style="display:flex;align-items:center;justify-content:space-between;gap:16px;margin-bottom:24px;">
+    <div>
+        <h1>Recompensas</h1>
+        <p style="color: var(--kb-ink-muted); margin-top: -8px;">
+            Administra el catalogo de recompensas disponible para canjes.
+        </p>
+    </div>
+    <button class="kb-btn kb-btn--primary" @onclick="StartCreate" disabled="@busy">
+        Nueva recompensa
+    </button>
+</div>
+
+@if (successMsg is not null) { <div class="kb-form-success">@successMsg</div> }
+@if (errorMsg is not null) { <div class="kb-form-error">@errorMsg</div> }
+
+@if (showForm)
+{
+    <section class="kb-card" style="margin-bottom:24px;max-width:860px;">
+        <h2>@(editingId.HasValue ? "Editar recompensa" : "Nueva recompensa")</h2>
+
+        @if (validationErrors.Count > 0)
+        {
+            <div class="kb-form-error">
+                @foreach (var error in validationErrors)
+                {
+                    <div>@error</div>
+                }
+            </div>
+        }
+
+        <div class="kb-form-row kb-form-row--horizontal">
+            <div style="flex:1;min-width:240px;">
+                <label for="reward-name">Nombre</label>
+                <input id="reward-name" type="text" @bind="form.Name" />
+            </div>
+            <div style="flex:1;min-width:180px;">
+                <label for="reward-points">Puntos requeridos</label>
+                <input id="reward-points" type="number" min="1" @bind="form.PointsCost" />
+            </div>
+            <div style="flex:1;min-width:180px;">
+                <label for="reward-level">Nivel minimo</label>
+                <select id="reward-level" @bind="form.MinLevel">
+                    <option value="@LoyaltyConstants.Levels.Mist">Mist</option>
+                    <option value="@LoyaltyConstants.Levels.Glow">Glow</option>
+                    <option value="@LoyaltyConstants.Levels.Radiance">Radiance</option>
+                </select>
+            </div>
+        </div>
+
+        <div class="kb-form-row" style="max-width:100%;">
+            <div>
+                <label for="reward-description">Descripcion</label>
+                <textarea id="reward-description" rows="3" @bind="form.Description"></textarea>
+            </div>
+        </div>
+
+        <div class="kb-form-row kb-form-row--horizontal">
+            <div style="min-width:180px;">
+                <label for="reward-from">Vigente desde</label>
+                <input id="reward-from" type="date" @bind="form.ValidFrom" />
+            </div>
+            <div style="min-width:180px;">
+                <label for="reward-to">Vigente hasta</label>
+                <input id="reward-to" type="date" @bind="form.ValidTo" />
+            </div>
+            <label style="display:flex;align-items:center;gap:10px;margin-bottom:12px;">
+                <input type="checkbox" @bind="form.IsMonthlyProduct" style="width:auto;" />
+                Producto del mes
+            </label>
+            <label style="display:flex;align-items:center;gap:10px;margin-bottom:12px;">
+                <input type="checkbox" @bind="form.IsActive" style="width:auto;" />
+                Activa
+            </label>
+        </div>
+
+        <div style="display:flex;gap:12px;flex-wrap:wrap;">
+            <button class="kb-btn kb-btn--primary" @onclick="SaveAsync" disabled="@busy">
+                @(busy ? "Guardando..." : "Guardar")
+            </button>
+            <button class="kb-btn kb-btn--ghost" @onclick="CancelForm" disabled="@busy">
+                Cancelar
+            </button>
+        </div>
+    </section>
+}
+
+@if (rewards is null)
+{
+    <p>Cargando...</p>
+}
+else if (rewards.Count == 0)
+{
+    <p style="color: var(--kb-ink-muted);">No hay recompensas registradas.</p>
+}
+else
+{
+    <table class="kb-table">
+        <thead>
+            <tr>
+                <th>Nombre</th>
+                <th>Descripcion</th>
+                <th>Puntos</th>
+                <th>Nivel minimo</th>
+                <th>Producto del mes</th>
+                <th>Vigencia</th>
+                <th>Estado</th>
+                <th>Acciones</th>
+            </tr>
+        </thead>
+        <tbody>
+        @foreach (var reward in rewards)
+        {
+            <tr>
+                <td><strong>@reward.Name</strong></td>
+                <td style="color: var(--kb-ink-muted); max-width: 260px;">@reward.Description</td>
+                <td style="font-weight:600;">@reward.PointsCost.ToString("N0") pts</td>
+                <td><LevelBadge Level="@reward.MinLevel" /></td>
+                <td>@(reward.IsMonthlyProduct ? "Si" : "No")</td>
+                <td style="color: var(--kb-ink-muted);">@FormatValidity(reward)</td>
+                <td>
+                    @if (reward.IsActive)
+                    {
+                        <span style="color: var(--kb-sage); font-weight:600;">Activa</span>
+                    }
+                    else
+                    {
+                        <span style="color: var(--kb-ink-muted); font-weight:600;">Inactiva</span>
+                    }
+                </td>
+                <td>
+                    <div style="display:flex;gap:8px;flex-wrap:wrap;">
+                        <button class="kb-btn kb-btn--ghost" @onclick="@(() => StartEdit(reward))" disabled="@busy">
+                            Editar
+                        </button>
+                        @if (reward.IsActive)
+                        {
+                            <button class="kb-btn kb-btn--ghost" @onclick="@(() => DeactivateAsync(reward.Id))" disabled="@busy">
+                                Desactivar
+                            </button>
+                        }
+                        else
+                        {
+                            <button class="kb-btn kb-btn--primary" @onclick="@(() => ActivateAsync(reward.Id))" disabled="@busy">
+                                Activar
+                            </button>
+                        }
+                    </div>
+                </td>
+            </tr>
+        }
+        </tbody>
+    </table>
+}
+
+@code {
+    private List<RewardAdminDto>? rewards;
+    private RewardFormModel form = RewardFormModel.CreateDefault();
+    private readonly List<string> validationErrors = new();
+    private Guid? editingId;
+    private string? successMsg;
+    private string? errorMsg;
+    private bool showForm;
+    private bool busy;
+
+    protected override async Task OnInitializedAsync() => await ReloadAsync();
+
+    private async Task ReloadAsync()
+    {
+        var result = await Sender.Send(new ListRewardsQuery(
+            ActiveOnly: false,
+            IncludeExpired: true,
+            MinLevel: null));
+
+        if (result.IsSuccess)
+        {
+            rewards = result.Value.ToList();
+        }
+        else
+        {
+            errorMsg = result.Error;
+        }
+    }
+
+    private void StartCreate()
+    {
+        ClearMessages();
+        editingId = null;
+        form = RewardFormModel.CreateDefault();
+        showForm = true;
+    }
+
+    private void StartEdit(RewardAdminDto reward)
+    {
+        ClearMessages();
+        editingId = reward.Id;
+        form = new RewardFormModel
+        {
+            Name = reward.Name,
+            Description = reward.Description,
+            PointsCost = reward.PointsCost,
+            MinLevel = reward.MinLevel,
+            IsMonthlyProduct = reward.IsMonthlyProduct,
+            IsActive = reward.IsActive,
+            ValidFrom = reward.ValidFrom,
+            ValidTo = reward.ValidTo
+        };
+        showForm = true;
+    }
+
+    private async Task SaveAsync()
+    {
+        ClearMessages();
+        if (!ValidateForm())
+            return;
+
+        busy = true;
+
+        var result = editingId.HasValue
+            ? await Sender.Send(new UpdateRewardCommand(
+                editingId.Value,
+                form.Name.Trim(),
+                form.Description.Trim(),
+                form.PointsCost,
+                form.MinLevel,
+                form.IsMonthlyProduct,
+                form.ValidFrom,
+                form.ValidTo,
+                form.IsActive))
+            : await Sender.Send(new CreateRewardCommand(
+                form.Name.Trim(),
+                form.Description.Trim(),
+                form.PointsCost,
+                form.MinLevel,
+                form.IsMonthlyProduct,
+                form.ValidFrom,
+                form.ValidTo,
+                form.IsActive));
+
+        busy = false;
+
+        if (result.IsFailure)
+        {
+            errorMsg = result.Error;
+            return;
+        }
+
+        successMsg = editingId.HasValue ? "Recompensa actualizada." : "Recompensa creada.";
+        showForm = false;
+        editingId = null;
+        form = RewardFormModel.CreateDefault();
+        await ReloadAsync();
+    }
+
+    private async Task ActivateAsync(Guid id)
+    {
+        ClearMessages();
+        busy = true;
+        var result = await Sender.Send(new ActivateRewardCommand(id));
+        busy = false;
+
+        if (result.IsFailure)
+        {
+            errorMsg = result.Error;
+            return;
+        }
+
+        successMsg = "Recompensa activada.";
+        await ReloadAsync();
+    }
+
+    private async Task DeactivateAsync(Guid id)
+    {
+        ClearMessages();
+        busy = true;
+        var result = await Sender.Send(new DeactivateRewardCommand(id));
+        busy = false;
+
+        if (result.IsFailure)
+        {
+            errorMsg = result.Error;
+            return;
+        }
+
+        successMsg = "Recompensa desactivada.";
+        await ReloadAsync();
+    }
+
+    private void CancelForm()
+    {
+        showForm = false;
+        editingId = null;
+        form = RewardFormModel.CreateDefault();
+        validationErrors.Clear();
+    }
+
+    private bool ValidateForm()
+    {
+        validationErrors.Clear();
+
+        if (string.IsNullOrWhiteSpace(form.Name))
+            validationErrors.Add("El nombre es obligatorio.");
+
+        if (string.IsNullOrWhiteSpace(form.Description))
+            validationErrors.Add("La descripcion es obligatoria.");
+
+        if (form.PointsCost <= 0)
+            validationErrors.Add("Los puntos requeridos deben ser mayores a 0.");
+
+        if (form.ValidFrom.HasValue && form.ValidTo.HasValue && form.ValidTo.Value < form.ValidFrom.Value)
+            validationErrors.Add("Vigente hasta no puede ser menor que Vigente desde.");
+
+        return validationErrors.Count == 0;
+    }
+
+    private void ClearMessages()
+    {
+        successMsg = null;
+        errorMsg = null;
+        validationErrors.Clear();
+    }
+
+    private static string FormatValidity(RewardAdminDto reward)
+    {
+        if (!reward.ValidFrom.HasValue && !reward.ValidTo.HasValue)
+            return "Sin vigencia";
+
+        var from = reward.ValidFrom?.ToLocalTime().ToString("dd MMM yyyy") ?? "Inicio abierto";
+        var to = reward.ValidTo?.ToLocalTime().ToString("dd MMM yyyy") ?? "Sin fin";
+        return $"{from} - {to}";
+    }
+
+    private sealed class RewardFormModel
+    {
+        public string Name { get; set; } = string.Empty;
+        public string Description { get; set; } = string.Empty;
+        public int PointsCost { get; set; } = 1;
+        public string MinLevel { get; set; } = LoyaltyConstants.Levels.Mist;
+        public bool IsMonthlyProduct { get; set; }
+        public bool IsActive { get; set; } = true;
+        public DateTime? ValidFrom { get; set; }
+        public DateTime? ValidTo { get; set; }
+
+        public static RewardFormModel CreateDefault() => new();
+    }
+}
