@@ -21,6 +21,8 @@ public class AppDbContext : DbContext, IUnitOfWork
     public DbSet<Customer> Customers => Set<Customer>();
     public DbSet<LoyaltyCard> LoyaltyCards => Set<LoyaltyCard>();
     public DbSet<PointTransaction> PointTransactions => Set<PointTransaction>();
+    public DbSet<PointLot> PointLots => Set<PointLot>();
+    public DbSet<PointLotConsumption> PointLotConsumptions => Set<PointLotConsumption>();
     public DbSet<Redemption> Redemptions => Set<Redemption>();
     public DbSet<RewardCatalogItem> RewardCatalogItems => Set<RewardCatalogItem>();
     public DbSet<ProgramConfig> ProgramConfigs => Set<ProgramConfig>();
@@ -51,7 +53,7 @@ public class AppDbContext : DbContext, IUnitOfWork
             }
         }
 
-        // Seed de la configuración del programa (15 claves con sus valores default).
+        // Seed de la configuración del programa con sus valores default.
         ProgramConfigSeed.Apply(modelBuilder);
     }
 

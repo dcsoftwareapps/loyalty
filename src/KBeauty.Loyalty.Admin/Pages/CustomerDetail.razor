@@ -1,85 +1,222 @@
+@page "/customers/{CustomerId:guid}"
 @page "/customers/{SerialNumber}"
 @attribute [Authorize]
 @rendermode InteractiveServer
 
-@using KBeauty.Loyalty.Application.Customers.Queries.GetCustomerBySerial
-@using KBeauty.Loyalty.Application.Customers.Queries.GetCustomerTransactions
-@using KBeauty.Loyalty.Common.Results
+@using KBeauty.Loyalty.Application.Customers.Queries.GetCustomerDetail
+@using KBeauty.Loyalty.Domain.Enums
 @inject ISender Sender
 @inject NavigationManager Nav
 
-<PageTitle>@(customer?.FullName ?? "Clienta") · KBeauty</PageTitle>
+<PageTitle>@(detail?.Summary.FullName ?? "Clienta") - KBeauty</PageTitle>
 
-@if (customer is null)
+@if (errorMsg is not null)
 {
-    <p>Cargando…</p>
+    <div class="kb-form-error">@errorMsg</div>
+    <a href="/customers" class="kb-btn kb-btn--ghost">Volver</a>
+}
+else if (detail is null)
+{
+    <p>Cargando...</p>
 }
 else
 {
-    <a href="/customers" style="color: var(--kb-ink-muted);">← Volver a clientas</a>
-
-    <div style="display:grid;grid-template-columns: 360px 1fr; gap: 32px; margin-top: 16px;">
+    <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:16px;margin-bottom:24px;">
         <div>
-            <CustomerCard Customer="customer" />
-            <button class="kb-btn kb-btn--primary kb-btn--block" style="margin-top: 16px;"
-                    @onclick="@(() => Nav.NavigateTo($"/scan?serial={customer.SerialNumber}"))">
+            <a href="/customers" style="color: var(--kb-ink-muted);">Volver a clientas</a>
+            <h1 style="margin-top:12px;">@detail.Summary.FullName</h1>
+            <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
+                <LevelBadge Level="@detail.Summary.Level" />
+                <span class="@StatusBadgeClass(detail.Summary.IsActive)">@(detail.Summary.IsActive ? "Activo" : "Inactivo")</span>
+                <span class="@StatusBadgeClass(detail.Summary.WalletIssued)">Wallet @(detail.Summary.WalletIssued ? "emitida" : "no emitida")</span>
+            </div>
+            <p class="kb-muted" style="margin-top:12px;">
+                @detail.Summary.Email
+                @if (!string.IsNullOrWhiteSpace(detail.Summary.Phone))
+                {
+                    <span> · @detail.Summary.Phone</span>
+                }
+            </p>
+        </div>
+
+        @if (!string.IsNullOrWhiteSpace(detail.Wallet.SerialNumber))
+        {
+            <button class="kb-btn kb-btn--primary" @onclick="@(() => Nav.NavigateTo($"/scan?serial={detail.Wallet.SerialNumber}"))">
                 Sumar puntos
             </button>
-            <div style="margin-top: 24px; color: var(--kb-ink-muted); font-size: 0.9rem;">
-                <p>Teléfono: @(customer.Phone ?? "—")</p>
-                <p>Cumpleaños: @customer.DateOfBirth.ToString("dd MMM yyyy")</p>
-                <p>Lifetime: @customer.LifetimePoints.ToString("N0") pts</p>
-                <p>Nivel alcanzado: @customer.LevelAchievedAt.ToLocalTime().ToString("dd MMM yyyy")</p>
+        }
+    </div>
+
+    <section style="margin-bottom:32px;">
+        <h2>Estadisticas rapidas</h2>
+        <div class="kb-grid">
+            <MetricCard Label="Puntos actuales" Value="@FormatNumber(detail.Statistics.CurrentPoints)" />
+            <MetricCard Label="Puntos historicos" Value="@FormatNumber(detail.Statistics.LifetimePoints)" />
+            <MetricCard Label="Puntos canjeados" Value="@FormatNumber(detail.Statistics.PointsRedeemed)" />
+            <MetricCard Label="Total de canjes" Value="@FormatNumber(detail.Statistics.TotalRedemptions)" />
+            <MetricCard Label="Pendientes" Value="@FormatNumber(detail.Statistics.PendingRedemptions)" />
+            <MetricCard Label="Cancelados" Value="@FormatNumber(detail.Statistics.CancelledRedemptions)" />
+            <MetricCard Label="Confirmados" Value="@FormatNumber(detail.Statistics.ConfirmedRedemptions)" />
+        </div>
+    </section>
+
+    <section style="margin-bottom:32px;">
+        <h2>Informacion general</h2>
+        <div class="kb-card">
+            <div class="kb-detail-grid">
+                <DetailItem Label="Nombre completo" Value="@detail.Summary.FullName" />
+                <DetailItem Label="Email" Value="@detail.Summary.Email" />
+                <DetailItem Label="Telefono" Value="@DisplayText(detail.Summary.Phone)" />
+                <DetailItem Label="Fecha de registro" Value="@FormatDate(detail.Summary.CreatedAt)" />
+                <DetailItem Label="Estado" Value="@StatusText(detail.Summary.IsActive)" />
+                <DetailItem Label="Nivel actual" Value="@detail.Summary.Level" />
+                <DetailItem Label="Wallet emitida" Value="@YesNo(detail.Summary.WalletIssued)" />
             </div>
         </div>
+    </section>
 
-        <div>
-            <h2>Historial</h2>
-            @if (transactions is null || transactions.Items.Count == 0)
-            {
-                <p style="color: var(--kb-ink-muted);">Sin movimientos.</p>
-            }
-            else
-            {
-                <table class="kb-table">
-                    <thead>
-                        <tr>
-                            <th></th>
-                            <th>Descripción</th>
-                            <th>Puntos</th>
-                            <th>Fecha</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                    @foreach (var t in transactions.Items)
-                    {
-                        <TransactionRow Transaction="t" />
-                    }
-                    </tbody>
-                </table>
-            }
-        </div>
-    </div>
+    <section style="margin-bottom:32px;">
+        <h2>Tarjeta Loyalty / Wallet</h2>
+        @if (!detail.Wallet.WalletIssued)
+        {
+            <p class="kb-muted">Este cliente aun no tiene Wallet emitida.</p>
+        }
+        else
+        {
+            <div class="kb-card">
+                <div class="kb-detail-grid">
+                    <DetailItem Label="Numero de tarjeta" Value="@DisplayText(detail.Wallet.SerialNumber)" />
+                    <DetailItem Label="Puntos actuales" Value="@FormatNullableNumber(detail.Wallet.CurrentPoints)" />
+                    <DetailItem Label="Fecha de emision" Value="@FormatNullableDate(detail.Wallet.IssuedAt)" />
+                    <DetailItem Label="Ultima actualizacion" Value="@FormatNullableDateTime(detail.Wallet.LastActivityAt)" />
+                    <DetailItem Label="Dispositivos registrados" Value="@FormatNumber(detail.Wallet.DeviceRegistrationCount)" />
+                    <DetailItem Label="Ultimo push enviado" Value="@FormatNullableDateTime(detail.Wallet.LastPushSentAt)" />
+                </div>
+            </div>
+        }
+    </section>
+
+    <section style="margin-bottom:32px;">
+        <h2>Historial de puntos</h2>
+        @if (detail.PointHistory.Count == 0)
+        {
+            <p class="kb-muted">Sin movimientos de puntos.</p>
+        }
+        else
+        {
+            <table class="kb-table kb-table--compact">
+                <thead>
+                    <tr>
+                        <th>Fecha</th>
+                        <th>Tipo</th>
+                        <th>Descripcion</th>
+                        <th class="kb-cell-number">Puntos</th>
+                        <th>Balance despues</th>
+                    </tr>
+                </thead>
+                <tbody>
+                @foreach (var item in detail.PointHistory)
+                {
+                    <tr>
+                        <td class="kb-muted">@FormatDateTime(item.CreatedAt)</td>
+                        <td><span class="kb-badge kb-badge--muted">@item.Type</span></td>
+                        <td>@item.Description</td>
+                        <td class="kb-cell-number" style="font-weight:600;color:@PointColor(item.Points);">
+                            @(item.Points > 0 ? "+" : "")@item.Points.ToString("N0")
+                        </td>
+                        <td class="kb-muted">@FormatNullableNumber(item.BalanceAfter)</td>
+                    </tr>
+                }
+                </tbody>
+            </table>
+        }
+    </section>
+
+    <section>
+        <h2>Historial de canjes</h2>
+        @if (detail.RedemptionHistory.Count == 0)
+        {
+            <p class="kb-muted">Sin canjes registrados.</p>
+        }
+        else
+        {
+            <table class="kb-table kb-table--compact">
+                <thead>
+                    <tr>
+                        <th>Fecha</th>
+                        <th>Reward</th>
+                        <th>Estado</th>
+                        <th class="kb-cell-number">Puntos utilizados</th>
+                    </tr>
+                </thead>
+                <tbody>
+                @foreach (var item in detail.RedemptionHistory)
+                {
+                    <tr>
+                        <td class="kb-muted">@FormatDateTime(item.RedeemedAt)</td>
+                        <td>@item.RewardName</td>
+                        <td><span class="@RedemptionStatusBadgeClass(item.Status)">@item.Status</span></td>
+                        <td class="kb-cell-number" style="font-weight:600;">@item.PointsSpent.ToString("N0")</td>
+                    </tr>
+                }
+                </tbody>
+            </table>
+        }
+    </section>
 }
 
 @code {
-    [Parameter] public string SerialNumber { get; set; } = string.Empty;
+    [Parameter] public Guid CustomerId { get; set; }
+    [Parameter] public string? SerialNumber { get; set; }
 
-    private CustomerDetailDto? customer;
-    private PagedResult<TransactionDto>? transactions;
+    private CustomerDetailDto? detail;
+    private string? errorMsg;
 
     protected override async Task OnInitializedAsync()
     {
-        var customerResult = await Sender.Send(new GetCustomerBySerialQuery(SerialNumber));
-        if (customerResult.IsFailure)
+        if (CustomerId == Guid.Empty && !string.IsNullOrWhiteSpace(SerialNumber))
         {
-            Nav.NavigateTo("/customers");
+            var legacyResult = await Sender.Send(
+                new KBeauty.Loyalty.Application.Customers.Queries.GetCustomerBySerial.GetCustomerBySerialQuery(SerialNumber));
+            if (legacyResult.IsSuccess)
+            {
+                Nav.NavigateTo($"/customers/{legacyResult.Value.CustomerId}", replace: true);
+                return;
+            }
+
+            errorMsg = legacyResult.Error;
             return;
         }
-        customer = customerResult.Value;
 
-        var txResult = await Sender.Send(new GetCustomerTransactionsQuery(
-            SerialNumber, new PaginationParams { PageNumber = 1, PageSize = 50 }));
-        if (txResult.IsSuccess) transactions = txResult.Value;
+        var result = await Sender.Send(new GetCustomerDetailQuery(CustomerId));
+        if (result.IsSuccess)
+        {
+            detail = result.Value;
+            return;
+        }
+
+        errorMsg = result.Error;
     }
+
+    private static string FormatNumber(int value) => value.ToString("N0");
+    private static string FormatNullableNumber(int? value) => value.HasValue ? value.Value.ToString("N0") : "No disponible";
+    private static string FormatDate(DateTime value) => value.ToLocalTime().ToString("dd MMM yyyy");
+    private static string FormatDateTime(DateTime value) => value.ToLocalTime().ToString("dd MMM yyyy HH:mm");
+    private static string FormatNullableDate(DateTime? value) => value.HasValue ? FormatDate(value.Value) : "No disponible";
+    private static string FormatNullableDateTime(DateTime? value) => value.HasValue ? FormatDateTime(value.Value) : "No disponible";
+    private static string DisplayText(string? value) => string.IsNullOrWhiteSpace(value) ? "No disponible" : value;
+    private static string PointColor(int points) => points >= 0 ? "var(--kb-sage)" : "var(--kb-blush)";
+    private static string StatusText(bool isActive) => isActive ? "Activo" : "Inactivo";
+    private static string YesNo(bool value) => value ? "Si" : "No";
+
+    private static string StatusBadgeClass(bool isActive) =>
+        isActive ? "kb-badge kb-badge--success" : "kb-badge kb-badge--muted";
+
+    private static string RedemptionStatusBadgeClass(RedemptionStatus status) => status switch
+    {
+        RedemptionStatus.Pending => "kb-badge kb-badge--warning",
+        RedemptionStatus.Confirmed => "kb-badge kb-badge--success",
+        RedemptionStatus.Cancelled => "kb-badge kb-badge--muted",
+        _ => "kb-badge"
+    };
 }

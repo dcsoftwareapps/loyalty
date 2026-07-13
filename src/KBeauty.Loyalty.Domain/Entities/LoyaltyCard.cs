@@ -80,7 +80,7 @@ public class LoyaltyCard : Entity
     {
         if (points <= 0)
             throw new ArgumentOutOfRangeException(nameof(points), "Los puntos a sumar deben ser positivos.");
-        if (type == TransactionType.Redemption || type == TransactionType.Expiry)
+        if (type == TransactionType.Redemption || type == TransactionType.Expiry || type == TransactionType.Expired)
             throw new ArgumentException("EarnPoints no admite tipos que restan saldo.", nameof(type));
         ArgumentNullException.ThrowIfNull(config);
         ArgumentNullException.ThrowIfNull(dt);
@@ -133,6 +133,22 @@ public class LoyaltyCard : Entity
         ArgumentNullException.ThrowIfNull(dt);
 
         CurrentPoints += points;
+        LastActivityAt = dt.UtcNow;
+    }
+
+    /// <summary>
+    /// Expira puntos disponibles. No afecta LifetimePoints ni PointsEarnedThisYear.
+    /// La actualizacion de nivel por ventana movil queda para Fase 3.4.
+    /// </summary>
+    public void ExpirePoints(int points, IDateTimeProvider dt)
+    {
+        if (points <= 0)
+            throw new ArgumentOutOfRangeException(nameof(points), "Los puntos a expirar deben ser positivos.");
+        if (CurrentPoints < points)
+            throw new InsufficientPointsException(points, CurrentPoints);
+        ArgumentNullException.ThrowIfNull(dt);
+
+        CurrentPoints -= points;
         LastActivityAt = dt.UtcNow;
     }
 

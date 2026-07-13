@@ -1,4 +1,5 @@
 using KBeauty.Loyalty.Application.Admin.Queries.GetAdminDashboard;
+using KBeauty.Loyalty.Application.Points.Commands.ExpirePoints;
 using MediatR;
 using Microsoft.AspNetCore.Mvc;
 
@@ -19,6 +20,21 @@ public sealed class AdminController : ControllerBase
     public async Task<IActionResult> Dashboard(CancellationToken ct)
     {
         var result = await _sender.Send(new GetAdminDashboardQuery(), ct);
+        return Ok(result.Value);
+    }
+
+    /// <summary>POST /api/admin/points/expire — ejecuta expiracion FIFO de puntos vencidos.</summary>
+    [HttpPost("points/expire")]
+    [ProducesResponseType(typeof(ExpirePointsResponse), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
+    public async Task<IActionResult> ExpirePoints(
+        [FromHeader(Name = "X-Operator-Id")] string? operatorId,
+        CancellationToken ct)
+    {
+        var result = await _sender.Send(new ExpirePointsCommand(operatorId ?? "api-admin"), ct);
+        if (result.IsFailure)
+            return BadRequest(new ProblemDetails { Title = "Validacion", Detail = result.Error });
+
         return Ok(result.Value);
     }
 }

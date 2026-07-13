@@ -1,4 +1,5 @@
 using FluentValidation;
+using KBeauty.Loyalty.Common.Constants;
 
 namespace KBeauty.Loyalty.Application.Config.Commands.UpdateProgramConfig;
 
@@ -18,6 +19,14 @@ public sealed class UpdateProgramConfigValidator : AbstractValidator<UpdateProgr
             entry.RuleFor(e => e.Value)
                 .NotNull().WithMessage("Cada entrada debe tener Value (puede ser cadena vacía).")
                 .MaximumLength(500);
+            entry.RuleFor(e => e.Value)
+                .Must(v => bool.TryParse(v, out _))
+                .When(e => string.Equals(e.Key, LoyaltyConstants.ConfigKeys.PointsExpirationEnabled, StringComparison.OrdinalIgnoreCase))
+                .WithMessage("points_expiration_enabled debe ser true o false.");
+            entry.RuleFor(e => e.Value)
+                .Must(v => int.TryParse(v, out var months) && months > 0)
+                .When(e => string.Equals(e.Key, LoyaltyConstants.ConfigKeys.PointsExpireAfterMonths, StringComparison.OrdinalIgnoreCase))
+                .WithMessage("points_expire_after_months debe ser un entero mayor a 0.");
         });
 
         RuleFor(x => x.UpdatedBy)

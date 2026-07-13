@@ -89,7 +89,31 @@ Fase 2.5:
 - ✅ Badges de estado/nivel.
 - ✅ Tablas mas limpias.
 
-El mecanismo unico para informar cambios al Web Service de Apple Wallet es `LoyaltyCard.LastActivityAt`. Las acumulaciones de puntos lo actualizan mediante `LoyaltyCard.EarnPoints()`. Los canjes tambien lo actualizan mediante `LoyaltyCard.Touch(...)` despues de `LoyaltyCard.RedeemPoints(...)`.
+Fase 3.1:
+
+- ✅ Dashboard / Analytics.
+- ✅ KPIs de clientes, puntos, canjes y recompensas.
+- ✅ Actividad reciente.
+- ✅ Lecturas agregadas con `IDashboardReadService`.
+
+Fase 3.2:
+
+- ✅ Customer Detail.
+- ✅ Informacion general, Loyalty/Wallet y estadisticas.
+- ✅ Historial de puntos.
+- ✅ Historial de canjes.
+- ✅ Lectura agregada con `ICustomerDetailReadService`.
+
+Fase 3.3:
+
+- ✅ Expiracion de puntos con FIFO.
+- ✅ `PointLot` y `PointLotConsumption`.
+- ✅ Canjes consumen lotes FIFO.
+- ✅ Cancelaciones restauran lotes originales.
+- ✅ `POST /api/admin/points/expire`.
+- ✅ Wallet refresh despues de expiraciones.
+
+El mecanismo unico para informar cambios al Web Service de Apple Wallet es `LoyaltyCard.LastActivityAt`. Las acumulaciones de puntos lo actualizan mediante `LoyaltyCard.EarnPoints()`. Los canjes tambien lo actualizan mediante `LoyaltyCard.Touch(...)` despues de `LoyaltyCard.RedeemPoints(...)`. Las expiraciones lo actualizan mediante `LoyaltyCard.ExpirePoints(...)`.
 
 ## Flujo desde Customer hasta Wallet
 
@@ -437,6 +461,301 @@ Mejoras implementadas:
 - Acciones compactas.
 - Notas truncadas con tooltip cuando aplica.
 - Mejor presentacion visual.
+
+# Fase 3.1 - Dashboard / Analytics
+
+El Admin cuenta con un Dashboard analitico en:
+
+```text
+/dashboard
+```
+
+Tambien responde en `/`.
+
+## Que se agrego
+
+- `GetDashboardSummaryQuery`.
+- `GetDashboardSummaryHandler`.
+- `DashboardSummaryDto`.
+- DTOs de metricas para clientes, puntos, canjes, recompensas y actividad reciente.
+- Extension de `IDashboardReadService`.
+- Implementacion de agregaciones en `DashboardReadService`.
+- Pantalla Admin con cards KPI y tabla de actividad reciente.
+
+## Metricas
+
+Clientes:
+
+- Total de clientes registrados.
+- Clientes nuevos este mes.
+- Clientes con Wallet emitida.
+- Clientes activos.
+
+Puntos:
+
+- Puntos otorgados.
+- Puntos canjeados.
+- Balance total de puntos actual.
+
+Canjes:
+
+- Canjes pendientes.
+- Canjes confirmados.
+- Canjes cancelados.
+- Total de canjes.
+
+Recompensas:
+
+- Total de recompensas.
+- Recompensas activas.
+- Recompensas inactivas.
+
+Actividad reciente:
+
+- Ultimos canjes.
+- Ultimas transacciones de puntos.
+
+## Criterios de calculo
+
+- Clientes nuevos este mes: clientes con `CreatedAt` desde el primer dia UTC del mes actual.
+- Clientes con Wallet emitida: clientes con `LoyaltyCard` existente.
+- Clientes activos: clientes con al menos una `PointTransaction` o al menos un `Redemption`.
+- Puntos otorgados: suma de `PointTransaction.Points` positivos.
+- Puntos canjeados: suma absoluta de transacciones negativas con `TransactionType.Redemption`.
+- Balance total: suma de `LoyaltyCard.CurrentPoints`.
+- Actividad reciente: union en memoria de los ultimos canjes y las ultimas transacciones de puntos, tomando los 10 mas recientes.
+
+## Arquitectura
+
+```text
+Admin Dashboard
+  ↓
+GetDashboardSummaryQuery
+  ↓
+IDashboardReadService
+  ↓
+DashboardReadService
+  ↓
+SQL Server
+```
+
+`DashboardReadService` usa consultas `AsNoTracking` y agregaciones en SQL Server para evitar cargar tablas completas en memoria.
+
+## Prueba manual
+
+1. Levantar API/Admin como normalmente.
+2. Abrir Admin.
+3. Entrar a `Dashboard`.
+4. Confirmar que las cards cargan.
+5. Confirmar que no falla sin datos.
+6. Crear o usar cliente existente.
+7. Crear puntos, canje o recompensa.
+8. Refrescar Dashboard y validar que las metricas cambian.
+
+# Fase 3.2 - Customer Detail
+
+El Admin cuenta con una pantalla de detalle de cliente en:
+
+```text
+/customers/{customerId}
+```
+
+La ruta legacy por serial (`/customers/{serialNumber}`) redirige al detalle por `customerId` cuando encuentra la tarjeta.
+
+## Que se agrego
+
+- `GetCustomerDetailQuery`.
+- `GetCustomerDetailHandler`.
+- `CustomerDetailDto`.
+- Sub DTOs:
+  - `CustomerSummaryDto`
+  - `CustomerWalletDto`
+  - `CustomerPointHistoryItemDto`
+  - `CustomerRedemptionHistoryItemDto`
+  - `CustomerStatisticsDto`
+- `ICustomerDetailReadService`.
+- `CustomerDetailReadService`.
+- Componente `DetailItem`.
+- Navegacion desde el listado de clientes con accion `Ver detalle`.
+
+## Informacion mostrada
+
+Informacion general:
+
+- Nombre completo.
+- Email.
+- Telefono, si existe.
+- Fecha de registro.
+- Estado.
+- Nivel actual.
+- Wallet emitida.
+
+Tarjeta Loyalty / Wallet:
+
+- Numero de tarjeta.
+- Puntos actuales.
+- Fecha de emision.
+- Ultima actualizacion.
+- Cantidad de dispositivos registrados.
+- Ultimo push enviado si existiera en modelo.
+
+Estadisticas rapidas:
+
+- Puntos actuales.
+- Puntos obtenidos historicamente.
+- Puntos canjeados.
+- Total de canjes.
+- Canjes pendientes.
+- Canjes cancelados.
+- Canjes confirmados.
+
+Historial de puntos:
+
+- Fecha.
+- Tipo.
+- Descripcion.
+- Puntos.
+- Balance despues del movimiento cuando exista.
+
+Historial de canjes:
+
+- Fecha.
+- Reward.
+- Estado.
+- Puntos utilizados.
+
+## Criterios usados
+
+- Wallet emitida: existe `LoyaltyCard` para el cliente.
+- Fecha de emision de Wallet: se usa `Customer.CreatedAt`, porque el flujo actual crea `Customer` y `LoyaltyCard` en la misma operacion y `LoyaltyCard` no tiene campo propio de creacion.
+- Ultima actualizacion: `LoyaltyCard.LastActivityAt`.
+- Ultimo push enviado: no existe campo persistido actualmente, por lo que se muestra `No disponible`.
+- Balance despues del movimiento: no existe snapshot persistido por transaccion, por lo que se muestra `No disponible`.
+
+## Arquitectura
+
+```text
+Admin Customer Detail
+  ↓
+GetCustomerDetailQuery
+  ↓
+ICustomerDetailReadService
+  ↓
+CustomerDetailReadService
+  ↓
+SQL Server
+```
+
+`CustomerDetailReadService` usa `AsNoTracking`, proyecciones y agregaciones SQL. Los historiales se limitan a los ultimos 50 movimientos/canjes.
+
+## Prueba manual
+
+1. Abrir listado de clientes.
+2. Entrar al detalle con `Ver detalle`.
+3. Validar informacion general.
+4. Validar estadisticas.
+5. Validar historial de puntos.
+6. Validar historial de canjes.
+7. Probar un cliente nuevo sin movimientos.
+8. Confirmar que la pagina no genera errores.
+
+# Fase 3.3 - Expiracion de puntos con FIFO
+
+El sistema implementa expiracion de puntos por lotes.
+
+Reglas vigentes:
+
+- Cada acumulacion positiva crea un `PointLot`.
+- Cada lote conserva `OriginalAmount`, `RemainingAmount`, `EarnedAt` y `ExpiresAt`.
+- `ExpiresAt` se calcula con `points_expire_after_months`; el default actual es `12`.
+- Los puntos vencen 12 meses despues de ser otorgados.
+- Los canjes consumen puntos FIFO: primero los lotes mas antiguos disponibles.
+- Los consumos parciales dejan saldo remanente en el lote.
+- Los puntos vencidos no pueden usarse en canjes.
+- La expiracion es idempotente: un lote con `RemainingAmount = 0` no vuelve a expirar.
+- Nunca se expiran mas puntos que el saldo disponible de la tarjeta.
+
+Arquitectura:
+
+```text
+POST /api/admin/points/expire
+  ↓
+ExpirePointsCommand
+  ↓
+PointLots vencidos
+  ↓
+PointTransaction negativa (Expired)
+  ↓
+LoyaltyCard.ExpirePoints
+  ↓
+LastActivityAt
+  ↓
+APNs best-effort
+  ↓
+Apple Wallet refresh
+```
+
+Tablas nuevas:
+
+- `PointLots`: lotes positivos con vencimiento.
+- `PointLotConsumptions`: asignaciones FIFO de movimientos negativos contra lotes.
+
+Flujos modificados:
+
+- Registro de cliente: el bono de bienvenida crea `PointTransaction` positiva y `PointLot`.
+- Acumulacion de puntos: la compra crea `PointTransaction` positiva y `PointLot`.
+- Canje: crea `PointTransaction` negativa, descuenta `LoyaltyCard.CurrentPoints` y consume lotes FIFO.
+- Cancelacion de canje: restaura el saldo, marca consumos como reversados y devuelve puntos a los lotes originales sin crear lotes nuevos.
+- Expiracion: crea `PointTransaction` negativa de tipo `Expired`, deja los lotes en `RemainingAmount = 0`, actualiza `LastActivityAt` y notifica Wallet.
+
+Configuracion:
+
+- `points_expiration_enabled`: `true` / `false`.
+- `points_expire_after_months`: entero mayor a `0`; default `12`.
+
+Todas las fechas de lotes, consumos y ejecucion de expiracion usan UTC mediante el proveedor de tiempo del proyecto.
+
+Endpoint administrativo:
+
+```text
+POST /api/admin/points/expire
+```
+
+Header:
+
+```text
+X-Operator-Id: admin
+```
+
+Respuesta:
+
+- `runAt`
+- `enabled`
+- `clientsProcessed`
+- `clientsAffected`
+- `lotsExpired`
+- `pointsExpired`
+- `walletsNotified`
+- `warnings`
+
+La migracion `AddPointLotsForExpiration` asume una base nueva de desarrollo. KBeauty Loyalty esta en etapa inicial, por lo que no se implementa estrategia de migracion historica en Fase 3.3.
+
+La migracion se limita a:
+
+- Crear `PointLots`.
+- Crear `PointLotConsumptions`.
+- Crear claves foraneas e indices.
+- Insertar las claves `points_expiration_enabled` y `points_expire_after_months`.
+
+Para desarrollo local, la ruta recomendada es borrar y recrear la base en lugar de migrar saldos o canjes anteriores.
+
+Regla futura documentada, no implementada en Fase 3.3:
+
+- El nivel se calculara con puntos positivos ganados en una ventana movil de 12 meses.
+- Los canjes no reduciran progreso de nivel.
+- La expiracion no reducira progreso directamente.
+- El nivel podra bajar cuando puntos antiguos salgan de la ventana.
+- El recalculo ocurrira al otorgar puntos y en el proceso diario.
 
 ## Services involucrados
 

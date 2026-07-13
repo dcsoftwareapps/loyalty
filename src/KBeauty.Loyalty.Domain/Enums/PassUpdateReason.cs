@@ -17,5 +17,8 @@ public enum PassUpdateReason
     RedemptionConfirmed = 2,
 
     /// <summary>Se cancelo un canje y el saldo fue restaurado.</summary>
-    RedemptionCancelled = 3
+    RedemptionCancelled = 3,
+
+    /// <summary>Expiraron puntos y el saldo bajo.</summary>
+    PointsExpired = 4
 }

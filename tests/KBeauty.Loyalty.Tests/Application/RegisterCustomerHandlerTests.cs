@@ -18,7 +18,8 @@ public class RegisterCustomerHandlerTests
         Mock<IPointTransactionRepository> transactions,
         Mock<IUnitOfWork>? uow = null,
         Mock<IPassGeneratorService>? passes = null,
-        Mock<IStorageService>? storage = null)
+        Mock<IStorageService>? storage = null,
+        Mock<IPointLotRepository>? pointLots = null)
     {
         var config = ConfigRepoWithDefaults();
         var passesMock = passes ?? new Mock<IPassGeneratorService>();
@@ -36,6 +37,7 @@ public class RegisterCustomerHandlerTests
             customers.Object,
             cards.Object,
             transactions.Object,
+            (pointLots ?? new Mock<IPointLotRepository>()).Object,
             config.Object,
             passesMock.Object,
             storageMock.Object,

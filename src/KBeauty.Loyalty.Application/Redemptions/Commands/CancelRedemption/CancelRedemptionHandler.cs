@@ -17,6 +17,7 @@ public sealed class CancelRedemptionHandler
     private readonly ILoyaltyCardRepository _cards;
     private readonly IRewardCatalogRepository _rewards;
     private readonly IPointTransactionRepository _transactions;
+    private readonly IPointLotRepository _pointLots;
     private readonly IDeviceRegistrationRepository _devices;
     private readonly IApnService _apn;
     private readonly IDateTimeProvider _dt;
@@ -28,6 +29,7 @@ public sealed class CancelRedemptionHandler
         ILoyaltyCardRepository cards,
         IRewardCatalogRepository rewards,
         IPointTransactionRepository transactions,
+        IPointLotRepository pointLots,
         IDeviceRegistrationRepository devices,
         IApnService apn,
         IDateTimeProvider dt,
@@ -38,6 +40,7 @@ public sealed class CancelRedemptionHandler
         _cards = cards;
         _rewards = rewards;
         _transactions = transactions;
+        _pointLots = pointLots;
         _devices = devices;
         _apn = apn;
         _dt = dt;
@@ -60,6 +63,10 @@ public sealed class CancelRedemptionHandler
 
         var reward = await _rewards.GetByIdAsync(redemption.RewardCatalogItemId, ct);
         var now = _dt.UtcNow;
+        var consumptions = await _pointLots.GetActiveConsumptionsByRedemptionIdAsync(redemption.Id, ct);
+        if (consumptions.Count == 0)
+            return Result.Fail<CancelRedemptionResponse>(
+                "El canje no tiene consumos FIFO para restaurar.");
 
         try
         {
@@ -73,6 +80,18 @@ public sealed class CancelRedemptionHandler
         card.RestorePoints(redemption.PointsSpent, _dt);
         _cards.Update(card);
         _redemptions.Update(redemption);
+
+        foreach (var consumption in consumptions)
+        {
+            var lot = await _pointLots.GetLotByIdAsync(consumption.PointLotId, ct);
+            if (lot is null)
+                return Result.Fail<CancelRedemptionResponse>($"No se encontro el lote {consumption.PointLotId} del canje.");
+
+            lot.Restore(consumption.Amount);
+            consumption.MarkReversed(now);
+            _pointLots.UpdateLot(lot);
+            _pointLots.UpdateConsumption(consumption);
+        }
 
         await _transactions.AddAsync(new PointTransaction(
             id: Guid.NewGuid(),

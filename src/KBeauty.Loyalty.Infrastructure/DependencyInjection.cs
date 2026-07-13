@@ -66,6 +66,7 @@ public static class DependencyInjection
         services.AddScoped<ICustomerRepository, CustomerRepository>();
         services.AddScoped<ILoyaltyCardRepository, LoyaltyCardRepository>();
         services.AddScoped<IPointTransactionRepository, PointTransactionRepository>();
+        services.AddScoped<IPointLotRepository, PointLotRepository>();
         services.AddScoped<IRedemptionRepository, RedemptionRepository>();
         services.AddScoped<IRewardCatalogRepository, RewardCatalogRepository>();
         services.AddScoped<IProgramConfigRepository, ProgramConfigRepository>();
@@ -81,6 +82,7 @@ public static class DependencyInjection
 
         services.AddScoped<IDashboardReadService, DashboardReadService>();
         services.AddScoped<ICustomerListReadService, CustomerListReadService>();
+        services.AddScoped<ICustomerDetailReadService, CustomerDetailReadService>();
         services.AddScoped<IRedemptionHistoryReadService, RedemptionHistoryReadService>();
     }
 

@@ -1,4 +1,5 @@
 using KBeauty.Loyalty.Application.Admin.Queries.GetAdminDashboard;
+using KBeauty.Loyalty.Application.Admin.Queries.GetDashboardSummary;
 
 namespace KBeauty.Loyalty.Application.Common.Interfaces;
 
@@ -15,4 +16,7 @@ public interface IDashboardReadService
 {
     /// <summary>Construye el <see cref="DashboardDto"/> con conteos y agregaciones del mes en curso.</summary>
     Task<DashboardDto> GetDashboardAsync(CancellationToken ct = default);
+
+    /// <summary>Construye el dashboard analitico de Fase 3.1.</summary>
+    Task<DashboardSummaryDto> GetDashboardSummaryAsync(CancellationToken ct = default);
 }

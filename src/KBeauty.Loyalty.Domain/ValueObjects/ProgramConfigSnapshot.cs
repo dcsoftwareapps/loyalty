@@ -20,6 +20,8 @@ public sealed record ProgramConfigSnapshot(
     int WelcomeBonusPoints,
     int ReferralBonusPoints,
     int BirthdayMultiplier,
+    bool PointsExpirationEnabled,
+    int PointsExpireAfterMonths,
     int LevelMistMin,
     int LevelGlowMin,
     int LevelRadianceMin,
@@ -47,6 +49,8 @@ public sealed record ProgramConfigSnapshot(
             WelcomeBonusPoints: GetInt(map, LoyaltyConstants.ConfigKeys.WelcomeBonusPoints, LoyaltyConstants.Defaults.WelcomeBonusPoints),
             ReferralBonusPoints: GetInt(map, LoyaltyConstants.ConfigKeys.ReferralBonusPoints, LoyaltyConstants.Defaults.ReferralBonusPoints),
             BirthdayMultiplier: GetInt(map, LoyaltyConstants.ConfigKeys.BirthdayMultiplier, LoyaltyConstants.Defaults.BirthdayMultiplier),
+            PointsExpirationEnabled: GetBool(map, LoyaltyConstants.ConfigKeys.PointsExpirationEnabled, LoyaltyConstants.Defaults.PointsExpirationEnabled),
+            PointsExpireAfterMonths: GetInt(map, LoyaltyConstants.ConfigKeys.PointsExpireAfterMonths, LoyaltyConstants.Defaults.PointsExpireAfterMonths),
             LevelMistMin: GetInt(map, LoyaltyConstants.ConfigKeys.LevelMistMin, LoyaltyConstants.Defaults.LevelMistMin),
             LevelGlowMin: GetInt(map, LoyaltyConstants.ConfigKeys.LevelGlowMin, LoyaltyConstants.Defaults.LevelGlowMin),
             LevelRadianceMin: GetInt(map, LoyaltyConstants.ConfigKeys.LevelRadianceMin, LoyaltyConstants.Defaults.LevelRadianceMin),
@@ -77,6 +81,11 @@ public sealed record ProgramConfigSnapshot(
 
     private static decimal GetDecimal(IDictionary<string, string> map, string key, decimal defaultValue) =>
         map.TryGetValue(key, out var raw) && decimal.TryParse(raw, NumberStyles.Number, CultureInfo.InvariantCulture, out var parsed)
+            ? parsed
+            : defaultValue;
+
+    private static bool GetBool(IDictionary<string, string> map, string key, bool defaultValue) =>
+        map.TryGetValue(key, out var raw) && bool.TryParse(raw, out var parsed)
             ? parsed
             : defaultValue;
 }

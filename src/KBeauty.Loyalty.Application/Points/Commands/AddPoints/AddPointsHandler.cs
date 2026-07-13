@@ -17,6 +17,7 @@ public sealed class AddPointsHandler : IRequestHandler<AddPointsCommand, Result<
     private readonly ILoyaltyCardRepository _cards;
     private readonly ICustomerRepository _customers;
     private readonly IPointTransactionRepository _transactions;
+    private readonly IPointLotRepository _pointLots;
     private readonly IProgramConfigRepository _config;
     private readonly IDeviceRegistrationRepository _devices;
     private readonly IApnService _apn;
@@ -28,6 +29,7 @@ public sealed class AddPointsHandler : IRequestHandler<AddPointsCommand, Result<
         ILoyaltyCardRepository cards,
         ICustomerRepository customers,
         IPointTransactionRepository transactions,
+        IPointLotRepository pointLots,
         IProgramConfigRepository config,
         IDeviceRegistrationRepository devices,
         IApnService apn,
@@ -38,6 +40,7 @@ public sealed class AddPointsHandler : IRequestHandler<AddPointsCommand, Result<
         _cards = cards;
         _customers = customers;
         _transactions = transactions;
+        _pointLots = pointLots;
         _config = config;
         _devices = devices;
         _apn = apn;
@@ -81,16 +84,27 @@ public sealed class AddPointsHandler : IRequestHandler<AddPointsCommand, Result<
             ? $"Compra ${command.PurchaseAmount:0.00} (x{snapshot.BirthdayMultiplier} cumpleaños)"
             : $"Compra ${command.PurchaseAmount:0.00}";
 
+        var transactionId = Guid.NewGuid();
+        var transactionCreatedAt = _dt.UtcNow;
         await _transactions.AddAsync(new PointTransaction(
-            id: Guid.NewGuid(),
+            id: transactionId,
             loyaltyCardId: card.Id,
             points: finalPoints,
             type: TransactionType.Purchase,
             description: description,
-            createdAtUtc: _dt.UtcNow,
+            createdAtUtc: transactionCreatedAt,
             bonusType: bonusType,
             purchaseAmount: command.PurchaseAmount,
             createdBy: command.OperatorId), ct);
+
+        await _pointLots.AddLotAsync(new PointLot(
+            id: Guid.NewGuid(),
+            loyaltyCardId: card.Id,
+            sourcePointTransactionId: transactionId,
+            amount: finalPoints,
+            earnedAtUtc: transactionCreatedAt,
+            expiresAtUtc: transactionCreatedAt.AddMonths(snapshot.PointsExpireAfterMonths),
+            createdAtUtc: transactionCreatedAt), ct);
 
         await _uow.SaveChangesAsync(ct);
 

@@ -29,6 +29,7 @@ public sealed class RegisterCustomerHandler
     private readonly ICustomerRepository _customers;
     private readonly ILoyaltyCardRepository _cards;
     private readonly IPointTransactionRepository _transactions;
+    private readonly IPointLotRepository _pointLots;
     private readonly IProgramConfigRepository _config;
     private readonly IPassGeneratorService _passes;
     private readonly IStorageService _storage;
@@ -41,6 +42,7 @@ public sealed class RegisterCustomerHandler
         ICustomerRepository customers,
         ILoyaltyCardRepository cards,
         IPointTransactionRepository transactions,
+        IPointLotRepository pointLots,
         IProgramConfigRepository config,
         IPassGeneratorService passes,
         IStorageService storage,
@@ -52,6 +54,7 @@ public sealed class RegisterCustomerHandler
         _customers = customers;
         _cards = cards;
         _transactions = transactions;
+        _pointLots = pointLots;
         _config = config;
         _passes = passes;
         _storage = storage;
@@ -110,8 +113,9 @@ public sealed class RegisterCustomerHandler
         if (snapshot.WelcomeBonusPoints > 0)
         {
             card.EarnPoints(snapshot.WelcomeBonusPoints, TransactionType.BonusWelcome, snapshot, _dt);
+            var transactionId = Guid.NewGuid();
             await _transactions.AddAsync(new PointTransaction(
-                id: Guid.NewGuid(),
+                id: transactionId,
                 loyaltyCardId: cardId,
                 points: snapshot.WelcomeBonusPoints,
                 type: TransactionType.BonusWelcome,
@@ -119,6 +123,14 @@ public sealed class RegisterCustomerHandler
                 createdAtUtc: now,
                 bonusType: BonusType.Welcome,
                 createdBy: operatorName), ct);
+            await _pointLots.AddLotAsync(new PointLot(
+                id: Guid.NewGuid(),
+                loyaltyCardId: cardId,
+                sourcePointTransactionId: transactionId,
+                amount: snapshot.WelcomeBonusPoints,
+                earnedAtUtc: now,
+                expiresAtUtc: now.AddMonths(snapshot.PointsExpireAfterMonths),
+                createdAtUtc: now), ct);
         }
 
         // 5. Bono al referidor
@@ -126,8 +138,9 @@ public sealed class RegisterCustomerHandler
         {
             referrerCard.EarnPoints(snapshot.ReferralBonusPoints, TransactionType.BonusReferral, snapshot, _dt);
             _cards.Update(referrerCard);
+            var transactionId = Guid.NewGuid();
             await _transactions.AddAsync(new PointTransaction(
-                id: Guid.NewGuid(),
+                id: transactionId,
                 loyaltyCardId: referrerCard.Id,
                 points: snapshot.ReferralBonusPoints,
                 type: TransactionType.BonusReferral,
@@ -135,6 +148,14 @@ public sealed class RegisterCustomerHandler
                 createdAtUtc: now,
                 bonusType: BonusType.Referral,
                 createdBy: operatorName), ct);
+            await _pointLots.AddLotAsync(new PointLot(
+                id: Guid.NewGuid(),
+                loyaltyCardId: referrerCard.Id,
+                sourcePointTransactionId: transactionId,
+                amount: snapshot.ReferralBonusPoints,
+                earnedAtUtc: now,
+                expiresAtUtc: now.AddMonths(snapshot.PointsExpireAfterMonths),
+                createdAtUtc: now), ct);
         }
 
         // 6. Commit transaccional

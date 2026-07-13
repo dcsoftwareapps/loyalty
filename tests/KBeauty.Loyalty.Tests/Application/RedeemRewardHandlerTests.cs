@@ -30,6 +30,12 @@ public class RedeemRewardHandlerTests
 
         redemptions = new Mock<IRedemptionRepository>();
         var transactions = new Mock<IPointTransactionRepository>();
+        var pointLots = new Mock<IPointLotRepository>();
+        pointLots
+            .Setup(r => r.GetAvailableLotsAsync(card.Id, It.IsAny<DateTime>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(() => card.CurrentPoints > 0
+                ? new[] { new PointLot(Guid.NewGuid(), card.Id, Guid.NewGuid(), card.CurrentPoints, Now, Now.AddMonths(12), Now) }
+                : Array.Empty<PointLot>());
         var config = ConfigRepoWithDefaults();
 
         var devices = new Mock<IDeviceRegistrationRepository>();
@@ -43,7 +49,7 @@ public class RedeemRewardHandlerTests
 
         return new RedeemRewardHandler(
             cards.Object, rewards.Object, redemptions.Object, transactions.Object,
-            config.Object, devices.Object, apn.Object, publisher.Object,
+            pointLots.Object, config.Object, devices.Object, apn.Object, publisher.Object,
             clock.Object, uow.Object,
             NullLogger<RedeemRewardHandler>.Instance);
     }
@@ -55,7 +61,7 @@ public class RedeemRewardHandlerTests
         if (points > 0)
         {
             var snapshot = new KBeauty.Loyalty.Domain.ValueObjects.ProgramConfigSnapshot(
-                10m, 50, 150, 2, 0, 1000, 3000, 500, 300, 500, 400, 700, 800, 1200);
+                10m, 50, 150, 2, true, 12, 0, 1000, 3000, 500, 300, 500, 400, 700, 800, 1200);
             card.EarnPoints(points, TransactionType.Purchase, snapshot, dt);
             card.ClearDomainEvents();
         }
@@ -153,6 +159,7 @@ public class RedeemRewardHandlerTests
             cards.Object, rewards.Object,
             new Mock<IRedemptionRepository>().Object,
             new Mock<IPointTransactionRepository>().Object,
+            new Mock<IPointLotRepository>().Object,
             ConfigRepoWithDefaults().Object,
             new Mock<IDeviceRegistrationRepository>().Object,
             new Mock<IApnService>().Object,

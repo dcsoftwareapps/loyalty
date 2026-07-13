@@ -1,0 +1,9 @@
+<div class="kb-card">
+    <div class="kb-card-label">@Label</div>
+    <div class="kb-card-value">@Value</div>
+</div>
+
+@code {
+    [Parameter, EditorRequired] public string Label { get; set; } = string.Empty;
+    [Parameter, EditorRequired] public string Value { get; set; } = string.Empty;
+}

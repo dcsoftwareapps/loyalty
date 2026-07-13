@@ -317,6 +317,90 @@ Estado Fase 2.5:
 - ✅ Badges de estado en `/redemptions`.
 - ✅ Notas truncadas con tooltip cuando aplica.
 
+## Dashboard / Analytics
+
+Fase 3.1 agrega un Dashboard analitico en el Admin.
+
+Pagina:
+
+```text
+/dashboard
+```
+
+Muestra KPIs de:
+
+- Clientes.
+- Puntos.
+- Canjes.
+- Recompensas.
+- Actividad reciente.
+
+Criterios usados:
+
+- Clientes con Wallet emitida: clientes con `LoyaltyCard` existente.
+- Clientes activos: clientes con al menos una transaccion de puntos o un canje.
+- Puntos otorgados: suma de transacciones positivas.
+- Puntos canjeados: suma absoluta de transacciones negativas de tipo `Redemption`.
+- Balance total: suma de `LoyaltyCard.CurrentPoints`.
+
+Prueba manual:
+
+1. Levantar API/Admin como normalmente.
+2. Abrir Admin.
+3. Entrar a `Dashboard`.
+4. Confirmar que las cards cargan.
+5. Confirmar que no falla sin datos.
+6. Crear o usar cliente existente.
+7. Crear puntos, canje o recompensa.
+8. Refrescar Dashboard y validar que las metricas cambian.
+
+## Customer Detail
+
+Fase 3.2 agrega una pantalla principal de detalle de cliente en el Admin.
+
+Pagina:
+
+```text
+/customers/{customerId}
+```
+
+Desde el listado de clientes se accede con `Ver detalle`.
+
+Muestra:
+
+- Informacion general del cliente.
+- Tarjeta Loyalty / Wallet.
+- Estadisticas rapidas.
+- Historial de puntos.
+- Historial de canjes.
+- Dispositivos Wallet registrados.
+
+Consultas implementadas:
+
+- `GetCustomerDetailQuery`.
+- `GetCustomerDetailHandler`.
+- `ICustomerDetailReadService`.
+- `CustomerDetailReadService`.
+
+Criterios usados:
+
+- Wallet emitida: existe `LoyaltyCard`.
+- Fecha de emision: `Customer.CreatedAt`, porque la tarjeta se crea junto con el cliente.
+- Ultima actualizacion: `LoyaltyCard.LastActivityAt`.
+- Ultimo push enviado: no existe dato persistido, se muestra `No disponible`.
+- Balance despues del movimiento: no existe snapshot persistido, se muestra `No disponible`.
+
+Prueba manual:
+
+1. Abrir listado de clientes.
+2. Entrar al detalle.
+3. Validar informacion general.
+4. Validar estadisticas.
+5. Validar historial de puntos.
+6. Validar historial de canjes.
+7. Probar un cliente nuevo sin movimientos.
+8. Confirmar que la pagina no genera errores.
+
 Arquitectura de lectura:
 
 ```text
@@ -330,6 +414,99 @@ RedemptionHistoryReadService
   ↓
 SQL Server
 ```
+
+## Expiracion de puntos con FIFO
+
+Fase 3.3 agrega expiracion de puntos por lotes.
+
+Configuracion en `ProgramConfig`:
+
+- `points_expiration_enabled`: activa o desactiva el proceso.
+- `points_expire_after_months`: meses de vigencia de cada lote. Debe ser mayor a `0`. Default actual: `12`.
+
+Cada movimiento positivo crea un `PointLot`:
+
+- Registro con bono de bienvenida.
+- Compra/acumulacion de puntos.
+- Bono de referido.
+
+Cada canje consume lotes FIFO y crea `PointLotConsumption`. Si el canje se cancela, los consumos se marcan reversados y se restauran los puntos al lote original.
+
+Endpoint manual para ejecutar expiracion:
+
+```text
+POST /api/admin/points/expire
+```
+
+Header recomendado:
+
+```text
+X-Operator-Id: admin
+```
+
+Respuesta esperada:
+
+```json
+{
+  "runAt": "2026-07-10T00:00:00Z",
+  "enabled": true,
+  "clientsProcessed": 1,
+  "clientsAffected": 1,
+  "lotsExpired": 2,
+  "pointsExpired": 150,
+  "walletsNotified": 1,
+  "warnings": []
+}
+```
+
+La expiracion actualiza `LoyaltyCard.LastActivityAt` y envia APNs best-effort, por lo que Wallet debe refrescar igual que con compras, canjes y cancelaciones.
+
+Migracion:
+
+- `20260710090000_AddPointLotsForExpiration`
+
+No aplicar automaticamente. Cuando se aplique manualmente con `dotnet ef database update`, la migracion:
+
+1. Crea `PointLots`.
+2. Crea `PointLotConsumptions`.
+3. Inserta las claves de configuracion.
+
+KBeauty Loyalty esta en etapa inicial. En Fase 3.3 no existe estrategia de migracion historica: no se reconstruyen lotes desde transacciones anteriores, no se aplican negativos historicos y no se validan saldos existentes. Para desarrollo local se recomienda borrar y recrear la base.
+
+Prueba manual sugerida:
+
+1. Borrar la base local si existe.
+2. Aplicar migraciones en una base nueva.
+3. Crear un cliente nuevo.
+4. Agregar puntos.
+5. Verificar que se crea un `PointLot`.
+6. Crear un canje y confirmar que consume el lote mas antiguo.
+7. Cancelar el canje y confirmar que el lote recupera `RemainingAmount`.
+8. Ajustar temporalmente datos locales para tener un lote vencido.
+9. Ejecutar `POST /api/admin/points/expire`.
+10. Confirmar que se crea `PointTransaction` tipo `Expired`.
+11. Confirmar que `CurrentPoints` baja y `LastActivityAt` cambia.
+12. Confirmar en logs que APNs intenta notificar Wallet.
+13. Ejecutar el endpoint de nuevo y confirmar que no duplica expiraciones.
+
+Casos manuales recomendados:
+
+- Lote de 100 pts con 12 meses cumplidos expira 100.
+- Lote parcialmente consumido de 100 con 40 restantes expira 40.
+- Dos lotes vencidos de la misma tarjeta generan una sola transaccion `Expired` por tarjeta.
+- Canje consume primero el lote mas antiguo.
+- Cancelacion de canje restaura puntos al lote original.
+- Endpoint con `points_expiration_enabled=false` no modifica datos.
+- Reejecutar expiracion no duplica descuento.
+- Wallet recibe refresh porque `LastActivityAt` cambia y se envia APNs.
+
+Regla futura no implementada en Fase 3.3:
+
+- El nivel se calculara con puntos positivos ganados en una ventana movil de 12 meses.
+- Los canjes no reduciran progreso de nivel.
+- La expiracion no reducira progreso directamente.
+- El nivel podra bajar cuando puntos antiguos salgan de la ventana.
+- El recalculo ocurrira al otorgar puntos y en el proceso diario.
 
 ## Descargar un pass
 

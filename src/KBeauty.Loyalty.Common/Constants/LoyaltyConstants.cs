@@ -15,6 +15,8 @@ public static class LoyaltyConstants
         public const string WelcomeBonusPoints = "welcome_bonus_points";
         public const string ReferralBonusPoints = "referral_bonus_points";
         public const string BirthdayMultiplier = "birthday_multiplier";
+        public const string PointsExpirationEnabled = "points_expiration_enabled";
+        public const string PointsExpireAfterMonths = "points_expire_after_months";
 
         // Umbrales de nivel
         public const string LevelMistMin = "level_mist_min";
@@ -69,6 +71,8 @@ public static class LoyaltyConstants
         public const int WelcomeBonusPoints = 50;
         public const int ReferralBonusPoints = 150;
         public const int BirthdayMultiplier = 2;
+        public const bool PointsExpirationEnabled = true;
+        public const int PointsExpireAfterMonths = 12;
         public const int LevelMistMin = 0;
         public const int LevelGlowMin = 1000;
         public const int LevelRadianceMin = 3000;

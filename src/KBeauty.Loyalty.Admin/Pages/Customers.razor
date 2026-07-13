@@ -60,7 +60,7 @@ else
                 <td><LevelBadge Level="@c.Level" /></td>
                 <td style="font-weight: 600;">@c.CurrentPoints.ToString("N0")</td>
                 <td style="color: var(--kb-ink-muted);">@c.CreatedAt.ToLocalTime().ToString("dd MMM yyyy")</td>
-                <td><a href="/customers/@c.SerialNumber">Detalle →</a></td>
+                <td><a href="/customers/@c.CustomerId">Ver detalle</a></td>
             </tr>
         }
         </tbody>

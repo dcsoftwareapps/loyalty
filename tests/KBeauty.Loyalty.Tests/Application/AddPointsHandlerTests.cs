@@ -32,6 +32,7 @@ public class AddPointsHandlerTests
                  .ReturnsAsync(customer);
 
         var transactions = new Mock<IPointTransactionRepository>();
+        var pointLots = new Mock<IPointLotRepository>();
         var config = ConfigRepoWithDefaults();
 
         var devices = new Mock<IDeviceRegistrationRepository>();
@@ -46,6 +47,7 @@ public class AddPointsHandlerTests
             cards.Object,
             customers.Object,
             transactions.Object,
+            pointLots.Object,
             config.Object,
             devices.Object,
             apn.Object,
@@ -110,6 +112,7 @@ public class AddPointsHandlerTests
                  .ReturnsAsync(customer);
 
         var transactions = new Mock<IPointTransactionRepository>();
+        var pointLots = new Mock<IPointLotRepository>();
         var config = ConfigRepoWithDefaults();
 
         // Un dispositivo registrado para esta tarjeta.
@@ -126,7 +129,7 @@ public class AddPointsHandlerTests
         var uow = NoOpUnitOfWork();
 
         var handler = new AddPointsHandler(
-            cards.Object, customers.Object, transactions.Object, config.Object,
+            cards.Object, customers.Object, transactions.Object, pointLots.Object, config.Object,
             devices.Object, apn.Object, clock.Object, uow.Object,
             NullLogger<AddPointsHandler>.Instance);
 

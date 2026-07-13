@@ -22,5 +22,8 @@ public enum TransactionType
     Expiry = 5,
 
     /// <summary>Reversa positiva de puntos por cancelacion de un canje pendiente.</summary>
-    RedemptionReversal = 6
+    RedemptionReversal = 6,
+
+    /// <summary>Expiracion automatica de puntos vencidos.</summary>
+    Expired = 7
 }

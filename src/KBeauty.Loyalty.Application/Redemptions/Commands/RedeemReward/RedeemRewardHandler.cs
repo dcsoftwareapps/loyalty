@@ -19,6 +19,7 @@ public sealed class RedeemRewardHandler : IRequestHandler<RedeemRewardCommand, R
     private readonly IRewardCatalogRepository _rewards;
     private readonly IRedemptionRepository _redemptions;
     private readonly IPointTransactionRepository _transactions;
+    private readonly IPointLotRepository _pointLots;
     private readonly IProgramConfigRepository _config;
     private readonly IDeviceRegistrationRepository _devices;
     private readonly IApnService _apn;
@@ -32,6 +33,7 @@ public sealed class RedeemRewardHandler : IRequestHandler<RedeemRewardCommand, R
         IRewardCatalogRepository rewards,
         IRedemptionRepository redemptions,
         IPointTransactionRepository transactions,
+        IPointLotRepository pointLots,
         IProgramConfigRepository config,
         IDeviceRegistrationRepository devices,
         IApnService apn,
@@ -44,6 +46,7 @@ public sealed class RedeemRewardHandler : IRequestHandler<RedeemRewardCommand, R
         _rewards = rewards;
         _redemptions = redemptions;
         _transactions = transactions;
+        _pointLots = pointLots;
         _config = config;
         _devices = devices;
         _apn = apn;
@@ -82,6 +85,12 @@ public sealed class RedeemRewardHandler : IRequestHandler<RedeemRewardCommand, R
             return Result.Fail<RedemptionResponse>(
                 $"Saldo insuficiente: necesitas {reward.PointsCost} y tienes {card.CurrentPoints}.");
 
+        var lots = await _pointLots.GetAvailableLotsAsync(card.Id, now, ct);
+        var availableLotPoints = lots.Sum(l => l.RemainingAmount);
+        if (availableLotPoints < reward.PointsCost)
+            return Result.Fail<RedemptionResponse>(
+                $"Saldo disponible insuficiente: necesitas {reward.PointsCost} puntos no vencidos y tienes {availableLotPoints}.");
+
         // Mutar dominio
         card.RedeemPoints(reward.PointsCost);
         card.Touch(_dt);
@@ -96,14 +105,17 @@ public sealed class RedeemRewardHandler : IRequestHandler<RedeemRewardCommand, R
         await _redemptions.AddAsync(redemption, ct);
 
         // Diario contable
+        var transactionId = Guid.NewGuid();
         await _transactions.AddAsync(new PointTransaction(
-            id: Guid.NewGuid(),
+            id: transactionId,
             loyaltyCardId: card.Id,
             points: -reward.PointsCost,
             type: TransactionType.Redemption,
             description: $"Canje: {reward.Name}",
             createdAtUtc: now,
             createdBy: command.OperatorId), ct);
+
+        await ConsumeLotsAsync(lots, reward.PointsCost, transactionId, redemption.Id, now, ct);
 
         await _uow.SaveChangesAsync(ct);
 
@@ -135,6 +147,36 @@ public sealed class RedeemRewardHandler : IRequestHandler<RedeemRewardCommand, R
         catch (Exception ex)
         {
             _logger.LogWarning(ex, "Fallo enviando push de Wallet para serial {Serial}", serial);
+        }
+    }
+
+    private async Task ConsumeLotsAsync(
+        IReadOnlyList<PointLot> lots,
+        int pointsToConsume,
+        Guid transactionId,
+        Guid redemptionId,
+        DateTime now,
+        CancellationToken ct)
+    {
+        var remaining = pointsToConsume;
+        foreach (var lot in lots)
+        {
+            if (remaining == 0)
+                break;
+
+            var amount = Math.Min(lot.RemainingAmount, remaining);
+            lot.Consume(amount);
+            _pointLots.UpdateLot(lot);
+
+            await _pointLots.AddConsumptionAsync(new PointLotConsumption(
+                id: Guid.NewGuid(),
+                pointLotId: lot.Id,
+                consumingPointTransactionId: transactionId,
+                amount: amount,
+                createdAtUtc: now,
+                redemptionId: redemptionId), ct);
+
+            remaining -= amount;
         }
     }
 }
