@@ -1,4 +1,5 @@
 using KBeauty.Loyalty.Application.Admin.Queries.GetAdminDashboard;
+using KBeauty.Loyalty.Application.Levels.Commands.RecalculateLevels;
 using KBeauty.Loyalty.Application.Points.Commands.ExpirePoints;
 using MediatR;
 using Microsoft.AspNetCore.Mvc;
@@ -34,6 +35,21 @@ public sealed class AdminController : ControllerBase
         var result = await _sender.Send(new ExpirePointsCommand(operatorId ?? "api-admin"), ct);
         if (result.IsFailure)
             return BadRequest(new ProblemDetails { Title = "Validacion", Detail = result.Error });
+
+        return Ok(result.Value);
+    }
+
+    /// <summary>POST /api/admin/levels/recalculate - recalcula niveles con ventana movil de 12 meses.</summary>
+    [HttpPost("levels/recalculate")]
+    [ProducesResponseType(typeof(RecalculateLevelsResponse), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
+    public async Task<IActionResult> RecalculateLevels(
+        [FromHeader(Name = "X-Operator-Id")] string? operatorId,
+        CancellationToken ct)
+    {
+        var result = await _sender.Send(new RecalculateLevelsCommand(operatorId ?? "api-admin"), ct);
+        if (result.IsFailure)
+            return BadRequest(new ProblemDetails { Title = "Niveles", Detail = result.Error });
 
         return Ok(result.Value);
     }

@@ -1,3 +1,4 @@
+using KBeauty.Loyalty.Application.Common.Interfaces;
 using KBeauty.Loyalty.Common.Extensions;
 using KBeauty.Loyalty.Common.Results;
 using KBeauty.Loyalty.Common.Services;
@@ -13,18 +14,24 @@ public sealed class GetCustomerBySerialHandler
 {
     private readonly ILoyaltyCardRepository _cards;
     private readonly ICustomerRepository _customers;
+    private readonly IPointTransactionRepository _transactions;
     private readonly IProgramConfigRepository _config;
+    private readonly ILevelCalculationService _levels;
     private readonly IDateTimeProvider _dt;
 
     public GetCustomerBySerialHandler(
         ILoyaltyCardRepository cards,
         ICustomerRepository customers,
+        IPointTransactionRepository transactions,
         IProgramConfigRepository config,
+        ILevelCalculationService levels,
         IDateTimeProvider dt)
     {
         _cards = cards;
         _customers = customers;
+        _transactions = transactions;
         _config = config;
+        _levels = levels;
         _dt = dt;
     }
 
@@ -40,7 +47,8 @@ public sealed class GetCustomerBySerialHandler
             return Result.Fail<CustomerDetailDto>("La tarjeta existe pero su clienta no — datos inconsistentes.");
 
         var snapshot = ProgramConfigSnapshot.FromEntries(await _config.GetAllAsync(ct));
-        var memberLevel = MemberLevel.FromPoints(card.CurrentPoints, snapshot);
+        var rollingPoints = await _transactions.GetEligibleLevelPointsAsync(card.Id, _dt.UtcNow.AddMonths(-12), ct);
+        var memberLevel = _levels.CalculateLevel(rollingPoints, snapshot);
 
         return Result.Ok(new CustomerDetailDto(
             CustomerId: customer.Id,
@@ -52,9 +60,9 @@ public sealed class GetCustomerBySerialHandler
             SerialNumber: card.SerialNumber,
             CurrentPoints: card.CurrentPoints,
             LifetimePoints: card.LifetimePoints,
-            Level: card.Level,
-            PointsToNextLevel: memberLevel.PointsToNextLevel(card.CurrentPoints),
-            PointsEarnedThisYear: card.PointsEarnedThisYear,
+            Level: memberLevel.Name,
+            PointsToNextLevel: memberLevel.PointsToNextLevel(rollingPoints),
+            PointsEarnedThisYear: rollingPoints,
             LevelAchievedAt: card.LevelAchievedAt,
             LastActivityAt: card.LastActivityAt,
             CreatedAt: customer.CreatedAt,

@@ -69,8 +69,8 @@ public class LoyaltyCard : Entity
     }
 
     /// <summary>
-    /// Suma puntos a la tarjeta. Recalcula el nivel y, si cambia, emite
-    /// <see cref="LevelUpgradedEvent"/>. Siempre emite <see cref="PointsEarnedEvent"/>.
+    /// Suma puntos a la tarjeta y emite <see cref="PointsEarnedEvent"/>.
+    /// El nivel se aplica aparte con la ventana movil de 12 meses.
     /// </summary>
     /// <param name="points">Cantidad de puntos a sumar — debe ser &gt; 0.</param>
     /// <param name="type">Naturaleza del movimiento (Purchase, BonusXxx).</param>
@@ -86,26 +86,34 @@ public class LoyaltyCard : Entity
         ArgumentNullException.ThrowIfNull(dt);
 
         var now = dt.UtcNow;
-        var oldLevel = Level;
-
         CurrentPoints += points;
         LifetimePoints += points;
         PointsEarnedThisYear += points;
         LastActivityAt = now;
 
-        var newLevel = MemberLevel.FromPoints(CurrentPoints, config);
-        var levelChanged = !string.Equals(oldLevel, newLevel.Name, StringComparison.Ordinal);
+        AddDomainEvent(new PointsEarnedEvent(Id, points, CurrentPoints, false, Level));
+    }
 
-        if (levelChanged)
-        {
-            Level = newLevel.Name;
-            LevelAchievedAt = now;
-            // Empieza un nuevo "año" para la re-cualificación Radiance.
-            PointsEarnedThisYear = points;
-            AddDomainEvent(new LevelUpgradedEvent(Id, oldLevel, newLevel.Name));
-        }
+    /// <summary>
+    /// Aplica el nivel calculado por ventana movil de 12 meses.
+    /// Actualiza LevelAchievedAt y LastActivityAt solo si el nivel cambia.
+    /// </summary>
+    public bool ApplyCalculatedLevel(MemberLevel calculatedLevel, IDateTimeProvider dt)
+    {
+        ArgumentNullException.ThrowIfNull(calculatedLevel);
+        ArgumentNullException.ThrowIfNull(dt);
 
-        AddDomainEvent(new PointsEarnedEvent(Id, points, CurrentPoints, levelChanged, newLevel.Name));
+        if (string.Equals(Level, calculatedLevel.Name, StringComparison.Ordinal))
+            return false;
+
+        var oldLevel = Level;
+        var now = dt.UtcNow;
+        Level = calculatedLevel.Name;
+        LevelAchievedAt = now;
+        LastActivityAt = now;
+
+        AddDomainEvent(new LevelUpgradedEvent(Id, oldLevel, calculatedLevel.Name));
+        return true;
     }
 
     /// <summary>
@@ -138,7 +146,7 @@ public class LoyaltyCard : Entity
 
     /// <summary>
     /// Expira puntos disponibles. No afecta LifetimePoints ni PointsEarnedThisYear.
-    /// La actualizacion de nivel por ventana movil queda para Fase 3.4.
+    /// La expiracion no modifica directamente el progreso de nivel.
     /// </summary>
     public void ExpirePoints(int points, IDateTimeProvider dt)
     {
@@ -162,6 +170,7 @@ public class LoyaltyCard : Entity
         IDateTimeProvider dt,
         int requiredPointsPerYear = LoyaltyConstants.Defaults.RadianceRequalificationPoints)
     {
+        // TODO Phase 3.x: remove this legacy annual requalification path after all callers use rolling PointTransaction sums.
         ArgumentNullException.ThrowIfNull(dt);
 
         if (!string.Equals(Level, LoyaltyConstants.Levels.Radiance, StringComparison.Ordinal))

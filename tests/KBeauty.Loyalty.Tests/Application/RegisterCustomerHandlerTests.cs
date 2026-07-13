@@ -22,6 +22,10 @@ public class RegisterCustomerHandlerTests
         Mock<IPointLotRepository>? pointLots = null)
     {
         var config = ConfigRepoWithDefaults();
+        transactions.Setup(r => r.GetEligibleLevelPointsAsync(
+                It.IsAny<Guid>(), It.IsAny<DateTime>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(0);
+
         var passesMock = passes ?? new Mock<IPassGeneratorService>();
         passesMock.Setup(p => p.GeneratePassAsync(It.IsAny<LoyaltyCard>(), It.IsAny<Customer>(), It.IsAny<CancellationToken>()))
                   .ReturnsAsync(new byte[] { 1, 2, 3 });
@@ -41,6 +45,7 @@ public class RegisterCustomerHandlerTests
             config.Object,
             passesMock.Object,
             storageMock.Object,
+            LevelCalculator().Object,
             Clock().Object,
             currentUser.Object,
             (uow ?? NoOpUnitOfWork()).Object,

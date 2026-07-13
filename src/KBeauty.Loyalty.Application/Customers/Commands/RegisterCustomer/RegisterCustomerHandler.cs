@@ -33,6 +33,7 @@ public sealed class RegisterCustomerHandler
     private readonly IProgramConfigRepository _config;
     private readonly IPassGeneratorService _passes;
     private readonly IStorageService _storage;
+    private readonly ILevelCalculationService _levels;
     private readonly IDateTimeProvider _dt;
     private readonly ICurrentUserService _currentUser;
     private readonly IUnitOfWork _uow;
@@ -46,6 +47,7 @@ public sealed class RegisterCustomerHandler
         IProgramConfigRepository config,
         IPassGeneratorService passes,
         IStorageService storage,
+        ILevelCalculationService levels,
         IDateTimeProvider dt,
         ICurrentUserService currentUser,
         IUnitOfWork uow,
@@ -58,6 +60,7 @@ public sealed class RegisterCustomerHandler
         _config = config;
         _passes = passes;
         _storage = storage;
+        _levels = levels;
         _dt = dt;
         _currentUser = currentUser;
         _uow = uow;
@@ -131,6 +134,9 @@ public sealed class RegisterCustomerHandler
                 earnedAtUtc: now,
                 expiresAtUtc: now.AddMonths(snapshot.PointsExpireAfterMonths),
                 createdAtUtc: now), ct);
+
+            var calculatedLevel = _levels.CalculateLevel(snapshot.WelcomeBonusPoints, snapshot);
+            card.ApplyCalculatedLevel(calculatedLevel, _dt);
         }
 
         // 5. Bono al referidor
@@ -156,6 +162,14 @@ public sealed class RegisterCustomerHandler
                 earnedAtUtc: now,
                 expiresAtUtc: now.AddMonths(snapshot.PointsExpireAfterMonths),
                 createdAtUtc: now), ct);
+
+            var windowStart = now.AddMonths(-12);
+            var rollingPoints = await _transactions.GetEligibleLevelPointsAsync(referrerCard.Id, windowStart, ct);
+            if (_levels.IsEligibleForLevelProgress(TransactionType.BonusReferral))
+                rollingPoints += snapshot.ReferralBonusPoints;
+
+            var calculatedLevel = _levels.CalculateLevel(rollingPoints, snapshot);
+            referrerCard.ApplyCalculatedLevel(calculatedLevel, _dt);
         }
 
         // 6. Commit transaccional

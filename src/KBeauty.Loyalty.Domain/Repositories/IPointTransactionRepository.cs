@@ -23,5 +23,14 @@ public interface IPointTransactionRepository
         IDateTimeProvider dt,
         CancellationToken ct = default);
 
+    Task<int> GetEligibleLevelPointsAsync(
+        Guid loyaltyCardId,
+        DateTime windowStartUtc,
+        CancellationToken ct = default);
+
+    Task<IReadOnlyDictionary<Guid, int>> GetEligibleLevelPointsByCardAsync(
+        DateTime windowStartUtc,
+        CancellationToken ct = default);
+
     Task AddAsync(PointTransaction transaction, CancellationToken ct = default);
 }

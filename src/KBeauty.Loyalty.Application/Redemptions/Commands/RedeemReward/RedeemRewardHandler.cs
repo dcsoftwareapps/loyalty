@@ -23,6 +23,7 @@ public sealed class RedeemRewardHandler : IRequestHandler<RedeemRewardCommand, R
     private readonly IProgramConfigRepository _config;
     private readonly IDeviceRegistrationRepository _devices;
     private readonly IApnService _apn;
+    private readonly ILevelCalculationService _levels;
     private readonly IPublisher _publisher;
     private readonly IDateTimeProvider _dt;
     private readonly IUnitOfWork _uow;
@@ -37,6 +38,7 @@ public sealed class RedeemRewardHandler : IRequestHandler<RedeemRewardCommand, R
         IProgramConfigRepository config,
         IDeviceRegistrationRepository devices,
         IApnService apn,
+        ILevelCalculationService levels,
         IPublisher publisher,
         IDateTimeProvider dt,
         IUnitOfWork uow,
@@ -50,6 +52,7 @@ public sealed class RedeemRewardHandler : IRequestHandler<RedeemRewardCommand, R
         _config = config;
         _devices = devices;
         _apn = apn;
+        _levels = levels;
         _publisher = publisher;
         _dt = dt;
         _uow = uow;
@@ -75,7 +78,8 @@ public sealed class RedeemRewardHandler : IRequestHandler<RedeemRewardCommand, R
 
         // Elegibilidad por nivel
         var snapshot = ProgramConfigSnapshot.FromEntries(await _config.GetAllAsync(ct));
-        var customerLevel = MemberLevel.FromPoints(card.CurrentPoints, snapshot);
+        var rollingPoints = await _transactions.GetEligibleLevelPointsAsync(card.Id, now.AddMonths(-12), ct);
+        var customerLevel = _levels.CalculateLevel(rollingPoints, snapshot);
         if (!reward.IsEligibleFor(customerLevel, snapshot))
             return Result.Fail<RedemptionResponse>(
                 $"Tu nivel {customerLevel.Name} no alcanza para '{reward.Name}' (requiere {reward.MinLevel}).");

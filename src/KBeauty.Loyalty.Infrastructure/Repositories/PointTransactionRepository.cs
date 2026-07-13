@@ -2,6 +2,7 @@ using KBeauty.Loyalty.Common.Pagination;
 using KBeauty.Loyalty.Common.Results;
 using KBeauty.Loyalty.Common.Services;
 using KBeauty.Loyalty.Domain.Entities;
+using KBeauty.Loyalty.Domain.Enums;
 using KBeauty.Loyalty.Domain.Repositories;
 using KBeauty.Loyalty.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
@@ -46,9 +47,41 @@ internal sealed class PointTransactionRepository : IPointTransactionRepository
             .AsNoTracking()
             .Where(t => t.LoyaltyCardId == loyaltyCardId
                      && t.CreatedAt >= cutoff
-                     && t.Points > 0)
+                     && t.Points > 0
+                     && LevelProgressTransactionTypes.All.Contains(t.Type))
             .SumAsync(t => (int?)t.Points, ct)
             .ContinueWith(x => x.Result ?? 0, ct);
+    }
+
+    public Task<int> GetEligibleLevelPointsAsync(
+        Guid loyaltyCardId,
+        DateTime windowStartUtc,
+        CancellationToken ct = default)
+    {
+        return _db.PointTransactions
+            .AsNoTracking()
+            .Where(t => t.LoyaltyCardId == loyaltyCardId
+                     && t.CreatedAt >= windowStartUtc
+                     && t.Points > 0
+                     && LevelProgressTransactionTypes.All.Contains(t.Type))
+            .SumAsync(t => (int?)t.Points, ct)
+            .ContinueWith(x => x.Result ?? 0, ct);
+    }
+
+    public async Task<IReadOnlyDictionary<Guid, int>> GetEligibleLevelPointsByCardAsync(
+        DateTime windowStartUtc,
+        CancellationToken ct = default)
+    {
+        var rows = await _db.PointTransactions
+            .AsNoTracking()
+            .Where(t => t.CreatedAt >= windowStartUtc
+                     && t.Points > 0
+                     && LevelProgressTransactionTypes.All.Contains(t.Type))
+            .GroupBy(t => t.LoyaltyCardId)
+            .Select(g => new { LoyaltyCardId = g.Key, Points = g.Sum(t => t.Points) })
+            .ToListAsync(ct);
+
+        return rows.ToDictionary(x => x.LoyaltyCardId, x => x.Points);
     }
 
     public async Task AddAsync(PointTransaction transaction, CancellationToken ct = default)

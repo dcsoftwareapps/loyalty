@@ -1,6 +1,8 @@
 using System.Reflection;
 using FluentValidation;
 using KBeauty.Loyalty.Application.Common.Behaviors;
+using KBeauty.Loyalty.Application.Common.Interfaces;
+using KBeauty.Loyalty.Application.Services;
 using MediatR;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -33,6 +35,7 @@ public static class DependencyInjection
         });
 
         services.AddValidatorsFromAssembly(assembly, includeInternalTypes: true);
+        services.AddScoped<ILevelCalculationService, LevelCalculationService>();
 
         return services;
     }

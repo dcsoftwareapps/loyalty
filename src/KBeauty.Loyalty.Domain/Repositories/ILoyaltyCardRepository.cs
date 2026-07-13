@@ -17,6 +17,8 @@ public interface ILoyaltyCardRepository
     /// <summary>Devuelve cards Radiance cuyo aniversario ya pasó y no acumularon el mínimo anual.</summary>
     Task<IReadOnlyList<LoyaltyCard>> GetCardsForLevelRequalificationAsync(CancellationToken ct = default);
 
+    Task<IReadOnlyList<LoyaltyCard>> GetActiveAsync(CancellationToken ct = default);
+
     Task AddAsync(LoyaltyCard card, CancellationToken ct = default);
     void Update(LoyaltyCard card);
 }

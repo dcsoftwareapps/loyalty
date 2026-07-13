@@ -43,6 +43,16 @@ internal sealed class LoyaltyCardRepository : ILoyaltyCardRepository
         return cards.AsReadOnly();
     }
 
+    public async Task<IReadOnlyList<LoyaltyCard>> GetActiveAsync(CancellationToken ct = default)
+    {
+        var cards = await _db.LoyaltyCards
+            .Where(c => c.IsActive)
+            .OrderBy(c => c.SerialNumber)
+            .ToListAsync(ct);
+
+        return cards.AsReadOnly();
+    }
+
     public async Task AddAsync(LoyaltyCard card, CancellationToken ct = default)
     {
         await _db.LoyaltyCards.AddAsync(card, ct);

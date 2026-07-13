@@ -199,6 +199,69 @@ El handler:
 
 El shape exacto del request esta definido por `RegisterCustomerCommand`.
 
+## Niveles automaticos - Fase 3.4
+
+Los niveles se calculan con puntos positivos elegibles de los ultimos 12 meses. La fuente de verdad es `PointTransactions`.
+
+Tipos que cuentan para nivel:
+
+- `Purchase`
+- `BonusWelcome`
+- `BonusBirthday`
+- `BonusReferral`
+
+Tipos que no cuentan:
+
+- `Redemption`
+- `RedemptionReversal`
+- `Expired`
+- `Expiry`
+
+Endpoint manual de recalculo:
+
+```powershell
+Invoke-RestMethod `
+  -Method Post `
+  -Uri "https://localhost:55128/api/admin/levels/recalculate" `
+  -Headers @{ "X-Operator-Id" = "dev-admin" }
+```
+
+Validacion SQL sugerida antes de recalcular:
+
+```sql
+DECLARE @WindowStart datetime2 = DATEADD(month, -12, SYSUTCDATETIME());
+
+SELECT
+    lc.SerialNumber,
+    lc.Level AS StoredLevel,
+    SUM(CASE
+        WHEN pt.Points > 0
+         AND pt.Type IN (
+             'Purchase',
+             'BonusWelcome',
+             'BonusBirthday',
+             'BonusReferral'
+         )
+         AND pt.CreatedAt >= @WindowStart
+        THEN pt.Points ELSE 0 END) AS RollingEligiblePoints
+FROM LoyaltyCards lc
+LEFT JOIN PointTransactions pt ON pt.LoyaltyCardId = lc.Id
+WHERE lc.IsActive = 1
+GROUP BY lc.SerialNumber, lc.Level
+ORDER BY lc.SerialNumber;
+```
+
+Escenarios manuales recomendados:
+
+1. Crear una clienta nueva y confirmar que inicia en Mist.
+2. Agregar compras suficientes para llegar a Glow y ejecutar `POST /api/admin/levels/recalculate`.
+3. Confirmar que `Level` cambio, `LastActivityAt` se actualizo y Wallet recibe APNs si el pass esta registrado.
+4. Crear un canje y confirmar que no reduce el progreso de nivel.
+5. Cancelar el canje y confirmar que la reversa positiva no aumenta progreso de nivel.
+6. Insertar o ajustar en desarrollo una transaccion elegible fuera de la ventana de 12 meses, recalcular y confirmar que el nivel puede bajar.
+
+No hay scheduler diario implementado todavia. Mientras tanto, el recalculo puede ejecutarse manualmente con el endpoint administrativo.
+
 ## Reward Catalog API
 
 Fase 2.1 agrega CRUD API administrativo para `RewardCatalogItem`.

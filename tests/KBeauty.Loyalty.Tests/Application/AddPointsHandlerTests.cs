@@ -32,6 +32,9 @@ public class AddPointsHandlerTests
                  .ReturnsAsync(customer);
 
         var transactions = new Mock<IPointTransactionRepository>();
+        transactions.Setup(r => r.GetEligibleLevelPointsAsync(
+                It.IsAny<Guid>(), It.IsAny<DateTime>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(0);
         var pointLots = new Mock<IPointLotRepository>();
         var config = ConfigRepoWithDefaults();
 
@@ -51,6 +54,7 @@ public class AddPointsHandlerTests
             config.Object,
             devices.Object,
             apn.Object,
+            LevelCalculator().Object,
             clock.Object,
             uow.Object,
             NullLogger<AddPointsHandler>.Instance);
@@ -112,6 +116,9 @@ public class AddPointsHandlerTests
                  .ReturnsAsync(customer);
 
         var transactions = new Mock<IPointTransactionRepository>();
+        transactions.Setup(r => r.GetEligibleLevelPointsAsync(
+                It.IsAny<Guid>(), It.IsAny<DateTime>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(0);
         var pointLots = new Mock<IPointLotRepository>();
         var config = ConfigRepoWithDefaults();
 
@@ -130,7 +137,7 @@ public class AddPointsHandlerTests
 
         var handler = new AddPointsHandler(
             cards.Object, customers.Object, transactions.Object, pointLots.Object, config.Object,
-            devices.Object, apn.Object, clock.Object, uow.Object,
+            devices.Object, apn.Object, LevelCalculator().Object, clock.Object, uow.Object,
             NullLogger<AddPointsHandler>.Instance);
 
         await handler.Handle(

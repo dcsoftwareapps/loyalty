@@ -1,6 +1,9 @@
+using KBeauty.Loyalty.Application.Common.Interfaces;
 using KBeauty.Loyalty.Common.Services;
 using KBeauty.Loyalty.Domain.Entities;
+using KBeauty.Loyalty.Domain.Enums;
 using KBeauty.Loyalty.Domain.Repositories;
+using KBeauty.Loyalty.Domain.ValueObjects;
 using Moq;
 
 namespace KBeauty.Loyalty.Tests.Application;
@@ -35,6 +38,29 @@ internal static class HandlerTestHelpers
         var mock = new Mock<IUnitOfWork>();
         mock.Setup(u => u.SaveChangesAsync(It.IsAny<CancellationToken>())).ReturnsAsync(1);
         return mock;
+    }
+
+    public static Mock<ILevelCalculationService> LevelCalculator()
+    {
+        var mock = new Mock<ILevelCalculationService>();
+        mock.Setup(s => s.CalculateLevel(It.IsAny<int>(), It.IsAny<ProgramConfigSnapshot>()))
+            .Returns<int, ProgramConfigSnapshot>((points, config) => MemberLevel.FromPoints(points, config));
+        mock.Setup(s => s.IsEligibleForLevelProgress(It.IsAny<TransactionType>()))
+            .Returns<TransactionType>(LevelProgressTransactionTypes.Contains);
+        mock.Setup(s => s.CompareLevels(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<ProgramConfigSnapshot>()))
+            .Returns<string, string, ProgramConfigSnapshot>((current, next, config) =>
+                Rank(next, config).CompareTo(Rank(current, config)));
+        return mock;
+    }
+
+    private static int Rank(string level, ProgramConfigSnapshot config)
+    {
+        if (string.Equals(level, KBeauty.Loyalty.Common.Constants.LoyaltyConstants.Levels.Radiance, StringComparison.OrdinalIgnoreCase))
+            return config.LevelRadianceMin;
+        if (string.Equals(level, KBeauty.Loyalty.Common.Constants.LoyaltyConstants.Levels.Glow, StringComparison.OrdinalIgnoreCase))
+            return config.LevelGlowMin;
+
+        return config.LevelMistMin;
     }
 
     public static Customer NewCustomer(string fullName = "Ana López", DateTime? dob = null) =>

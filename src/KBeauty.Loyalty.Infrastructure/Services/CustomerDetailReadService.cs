@@ -1,6 +1,8 @@
 using KBeauty.Loyalty.Application.Common.Interfaces;
 using KBeauty.Loyalty.Application.Customers.Queries.GetCustomerDetail;
+using KBeauty.Loyalty.Common.Services;
 using KBeauty.Loyalty.Domain.Enums;
+using KBeauty.Loyalty.Domain.ValueObjects;
 using KBeauty.Loyalty.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 
@@ -9,8 +11,15 @@ namespace KBeauty.Loyalty.Infrastructure.Services;
 internal sealed class CustomerDetailReadService : ICustomerDetailReadService
 {
     private readonly AppDbContext _db;
+    private readonly IDateTimeProvider _dt;
+    private readonly ILevelCalculationService _levels;
 
-    public CustomerDetailReadService(AppDbContext db) => _db = db;
+    public CustomerDetailReadService(AppDbContext db, IDateTimeProvider dt, ILevelCalculationService levels)
+    {
+        _db = db;
+        _dt = dt;
+        _levels = levels;
+    }
 
     public async Task<CustomerDetailDto?> GetByCustomerIdAsync(Guid customerId, CancellationToken ct = default)
     {
@@ -76,6 +85,22 @@ internal sealed class CustomerDetailReadService : ICustomerDetailReadService
                 .CountAsync(d => d.SerialNumber == serial, ct)
             : 0;
 
+        var rollingLevel = baseInfo.Level;
+        if (hasCard)
+        {
+            var windowStart = _dt.UtcNow.AddMonths(-12);
+            var rollingPoints = await _db.PointTransactions
+                .AsNoTracking()
+                .Where(t => t.LoyaltyCardId == cardId
+                         && t.CreatedAt >= windowStart
+                         && t.Points > 0
+                         && LevelProgressTransactionTypes.All.Contains(t.Type))
+                .SumAsync(t => (int?)t.Points, ct) ?? 0;
+
+            var snapshot = ProgramConfigSnapshot.FromEntries(await _db.ProgramConfigs.AsNoTracking().ToListAsync(ct));
+            rollingLevel = _levels.CalculateLevel(rollingPoints, snapshot).Name;
+        }
+
         var pointHistory = hasCard
             ? await _db.PointTransactions
                 .AsNoTracking()
@@ -114,7 +139,7 @@ internal sealed class CustomerDetailReadService : ICustomerDetailReadService
                 Phone: baseInfo.Phone,
                 CreatedAt: baseInfo.CreatedAt,
                 IsActive: baseInfo.CustomerIsActive && (!hasCard || baseInfo.CardIsActive),
-                Level: baseInfo.Level,
+                Level: rollingLevel,
                 WalletIssued: hasCard),
             Wallet: new CustomerWalletDto(
                 WalletIssued: hasCard,

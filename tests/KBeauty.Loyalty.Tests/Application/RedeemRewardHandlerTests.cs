@@ -30,6 +30,9 @@ public class RedeemRewardHandlerTests
 
         redemptions = new Mock<IRedemptionRepository>();
         var transactions = new Mock<IPointTransactionRepository>();
+        transactions.Setup(r => r.GetEligibleLevelPointsAsync(
+                card.Id, It.IsAny<DateTime>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(card.CurrentPoints);
         var pointLots = new Mock<IPointLotRepository>();
         pointLots
             .Setup(r => r.GetAvailableLotsAsync(card.Id, It.IsAny<DateTime>(), It.IsAny<CancellationToken>()))
@@ -49,7 +52,7 @@ public class RedeemRewardHandlerTests
 
         return new RedeemRewardHandler(
             cards.Object, rewards.Object, redemptions.Object, transactions.Object,
-            pointLots.Object, config.Object, devices.Object, apn.Object, publisher.Object,
+            pointLots.Object, config.Object, devices.Object, apn.Object, LevelCalculator().Object, publisher.Object,
             clock.Object, uow.Object,
             NullLogger<RedeemRewardHandler>.Instance);
     }
@@ -155,14 +158,20 @@ public class RedeemRewardHandlerTests
         rewards.Setup(r => r.GetByIdAsync(It.IsAny<Guid>(), It.IsAny<CancellationToken>()))
                .ReturnsAsync((RewardCatalogItem?)null);
 
+        var transactions = new Mock<IPointTransactionRepository>();
+        transactions.Setup(r => r.GetEligibleLevelPointsAsync(
+                card.Id, It.IsAny<DateTime>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(card.CurrentPoints);
+
         var handler = new RedeemRewardHandler(
             cards.Object, rewards.Object,
             new Mock<IRedemptionRepository>().Object,
-            new Mock<IPointTransactionRepository>().Object,
+            transactions.Object,
             new Mock<IPointLotRepository>().Object,
             ConfigRepoWithDefaults().Object,
             new Mock<IDeviceRegistrationRepository>().Object,
             new Mock<IApnService>().Object,
+            LevelCalculator().Object,
             new Mock<IPublisher>().Object,
             Clock().Object,
             NoOpUnitOfWork().Object,

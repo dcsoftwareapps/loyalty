@@ -21,6 +21,7 @@ public sealed class AddPointsHandler : IRequestHandler<AddPointsCommand, Result<
     private readonly IProgramConfigRepository _config;
     private readonly IDeviceRegistrationRepository _devices;
     private readonly IApnService _apn;
+    private readonly ILevelCalculationService _levels;
     private readonly IDateTimeProvider _dt;
     private readonly IUnitOfWork _uow;
     private readonly ILogger<AddPointsHandler> _logger;
@@ -33,6 +34,7 @@ public sealed class AddPointsHandler : IRequestHandler<AddPointsCommand, Result<
         IProgramConfigRepository config,
         IDeviceRegistrationRepository devices,
         IApnService apn,
+        ILevelCalculationService levels,
         IDateTimeProvider dt,
         IUnitOfWork uow,
         ILogger<AddPointsHandler> logger)
@@ -44,6 +46,7 @@ public sealed class AddPointsHandler : IRequestHandler<AddPointsCommand, Result<
         _config = config;
         _devices = devices;
         _apn = apn;
+        _levels = levels;
         _dt = dt;
         _uow = uow;
         _logger = logger;
@@ -74,10 +77,7 @@ public sealed class AddPointsHandler : IRequestHandler<AddPointsCommand, Result<
         var bonusType = isBirthMonth ? BonusType.Birthday : (BonusType?)null;
 
         // Aplicar a la tarjeta (raises domain events)
-        var oldLevel = card.Level;
         card.EarnPoints(finalPoints, TransactionType.Purchase, snapshot, _dt);
-        var leveledUp = !string.Equals(oldLevel, card.Level, StringComparison.Ordinal);
-        _cards.Update(card);
 
         // Registrar la transacción en el diario
         var description = isBirthMonth
@@ -106,11 +106,23 @@ public sealed class AddPointsHandler : IRequestHandler<AddPointsCommand, Result<
             expiresAtUtc: transactionCreatedAt.AddMonths(snapshot.PointsExpireAfterMonths),
             createdAtUtc: transactionCreatedAt), ct);
 
+        var windowStart = transactionCreatedAt.AddMonths(-12);
+        var rollingPoints = await _transactions.GetEligibleLevelPointsAsync(card.Id, windowStart, ct);
+        if (_levels.IsEligibleForLevelProgress(TransactionType.Purchase))
+            rollingPoints += finalPoints;
+
+        var oldLevel = card.Level;
+        var calculatedLevel = _levels.CalculateLevel(rollingPoints, snapshot);
+        var levelComparison = _levels.CompareLevels(oldLevel, calculatedLevel.Name, snapshot);
+        var levelChanged = card.ApplyCalculatedLevel(calculatedLevel, _dt);
+        var leveledUp = levelChanged && levelComparison > 0;
+        _cards.Update(card);
+
         await _uow.SaveChangesAsync(ct);
 
         // Push a Wallet — best-effort, no falla la transacción si el APN está caído.
         await TryPushWalletUpdateAsync(card.SerialNumber,
-            leveledUp ? PassUpdateReason.LevelChanged : PassUpdateReason.PointsAdded, ct);
+            levelChanged ? PassUpdateReason.LevelChanged : PassUpdateReason.PointsAdded, ct);
 
         return Result.Ok(new AddPointsResponse(
             PointsAdded: finalPoints,

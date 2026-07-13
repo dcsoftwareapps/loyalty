@@ -1,3 +1,4 @@
+using KBeauty.Loyalty.Application.Common.Interfaces;
 using KBeauty.Loyalty.Common.Results;
 using KBeauty.Loyalty.Common.Services;
 using KBeauty.Loyalty.Domain.Repositories;
@@ -12,18 +13,24 @@ public sealed class GetRedemptionCatalogHandler
 {
     private readonly ILoyaltyCardRepository _cards;
     private readonly IRewardCatalogRepository _rewards;
+    private readonly IPointTransactionRepository _transactions;
     private readonly IProgramConfigRepository _config;
+    private readonly ILevelCalculationService _levels;
     private readonly IDateTimeProvider _dt;
 
     public GetRedemptionCatalogHandler(
         ILoyaltyCardRepository cards,
         IRewardCatalogRepository rewards,
+        IPointTransactionRepository transactions,
         IProgramConfigRepository config,
+        ILevelCalculationService levels,
         IDateTimeProvider dt)
     {
         _cards = cards;
         _rewards = rewards;
+        _transactions = transactions;
         _config = config;
+        _levels = levels;
         _dt = dt;
     }
 
@@ -38,9 +45,10 @@ public sealed class GetRedemptionCatalogHandler
                 $"No se encontró tarjeta con serial '{query.SerialNumber}'.");
 
         var snapshot = ProgramConfigSnapshot.FromEntries(await _config.GetAllAsync(ct));
-        var level = MemberLevel.FromPoints(card.CurrentPoints, snapshot);
-        var items = await _rewards.GetByLevelAsync(level, snapshot, ct);
         var now = _dt.UtcNow;
+        var rollingPoints = await _transactions.GetEligibleLevelPointsAsync(card.Id, now.AddMonths(-12), ct);
+        var level = _levels.CalculateLevel(rollingPoints, snapshot);
+        var items = await _rewards.GetByLevelAsync(level, snapshot, ct);
 
         IReadOnlyList<RewardCatalogItemDto> dtos = items
             .Where(i => i.IsAvailableOn(now))

@@ -20,6 +20,8 @@ public class LoyaltyCardTests
         WelcomeBonusPoints: 50,
         ReferralBonusPoints: 150,
         BirthdayMultiplier: 2,
+        PointsExpirationEnabled: true,
+        PointsExpireAfterMonths: 12,
         LevelMistMin: 0,
         LevelGlowMin: 1000,
         LevelRadianceMin: 3000,

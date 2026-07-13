@@ -1183,3 +1183,66 @@ Wallet actualizado
 ```
 
 La deteccion de cambios para Apple se basa en `LoyaltyCard.LastActivityAt`: compras/acumulaciones lo actualizan en `EarnPoints`; canjes lo actualizan con `Touch` despues de descontar puntos; cancelaciones de canjes lo actualizan con `RestorePoints` al restaurar saldo.
+
+# Fase 3.4 - Niveles automaticos con ventana movil de 12 meses
+
+El nivel de lealtad se calcula con puntos positivos elegibles acumulados en una ventana movil de 12 meses:
+
+```text
+windowStart = now.AddMonths(-12)
+```
+
+La fuente de verdad para el progreso de nivel es `PointTransaction`, no `CurrentPoints`, `LifetimePoints` ni `PointsEarnedThisYear`.
+
+Tipos incluidos:
+
+- `Purchase`
+- `BonusWelcome`
+- `BonusBirthday`
+- `BonusReferral`
+
+Tipos excluidos:
+
+- `Redemption`
+- `RedemptionReversal`
+- `Expired`
+- `Expiry`
+
+Los canjes no reducen progreso de nivel. Las cancelaciones/reversas no aumentan progreso de nivel. La expiracion de puntos no reduce progreso directamente. El nivel puede bajar cuando transacciones elegibles antiguas salen de la ventana movil.
+
+El cambio de nivel se aplica con `LoyaltyCard.ApplyCalculatedLevel(...)`. Cuando el nivel cambia:
+
+- se actualiza `LoyaltyCard.Level`;
+- se actualiza `LevelAchievedAt` como fecha de entrada al nivel actual;
+- se actualiza `LastActivityAt`;
+- se dispara APNs best-effort con `PassUpdateReason.LevelChanged`.
+
+Endpoint administrativo:
+
+```text
+POST /api/admin/levels/recalculate
+```
+
+Header opcional:
+
+```text
+X-Operator-Id: admin
+```
+
+Response:
+
+```json
+{
+  "runAt": "2026-07-13T00:00:00Z",
+  "cardsProcessed": 10,
+  "cardsChanged": 2,
+  "cardsUpgraded": 1,
+  "cardsDowngraded": 1,
+  "walletsNotified": 2,
+  "warnings": []
+}
+```
+
+Tambien se recalcula el nivel al otorgar puntos en `AddPointsHandler` y al crear bonos de bienvenida/referido en `RegisterCustomerHandler`. La automatizacion diaria del recalculo queda pendiente; por ahora el endpoint manual cubre la operacion administrativa.
+
+Nota legacy: `PointsEarnedThisYear` permanece en el modelo por compatibilidad historica. En el DTO legacy de `GetCustomerBySerial`, el campo `PointsEarnedThisYear` devuelve los puntos elegibles de la ventana movil de 12 meses hasta que ese contrato sea renombrado en una fase posterior.
