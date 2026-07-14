@@ -9,7 +9,8 @@
 - Fase 3.2 - Customer Detail
 - Fase 3.3 - Expiracion de puntos con FIFO
 - Fase 3.4 - Niveles automaticos con ventana movil de 12 meses
-- Fase 3.5 - Scheduler diario de mantenimiento: Implementada - pendiente de validacion manual
+- Fase 3.5 - Scheduler diario de mantenimiento
+- Fase 3.6 - Customer Detail avanzado: Implementada - pendiente de validacion manual
 
 ## Siguiente
 
@@ -17,5 +18,5 @@
 
 Siguiente sugerido:
 
-- Validar manualmente el mantenimiento diario.
+- Validar manualmente Customer Detail avanzado.
 - Definir siguiente bloque funcional despues de la validacion.

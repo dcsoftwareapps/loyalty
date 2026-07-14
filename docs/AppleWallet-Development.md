@@ -340,6 +340,34 @@ Si recalculo falla, el error se registra y el hosted service espera la siguiente
 
 El servicio asume una sola instancia del host. Para despliegues multi-instancia se debe agregar un distributed lock antes de habilitarlo en todas las instancias.
 
+## Customer Detail avanzado - Fase 3.6
+
+La pantalla Admin:
+
+```text
+/customers/{customerId}
+```
+
+incluye informacion de auditoria de puntos para soporte.
+
+Validacion manual sugerida:
+
+1. Abrir listado de clientas.
+2. Entrar al detalle de una clienta con Wallet.
+3. Confirmar que se muestran saldo disponible, rolling points, lifetime points, nivel y fecha de nivel.
+4. Confirmar la seccion de proxima expiracion.
+5. Validar tabla de lotes:
+   - ganado;
+   - expira;
+   - monto original;
+   - monto disponible;
+   - estado.
+6. Validar tabla de consumo FIFO en una clienta con canjes o expiraciones.
+7. Confirmar que clientes sin lotes o sin consumos muestran mensajes amigables.
+8. Confirmar que el historial de puntos muestra balance despues de cada movimiento visible.
+
+La fase es solo lectura. No modifica FIFO, expiracion, Wallet, APNs, scheduler ni comandos existentes.
+
 ## Reward Catalog API
 
 Fase 2.1 agrega CRUD API administrativo para `RewardCatalogItem`.

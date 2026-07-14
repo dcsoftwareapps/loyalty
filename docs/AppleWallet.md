@@ -1274,6 +1274,51 @@ Configuracion:
 }
 ```
 
+# Fase 3.6 - Customer Detail avanzado
+
+La pantalla Admin `/customers/{customerId}` ahora funciona tambien como herramienta de auditoria de puntos para soporte.
+
+La informacion se obtiene por lectura mediante `GetCustomerDetailQuery` y `ICustomerDetailReadService`. No modifica puntos, lotes, Wallet, APNs, expiracion ni canjes.
+
+Datos agregados:
+
+- saldo disponible (`CurrentPoints`);
+- puntos rolling de 12 meses calculados con la misma regla de niveles;
+- lifetime points;
+- nivel actual y fecha de entrada al nivel;
+- proxima expiracion de puntos;
+- tabla de lotes FIFO;
+- tabla de consumos FIFO;
+- progreso real hacia el siguiente nivel;
+- balance despues de cada movimiento visible en historial.
+
+DTOs agregados al Customer Detail:
+
+- `CustomerLoyaltyAuditDto`
+- `UpcomingExpirationDto`
+- `RollingProgressDto`
+- `LotSummaryDto`
+- `ConsumptionDto`
+
+Los lotes se ordenan por:
+
+```text
+ExpiresAt
+EarnedAt
+Id
+```
+
+Estados de lote:
+
+- `Activo`: lote completo disponible y no vencido.
+- `Parcialmente consumido`: tiene saldo disponible, pero ya fue consumido parcialmente.
+- `Consumido`: saldo disponible en cero por consumo FIFO.
+- `Expirado`: vencido o consumido por expiracion automatica.
+
+La proxima expiracion considera lotes con `RemainingAmount > 0` y `ExpiresAt > now`, agrupando los puntos que vencen en la fecha mas cercana.
+
+El resumen de consumo FIFO solo se carga cuando existen lotes con consumo, para evitar consultas innecesarias en clientes sin canjes/expiraciones.
+
 `RunAtLocalTime` se interpreta en la zona horaria configurada. `America/Tijuana` es la zona funcional de Ensenada/Baja California. En Windows, si el identificador IANA no existe, el servicio intenta usar el equivalente `Pacific Standard Time (Mexico)`.
 
 El servicio calcula la siguiente ejecucion diaria:

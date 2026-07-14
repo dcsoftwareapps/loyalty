@@ -1,5 +1,6 @@
 using KBeauty.Loyalty.Application.Common.Interfaces;
 using KBeauty.Loyalty.Application.Customers.Queries.GetCustomerDetail;
+using KBeauty.Loyalty.Common.Constants;
 using KBeauty.Loyalty.Common.Services;
 using KBeauty.Loyalty.Domain.Enums;
 using KBeauty.Loyalty.Domain.ValueObjects;
@@ -42,6 +43,7 @@ internal sealed class CustomerDetailReadService : ICustomerDetailReadService
                 CurrentPoints = card == null ? 0 : card.CurrentPoints,
                 LifetimePoints = card == null ? 0 : card.LifetimePoints,
                 Level = card == null ? "Sin Wallet" : card.Level,
+                LevelAchievedAt = card == null ? (DateTime?)null : card.LevelAchievedAt,
                 LastActivityAt = card == null ? (DateTime?)null : card.LastActivityAt
             })
             .FirstOrDefaultAsync(ct);
@@ -85,11 +87,14 @@ internal sealed class CustomerDetailReadService : ICustomerDetailReadService
                 .CountAsync(d => d.SerialNumber == serial, ct)
             : 0;
 
+        var now = _dt.UtcNow;
         var rollingLevel = baseInfo.Level;
+        var rollingPoints = 0;
+        var rollingProgress = new RollingProgressDto(0, 0, 0, 0, baseInfo.Level, "No disponible");
         if (hasCard)
         {
-            var windowStart = _dt.UtcNow.AddMonths(-12);
-            var rollingPoints = await _db.PointTransactions
+            var windowStart = now.AddMonths(-12);
+            rollingPoints = await _db.PointTransactions
                 .AsNoTracking()
                 .Where(t => t.LoyaltyCardId == cardId
                          && t.CreatedAt >= windowStart
@@ -98,23 +103,159 @@ internal sealed class CustomerDetailReadService : ICustomerDetailReadService
                 .SumAsync(t => (int?)t.Points, ct) ?? 0;
 
             var snapshot = ProgramConfigSnapshot.FromEntries(await _db.ProgramConfigs.AsNoTracking().ToListAsync(ct));
-            rollingLevel = _levels.CalculateLevel(rollingPoints, snapshot).Name;
+            var memberLevel = _levels.CalculateLevel(rollingPoints, snapshot);
+            rollingLevel = memberLevel.Name;
+            var nextLevel = memberLevel.Name switch
+            {
+                var n when string.Equals(n, LoyaltyConstants.Levels.Mist, StringComparison.OrdinalIgnoreCase) => LoyaltyConstants.Levels.Glow,
+                var n when string.Equals(n, LoyaltyConstants.Levels.Glow, StringComparison.OrdinalIgnoreCase) => LoyaltyConstants.Levels.Radiance,
+                _ => "Maximo"
+            };
+            rollingProgress = new RollingProgressDto(
+                RollingPoints: rollingPoints,
+                GlowThreshold: snapshot.LevelGlowMin,
+                RadianceThreshold: snapshot.LevelRadianceMin,
+                PointsToNextLevel: memberLevel.PointsToNextLevel(rollingPoints),
+                CurrentLevel: memberLevel.Name,
+                NextLevel: nextLevel);
         }
 
-        var pointHistory = hasCard
+        var lotRows = hasCard
+            ? await (
+                from lot in _db.PointLots.AsNoTracking()
+                where lot.LoyaltyCardId == cardId
+                orderby lot.ExpiresAt, lot.EarnedAt, lot.Id
+                select new
+                {
+                    lot.Id,
+                    lot.EarnedAt,
+                    lot.ExpiresAt,
+                    lot.OriginalAmount,
+                    lot.RemainingAmount,
+                    HasExpirationConsumption = (
+                        from consumption in _db.PointLotConsumptions.AsNoTracking()
+                        join tx in _db.PointTransactions.AsNoTracking()
+                            on consumption.ConsumingPointTransactionId equals tx.Id
+                        where consumption.PointLotId == lot.Id
+                           && consumption.ReversedAt == null
+                           && tx.Type == TransactionType.Expired
+                        select consumption.Id).Any()
+                })
+                .ToListAsync(ct)
+            : [];
+
+        var upcomingDate = lotRows
+            .Where(l => l.RemainingAmount > 0 && l.ExpiresAt > now)
+            .Select(l => (DateTime?)l.ExpiresAt)
+            .FirstOrDefault();
+
+        var upcomingExpiration = upcomingDate.HasValue
+            ? new UpcomingExpirationDto(
+                upcomingDate.Value,
+                lotRows
+                    .Where(l => l.RemainingAmount > 0 && l.ExpiresAt == upcomingDate.Value)
+                    .Sum(l => l.RemainingAmount))
+            : null;
+
+        var lotSummaries = lotRows
+            .Select(l => new LotSummaryDto(
+                LotId: l.Id,
+                EarnedAt: l.EarnedAt,
+                ExpiresAt: l.ExpiresAt,
+                OriginalAmount: l.OriginalAmount,
+                RemainingAmount: l.RemainingAmount,
+                Status: GetLotStatus(l.OriginalAmount, l.RemainingAmount, l.ExpiresAt, l.HasExpirationConsumption, now)))
+            .ToList();
+
+        var shouldLoadConsumptions = lotRows.Any(l => l.RemainingAmount < l.OriginalAmount);
+        var consumptionRows = hasCard && shouldLoadConsumptions
+            ? await (
+                from consumption in _db.PointLotConsumptions.AsNoTracking()
+                join lot in _db.PointLots.AsNoTracking() on consumption.PointLotId equals lot.Id
+                join tx in _db.PointTransactions.AsNoTracking()
+                    on consumption.ConsumingPointTransactionId equals tx.Id
+                join redemption in _db.Redemptions.AsNoTracking()
+                    on consumption.RedemptionId equals redemption.Id into redemptions
+                from redemption in redemptions.DefaultIfEmpty()
+                join reward in _db.RewardCatalogItems.AsNoTracking()
+                    on redemption.RewardCatalogItemId equals reward.Id into rewards
+                from reward in rewards.DefaultIfEmpty()
+                where lot.LoyaltyCardId == cardId
+                orderby lot.ExpiresAt, lot.EarnedAt, lot.Id, consumption.CreatedAt
+                select new
+                {
+                    consumption.Id,
+                    consumption.PointLotId,
+                    lot.EarnedAt,
+                    lot.ExpiresAt,
+                    lot.OriginalAmount,
+                    consumption.Amount,
+                    consumption.CreatedAt,
+                    IsReversed = consumption.ReversedAt != null,
+                    Reason = tx.Type.ToString(),
+                    RewardName = reward == null ? null : reward.Name
+                })
+                .ToListAsync(ct)
+            : [];
+
+        var runningByLot = lotRows.ToDictionary(l => l.Id, l => l.OriginalAmount);
+        var consumptions = new List<ConsumptionDto>();
+        foreach (var row in consumptionRows)
+        {
+            if (!runningByLot.TryGetValue(row.PointLotId, out var running))
+                running = row.OriginalAmount;
+
+            var remainingAfter = row.IsReversed ? running : Math.Max(0, running - row.Amount);
+            if (!row.IsReversed)
+                runningByLot[row.PointLotId] = remainingAfter;
+
+            consumptions.Add(new ConsumptionDto(
+                ConsumptionId: row.Id,
+                LotId: row.PointLotId,
+                LotEarnedAt: row.EarnedAt,
+                LotExpiresAt: row.ExpiresAt,
+                AmountConsumed: row.Amount,
+                RemainingAfterConsumption: remainingAfter,
+                Reason: row.Reason,
+                RewardName: row.RewardName,
+                ConsumedAt: row.CreatedAt,
+                IsReversed: row.IsReversed));
+        }
+
+        var pointTransactions = hasCard
             ? await _db.PointTransactions
                 .AsNoTracking()
                 .Where(t => t.LoyaltyCardId == cardId)
                 .OrderByDescending(t => t.CreatedAt)
-                .Select(t => new CustomerPointHistoryItemDto(
+                .Select(t => new
+                {
                     t.CreatedAt,
                     t.Type,
                     t.Description,
-                    t.Points,
-                    null))
+                    t.Points
+                })
                 .Take(50)
                 .ToListAsync(ct)
-            : new List<CustomerPointHistoryItemDto>();
+            : [];
+
+        var pointHistory = new List<CustomerPointHistoryItemDto>();
+        if (hasCard && pointTransactions.Count > 0)
+        {
+            var balance = baseInfo.CurrentPoints;
+            pointHistory = pointTransactions
+                .Select(t =>
+                {
+                    var item = new CustomerPointHistoryItemDto(
+                        t.CreatedAt,
+                        t.Type,
+                        t.Description,
+                        t.Points,
+                        balance);
+                    balance -= t.Points;
+                    return item;
+                })
+                .ToList();
+        }
 
         var redemptionHistory = hasCard
             ? await (
@@ -140,6 +281,7 @@ internal sealed class CustomerDetailReadService : ICustomerDetailReadService
                 CreatedAt: baseInfo.CreatedAt,
                 IsActive: baseInfo.CustomerIsActive && (!hasCard || baseInfo.CardIsActive),
                 Level: rollingLevel,
+                LevelAchievedAt: baseInfo.LevelAchievedAt,
                 WalletIssued: hasCard),
             Wallet: new CustomerWalletDto(
                 WalletIssued: hasCard,
@@ -151,13 +293,36 @@ internal sealed class CustomerDetailReadService : ICustomerDetailReadService
                 LastPushSentAt: null),
             Statistics: new CustomerStatisticsDto(
                 CurrentPoints: baseInfo.CurrentPoints,
+                RollingPoints: rollingPoints,
                 LifetimePoints: baseInfo.LifetimePoints,
                 PointsRedeemed: pointsRedeemed,
                 TotalRedemptions: totalRedemptions,
                 PendingRedemptions: pendingRedemptions,
                 CancelledRedemptions: cancelledRedemptions,
                 ConfirmedRedemptions: confirmedRedemptions),
+            LoyaltyAudit: new CustomerLoyaltyAuditDto(
+                UpcomingExpiration: upcomingExpiration,
+                RollingProgress: rollingProgress,
+                Lots: lotSummaries.AsReadOnly(),
+                Consumptions: consumptions.AsReadOnly()),
             PointHistory: pointHistory.AsReadOnly(),
             RedemptionHistory: redemptionHistory.AsReadOnly());
+    }
+
+    private static string GetLotStatus(
+        int originalAmount,
+        int remainingAmount,
+        DateTime expiresAt,
+        bool hasExpirationConsumption,
+        DateTime now)
+    {
+        if (hasExpirationConsumption || (remainingAmount > 0 && expiresAt <= now))
+            return "Expirado";
+        if (remainingAmount == 0)
+            return "Consumido";
+        if (remainingAmount < originalAmount)
+            return "Parcialmente consumido";
+
+        return "Activo";
     }
 }

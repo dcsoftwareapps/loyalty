@@ -51,6 +51,7 @@ else
         <h2>Estadisticas rapidas</h2>
         <div class="kb-grid">
             <MetricCard Label="Puntos actuales" Value="@FormatNumber(detail.Statistics.CurrentPoints)" />
+            <MetricCard Label="Puntos rolling" Value="@FormatNumber(detail.Statistics.RollingPoints)" />
             <MetricCard Label="Puntos historicos" Value="@FormatNumber(detail.Statistics.LifetimePoints)" />
             <MetricCard Label="Puntos canjeados" Value="@FormatNumber(detail.Statistics.PointsRedeemed)" />
             <MetricCard Label="Total de canjes" Value="@FormatNumber(detail.Statistics.TotalRedemptions)" />
@@ -70,7 +71,48 @@ else
                 <DetailItem Label="Fecha de registro" Value="@FormatDate(detail.Summary.CreatedAt)" />
                 <DetailItem Label="Estado" Value="@StatusText(detail.Summary.IsActive)" />
                 <DetailItem Label="Nivel actual" Value="@detail.Summary.Level" />
+                <DetailItem Label="Fecha de nivel" Value="@FormatNullableDateTime(detail.Summary.LevelAchievedAt)" />
                 <DetailItem Label="Wallet emitida" Value="@YesNo(detail.Summary.WalletIssued)" />
+            </div>
+        </div>
+    </section>
+
+    <section style="margin-bottom:32px;">
+        <h2>Auditoria de saldo</h2>
+        <div class="kb-grid">
+            <MetricCard Label="Saldo disponible" Value="@FormatNumber(detail.Statistics.CurrentPoints)" />
+            <MetricCard Label="Rolling 12 meses" Value="@FormatNumber(detail.LoyaltyAudit.RollingProgress.RollingPoints)" />
+            <MetricCard Label="Lifetime Points" Value="@FormatNumber(detail.Statistics.LifetimePoints)" />
+            <MetricCard Label="Nivel actual" Value="@detail.LoyaltyAudit.RollingProgress.CurrentLevel" />
+        </div>
+    </section>
+
+    <section style="margin-bottom:32px;">
+        <h2>Proxima expiracion</h2>
+        <div class="kb-card">
+            @if (detail.LoyaltyAudit.UpcomingExpiration is null)
+            {
+                <p class="kb-muted" style="margin:0;">Sin puntos proximos a expirar.</p>
+            }
+            else
+            {
+                <div class="kb-detail-grid">
+                    <DetailItem Label="Fecha" Value="@FormatDate(detail.LoyaltyAudit.UpcomingExpiration.ExpiresAt)" />
+                    <DetailItem Label="Puntos" Value="@($"{FormatNumber(detail.LoyaltyAudit.UpcomingExpiration.Points)} puntos")" />
+                </div>
+            }
+        </div>
+    </section>
+
+    <section style="margin-bottom:32px;">
+        <h2>Rolling Progress</h2>
+        <div class="kb-card">
+            <div class="kb-detail-grid">
+                <DetailItem Label="Rolling Points" Value="@FormatNumber(detail.LoyaltyAudit.RollingProgress.RollingPoints)" />
+                <DetailItem Label="Glow" Value="@ThresholdText(detail.LoyaltyAudit.RollingProgress.GlowThreshold, detail.LoyaltyAudit.RollingProgress.RollingPoints)" />
+                <DetailItem Label="Radiance" Value="@ThresholdText(detail.LoyaltyAudit.RollingProgress.RadianceThreshold, detail.LoyaltyAudit.RollingProgress.RollingPoints)" />
+                <DetailItem Label="Siguiente nivel" Value="@detail.LoyaltyAudit.RollingProgress.NextLevel" />
+                <DetailItem Label="Faltan" Value="@($"{FormatNumber(detail.LoyaltyAudit.RollingProgress.PointsToNextLevel)} puntos")" />
             </div>
         </div>
     </section>
@@ -125,6 +167,78 @@ else
                             @(item.Points > 0 ? "+" : "")@item.Points.ToString("N0")
                         </td>
                         <td class="kb-muted">@FormatNullableNumber(item.BalanceAfter)</td>
+                    </tr>
+                }
+                </tbody>
+            </table>
+        }
+    </section>
+
+    <section style="margin-bottom:32px;">
+        <h2>Lotes de puntos</h2>
+        @if (detail.LoyaltyAudit.Lots.Count == 0)
+        {
+            <p class="kb-muted">Sin lotes de puntos.</p>
+        }
+        else
+        {
+            <table class="kb-table kb-table--compact">
+                <thead>
+                    <tr>
+                        <th>Ganado</th>
+                        <th>Expira</th>
+                        <th class="kb-cell-number">Original</th>
+                        <th class="kb-cell-number">Disponible</th>
+                        <th>Estado</th>
+                    </tr>
+                </thead>
+                <tbody>
+                @foreach (var lot in detail.LoyaltyAudit.Lots)
+                {
+                    <tr>
+                        <td class="kb-muted">@FormatDate(lot.EarnedAt)</td>
+                        <td class="kb-muted">@FormatDate(lot.ExpiresAt)</td>
+                        <td class="kb-cell-number">@FormatNumber(lot.OriginalAmount)</td>
+                        <td class="kb-cell-number">@FormatNumber(lot.RemainingAmount)</td>
+                        <td><span class="@LotStatusBadgeClass(lot.Status)">@lot.Status</span></td>
+                    </tr>
+                }
+                </tbody>
+            </table>
+        }
+    </section>
+
+    <section style="margin-bottom:32px;">
+        <h2>Consumo FIFO</h2>
+        @if (detail.LoyaltyAudit.Consumptions.Count == 0)
+        {
+            <p class="kb-muted">Sin consumos FIFO registrados.</p>
+        }
+        else
+        {
+            <table class="kb-table kb-table--compact">
+                <thead>
+                    <tr>
+                        <th>Fecha</th>
+                        <th>Lote</th>
+                        <th>Motivo</th>
+                        <th>Reward</th>
+                        <th class="kb-cell-number">Consumido</th>
+                        <th class="kb-cell-number">Quedo</th>
+                        <th>Estado</th>
+                    </tr>
+                </thead>
+                <tbody>
+                @foreach (var item in detail.LoyaltyAudit.Consumptions)
+                {
+                    <tr>
+                        <td class="kb-muted">@FormatDateTime(item.ConsumedAt)</td>
+                        <td class="kb-muted">@FormatDate(item.LotExpiresAt)</td>
+                        <td><span class="kb-badge kb-badge--muted">@item.Reason</span></td>
+                        <td>@DisplayText(item.RewardName)</td>
+                        <td class="kb-cell-number">@FormatNumber(item.AmountConsumed)</td>
+                        <td class="kb-cell-number">@FormatNumber(item.RemainingAfterConsumption)</td>
+                        <td>@(item.IsReversed ? "Revertido" : "Aplicado")</td>
                     </tr>
                 }
                 </tbody>
@@ -208,6 +322,8 @@ else
     private static string PointColor(int points) => points >= 0 ? "var(--kb-sage)" : "var(--kb-blush)";
     private static string StatusText(bool isActive) => isActive ? "Activo" : "Inactivo";
     private static string YesNo(bool value) => value ? "Si" : "No";
+    private static string ThresholdText(int threshold, int rollingPoints) =>
+        rollingPoints >= threshold ? $"{threshold:N0} ✓" : threshold.ToString("N0");
 
     private static string StatusBadgeClass(bool isActive) =>
         isActive ? "kb-badge kb-badge--success" : "kb-badge kb-badge--muted";
@@ -217,6 +333,15 @@ else
         RedemptionStatus.Pending => "kb-badge kb-badge--warning",
         RedemptionStatus.Confirmed => "kb-badge kb-badge--success",
         RedemptionStatus.Cancelled => "kb-badge kb-badge--muted",
+        _ => "kb-badge"
+    };
+
+    private static string LotStatusBadgeClass(string status) => status switch
+    {
+        "Activo" => "kb-badge kb-badge--success",
+        "Parcialmente consumido" => "kb-badge kb-badge--warning",
+        "Consumido" => "kb-badge kb-badge--muted",
+        "Expirado" => "kb-badge kb-badge--muted",
         _ => "kb-badge"
     };
 }

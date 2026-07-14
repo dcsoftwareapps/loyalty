@@ -6,6 +6,7 @@ public sealed record CustomerDetailDto(
     CustomerSummaryDto Summary,
     CustomerWalletDto Wallet,
     CustomerStatisticsDto Statistics,
+    CustomerLoyaltyAuditDto LoyaltyAudit,
     IReadOnlyList<CustomerPointHistoryItemDto> PointHistory,
     IReadOnlyList<CustomerRedemptionHistoryItemDto> RedemptionHistory);
 
@@ -17,6 +18,7 @@ public sealed record CustomerSummaryDto(
     DateTime CreatedAt,
     bool IsActive,
     string Level,
+    DateTime? LevelAchievedAt,
     bool WalletIssued);
 
 public sealed record CustomerWalletDto(
@@ -30,12 +32,51 @@ public sealed record CustomerWalletDto(
 
 public sealed record CustomerStatisticsDto(
     int CurrentPoints,
+    int RollingPoints,
     int LifetimePoints,
     int PointsRedeemed,
     int TotalRedemptions,
     int PendingRedemptions,
     int CancelledRedemptions,
     int ConfirmedRedemptions);
+
+public sealed record CustomerLoyaltyAuditDto(
+    UpcomingExpirationDto? UpcomingExpiration,
+    RollingProgressDto RollingProgress,
+    IReadOnlyList<LotSummaryDto> Lots,
+    IReadOnlyList<ConsumptionDto> Consumptions);
+
+public sealed record UpcomingExpirationDto(
+    DateTime ExpiresAt,
+    int Points);
+
+public sealed record RollingProgressDto(
+    int RollingPoints,
+    int GlowThreshold,
+    int RadianceThreshold,
+    int PointsToNextLevel,
+    string CurrentLevel,
+    string NextLevel);
+
+public sealed record LotSummaryDto(
+    Guid LotId,
+    DateTime EarnedAt,
+    DateTime ExpiresAt,
+    int OriginalAmount,
+    int RemainingAmount,
+    string Status);
+
+public sealed record ConsumptionDto(
+    Guid ConsumptionId,
+    Guid LotId,
+    DateTime LotEarnedAt,
+    DateTime LotExpiresAt,
+    int AmountConsumed,
+    int RemainingAfterConsumption,
+    string Reason,
+    string? RewardName,
+    DateTime ConsumedAt,
+    bool IsReversed);
 
 public sealed record CustomerPointHistoryItemDto(
     DateTime CreatedAt,
