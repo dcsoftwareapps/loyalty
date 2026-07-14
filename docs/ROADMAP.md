@@ -8,14 +8,14 @@
 - Fase 3.1 - Dashboard / Analytics
 - Fase 3.2 - Customer Detail
 - Fase 3.3 - Expiracion de puntos con FIFO
-- Fase 3.4 - Niveles automaticos con ventana movil de 12 meses: Implementada - pendiente de validacion manual
+- Fase 3.4 - Niveles automaticos con ventana movil de 12 meses
+- Fase 3.5 - Scheduler diario de mantenimiento: Implementada - pendiente de validacion manual
 
 ## Siguiente
 
-### Fase 3.5 - Scheduler diario de mantenimiento
+### Siguiente fase por definir
 
 Siguiente sugerido:
 
-- Automatizar el recalculo diario de niveles.
-- Automatizar la expiracion diaria de puntos.
-- Mantener endpoints administrativos manuales como respaldo.
+- Validar manualmente el mantenimiento diario.
+- Definir siguiente bloque funcional despues de la validacion.

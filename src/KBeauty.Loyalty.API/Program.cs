@@ -1,4 +1,6 @@
 using KBeauty.Loyalty.API.Middleware;
+using KBeauty.Loyalty.API.Configuration;
+using KBeauty.Loyalty.API.Services;
 using KBeauty.Loyalty.Application;
 using KBeauty.Loyalty.Infrastructure;
 using KBeauty.Loyalty.Infrastructure.KeyVault;
@@ -16,6 +18,9 @@ builder.Configuration.AddKBeautyKeyVault(builder.Configuration["Azure:KeyVaultUr
 // =============================================================================
 builder.Services.AddApplication();
 builder.Services.AddInfrastructure(builder.Configuration, builder.Environment);
+builder.Services.Configure<LoyaltyMaintenanceOptions>(
+    builder.Configuration.GetSection(LoyaltyMaintenanceOptions.SectionName));
+builder.Services.AddHostedService<LoyaltyMaintenanceBackgroundService>();
 
 // Controllers + OpenAPI/Swagger
 builder.Services.AddControllers();

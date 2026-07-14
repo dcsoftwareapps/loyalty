@@ -1243,6 +1243,68 @@ Response:
 }
 ```
 
-Tambien se recalcula el nivel al otorgar puntos en `AddPointsHandler` y al crear bonos de bienvenida/referido en `RegisterCustomerHandler`. La automatizacion diaria del recalculo queda pendiente; por ahora el endpoint manual cubre la operacion administrativa.
+Tambien se recalcula el nivel al otorgar puntos en `AddPointsHandler` y al crear bonos de bienvenida/referido en `RegisterCustomerHandler`. El recalculo tambien puede ejecutarse manualmente desde el endpoint administrativo y de forma automatica mediante el proceso diario de mantenimiento.
 
 Nota legacy: `PointsEarnedThisYear` permanece en el modelo por compatibilidad historica. En el DTO legacy de `GetCustomerBySerial`, el campo `PointsEarnedThisYear` devuelve los puntos elegibles de la ventana movil de 12 meses hasta que ese contrato sea renombrado en una fase posterior.
+
+# Fase 3.5 - Proceso diario de mantenimiento
+
+La API hospeda `LoyaltyMaintenanceBackgroundService`, un `BackgroundService` que orquesta procesos diarios ya existentes mediante MediatR.
+
+El servicio vive en `KBeauty.Loyalty.API` porque la API es el host operativo principal: expone los endpoints manuales, registra Application/Infrastructure, tiene acceso a MediatR, repositorios, APNs y configuracion de Wallet. Admin es un proceso separado y no debe ejecutar mantenimiento para evitar duplicidad.
+
+El hosted service no accede directamente a `AppDbContext` ni inyecta handlers. En cada ejecucion crea un scope con `IServiceScopeFactory`, resuelve `ISender` y ejecuta:
+
+```text
+ExpirePointsCommand
+  ↓
+RecalculateLevelsCommand
+```
+
+Configuracion:
+
+```json
+{
+  "LoyaltyMaintenance": {
+    "Enabled": true,
+    "RunOnStartup": false,
+    "RunAtLocalTime": "02:00",
+    "TimeZoneId": "America/Tijuana"
+  }
+}
+```
+
+`RunAtLocalTime` se interpreta en la zona horaria configurada. `America/Tijuana` es la zona funcional de Ensenada/Baja California. En Windows, si el identificador IANA no existe, el servicio intenta usar el equivalente `Pacific Standard Time (Mexico)`.
+
+El servicio calcula la siguiente ejecucion diaria:
+
+- si la API inicia antes de la hora configurada, corre ese mismo dia a esa hora;
+- si inicia despues, corre al dia siguiente;
+- no ejecuta mantenimiento al iniciar por defecto;
+- respeta cambios de horario mediante `TimeZoneInfo`;
+- si la hora local cae en una hora invalida por cambio de horario, avanza en bloques cortos hasta una hora valida.
+
+`RunOnStartup=true` permite ejecutar una vez al iniciar para pruebas manuales. Despues de esa corrida, el servicio vuelve a esperar la siguiente ejecucion diaria.
+
+Manejo de errores:
+
+- registra inicio, resultados, warnings y duracion;
+- si expiracion falla inesperadamente, registra error y continua con recalculo de niveles;
+- si recalculo falla, registra error y espera la siguiente ejecucion;
+- una excepcion de mantenimiento no debe detener permanentemente la API.
+
+Limitacion actual:
+
+- se asume una sola instancia del host;
+- no hay distributed lock en esta fase;
+- antes de escalar a multiples instancias se debe agregar un lock distribuido o mover el mantenimiento a un worker singleton.
+
+Para desactivarlo:
+
+```json
+{
+  "LoyaltyMaintenance": {
+    "Enabled": false
+  }
+}
+```

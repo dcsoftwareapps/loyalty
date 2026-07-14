@@ -262,6 +262,84 @@ Escenarios manuales recomendados:
 
 No hay scheduler diario implementado todavia. Mientras tanto, el recalculo puede ejecutarse manualmente con el endpoint administrativo.
 
+## Mantenimiento diario - Fase 3.5
+
+La API hospeda `LoyaltyMaintenanceBackgroundService`.
+
+El servicio ejecuta automaticamente, una vez al dia:
+
+```text
+ExpirePointsCommand
+  ↓
+RecalculateLevelsCommand
+```
+
+No duplica reglas de expiracion, FIFO ni niveles. Solo crea un scope de DI, resuelve `ISender` y manda los commands ya existentes.
+
+Configuracion local:
+
+```json
+"LoyaltyMaintenance": {
+  "Enabled": true,
+  "RunOnStartup": false,
+  "RunAtLocalTime": "02:00",
+  "TimeZoneId": "America/Tijuana"
+}
+```
+
+`RunAtLocalTime` se interpreta en la zona horaria configurada. En Windows, `America/Tijuana` puede resolverse con fallback a `Pacific Standard Time (Mexico)`.
+
+### Prueba A - RunOnStartup
+
+Para validar una corrida inmediata en Development, cambiar temporalmente:
+
+```json
+"LoyaltyMaintenance": {
+  "Enabled": true,
+  "RunOnStartup": true,
+  "RunAtLocalTime": "02:00",
+  "TimeZoneId": "America/Tijuana"
+}
+```
+
+Al iniciar la API debe verse en logs:
+
+- ejecucion de mantenimiento al inicio;
+- resultado de expiracion;
+- resultado de recalculo de niveles;
+- duracion total;
+- siguiente ejecucion diaria programada.
+
+No dejar `RunOnStartup=true` en configuracion compartida.
+
+### Prueba B - Hora proxima
+
+Cambiar temporalmente `RunAtLocalTime` a unos minutos despues de la hora actual local.
+
+Ejemplo:
+
+```json
+"RunAtLocalTime": "14:35"
+```
+
+Iniciar API antes de esa hora y verificar:
+
+- log de siguiente ejecucion en hora local y UTC;
+- ejecucion en la hora indicada;
+- expiracion de puntos;
+- recalculo de niveles;
+- nueva programacion para el dia siguiente.
+
+No dejar esa hora temporal en commit.
+
+### Fallos y advertencias
+
+Si expiracion falla inesperadamente, el servicio registra el error y continua con recalculo de niveles porque ambos procesos son independientes.
+
+Si recalculo falla, el error se registra y el hosted service espera la siguiente ejecucion programada.
+
+El servicio asume una sola instancia del host. Para despliegues multi-instancia se debe agregar un distributed lock antes de habilitarlo en todas las instancias.
+
 ## Reward Catalog API
 
 Fase 2.1 agrega CRUD API administrativo para `RewardCatalogItem`.
