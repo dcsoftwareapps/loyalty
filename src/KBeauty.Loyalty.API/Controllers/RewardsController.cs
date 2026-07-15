@@ -105,12 +105,13 @@ public sealed class RewardsController : ControllerBase
     [HttpPut("{id:guid}/activate")]
     [ProducesResponseType(typeof(RewardAdminDto), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
     public async Task<IActionResult> Activate(Guid id, CancellationToken ct)
     {
         var result = await _sender.Send(new ActivateRewardCommand(id), ct);
 
         if (result.IsFailure)
-            return NotFound(new ProblemDetails { Title = "Activar recompensa", Detail = result.Error });
+            return RewardProblem("Activar recompensa", result.Error);
 
         return Ok(result.Value);
     }

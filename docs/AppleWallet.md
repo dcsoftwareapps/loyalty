@@ -1319,6 +1319,83 @@ La proxima expiracion considera lotes con `RemainingAmount > 0` y `ExpiresAt > n
 
 El resumen de consumo FIFO solo se carga cuando existen lotes con consumo, para evitar consultas innecesarias en clientes sin canjes/expiraciones.
 
+# Fase 3.7 - Producto del mes
+
+El catalogo de recompensas soporta formalmente Producto del mes usando las columnas existentes:
+
+- `RewardCatalogItem.IsMonthlyProduct`
+- `RewardCatalogItem.ValidFrom`
+- `RewardCatalogItem.ValidTo`
+- `RewardCatalogItem.IsActive`
+
+No hay cambios de esquema para esta fase.
+
+## Regla funcional
+
+Debe existir como maximo un Producto del mes activo y vigente para una fecha determinada.
+
+Una recompensa es Producto del mes vigente cuando:
+
+```text
+IsMonthlyProduct = true
+IsActive = true
+ValidFrom <= nowUtc
+ValidTo >= nowUtc
+```
+
+La convencion temporal sigue siendo UTC, igual que el resto de vigencias y procesos del backend.
+
+## Vigencia y traslape
+
+Para `IsMonthlyProduct = true`, `ValidFrom` y `ValidTo` son obligatorios.
+
+Dos Productos del mes activos se consideran traslapados si:
+
+```text
+existing.ValidFrom <= new.ValidTo
+AND existing.ValidTo >= new.ValidFrom
+```
+
+El sistema valida traslapes al:
+
+- crear una recompensa activa marcada como Producto del mes;
+- editar una recompensa activa marcada como Producto del mes;
+- activar una recompensa marcada como Producto del mes.
+
+Durante edicion, la recompensa actual se excluye de la comparacion por `Id`.
+
+Se permite crear un Producto del mes inactivo como borrador aunque su vigencia se traslape. El conflicto se valida al intentar activarlo.
+
+No se desactiva automaticamente ningun Producto del mes existente. Si hay conflicto, el caso de uso devuelve error de negocio.
+
+## Catalogo y canje
+
+`GET /api/redemptions/catalog/{serialNumber}` conserva el DTO existente con `IsMonthlyProduct`.
+
+El catalogo y el canje siguen respetando:
+
+- `IsActive`;
+- vigencia;
+- nivel minimo;
+- saldo disponible;
+- puntos no vencidos/FIFO.
+
+Un Producto del mes sin fechas completas no es canjeable.
+
+## Admin
+
+La pantalla `/rewards` muestra:
+
+- tarjeta compacta de Producto del mes actual;
+- estado del Producto del mes: `Vigente`, `Programado`, `Vencido` o `Inactivo`;
+- vigencia;
+- error visual si se marca Producto del mes sin fechas;
+- errores de traslape devueltos por Application.
+
+## Apple Wallet
+
+El Producto del mes no se agrega al frente ni al reverso del pass en esta fase. Una fase futura puede evaluar mostrar una promocion dinamica en el reverso, sin cambiar firma ni endpoints `/v1`.
+
 `RunAtLocalTime` se interpreta en la zona horaria configurada. `America/Tijuana` es la zona funcional de Ensenada/Baja California. En Windows, si el identificador IANA no existe, el servicio intenta usar el equivalente `Pacific Standard Time (Mexico)`.
 
 El servicio calcula la siguiente ejecucion diaria:

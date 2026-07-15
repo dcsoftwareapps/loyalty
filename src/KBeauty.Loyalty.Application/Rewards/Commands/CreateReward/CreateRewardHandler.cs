@@ -21,7 +21,21 @@ public sealed class CreateRewardHandler : IRequestHandler<CreateRewardCommand, R
 
     public async Task<Result<RewardAdminDto>> Handle(CreateRewardCommand command, CancellationToken ct)
     {
-        // TODO Phase 2.x: Enforce only one active monthly product when product-month rules are finalized.
+        if (command.IsMonthlyProduct && command.IsActive)
+        {
+            if (!command.ValidFrom.HasValue || !command.ValidTo.HasValue)
+                return Result.Fail<RewardAdminDto>("El Producto del mes requiere fecha de inicio y fecha de fin.");
+
+            var overlaps = await _rewards.HasOverlappingActiveMonthlyProductAsync(
+                command.ValidFrom.Value,
+                command.ValidTo.Value,
+                excludeRewardId: null,
+                ct);
+            if (overlaps)
+                return Result.Fail<RewardAdminDto>(
+                    "Ya existe un Producto del mes activo con una vigencia que se traslapa.");
+        }
+
         var reward = new RewardCatalogItem(
             id: Guid.NewGuid(),
             name: command.Name,

@@ -26,6 +26,12 @@ public interface IRewardCatalogRepository
     /// <summary>Producto del mes vigente — null si ninguno está marcado/vigente.</summary>
     Task<RewardCatalogItem?> GetCurrentMonthlyProductAsync(CancellationToken ct = default);
 
+    Task<bool> HasOverlappingActiveMonthlyProductAsync(
+        DateTime validFrom,
+        DateTime validTo,
+        Guid? excludeRewardId = null,
+        CancellationToken ct = default);
+
     Task AddAsync(RewardCatalogItem item, CancellationToken ct = default);
     void Update(RewardCatalogItem item);
 }

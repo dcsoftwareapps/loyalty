@@ -368,6 +368,90 @@ Validacion manual sugerida:
 
 La fase es solo lectura. No modifica FIFO, expiracion, Wallet, APNs, scheduler ni comandos existentes.
 
+## Producto del mes - Fase 3.7
+
+El catalogo de recompensas permite marcar una recompensa como Producto del mes.
+
+Reglas:
+
+- `IsMonthlyProduct=true` requiere `ValidFrom` y `ValidTo`.
+- Solo puede existir un Producto del mes activo con vigencia traslapada.
+- La vigencia se evalua en UTC.
+- Un Producto del mes inactivo puede existir como borrador.
+- Al activarlo se valida traslape.
+- No se desactiva automaticamente ningun producto existente.
+
+### Escenario 1 - Crear producto del mes
+
+```http
+POST /api/rewards
+Content-Type: application/json
+```
+
+```json
+{
+  "name": "Producto del mes julio",
+  "description": "Recompensa especial",
+  "pointsCost": 500,
+  "minLevel": "Mist",
+  "isMonthlyProduct": true,
+  "validFrom": "2026-07-01T00:00:00Z",
+  "validTo": "2026-07-31T23:59:59Z",
+  "isActive": true
+}
+```
+
+Verificar que aparece como vigente en `/rewards`, aparece en catalogo para clientas elegibles y puede canjearse.
+
+### Escenario 2 - Traslape
+
+Intentar crear otro Producto del mes activo:
+
+```json
+{
+  "name": "Otro producto julio",
+  "description": "Debe fallar",
+  "pointsCost": 400,
+  "minLevel": "Mist",
+  "isMonthlyProduct": true,
+  "validFrom": "2026-07-15T00:00:00Z",
+  "validTo": "2026-08-15T23:59:59Z",
+  "isActive": true
+}
+```
+
+Debe devolver error:
+
+```text
+Ya existe un Producto del mes activo con una vigencia que se traslapa.
+```
+
+### Escenario 3 - Producto futuro
+
+Crear un Producto del mes para agosto sin traslapar. Debe mostrarse como `Programado` y no aparecer como canjeable antes de `ValidFrom`.
+
+### Escenario 4 - Producto vencido
+
+Mover vigencia al pasado. Debe mostrarse como `Vencido` y no aparecer como canjeable.
+
+### Escenario 5 - Activacion con conflicto
+
+Crear un Producto del mes traslapado con `isActive=false`. La creacion puede guardarse como borrador. Al ejecutar:
+
+```http
+PUT /api/rewards/{id}/activate
+```
+
+debe fallar por traslape.
+
+### Escenario 6 - Recompensa normal
+
+Crear o editar una recompensa con `isMonthlyProduct=false`. Debe comportarse igual que antes.
+
+### Escenario 7 - Edicion
+
+Editar el Producto del mes vigente conservando su `Id`. La validacion excluye la misma recompensa y debe permitir guardar si no traslapa con otra.
+
 ## Reward Catalog API
 
 Fase 2.1 agrega CRUD API administrativo para `RewardCatalogItem`.

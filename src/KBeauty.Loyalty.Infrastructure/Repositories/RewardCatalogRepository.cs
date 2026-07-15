@@ -63,9 +63,30 @@ internal sealed class RewardCatalogRepository : IRewardCatalogRepository
             .AsNoTracking()
             .Where(r => r.IsActive
                      && r.IsMonthlyProduct
-                     && (r.ValidFrom == null || r.ValidFrom <= now)
-                     && (r.ValidTo == null || r.ValidTo >= now))
+                     && r.ValidFrom <= now
+                     && r.ValidTo >= now)
             .FirstOrDefaultAsync(ct);
+    }
+
+    public Task<bool> HasOverlappingActiveMonthlyProductAsync(
+        DateTime validFrom,
+        DateTime validTo,
+        Guid? excludeRewardId = null,
+        CancellationToken ct = default)
+    {
+        var query = _db.RewardCatalogItems
+            .AsNoTracking()
+            .Where(r => r.IsActive
+                     && r.IsMonthlyProduct
+                     && r.ValidFrom.HasValue
+                     && r.ValidTo.HasValue
+                     && r.ValidFrom.Value <= validTo
+                     && r.ValidTo.Value >= validFrom);
+
+        if (excludeRewardId.HasValue)
+            query = query.Where(r => r.Id != excludeRewardId.Value);
+
+        return query.AnyAsync(ct);
     }
 
     public async Task AddAsync(RewardCatalogItem item, CancellationToken ct = default)

@@ -24,6 +24,21 @@ public sealed class ActivateRewardHandler : IRequestHandler<ActivateRewardComman
         if (reward is null)
             return Result.Fail<RewardAdminDto>($"No se encontro recompensa con id '{command.Id}'.");
 
+        if (reward.IsMonthlyProduct)
+        {
+            if (!reward.ValidFrom.HasValue || !reward.ValidTo.HasValue)
+                return Result.Fail<RewardAdminDto>("El Producto del mes requiere fecha de inicio y fecha de fin.");
+
+            var overlaps = await _rewards.HasOverlappingActiveMonthlyProductAsync(
+                reward.ValidFrom.Value,
+                reward.ValidTo.Value,
+                excludeRewardId: reward.Id,
+                ct);
+            if (overlaps)
+                return Result.Fail<RewardAdminDto>(
+                    "Ya existe un Producto del mes activo con una vigencia que se traslapa.");
+        }
+
         reward.Activate();
         _rewards.Update(reward);
         await _uow.SaveChangesAsync(ct);

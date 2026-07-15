@@ -8,6 +8,7 @@
 @using KBeauty.Loyalty.Application.Rewards.Commands.DeactivateReward
 @using KBeauty.Loyalty.Application.Rewards.Commands.UpdateReward
 @using KBeauty.Loyalty.Application.Rewards.Queries.ListRewards
+@using System.Globalization
 @inject ISender Sender
 
 <PageTitle>Recompensas - KBeauty</PageTitle>
@@ -71,11 +72,11 @@
         <div class="kb-form-row kb-form-row--horizontal">
             <div style="min-width:180px;">
                 <label for="reward-from">Vigente desde</label>
-                <input id="reward-from" type="date" @bind="form.ValidFrom" />
+                <input id="reward-from" type="date" value="@form.ValidFromDate" @onchange="OnValidFromDateChanged" />
             </div>
             <div style="min-width:180px;">
                 <label for="reward-to">Vigente hasta</label>
-                <input id="reward-to" type="date" @bind="form.ValidTo" />
+                <input id="reward-to" type="date" value="@form.ValidToDate" @onchange="OnValidToDateChanged" />
             </div>
             <label style="display:flex;align-items:center;gap:10px;margin-bottom:12px;">
                 <input type="checkbox" @bind="form.IsMonthlyProduct" style="width:auto;" />
@@ -95,6 +96,27 @@
                 Cancelar
             </button>
         </div>
+    </section>
+}
+
+@if (rewards is not null)
+{
+    <section class="kb-card" style="margin-bottom:24px;">
+        <h2>Producto del mes actual</h2>
+        @if (CurrentMonthlyProduct is null)
+        {
+            <p class="kb-muted" style="margin:0;">No hay producto del mes vigente.</p>
+        }
+        else
+        {
+            <div class="kb-detail-grid">
+                <DetailItem Label="Nombre" Value="@CurrentMonthlyProduct.Name" />
+                <DetailItem Label="Costo" Value="@($"{CurrentMonthlyProduct.PointsCost:N0} pts")" />
+                <DetailItem Label="Nivel minimo" Value="@CurrentMonthlyProduct.MinLevel" />
+                <DetailItem Label="Vigencia" Value="@FormatValidity(CurrentMonthlyProduct)" />
+                <DetailItem Label="Estado" Value="@MonthlyProductStatus(CurrentMonthlyProduct)" />
+            </div>
+        }
     </section>
 }
 
@@ -143,7 +165,16 @@ else
                 </td>
                 <td class="kb-cell-number" style="font-weight:600;">@reward.PointsCost.ToString("N0") pts</td>
                 <td><LevelBadge Level="@reward.MinLevel" /></td>
-                <td class="kb-cell-center">@(reward.IsMonthlyProduct ? "⭐" : "—")</td>
+                <td class="kb-cell-center">
+                    @if (reward.IsMonthlyProduct)
+                    {
+                        <span class="@MonthlyProductBadgeClass(reward)">@MonthlyProductStatus(reward)</span>
+                    }
+                    else
+                    {
+                        <span class="kb-muted">—</span>
+                    }
+                </td>
                 <td class="kb-muted">@FormatValidity(reward)</td>
                 <td><span class="@RewardStatusBadgeClass(reward.IsActive)">@(reward.IsActive ? "Activa" : "Inactiva")</span></td>
                 <td>
@@ -192,6 +223,9 @@ else
         .ToList()
         .AsReadOnly();
 
+    private RewardAdminDto? CurrentMonthlyProduct => rewards?
+        .FirstOrDefault(r => r.IsMonthlyProduct && r.IsActive && r.IsCurrentlyAvailable);
+
     protected override async Task OnInitializedAsync() => await ReloadAsync();
 
     private async Task ReloadAsync()
@@ -231,8 +265,10 @@ else
             MinLevel = reward.MinLevel,
             IsMonthlyProduct = reward.IsMonthlyProduct,
             IsActive = reward.IsActive,
-            ValidFrom = reward.ValidFrom,
-            ValidTo = reward.ValidTo
+            OriginalValidFrom = reward.ValidFrom,
+            OriginalValidTo = reward.ValidTo,
+            ValidFromDate = ToDateInputValue(reward.ValidFrom),
+            ValidToDate = ToDateInputValue(reward.ValidTo)
         };
         showForm = true;
     }
@@ -244,6 +280,8 @@ else
             return;
 
         busy = true;
+        var validFrom = BuildDateForSave(form.ValidFromDate, form.OriginalValidFrom, endOfDay: false);
+        var validTo = BuildDateForSave(form.ValidToDate, form.OriginalValidTo, endOfDay: true);
 
         var result = editingId.HasValue
             ? await Sender.Send(new UpdateRewardCommand(
@@ -253,8 +291,8 @@ else
                 form.PointsCost,
                 form.MinLevel,
                 form.IsMonthlyProduct,
-                form.ValidFrom,
-                form.ValidTo,
+                validFrom,
+                validTo,
                 form.IsActive))
             : await Sender.Send(new CreateRewardCommand(
                 form.Name.Trim(),
@@ -262,8 +300,8 @@ else
                 form.PointsCost,
                 form.MinLevel,
                 form.IsMonthlyProduct,
-                form.ValidFrom,
-                form.ValidTo,
+                validFrom,
+                validTo,
                 form.IsActive));
 
         busy = false;
@@ -328,6 +366,16 @@ else
         rewardSearch = e.Value?.ToString() ?? string.Empty;
     }
 
+    private void OnValidFromDateChanged(ChangeEventArgs e)
+    {
+        form.ValidFromDate = e.Value?.ToString();
+    }
+
+    private void OnValidToDateChanged(ChangeEventArgs e)
+    {
+        form.ValidToDate = e.Value?.ToString();
+    }
+
     private void ShowAllRewards() => rewardStatusFilter = RewardFilterAll;
     private void ShowActiveRewards() => rewardStatusFilter = RewardFilterActive;
     private void ShowInactiveRewards() => rewardStatusFilter = RewardFilterInactive;
@@ -345,8 +393,20 @@ else
         if (form.PointsCost <= 0)
             validationErrors.Add("Los puntos requeridos deben ser mayores a 0.");
 
-        if (form.ValidFrom.HasValue && form.ValidTo.HasValue && form.ValidTo.Value < form.ValidFrom.Value)
+        var hasValidFrom = TryParseDateInput(form.ValidFromDate, out var validFromDate);
+        var hasValidTo = TryParseDateInput(form.ValidToDate, out var validToDate);
+
+        if (!hasValidFrom)
+            validationErrors.Add("Vigente desde no tiene un formato valido.");
+
+        if (!hasValidTo)
+            validationErrors.Add("Vigente hasta no tiene un formato valido.");
+
+        if (validFromDate.HasValue && validToDate.HasValue && validToDate.Value < validFromDate.Value)
             validationErrors.Add("Vigente hasta no puede ser menor que Vigente desde.");
+
+        if (form.IsMonthlyProduct && (!validFromDate.HasValue || !validToDate.HasValue))
+            validationErrors.Add("El Producto del mes requiere fecha de inicio y fecha de fin.");
 
         return validationErrors.Count == 0;
     }
@@ -381,14 +441,70 @@ else
     private static string RewardStatusBadgeClass(bool isActive) =>
         isActive ? "kb-badge kb-badge--success" : "kb-badge kb-badge--muted";
 
+    private static string MonthlyProductStatus(RewardAdminDto reward)
+    {
+        if (!reward.IsMonthlyProduct)
+            return "No aplica";
+        if (!reward.IsActive)
+            return "Inactivo";
+
+        var now = DateTime.UtcNow;
+        if (reward.ValidFrom.HasValue && reward.ValidFrom.Value > now)
+            return "Programado";
+        if (reward.ValidTo.HasValue && reward.ValidTo.Value < now)
+            return "Vencido";
+
+        return reward.IsCurrentlyAvailable ? "Vigente" : "Sin vigencia";
+    }
+
+    private static string MonthlyProductBadgeClass(RewardAdminDto reward) => MonthlyProductStatus(reward) switch
+    {
+        "Vigente" => "kb-badge kb-badge--success",
+        "Programado" => "kb-badge kb-badge--warning",
+        "Vencido" => "kb-badge kb-badge--muted",
+        "Inactivo" => "kb-badge kb-badge--muted",
+        _ => "kb-badge"
+    };
+
     private static string FormatValidity(RewardAdminDto reward)
     {
         if (!reward.ValidFrom.HasValue && !reward.ValidTo.HasValue)
             return "Sin vigencia";
 
-        var from = reward.ValidFrom?.ToLocalTime().ToString("dd MMM yyyy") ?? "Inicio abierto";
-        var to = reward.ValidTo?.ToLocalTime().ToString("dd MMM yyyy") ?? "Sin fin";
+        var from = FormatUtcCalendarDate(reward.ValidFrom, "Inicio abierto");
+        var to = FormatUtcCalendarDate(reward.ValidTo, "Sin fin");
         return $"{from} - {to}";
+    }
+
+    private static string FormatUtcCalendarDate(DateTime? date, string fallback) =>
+        date.HasValue ? date.Value.ToString("dd MMM yyyy", CultureInfo.InvariantCulture) : fallback;
+
+    private static string? ToDateInputValue(DateTime? date) =>
+        date.HasValue ? date.Value.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture) : null;
+
+    private static bool TryParseDateInput(string? value, out DateTime? date)
+    {
+        date = null;
+        if (string.IsNullOrWhiteSpace(value))
+            return true;
+
+        if (!DateTime.TryParseExact(value, "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out var parsed))
+            return false;
+
+        date = DateTime.SpecifyKind(parsed.Date, DateTimeKind.Utc);
+        return true;
+    }
+
+    private static DateTime? BuildDateForSave(string? value, DateTime? originalValue, bool endOfDay)
+    {
+        if (!TryParseDateInput(value, out var parsedDate) || !parsedDate.HasValue)
+            return null;
+
+        if (ToDateInputValue(originalValue) == value)
+            return originalValue;
+
+        var time = endOfDay ? new TimeSpan(23, 59, 59) : TimeSpan.Zero;
+        return DateTime.SpecifyKind(parsedDate.Value.Date.Add(time), DateTimeKind.Utc);
     }
 
     private sealed class RewardFormModel
@@ -399,8 +515,10 @@ else
         public string MinLevel { get; set; } = LoyaltyConstants.Levels.Mist;
         public bool IsMonthlyProduct { get; set; }
         public bool IsActive { get; set; } = true;
-        public DateTime? ValidFrom { get; set; }
-        public DateTime? ValidTo { get; set; }
+        public DateTime? OriginalValidFrom { get; set; }
+        public DateTime? OriginalValidTo { get; set; }
+        public string? ValidFromDate { get; set; }
+        public string? ValidToDate { get; set; }
 
         public static RewardFormModel CreateDefault() => new();
     }

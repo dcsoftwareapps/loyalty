@@ -64,6 +64,7 @@ public class RewardCatalogItem : Entity
     public bool IsAvailableOn(DateTime nowUtc)
     {
         if (!IsActive) return false;
+        if (IsMonthlyProduct && (!ValidFrom.HasValue || !ValidTo.HasValue)) return false;
         if (ValidFrom.HasValue && nowUtc < ValidFrom.Value) return false;
         if (ValidTo.HasValue && nowUtc > ValidTo.Value) return false;
         return true;

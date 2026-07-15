@@ -31,5 +31,9 @@ internal sealed class UpdateRewardValidator : AbstractValidator<UpdateRewardComm
         RuleFor(x => x)
             .Must(x => RewardValidation.HasValidDateRange(x.ValidFrom, x.ValidTo))
             .WithMessage("ValidTo no puede ser menor que ValidFrom.");
+
+        RuleFor(x => x)
+            .Must(x => RewardValidation.HasMonthlyProductDates(x.IsMonthlyProduct, x.ValidFrom, x.ValidTo))
+            .WithMessage("El Producto del mes requiere fecha de inicio y fecha de fin.");
     }
 }
