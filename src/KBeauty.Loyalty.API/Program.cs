@@ -21,6 +21,9 @@ builder.Services.AddInfrastructure(builder.Configuration, builder.Environment);
 builder.Services.Configure<LoyaltyMaintenanceOptions>(
     builder.Configuration.GetSection(LoyaltyMaintenanceOptions.SectionName));
 builder.Services.AddHostedService<LoyaltyMaintenanceBackgroundService>();
+builder.Services.Configure<LoyaltyNotificationOptions>(
+    builder.Configuration.GetSection(LoyaltyNotificationOptions.SectionName));
+builder.Services.AddHostedService<LoyaltyNotificationBackgroundService>();
 
 // Controllers + OpenAPI/Swagger
 builder.Services.AddControllers();

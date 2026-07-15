@@ -139,6 +139,43 @@ else
     </section>
 
     <section style="margin-bottom:32px;">
+        <h2>Notificaciones</h2>
+        @if (detail.NotificationHistory.Count == 0)
+        {
+            <p class="kb-muted">Sin notificaciones registradas.</p>
+        }
+        else
+        {
+            <table class="kb-table kb-table--compact">
+                <thead>
+                    <tr>
+                        <th>Fecha</th>
+                        <th>Tipo</th>
+                        <th>Mensaje</th>
+                        <th>Estado</th>
+                        <th>Apple Wallet</th>
+                    </tr>
+                </thead>
+                <tbody>
+                @foreach (var item in detail.NotificationHistory)
+                {
+                    <tr>
+                        <td class="kb-muted">@FormatDateTime(item.CreatedAt)</td>
+                        <td><span class="kb-badge kb-badge--muted">@item.Type</span></td>
+                        <td>
+                            <strong>@item.Title</strong>
+                            <div class="kb-muted kb-text-truncate" title="@item.Message">@item.Message</div>
+                        </td>
+                        <td><span class="@NotificationStatusBadgeClass(item.Status)">@item.Status</span></td>
+                        <td class="kb-muted">@($"{item.PushesAccepted}/{item.PushesAttempted} aceptados")</td>
+                    </tr>
+                }
+                </tbody>
+            </table>
+        }
+    </section>
+
+    <section style="margin-bottom:32px;">
         <h2>Historial de puntos</h2>
         @if (detail.PointHistory.Count == 0)
         {
@@ -351,5 +388,14 @@ else
         "Consumido" => "kb-badge kb-badge--muted",
         "Expirado" => "kb-badge kb-badge--muted",
         _ => "kb-badge"
+    };
+
+    private static string NotificationStatusBadgeClass(NotificationStatus status) => status switch
+    {
+        NotificationStatus.Delivered => "kb-badge kb-badge--success",
+        NotificationStatus.PartiallyDelivered => "kb-badge kb-badge--warning",
+        NotificationStatus.Failed => "kb-badge kb-badge--warning",
+        NotificationStatus.Cancelled => "kb-badge kb-badge--muted",
+        _ => "kb-badge kb-badge--muted"
     };
 }

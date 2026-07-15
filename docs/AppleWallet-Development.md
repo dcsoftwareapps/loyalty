@@ -1080,3 +1080,99 @@ GET /api/dev/passes/{serialNumber}
 ```
 
 El metodo `GetPassDownloadUrlAsync` de los generadores devuelve actualmente una ruta `/api/customers/{serialNumber}/pass`, pero el endpoint real de descarga directa implementado para Development es `/api/dev/passes/{serialNumber}`.
+
+## Motor de notificaciones - Fase 5.1
+
+La API puede procesar notificaciones logicas de lealtad con Apple Wallet como unico canal real en esta fase.
+
+Configuracion local:
+
+```json
+"LoyaltyNotifications": {
+  "Enabled": true,
+  "RunOnStartup": false,
+  "PollIntervalSeconds": 60,
+  "BatchSize": 25,
+  "MaxAttempts": 3
+}
+```
+
+Para validar manualmente:
+
+1. Aplicar la migracion de Fase 5.1 en una base local de desarrollo.
+2. Levantar Azurite, API, Admin y ngrok como en el flujo Wallet normal.
+3. Instalar un pass en iPhone y confirmar que existe `DeviceRegistration`.
+4. Abrir Admin en `/notifications`.
+5. Crear una notificacion manual para el serial del pass.
+6. Confirmar que la notificacion se procesa y registra metricas de Apple Wallet.
+7. Confirmar que APNs despierta Wallet y que Wallet descarga el pass actualizado.
+8. Abrir el reverso del pass y verificar la seccion `NOVEDADES`.
+
+Tambien se puede validar el origen automatico:
+
+1. Usar una clienta Mist con pass instalado.
+2. Agregar puntos suficientes para subir a Glow.
+3. Confirmar que se crea una notificacion `LevelChanged`.
+4. Confirmar que Wallet refresca el pass y muestra la novedad activa.
+
+Importante:
+
+- APNs no transporta el texto de la notificacion.
+- El texto se obtiene cuando Wallet descarga el nuevo `.pkpass`.
+- La notificacion activa se lee con `IWalletNotificationReadService`.
+- Si no hay devices registrados, la entrega queda como `NoRecipients`; la notificacion queda procesada pero no hubo push real.
+
+## changeMessage visible - Fase 5.2
+
+Fase 5.2 agrega `changeMessage` al campo estable de nivel del pass para validar alertas visibles de Apple Wallet en subidas de nivel.
+
+El campo usado es:
+
+```json
+{
+  "key": "level",
+  "label": "NIVEL",
+  "value": "Glow ✨",
+  "changeMessage": "🎉 Ahora eres cliente %@"
+}
+```
+
+La alerta visible depende de Apple Wallet. El sistema solo garantiza:
+
+- APNs PassKit silencioso;
+- cambio real del campo `level`;
+- `changeMessage` con `%@`;
+- pass regenerado con firma valida.
+
+### Prueba manual
+
+1. Instalar un pass en Mist.
+2. Confirmar que existe `DeviceRegistration`.
+3. Descargar o inspeccionar el pass inicial y confirmar:
+
+```text
+key = level
+value = Mist ✨
+```
+
+4. Otorgar puntos suficientes para subir a Glow.
+5. Revisar logs y confirmar:
+   - `Creating LevelChanged notification`;
+   - `Apple Wallet APNs summary`;
+   - `Apple Wallet requested updated serials`;
+   - `Apple Wallet downloading pass`;
+   - `changeMessageIncluded=True`.
+6. Confirmar que el pass actualizado contiene:
+
+```text
+key = level
+value = Glow ✨
+changeMessage = 🎉 Ahora eres cliente %@
+```
+
+7. Verificar si iOS muestra alerta visible.
+8. Abrir Wallet y confirmar que el nivel visible es Glow.
+9. Repetir un refresh sin cambio de nivel y confirmar que no se crea otra notificacion `LevelChanged`.
+10. Probar downgrade y confirmar que no se incluye `changeMessage` de felicitacion.
+
+No se debe intentar enviar texto dentro del payload APNs. El texto siempre vive dentro del `.pkpass`.

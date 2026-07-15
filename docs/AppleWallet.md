@@ -1491,3 +1491,314 @@ Para desactivarlo:
   }
 }
 ```
+
+# Fase 5.1 - Motor base de notificaciones
+
+El proyecto cuenta con un motor base de notificaciones de lealtad implementado y pendiente de validacion manual.
+
+La fase distingue tres conceptos:
+
+- `LoyaltyNotification`: notificacion logica del sistema.
+- `NotificationDelivery`: intento de entrega por canal.
+- Apple Wallet: canal real disponible en Fase 5.1, basado en refresh del pass.
+
+Apple Wallet no recibe texto arbitrario en APNs. El push APNs de PassKit solo despierta Wallet para que consulte el Web Service y descargue un pass actualizado. El contenido visible se publica en el reverso del pass como un `backField` compacto:
+
+```text
+NOVEDADES
+<mensaje activo>
+```
+
+## Modelo
+
+Entidades:
+
+- `LoyaltyNotification`
+  - cliente;
+  - tarjeta;
+  - tipo;
+  - titulo;
+  - mensaje;
+  - estado;
+  - programacion;
+  - vigencia visual en Wallet;
+  - `CorrelationId` para idempotencia.
+- `NotificationDelivery`
+  - canal;
+  - estado;
+  - intentos;
+  - dispositivos encontrados;
+  - pushes intentados;
+  - pushes aceptados;
+  - pushes fallidos;
+  - error de entrega.
+
+Enums:
+
+- `NotificationType`: `LevelChanged`, `PointsExpiring`, `MonthlyProductStarted`, `PointCampaignStarted`, `BirthdayBenefitStarted`, `Custom`.
+- `NotificationStatus`: `Pending`, `Processing`, `Delivered`, `PartiallyDelivered`, `Failed`, `Cancelled`.
+- `NotificationChannel`: `AppleWallet`, `Email`, `Sms`, `WhatsApp`, `MobilePush`.
+- `NotificationDeliveryStatus`: `Pending`, `Processing`, `Succeeded`, `Failed`, `Cancelled`, `Unsupported`, `NoRecipients`.
+
+Solo `AppleWallet` tiene procesador real en Fase 5.1. Los demas canales existen como modelo futuro y quedan como `Unsupported` si se intentan procesar.
+
+## Arquitectura
+
+```text
+Application CQRS
+  ↓
+ILoyaltyNotificationService
+  ↓
+INotificationChannelProcessor
+  ↓
+AppleWalletNotificationChannelProcessor
+  ↓
+LoyaltyCard.Touch
+  ↓
+APNs PassKit
+  ↓
+Wallet descarga pass actualizado
+```
+
+Servicios nuevos:
+
+- `ILoyaltyNotificationService`
+- `INotificationChannelProcessor`
+- `IWalletNotificationReadService`
+- `LoyaltyNotificationService`
+- `AppleWalletNotificationChannelProcessor`
+- `WalletNotificationReadService`
+
+El procesador Apple Wallet:
+
+1. Marca la entrega como `Processing`.
+2. Busca la tarjeta.
+3. Ejecuta `LoyaltyCard.Touch(...)` para actualizar `LastActivityAt`.
+4. Busca `DeviceRegistration` por serial.
+5. Envia APNs PassKit best-effort a cada device.
+6. Guarda metricas agregadas de entrega.
+
+## Origen automatico real
+
+El origen automatico implementado en Fase 5.1 es cambio positivo de nivel.
+
+Cuando `LoyaltyCard.ApplyCalculatedLevel(...)` cambia de nivel y el nuevo nivel es superior al anterior, se publica una `LoyaltyNotification` de tipo `LevelChanged`.
+
+Las bajadas de nivel no generan mensaje de felicitacion. Siguen actualizando el pass mediante el flujo existente de refresh de Wallet.
+
+## Idempotencia
+
+`LoyaltyNotification.CorrelationId` tiene indice unico filtrado cuando no es `NULL`.
+
+Para cambios de nivel, el correlation id se construye con tarjeta, nuevo nivel y fecha de obtencion del nivel. Si el mismo evento se intenta procesar dos veces, el servicio devuelve la notificacion existente y evita duplicados.
+
+## API
+
+Endpoints administrativos:
+
+- `GET /api/notifications`
+- `GET /api/notifications/metrics`
+- `GET /api/notifications/{id}`
+- `POST /api/notifications`
+- `POST /api/notifications/{id}/process`
+- `POST /api/notifications/{id}/retry`
+- `PUT /api/notifications/{id}/cancel`
+
+Estos endpoints usan MediatR y no acceden directo a `AppDbContext`.
+
+## Admin
+
+Pagina nueva:
+
+```text
+/notifications
+```
+
+Permite:
+
+- ver metricas;
+- listar notificaciones;
+- filtrar por tipo y estado;
+- crear notificacion manual `Custom` para un serial;
+- procesar pendientes;
+- reintentar fallidas;
+- cancelar pendientes.
+
+Customer Detail tambien muestra historial compacto de notificaciones del cliente.
+
+## Scheduler
+
+La API hospeda `LoyaltyNotificationBackgroundService`.
+
+Configuracion:
+
+```json
+"LoyaltyNotifications": {
+  "Enabled": true,
+  "RunOnStartup": false,
+  "PollIntervalSeconds": 60,
+  "BatchSize": 25,
+  "MaxAttempts": 3
+}
+```
+
+El scheduler crea un scope, resuelve `ISender` y ejecuta `ProcessPendingNotificationsCommand`.
+
+## Migracion
+
+Fase 5.1 requiere migracion de esquema para:
+
+- crear `LoyaltyNotifications`;
+- crear `NotificationDeliveries`;
+- crear foreign keys;
+- crear indices;
+- crear indice unico filtrado sobre `CorrelationId`.
+
+La migracion no debe aplicarse automaticamente. En desarrollo se aplica manualmente con `dotnet ef database update` cuando se vaya a validar.
+
+# Fase 5.2 - Notificaciones visibles Apple Wallet con changeMessage
+
+Fase 5.2 esta implementada y pendiente de validacion manual.
+
+El objetivo de esta fase es validar alertas visibles reales de Apple Wallet para subidas de nivel.
+
+## Regla PassKit
+
+Apple Wallet no muestra texto arbitrario enviado por APNs. El flujo correcto es:
+
+```text
+APNs PassKit silencioso
+  ↓
+Wallet consulta seriales actualizados
+  ↓
+Wallet descarga nuevo .pkpass
+  ↓
+Wallet compara campos existentes
+  ↓
+Si cambio un campo con changeMessage valido, puede mostrar alerta visible
+```
+
+El `changeMessage` debe vivir en el campo que cambia y debe contener `%@`.
+
+## Campo usado
+
+Se reutiliza el campo visual actual de nivel:
+
+```json
+{
+  "key": "level",
+  "label": "NIVEL",
+  "value": "Glow ✨",
+  "changeMessage": "🎉 Ahora eres cliente %@"
+}
+```
+
+La key `level` es estable. No se mueve entre secciones, no se renombra y no se genera dinamicamente.
+
+## Estrategia
+
+`IWalletNotificationReadService` proyecta la notificacion activa mas reciente para la tarjeta, incluyendo:
+
+- `NotificationType`;
+- `Message`;
+- `MetadataJson`.
+
+`PassGeneratorService` solo agrega `changeMessage` al campo `level` cuando:
+
+- existe una notificacion activa `LevelChanged`;
+- la metadata contiene `isUpgrade = true`;
+- `metadata.newLevel` coincide con `LoyaltyCard.Level`;
+- el pass se esta regenerando para esa tarjeta.
+
+La metadata de `LevelChanged` tiene esta forma:
+
+```json
+{
+  "previousLevel": "Mist",
+  "newLevel": "Glow",
+  "isUpgrade": true
+}
+```
+
+## Downgrades
+
+Las bajadas de nivel siguen actualizando el pass, pero no generan una notificacion `LevelChanged` positiva y no incluyen `changeMessage` de felicitacion.
+
+Esto evita que un cambio de `Glow` a `Mist` muestre un mensaje tipo:
+
+```text
+Ahora eres cliente Mist
+```
+
+## Alertas repetidas
+
+No se usan timestamps ni valores artificiales para forzar alertas.
+
+La alerta depende de que el valor estable del campo `level` cambie, por ejemplo:
+
+```text
+Mist ✨ → Glow ✨
+```
+
+Si Wallet vuelve a descargar el pass sin otro cambio de nivel, el campo conserva la misma key y el mismo value, por lo que no deberia generar otra alerta por el mismo cambio.
+
+## NOVEDADES
+
+La seccion `NOVEDADES` del reverso se conserva como complemento visible.
+
+En Fase 5.2 ya no se usa `changeMessage` en `NOVEDADES`; la alerta visible principal debe venir del campo estable `level`.
+
+## Logs de diagnostico
+
+Se agregaron logs seguros para distinguir:
+
+- creacion de notificacion `LevelChanged`;
+- resumen APNs del canal Apple Wallet;
+- consulta de seriales actualizados por Wallet;
+- descarga del pass actualizado;
+- inclusion u omision de `changeMessage` en el campo `level`.
+
+No se registran `authenticationToken` ni `pushToken`.
+
+## Prueba manual
+
+1. Instalar un pass en Mist.
+2. Confirmar `DeviceRegistration`.
+3. Confirmar que el pass inicial contiene:
+
+```json
+{
+  "key": "level",
+  "value": "Mist ✨"
+}
+```
+
+4. Otorgar puntos suficientes para subir a Glow.
+5. Confirmar que se crea una notificacion logica `LevelChanged`.
+6. Confirmar una entrega Apple Wallet.
+7. Confirmar un solo APNs del motor de notificaciones.
+8. Confirmar que Wallet llama:
+
+```text
+GET /v1/devices/{device}/registrations/{passType}
+GET /v1/passes/{passType}/{serial}
+```
+
+9. Confirmar que el nuevo pass contiene:
+
+```json
+{
+  "key": "level",
+  "value": "Glow ✨",
+  "changeMessage": "🎉 Ahora eres cliente %@"
+}
+```
+
+10. Verificar si iOS muestra alerta visible.
+11. Abrir Wallet y confirmar nivel Glow.
+12. Ejecutar refresh adicional sin cambio de nivel y confirmar que no se crea otra notificacion de nivel ni otro APNs de nivel.
+13. Probar downgrade y confirmar que el pass actualiza nivel, pero no muestra felicitacion.
+
+## Migracion
+
+Fase 5.2 no requiere cambios de esquema ni migracion nueva.

@@ -13,9 +13,15 @@
 - Fase 3.6 - Customer Detail avanzado
 - Fase 3.7 - Producto del mes: Completada
 - Fase 3.8 - Campanas de puntos: Completada
+- Fase 5.1 - Motor base de notificaciones: Implementada, pendiente de validacion manual
+- Fase 5.2 - Notificaciones visibles Apple Wallet con changeMessage: Implementada, pendiente de validacion manual
 
 ## Siguiente
 
-### Siguiente fase por definir
+### Fase 5.3 - Canales externos de notificacion
 
-- Definir siguiente bloque funcional despues de la validacion.
+- Email.
+- SMS.
+- WhatsApp.
+- Mobile Push.
+- Plantillas por canal.

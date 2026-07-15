@@ -151,8 +151,8 @@ public sealed class AddPointsHandler : IRequestHandler<AddPointsCommand, Result<
 
         await _uow.SaveChangesAsync(ct);
 
-        await TryPushWalletUpdateAsync(card.SerialNumber,
-            levelChanged ? PassUpdateReason.LevelChanged : PassUpdateReason.PointsAdded, ct);
+        if (!levelChanged)
+            await TryPushWalletUpdateAsync(card.SerialNumber, PassUpdateReason.PointsAdded, ct);
 
         return Result.Ok(new AddPointsResponse(
             PointsAdded: finalPoints,

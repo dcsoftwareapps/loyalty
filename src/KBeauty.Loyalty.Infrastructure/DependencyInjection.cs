@@ -72,6 +72,7 @@ public static class DependencyInjection
         services.AddScoped<IRewardCatalogRepository, RewardCatalogRepository>();
         services.AddScoped<IProgramConfigRepository, ProgramConfigRepository>();
         services.AddScoped<IDeviceRegistrationRepository, DeviceRegistrationRepository>();
+        services.AddScoped<ILoyaltyNotificationRepository, LoyaltyNotificationRepository>();
     }
 
     private static void AddCrossCuttingServices(IServiceCollection services)
@@ -85,6 +86,9 @@ public static class DependencyInjection
         services.AddScoped<ICustomerListReadService, CustomerListReadService>();
         services.AddScoped<ICustomerDetailReadService, CustomerDetailReadService>();
         services.AddScoped<IRedemptionHistoryReadService, RedemptionHistoryReadService>();
+        services.AddScoped<IWalletNotificationReadService, WalletNotificationReadService>();
+        services.AddScoped<ILoyaltyNotificationService, LoyaltyNotificationService>();
+        services.AddScoped<INotificationChannelProcessor, AppleWalletNotificationChannelProcessor>();
     }
 
     private static void AddWalletServices(

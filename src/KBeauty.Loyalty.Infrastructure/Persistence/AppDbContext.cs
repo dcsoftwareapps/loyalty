@@ -28,6 +28,8 @@ public class AppDbContext : DbContext, IUnitOfWork
     public DbSet<PointCampaign> PointCampaigns => Set<PointCampaign>();
     public DbSet<ProgramConfig> ProgramConfigs => Set<ProgramConfig>();
     public DbSet<DeviceRegistration> DeviceRegistrations => Set<DeviceRegistration>();
+    public DbSet<LoyaltyNotification> LoyaltyNotifications => Set<LoyaltyNotification>();
+    public DbSet<NotificationDelivery> NotificationDeliveries => Set<NotificationDelivery>();
 
     public AppDbContext(DbContextOptions<AppDbContext> options) : base(options) { }
 

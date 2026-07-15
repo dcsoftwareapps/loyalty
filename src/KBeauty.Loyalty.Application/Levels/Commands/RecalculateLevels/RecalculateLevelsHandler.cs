@@ -69,13 +69,17 @@ public sealed class RecalculateLevelsHandler
                 continue;
 
             _cards.Update(card);
-            affectedSerials.Add(card.SerialNumber);
             cardsChanged++;
 
             if (comparison > 0)
+            {
                 cardsUpgraded++;
+            }
             else if (comparison < 0)
+            {
                 cardsDowngraded++;
+                affectedSerials.Add(card.SerialNumber);
+            }
         }
 
         await _uow.SaveChangesAsync(ct);

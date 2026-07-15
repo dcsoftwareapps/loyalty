@@ -65,6 +65,12 @@ public sealed class PassesController : ControllerBase
         var customer = await _customers.GetByIdAsync(card.CustomerId, ct);
         if (customer is null) return NotFound();
 
+        _logger.LogInformation(
+            "Apple Wallet downloading pass for serial {Serial}; level={Level}; lastActivityAt={LastActivityAt}.",
+            serialNumber,
+            card.Level,
+            card.LastActivityAt);
+
         // Re-genera siempre (los datos del pase son derivados de card+customer).
         var bytes = await _passes.GeneratePassAsync(card, customer, ct);
 
@@ -87,6 +93,12 @@ public sealed class PassesController : ControllerBase
 
         var customer = await _customers.GetByIdAsync(card.CustomerId, ct);
         if (customer is null) return NotFound();
+
+        _logger.LogInformation(
+            "Development pass download for serial {Serial}; level={Level}; lastActivityAt={LastActivityAt}.",
+            serialNumber,
+            card.Level,
+            card.LastActivityAt);
 
         var bytes = await _passes.GeneratePassAsync(card, customer, ct);
         return File(bytes, LoyaltyConstants.ApplePass.ContentType, $"{serialNumber}.pkpass");
@@ -168,7 +180,21 @@ public sealed class PassesController : ControllerBase
             ct);
 
         if (result.IsFailure || result.Value.SerialNumbers.Count == 0)
+        {
+            _logger.LogInformation(
+                "Apple Wallet requested updated serials for device {Device} and pass type {PassType}; no updates since {Since}.",
+                SafeDeviceIdentifier(deviceLibraryIdentifier),
+                passTypeIdentifier,
+                passesUpdatedSince ?? "beginning");
             return StatusCode(StatusCodes.Status204NoContent);
+        }
+
+        _logger.LogInformation(
+            "Apple Wallet requested updated serials for device {Device} and pass type {PassType}; returning {Count} serial(s), lastUpdated={LastUpdated}.",
+            SafeDeviceIdentifier(deviceLibraryIdentifier),
+            passTypeIdentifier,
+            result.Value.SerialNumbers.Count,
+            result.Value.LastUpdated);
 
         return Ok(new
         {
@@ -222,6 +248,9 @@ public sealed class PassesController : ControllerBase
 
         return isValid;
     }
+
+    private static string SafeDeviceIdentifier(string value) =>
+        value.Length <= 8 ? value : $"{value[..4]}...{value[^4..]}";
 
     public sealed record PushTokenBody(string PushToken);
 

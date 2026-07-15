@@ -281,6 +281,22 @@ internal sealed class CustomerDetailReadService : ICustomerDetailReadService
                 .ToListAsync(ct)
             : new List<CustomerRedemptionHistoryItemDto>();
 
+        var notificationHistory = await _db.LoyaltyNotifications
+            .AsNoTracking()
+            .Where(n => n.CustomerId == baseInfo.Id)
+            .OrderByDescending(n => n.CreatedAt)
+            .Select(n => new CustomerNotificationHistoryItemDto(
+                n.CreatedAt,
+                n.Type,
+                n.Title,
+                n.Message,
+                n.Status,
+                n.Deliveries.Sum(d => (int?)d.PushesAttempted) ?? 0,
+                n.Deliveries.Sum(d => (int?)d.PushesAccepted) ?? 0,
+                n.Deliveries.Sum(d => (int?)d.PushesFailed) ?? 0))
+            .Take(10)
+            .ToListAsync(ct);
+
         return new CustomerDetailDto(
             Summary: new CustomerSummaryDto(
                 CustomerId: baseInfo.Id,
@@ -314,6 +330,7 @@ internal sealed class CustomerDetailReadService : ICustomerDetailReadService
                 RollingProgress: rollingProgress,
                 Lots: lotSummaries.AsReadOnly(),
                 Consumptions: consumptions.AsReadOnly()),
+            NotificationHistory: notificationHistory.AsReadOnly(),
             PointHistory: pointHistory.AsReadOnly(),
             RedemptionHistory: redemptionHistory.AsReadOnly());
     }

@@ -7,6 +7,7 @@ public sealed record CustomerDetailDto(
     CustomerWalletDto Wallet,
     CustomerStatisticsDto Statistics,
     CustomerLoyaltyAuditDto LoyaltyAudit,
+    IReadOnlyList<CustomerNotificationHistoryItemDto> NotificationHistory,
     IReadOnlyList<CustomerPointHistoryItemDto> PointHistory,
     IReadOnlyList<CustomerRedemptionHistoryItemDto> RedemptionHistory);
 
@@ -77,6 +78,16 @@ public sealed record ConsumptionDto(
     string? RewardName,
     DateTime ConsumedAt,
     bool IsReversed);
+
+public sealed record CustomerNotificationHistoryItemDto(
+    DateTime CreatedAt,
+    NotificationType Type,
+    string Title,
+    string Message,
+    NotificationStatus Status,
+    int PushesAttempted,
+    int PushesAccepted,
+    int PushesFailed);
 
 public sealed record CustomerPointHistoryItemDto(
     DateTime CreatedAt,

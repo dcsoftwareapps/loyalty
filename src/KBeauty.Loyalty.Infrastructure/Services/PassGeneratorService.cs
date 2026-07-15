@@ -7,6 +7,7 @@ using System.Text.Json;
 using KBeauty.Loyalty.Application.Common.Interfaces;
 using KBeauty.Loyalty.Common.Constants;
 using KBeauty.Loyalty.Domain.Entities;
+using KBeauty.Loyalty.Domain.Enums;
 using KBeauty.Loyalty.Infrastructure.Configuration;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
@@ -17,6 +18,7 @@ namespace KBeauty.Loyalty.Infrastructure.Services;
 internal sealed class PassGeneratorService : IPassGeneratorService
 {
     private readonly IAppleWalletSecretsProvider _secrets;
+    private readonly IWalletNotificationReadService _walletNotifications;
     private readonly ApplePassOptions _options;
     private readonly ILogger<PassGeneratorService> _logger;
 
@@ -25,6 +27,12 @@ internal sealed class PassGeneratorService : IPassGeneratorService
         WriteIndented = false,
         PropertyNamingPolicy = null
     };
+
+    private const string LevelFieldKey = "level";
+    private const string PointsExpiringFieldKey = "points_expiring";
+    private const string MonthlyProductFieldKey = "monthly_product";
+    private const string PointCampaignFieldKey = "point_campaign";
+    private const string BirthdayBenefitFieldKey = "birthday_benefit";
 
     private static readonly PassAssetSpec[] PassAssetSpecs =
     [
@@ -38,10 +46,12 @@ internal sealed class PassGeneratorService : IPassGeneratorService
 
     public PassGeneratorService(
         IAppleWalletSecretsProvider secrets,
+        IWalletNotificationReadService walletNotifications,
         IOptions<ApplePassOptions> options,
         ILogger<PassGeneratorService> logger)
     {
         _secrets = secrets;
+        _walletNotifications = walletNotifications;
         _options = options.Value;
         _logger = logger;
     }
@@ -51,7 +61,8 @@ internal sealed class PassGeneratorService : IPassGeneratorService
         ArgumentNullException.ThrowIfNull(card);
         ArgumentNullException.ThrowIfNull(customer);
 
-        var passJson = BuildPassJson(card, customer);
+        var walletMessage = await _walletNotifications.GetActiveMessageAsync(card.Id, ct);
+        var passJson = BuildPassJson(card, customer, walletMessage);
         var passJsonBytes = JsonSerializer.SerializeToUtf8Bytes(passJson, PassJsonOpts);
         var assets = LoadPassAssets();
 
@@ -89,7 +100,7 @@ internal sealed class PassGeneratorService : IPassGeneratorService
     public Task<string> GetPassDownloadUrlAsync(string serialNumber, CancellationToken ct = default) =>
         Task.FromResult($"/api/customers/{serialNumber}/pass");
 
-    private object BuildPassJson(LoyaltyCard card, Customer customer)
+    private object BuildPassJson(LoyaltyCard card, Customer customer, WalletNotificationMessage? walletMessage)
     {
         EnsureRequiredOption(_options.PassTypeIdentifier, "Apple:PassTypeIdentifier");
         EnsureRequiredOption(_options.TeamIdentifier, "Apple:TeamIdentifier");
@@ -98,6 +109,16 @@ internal sealed class PassGeneratorService : IPassGeneratorService
 
         var progress = BuildLevelProgress(card);
         var displayName = GetWalletDisplayName(customer);
+        var levelChangeMessage = BuildLevelChangeMessage(card, walletMessage);
+        var auxiliaryFields = BuildAuxiliaryFields(progress, levelChangeMessage);
+        var backFields = BuildBackFields(progress, walletMessage);
+
+        _logger.LogInformation(
+            "Apple Wallet pass level field for serial {Serial}: key={FieldKey}, value={LevelValue}, changeMessageIncluded={ChangeMessageIncluded}.",
+            card.SerialNumber,
+            LevelFieldKey,
+            progress.LevelShortText,
+            levelChangeMessage is not null);
 
         return new
         {
@@ -125,33 +146,8 @@ internal sealed class PassGeneratorService : IPassGeneratorService
                     }
                 },
                 secondaryFields = Array.Empty<object>(),
-                auxiliaryFields = new[]
-                {
-                    new { key = "points", label = "PUNTOS", value = progress.PointsText },
-                    new { key = "level", label = "NIVEL", value = progress.LevelShortText },
-                    new { key = "next", label = "PR\u00d3XIMO", value = progress.NextLevelText }
-                },
-                backFields = new object[]
-                {
-                    new
-                    {
-                        key = "benefits",
-                        label = "Beneficios",
-                        value = "\u2022 Acumula puntos en cada compra.\n\n\u2022 Desbloquea recompensas exclusivas.\n\n\u2022 Accede a beneficios seg\u00fan tu nivel."
-                    },
-                    new
-                    {
-                        key = "progress",
-                        label = "Progreso",
-                        value = $"Nivel actual\n{progress.LevelShortText}\n\nPr\u00f3ximo nivel\n{progress.NextLevelText}\n\nPuntos restantes\n{progress.RemainingPointsText}"
-                    },
-                    new
-                    {
-                        key = "contact",
-                        label = string.Empty,
-                        value = "@kbeauty_mx\n\nkbeautymx.com\n\n+52 646 238 6962"
-                    }
-                }
+                auxiliaryFields,
+                backFields
             },
             barcodes = new[]
             {
@@ -164,6 +160,135 @@ internal sealed class PassGeneratorService : IPassGeneratorService
                 }
             }
         };
+    }
+
+    private static object[] BuildAuxiliaryFields(PassProgress progress, string? levelChangeMessage)
+    {
+        var fields = new List<object>
+        {
+            new { key = "points", label = "PUNTOS", value = progress.PointsText }
+        };
+
+        if (string.IsNullOrWhiteSpace(levelChangeMessage))
+        {
+            fields.Add(new { key = LevelFieldKey, label = "NIVEL", value = progress.LevelShortText });
+        }
+        else
+        {
+            fields.Add(new
+            {
+                key = LevelFieldKey,
+                label = "NIVEL",
+                value = progress.LevelShortText,
+                changeMessage = levelChangeMessage
+            });
+        }
+
+        fields.Add(new { key = "next", label = "PR\u00d3XIMO", value = progress.NextLevelText });
+        return fields.ToArray();
+    }
+
+    private string? BuildLevelChangeMessage(LoyaltyCard card, WalletNotificationMessage? walletMessage)
+    {
+        if (walletMessage is null || walletMessage.Type != NotificationType.LevelChanged)
+            return null;
+
+        if (!TryReadLevelChangeMetadata(walletMessage.MetadataJson, out var previousLevel, out var newLevel, out var isUpgrade))
+        {
+            _logger.LogDebug(
+                "Level changeMessage skipped for card {CardId}: missing or invalid metadata on notification {NotificationId}.",
+                card.Id,
+                walletMessage.Id);
+            return null;
+        }
+
+        if (!isUpgrade)
+            return null;
+
+        if (!string.Equals(newLevel, card.Level, StringComparison.OrdinalIgnoreCase))
+        {
+            _logger.LogDebug(
+                "Level changeMessage skipped for card {CardId}: notification newLevel={NotificationLevel}, currentLevel={CurrentLevel}.",
+                card.Id,
+                newLevel,
+                card.Level);
+            return null;
+        }
+
+        _logger.LogInformation(
+            "Level changeMessage included for card {CardId}: {PreviousLevel} -> {NewLevel}.",
+            card.Id,
+            previousLevel,
+            newLevel);
+        return "\ud83c\udf89 Ahora eres cliente %@";
+    }
+
+    private static bool TryReadLevelChangeMetadata(
+        string? metadataJson,
+        out string? previousLevel,
+        out string? newLevel,
+        out bool isUpgrade)
+    {
+        previousLevel = null;
+        newLevel = null;
+        isUpgrade = false;
+
+        if (string.IsNullOrWhiteSpace(metadataJson))
+            return false;
+
+        try
+        {
+            using var doc = JsonDocument.Parse(metadataJson);
+            var root = doc.RootElement;
+            previousLevel = root.TryGetProperty("previousLevel", out var previous)
+                ? previous.GetString()
+                : null;
+            newLevel = root.TryGetProperty("newLevel", out var next)
+                ? next.GetString()
+                : null;
+            isUpgrade = root.TryGetProperty("isUpgrade", out var upgrade) && upgrade.ValueKind == JsonValueKind.True;
+
+            return !string.IsNullOrWhiteSpace(newLevel);
+        }
+        catch (JsonException)
+        {
+            return false;
+        }
+    }
+
+    private static object[] BuildBackFields(PassProgress progress, WalletNotificationMessage? walletMessage)
+    {
+        var fields = new List<object>();
+        if (walletMessage is not null)
+        {
+            fields.Add(new
+            {
+                key = "news",
+                label = "NOVEDADES",
+                value = walletMessage.Message
+            });
+        }
+
+        fields.Add(new
+        {
+            key = "benefits",
+            label = "Beneficios",
+            value = "\u2022 Acumula puntos en cada compra.\n\n\u2022 Desbloquea recompensas exclusivas.\n\n\u2022 Accede a beneficios seg\u00fan tu nivel."
+        });
+        fields.Add(new
+        {
+            key = "progress",
+            label = "Progreso",
+            value = $"Nivel actual\n{progress.LevelShortText}\n\nPr\u00f3ximo nivel\n{progress.NextLevelText}\n\nPuntos restantes\n{progress.RemainingPointsText}"
+        });
+        fields.Add(new
+        {
+            key = "contact",
+            label = string.Empty,
+            value = "@kbeauty_mx\n\nkbeautymx.com\n\n+52 646 238 6962"
+        });
+
+        return fields.ToArray();
     }
 
     private static string GetWalletDisplayName(Customer customer)

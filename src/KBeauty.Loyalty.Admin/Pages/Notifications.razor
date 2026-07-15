@@ -1,0 +1,385 @@
+@page "/notifications"
+@attribute [Authorize]
+@rendermode InteractiveServer
+
+@using KBeauty.Loyalty.Application.Notifications
+@using KBeauty.Loyalty.Application.Notifications.Commands.CancelNotification
+@using KBeauty.Loyalty.Application.Notifications.Commands.CreateNotification
+@using KBeauty.Loyalty.Application.Notifications.Commands.ProcessNotification
+@using KBeauty.Loyalty.Application.Notifications.Commands.RetryNotification
+@using KBeauty.Loyalty.Application.Notifications.Queries.GetNotificationMetrics
+@using KBeauty.Loyalty.Application.Notifications.Queries.ListNotifications
+@using KBeauty.Loyalty.Domain.Enums
+@inject ISender Sender
+
+<PageTitle>Notificaciones - KBeauty</PageTitle>
+
+<div style="display:flex;align-items:flex-start;justify-content:space-between;gap:16px;margin-bottom:24px;">
+    <div>
+        <h1>Notificaciones</h1>
+        <p class="kb-muted" style="margin-top:-8px;">
+            Mensajes logicos de lealtad y entregas por Apple Wallet.
+        </p>
+    </div>
+    <button class="kb-btn kb-btn--primary" @onclick="ToggleForm" disabled="@busy">
+        @(showForm ? "Cerrar" : "Nueva notificacion")
+    </button>
+</div>
+
+@if (successMsg is not null) { <div class="kb-form-success">@successMsg</div> }
+@if (errorMsg is not null) { <div class="kb-form-error">@errorMsg</div> }
+
+@if (metrics is not null)
+{
+    <section style="margin-bottom:32px;">
+        <div class="kb-grid">
+            <MetricCard Label="Pendientes" Value="@metrics.Pending.ToString("N0")" />
+            <MetricCard Label="Procesadas" Value="@metrics.Processed.ToString("N0")" />
+            <MetricCard Label="Fallidas" Value="@metrics.Failed.ToString("N0")" />
+            <MetricCard Label="Clientas alcanzadas" Value="@metrics.CustomersReached.ToString("N0")" />
+            <MetricCard Label="Pushes intentados" Value="@metrics.PushesAttempted.ToString("N0")" />
+            <MetricCard Label="Pushes fallidos" Value="@metrics.PushesFailed.ToString("N0")" />
+        </div>
+    </section>
+}
+
+@if (showForm)
+{
+    <section class="kb-card" style="margin-bottom:24px;max-width:900px;">
+        <h2>Nueva notificacion manual</h2>
+        <p class="kb-muted">
+            En Fase 5.1 Apple Wallet solo refresca el pass. El mensaje se muestra dentro del reverso del pass en la seccion NOVEDADES.
+        </p>
+
+        @if (validationErrors.Count > 0)
+        {
+            <div class="kb-form-error">
+                @foreach (var error in validationErrors)
+                {
+                    <div>@error</div>
+                }
+            </div>
+        }
+
+        <div class="kb-form-row kb-form-row--horizontal">
+            <div style="flex:1;min-width:220px;">
+                <label for="notification-serial">Serial Wallet</label>
+                <input id="notification-serial" type="text" @bind="form.SerialNumber" />
+            </div>
+            <div style="flex:1;min-width:220px;">
+                <label for="notification-title">Titulo interno</label>
+                <input id="notification-title" type="text" @bind="form.Title" />
+            </div>
+            <div style="flex:1;min-width:220px;">
+                <label for="notification-until">Mostrar hasta</label>
+                <input id="notification-until" type="datetime-local" value="@form.DisplayUntilLocal" @onchange="OnDisplayUntilChanged" />
+            </div>
+        </div>
+
+        <div class="kb-form-row" style="max-width:100%;">
+            <div>
+                <label for="notification-message">Mensaje Wallet</label>
+                <textarea id="notification-message" rows="3" @bind="form.Message"></textarea>
+            </div>
+        </div>
+
+        <div class="kb-actions-inline">
+            <button class="kb-btn kb-btn--primary" @onclick="CreateAsync" disabled="@busy">
+                @(busy ? "Guardando..." : "Crear y procesar")
+            </button>
+            <button class="kb-btn kb-btn--ghost" @onclick="ResetForm" disabled="@busy">Limpiar</button>
+        </div>
+    </section>
+}
+
+<div class="kb-form-row kb-form-row--horizontal" style="margin-bottom:20px;">
+    <div style="flex:1;min-width:180px;">
+        <label for="status-filter">Estado</label>
+        <select id="status-filter" @bind="statusFilter">
+            <option value="">Todos</option>
+            <option value="@NotificationStatus.Pending">Pending</option>
+            <option value="@NotificationStatus.Processing">Processing</option>
+            <option value="@NotificationStatus.Delivered">Delivered</option>
+            <option value="@NotificationStatus.PartiallyDelivered">PartiallyDelivered</option>
+            <option value="@NotificationStatus.Failed">Failed</option>
+            <option value="@NotificationStatus.Cancelled">Cancelled</option>
+        </select>
+    </div>
+    <div style="flex:1;min-width:180px;">
+        <label for="type-filter">Tipo</label>
+        <select id="type-filter" @bind="typeFilter">
+            <option value="">Todos</option>
+            <option value="@NotificationType.LevelChanged">LevelChanged</option>
+            <option value="@NotificationType.PointsExpiring">PointsExpiring</option>
+            <option value="@NotificationType.MonthlyProductStarted">MonthlyProductStarted</option>
+            <option value="@NotificationType.PointCampaignStarted">PointCampaignStarted</option>
+            <option value="@NotificationType.BirthdayBenefitStarted">BirthdayBenefitStarted</option>
+            <option value="@NotificationType.Custom">Custom</option>
+        </select>
+    </div>
+    <div class="kb-actions-inline" style="align-self:end;">
+        <button class="kb-btn kb-btn--ghost" @onclick="LoadAsync" disabled="@busy">Aplicar</button>
+    </div>
+</div>
+
+@if (notifications is null)
+{
+    <p>Cargando...</p>
+}
+else if (notifications.Count == 0)
+{
+    <p class="kb-muted">No hay notificaciones para este filtro.</p>
+}
+else
+{
+    <table class="kb-table kb-table--compact">
+        <thead>
+            <tr>
+                <th>Creada</th>
+                <th>Cliente</th>
+                <th>Serial</th>
+                <th>Tipo</th>
+                <th>Mensaje</th>
+                <th>Estado</th>
+                <th>Apple Wallet</th>
+                <th>Acciones</th>
+            </tr>
+        </thead>
+        <tbody>
+        @foreach (var item in notifications)
+        {
+            var wallet = item.Deliveries.FirstOrDefault(d => d.Channel == NotificationChannel.AppleWallet);
+            <tr>
+                <td class="kb-muted">@FormatDateTime(item.CreatedAt)</td>
+                <td>@DisplayText(item.CustomerName)</td>
+                <td class="kb-muted">@DisplayText(item.SerialNumber)</td>
+                <td><span class="kb-badge kb-badge--muted">@item.Type</span></td>
+                <td>
+                    <strong>@item.Title</strong>
+                    <div class="kb-muted kb-text-truncate" title="@item.Message">@item.Message</div>
+                </td>
+                <td><span class="@NotificationStatusClass(item.Status)">@item.Status</span></td>
+                <td>
+                    @if (wallet is null)
+                    {
+                        <span class="kb-muted">No disponible</span>
+                    }
+                    else
+                    {
+                        <span class="@DeliveryStatusClass(wallet.Status)">@wallet.Status</span>
+                        <div class="kb-muted" title="@wallet.FailureReason">
+                            @wallet.PushesAccepted/@wallet.PushesAttempted aceptados
+                        </div>
+                    }
+                </td>
+                <td>
+                    <div class="kb-actions-inline">
+                        @if (item.Status == NotificationStatus.Pending)
+                        {
+                            <button class="kb-btn kb-btn--primary kb-btn--small" @onclick="@(() => ProcessAsync(item.Id))" disabled="@busy">Procesar</button>
+                            <button class="kb-btn kb-btn--ghost kb-btn--small" @onclick="@(() => CancelAsync(item.Id))" disabled="@busy">Cancelar</button>
+                        }
+                        else if (item.Status == NotificationStatus.Failed)
+                        {
+                            <button class="kb-btn kb-btn--primary kb-btn--small" @onclick="@(() => RetryAsync(item.Id))" disabled="@busy">Reintentar</button>
+                        }
+                        else
+                        {
+                            <span class="kb-muted">Sin acciones</span>
+                        }
+                    </div>
+                </td>
+            </tr>
+        }
+        </tbody>
+    </table>
+}
+
+@code {
+    private List<NotificationDto>? notifications;
+    private NotificationMetricsDto? metrics;
+    private NotificationFormModel form = NotificationFormModel.CreateDefault();
+    private readonly List<string> validationErrors = new();
+    private string? statusFilter;
+    private string? typeFilter;
+    private string? successMsg;
+    private string? errorMsg;
+    private bool showForm;
+    private bool busy;
+
+    protected override async Task OnInitializedAsync() => await LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        busy = true;
+        errorMsg = null;
+        try
+        {
+            var status = Enum.TryParse<NotificationStatus>(statusFilter, out var parsedStatus) ? parsedStatus : (NotificationStatus?)null;
+            var type = Enum.TryParse<NotificationType>(typeFilter, out var parsedType) ? parsedType : (NotificationType?)null;
+
+            var listResult = await Sender.Send(new ListNotificationsQuery(Status: status, Type: type, Take: 100));
+            var metricsResult = await Sender.Send(new GetNotificationMetricsQuery());
+
+            if (listResult.IsFailure)
+            {
+                errorMsg = listResult.Error;
+                notifications = new List<NotificationDto>();
+            }
+            else
+            {
+                notifications = listResult.Value.ToList();
+            }
+
+            if (metricsResult.IsSuccess)
+                metrics = metricsResult.Value;
+        }
+        finally
+        {
+            busy = false;
+        }
+    }
+
+    private void ToggleForm()
+    {
+        showForm = !showForm;
+        validationErrors.Clear();
+        errorMsg = null;
+        successMsg = null;
+    }
+
+    private void ResetForm()
+    {
+        form = NotificationFormModel.CreateDefault();
+        validationErrors.Clear();
+    }
+
+    private void OnDisplayUntilChanged(ChangeEventArgs e) =>
+        form.DisplayUntilLocal = e.Value?.ToString() ?? string.Empty;
+
+    private async Task CreateAsync()
+    {
+        successMsg = null;
+        errorMsg = null;
+        validationErrors.Clear();
+
+        if (!ValidateForm())
+            return;
+
+        busy = true;
+        try
+        {
+            var result = await Sender.Send(new CreateNotificationCommand(
+                form.SerialNumber.Trim(),
+                NotificationType.Custom,
+                form.Title.Trim(),
+                form.Message.Trim(),
+                ScheduledAtUtc: null,
+                DisplayUntilUtc: ParseLocalDateTimeAsUtc(form.DisplayUntilLocal),
+                Channels: [NotificationChannel.AppleWallet],
+                CorrelationId: null,
+                Source: "admin",
+                MetadataJson: null,
+                ProcessImmediately: true));
+
+            if (result.IsFailure)
+            {
+                errorMsg = result.Error;
+                return;
+            }
+
+            successMsg = "Notificacion creada.";
+            showForm = false;
+            ResetForm();
+            await LoadAsync();
+        }
+        finally
+        {
+            busy = false;
+        }
+    }
+
+    private async Task ProcessAsync(Guid id) => await ExecuteAsync(() => Sender.Send(new ProcessNotificationCommand(id)), "Notificacion procesada.");
+    private async Task RetryAsync(Guid id) => await ExecuteAsync(() => Sender.Send(new RetryNotificationCommand(id)), "Notificacion reintentada.");
+    private async Task CancelAsync(Guid id) => await ExecuteAsync(() => Sender.Send(new CancelNotificationCommand(id)), "Notificacion cancelada.");
+
+    private async Task ExecuteAsync(Func<Task<KBeauty.Loyalty.Common.Results.Result<NotificationDto>>> operation, string success)
+    {
+        busy = true;
+        successMsg = null;
+        errorMsg = null;
+        try
+        {
+            var result = await operation();
+            if (result.IsFailure)
+            {
+                errorMsg = result.Error;
+                return;
+            }
+
+            successMsg = success;
+            await LoadAsync();
+        }
+        finally
+        {
+            busy = false;
+        }
+    }
+
+    private bool ValidateForm()
+    {
+        if (string.IsNullOrWhiteSpace(form.SerialNumber))
+            validationErrors.Add("El serial Wallet es obligatorio.");
+        if (string.IsNullOrWhiteSpace(form.Title))
+            validationErrors.Add("El titulo es obligatorio.");
+        if (string.IsNullOrWhiteSpace(form.Message))
+            validationErrors.Add("El mensaje es obligatorio.");
+        if (ParseLocalDateTimeAsUtc(form.DisplayUntilLocal) is not { } displayUntil || displayUntil <= DateTime.UtcNow)
+            validationErrors.Add("La fecha de vigencia debe ser futura.");
+
+        return validationErrors.Count == 0;
+    }
+
+    private static DateTime? ParseLocalDateTimeAsUtc(string value)
+    {
+        if (!DateTime.TryParse(value, out var local))
+            return null;
+
+        return DateTime.SpecifyKind(local, DateTimeKind.Local).ToUniversalTime();
+    }
+
+    private static string FormatDateTime(DateTime value) => value.ToLocalTime().ToString("dd MMM yyyy HH:mm");
+    private static string DisplayText(string? value) => string.IsNullOrWhiteSpace(value) ? "No disponible" : value;
+
+    private static string NotificationStatusClass(NotificationStatus status) => status switch
+    {
+        NotificationStatus.Delivered => "kb-badge kb-badge--success",
+        NotificationStatus.PartiallyDelivered => "kb-badge kb-badge--warning",
+        NotificationStatus.Failed => "kb-badge kb-badge--warning",
+        NotificationStatus.Cancelled => "kb-badge kb-badge--muted",
+        _ => "kb-badge kb-badge--muted"
+    };
+
+    private static string DeliveryStatusClass(NotificationDeliveryStatus status) => status switch
+    {
+        NotificationDeliveryStatus.Succeeded => "kb-badge kb-badge--success",
+        NotificationDeliveryStatus.Failed => "kb-badge kb-badge--warning",
+        NotificationDeliveryStatus.NoRecipients => "kb-badge kb-badge--muted",
+        NotificationDeliveryStatus.Unsupported => "kb-badge kb-badge--muted",
+        _ => "kb-badge kb-badge--muted"
+    };
+
+    private sealed class NotificationFormModel
+    {
+        public string SerialNumber { get; set; } = string.Empty;
+        public string Title { get; set; } = string.Empty;
+        public string Message { get; set; } = string.Empty;
+        public string DisplayUntilLocal { get; set; } = string.Empty;
+
+        public static NotificationFormModel CreateDefault() => new()
+        {
+            Title = "Novedad K-Beauty",
+            DisplayUntilLocal = DateTime.Now.AddDays(7).ToString("yyyy-MM-ddTHH:mm")
+        };
+    }
+}
