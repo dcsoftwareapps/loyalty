@@ -11,13 +11,11 @@
 - Fase 3.4 - Niveles automaticos con ventana movil de 12 meses
 - Fase 3.5 - Scheduler diario de mantenimiento
 - Fase 3.6 - Customer Detail avanzado
-- Fase 3.7 - Producto del mes: Implementada - pendiente de validacion manual
+- Fase 3.7 - Producto del mes: Completada
+- Fase 3.8 - Campanas de puntos: Completada
 
 ## Siguiente
 
 ### Siguiente fase por definir
 
-Siguiente sugerido:
-
-- Validar manualmente Producto del mes.
 - Definir siguiente bloque funcional despues de la validacion.

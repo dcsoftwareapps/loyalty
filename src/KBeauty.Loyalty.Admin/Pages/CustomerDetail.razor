@@ -152,6 +152,7 @@ else
                         <th>Fecha</th>
                         <th>Tipo</th>
                         <th>Descripcion</th>
+                        <th>Campana</th>
                         <th class="kb-cell-number">Puntos</th>
                         <th>Balance despues</th>
                     </tr>
@@ -163,6 +164,7 @@ else
                         <td class="kb-muted">@FormatDateTime(item.CreatedAt)</td>
                         <td><span class="kb-badge kb-badge--muted">@item.Type</span></td>
                         <td>@item.Description</td>
+                        <td>@CampaignText(item.CampaignName, item.AppliedMultiplier)</td>
                         <td class="kb-cell-number" style="font-weight:600;color:@PointColor(item.Points);">
                             @(item.Points > 0 ? "+" : "")@item.Points.ToString("N0")
                         </td>
@@ -319,6 +321,12 @@ else
     private static string FormatNullableDate(DateTime? value) => value.HasValue ? FormatDate(value.Value) : "No disponible";
     private static string FormatNullableDateTime(DateTime? value) => value.HasValue ? FormatDateTime(value.Value) : "No disponible";
     private static string DisplayText(string? value) => string.IsNullOrWhiteSpace(value) ? "No disponible" : value;
+    private static string CampaignText(string? campaignName, decimal? appliedMultiplier) =>
+        string.IsNullOrWhiteSpace(campaignName)
+            ? "No disponible"
+            : appliedMultiplier.HasValue
+                ? $"{campaignName} ({appliedMultiplier.Value:0.##}x)"
+                : campaignName;
     private static string PointColor(int points) => points >= 0 ? "var(--kb-sage)" : "var(--kb-blush)";
     private static string StatusText(bool isActive) => isActive ? "Activo" : "Inactivo";
     private static string YesNo(bool value) => value ? "Si" : "No";

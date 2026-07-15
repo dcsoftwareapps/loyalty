@@ -430,6 +430,71 @@ Ya existe un Producto del mes activo con una vigencia que se traslapa.
 
 Crear un Producto del mes para agosto sin traslapar. Debe mostrarse como `Programado` y no aparecer como canjeable antes de `ValidFrom`.
 
+## Campanas de puntos - Fase 3.8
+
+Las campanas se administran desde `/campaigns` y aplican automaticamente a `POST /api/points`.
+
+La UI captura fecha/hora local de Tijuana y el backend persiste UTC. Las campanas no requieren scheduler: `IsActive` es el interruptor administrativo y la vigencia se evalua al momento de la compra.
+
+Endpoints administrativos:
+
+- `GET /api/campaigns`
+- `GET /api/campaigns/{id}`
+- `POST /api/campaigns`
+- `PUT /api/campaigns/{id}`
+- `PUT /api/campaigns/{id}/activate`
+- `PUT /api/campaigns/{id}/deactivate`
+
+Request ejemplo:
+
+```json
+{
+  "name": "Triple puntos julio",
+  "description": "Campana 3x para compras de julio",
+  "multiplier": 3,
+  "minimumPurchaseAmount": 500,
+  "levelEligibility": "All",
+  "startsAtUtc": "2026-07-01T07:00:00Z",
+  "endsAtUtc": "2026-08-01T06:59:59Z",
+  "isActive": true
+}
+```
+
+`POST /api/points` no cambia su request:
+
+```json
+{
+  "serialNumber": "KB-JHYL7KK",
+  "purchaseAmount": 500
+}
+```
+
+La respuesta ahora incluye datos compatibles adicionales: `basePoints`, `campaignBonusPoints`, `appliedMultiplier`, `campaignId` y `campaignName`.
+
+Escenarios manuales:
+
+1. Compra sin campana: `appliedMultiplier = 1`, `campaignId = null`, `pointsAdded = basePoints`.
+2. Campana 2x vigente para todos: `pointsAdded = basePoints * 2`, una transaccion y un lote.
+3. Monto minimo: compra de `499` no aplica; compra de `500` aplica si el minimo es `500`.
+4. Nivel elegible: campana Glow no aplica a Mist y si aplica a Glow.
+5. Campanas traslapadas: gana la de mayor multiplicador.
+6. Cumpleanos mayor que campana: gana cumpleanos y `campaignId = null`.
+7. Campana mayor que cumpleanos: gana campana y se guarda `campaignId`.
+8. Empate cumpleanos/campana: se registra campana y `BirthdayBonusApplied = false`.
+9. Campana futura: estado `Programada`, no aplica.
+10. Campana vencida: estado `Vencida`, no aplica.
+11. Campana inactiva: no aplica aunque la fecha sea vigente.
+12. Admin: crear, editar, activar, desactivar y revisar hora Tijuana.
+13. Auditoria SQL: revisar `PointTransactions.CampaignId`, `BasePoints`, `AppliedMultiplier`, `Points`.
+14. Nivel rolling: confirmar que puntos finales cuentan para nivel.
+15. FIFO/expiracion: confirmar que el lote de puntos finales expira normalmente.
+
+Migracion:
+
+- `AddPointCampaignsAndTransactionAudit`.
+- No aplicar automaticamente; usar `dotnet ef database update` solo durante validacion local.
+- No hay backfill historico.
+
 ### Escenario 4 - Producto vencido
 
 Mover vigencia al pasado. Debe mostrarse como `Vencido` y no aparecer como canjeable.

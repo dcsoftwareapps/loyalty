@@ -36,6 +36,7 @@ public static class DependencyInjection
 
         services.AddValidatorsFromAssembly(assembly, includeInternalTypes: true);
         services.AddScoped<ILevelCalculationService, LevelCalculationService>();
+        services.AddScoped<IPointCampaignSelector, PointCampaignSelector>();
 
         return services;
     }

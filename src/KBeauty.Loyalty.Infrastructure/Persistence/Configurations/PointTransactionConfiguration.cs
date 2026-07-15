@@ -19,6 +19,9 @@ internal sealed class PointTransactionConfiguration : IEntityTypeConfiguration<P
         builder.Property(t => t.PurchaseAmount)
             .HasColumnType("decimal(18,2)");
 
+        builder.Property(t => t.AppliedMultiplier)
+            .HasColumnType("decimal(5,2)");
+
         builder.Property(t => t.CreatedBy)
             .HasMaxLength(100);
 
@@ -38,9 +41,16 @@ internal sealed class PointTransactionConfiguration : IEntityTypeConfiguration<P
         builder.HasIndex(t => new { t.LoyaltyCardId, t.CreatedAt })
             .IsDescending(false, true);
 
+        builder.HasIndex(t => t.CampaignId);
+
         builder.HasOne<LoyaltyCard>()
             .WithMany()
             .HasForeignKey(t => t.LoyaltyCardId)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        builder.HasOne(t => t.Campaign)
+            .WithMany()
+            .HasForeignKey(t => t.CampaignId)
             .OnDelete(DeleteBehavior.Restrict);
     }
 }

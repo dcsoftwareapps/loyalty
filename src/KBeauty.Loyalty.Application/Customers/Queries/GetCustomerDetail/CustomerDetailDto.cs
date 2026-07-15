@@ -83,7 +83,10 @@ public sealed record CustomerPointHistoryItemDto(
     TransactionType Type,
     string Description,
     int Points,
-    int? BalanceAfter);
+    int? BalanceAfter,
+    Guid? CampaignId,
+    string? CampaignName,
+    decimal? AppliedMultiplier);
 
 public sealed record CustomerRedemptionHistoryItemDto(
     DateTime RedeemedAt,

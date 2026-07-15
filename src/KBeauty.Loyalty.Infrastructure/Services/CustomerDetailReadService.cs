@@ -223,16 +223,22 @@ internal sealed class CustomerDetailReadService : ICustomerDetailReadService
         }
 
         var pointTransactions = hasCard
-            ? await _db.PointTransactions
-                .AsNoTracking()
-                .Where(t => t.LoyaltyCardId == cardId)
-                .OrderByDescending(t => t.CreatedAt)
-                .Select(t => new
+            ? await (
+                from transaction in _db.PointTransactions.AsNoTracking()
+                join campaign in _db.PointCampaigns.AsNoTracking()
+                    on transaction.CampaignId equals campaign.Id into campaigns
+                from campaign in campaigns.DefaultIfEmpty()
+                where transaction.LoyaltyCardId == cardId
+                orderby transaction.CreatedAt descending
+                select new
                 {
-                    t.CreatedAt,
-                    t.Type,
-                    t.Description,
-                    t.Points
+                    transaction.CreatedAt,
+                    transaction.Type,
+                    transaction.Description,
+                    transaction.Points,
+                    transaction.CampaignId,
+                    CampaignName = campaign == null ? null : campaign.Name,
+                    transaction.AppliedMultiplier
                 })
                 .Take(50)
                 .ToListAsync(ct)
@@ -250,7 +256,10 @@ internal sealed class CustomerDetailReadService : ICustomerDetailReadService
                         t.Type,
                         t.Description,
                         t.Points,
-                        balance);
+                        balance,
+                        t.CampaignId,
+                        t.CampaignName,
+                        t.AppliedMultiplier);
                     balance -= t.Points;
                     return item;
                 })

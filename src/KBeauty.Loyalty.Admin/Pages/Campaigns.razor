@@ -1,0 +1,390 @@
+@page "/campaigns"
+@attribute [Authorize]
+@rendermode InteractiveServer
+
+@using KBeauty.Loyalty.Application.Campaigns
+@using KBeauty.Loyalty.Application.Campaigns.Commands.ActivatePointCampaign
+@using KBeauty.Loyalty.Application.Campaigns.Commands.CreatePointCampaign
+@using KBeauty.Loyalty.Application.Campaigns.Commands.DeactivatePointCampaign
+@using KBeauty.Loyalty.Application.Campaigns.Commands.UpdatePointCampaign
+@using KBeauty.Loyalty.Application.Campaigns.Queries.ListPointCampaigns
+@using KBeauty.Loyalty.Domain.Enums
+@using System.Globalization
+@inject ISender Sender
+
+<PageTitle>Campanas - KBeauty</PageTitle>
+
+<div style="display:flex;align-items:center;justify-content:space-between;gap:16px;margin-bottom:24px;">
+    <div>
+        <h1>Campanas</h1>
+        <p style="color: var(--kb-ink-muted); margin-top: -8px;">Administra multiplicadores promocionales para compras.</p>
+    </div>
+    <button class="kb-btn kb-btn--primary" @onclick="StartCreate" disabled="@busy">Nueva campana</button>
+</div>
+
+@if (successMsg is not null) { <div class="kb-form-success">@successMsg</div> }
+@if (errorMsg is not null) { <div class="kb-form-error">@errorMsg</div> }
+
+@if (campaigns is not null)
+{
+    <div class="kb-grid" style="margin-bottom:24px;">
+        <MetricCard Label="Vigentes" Value="@CurrentCount.ToString("N0")" />
+        <MetricCard Label="Programadas" Value="@ScheduledCount.ToString("N0")" />
+        <MetricCard Label="Mayor multiplicador vigente" Value="@HighestCurrentMultiplierText" />
+    </div>
+}
+
+@if (showForm)
+{
+    <section class="kb-card" style="margin-bottom:24px;max-width:960px;">
+        <h2>@(editingId.HasValue ? "Editar campana" : "Nueva campana")</h2>
+
+        @if (validationErrors.Count > 0)
+        {
+            <div class="kb-form-error">
+                @foreach (var error in validationErrors)
+                {
+                    <div>@error</div>
+                }
+            </div>
+        }
+
+        <div class="kb-form-row kb-form-row--horizontal">
+            <div style="flex:2;min-width:260px;">
+                <label for="campaign-name">Nombre</label>
+                <input id="campaign-name" type="text" @bind="form.Name" />
+            </div>
+            <div style="flex:1;min-width:140px;">
+                <label for="campaign-multiplier">Multiplicador</label>
+                <input id="campaign-multiplier" type="number" min="2" max="5" step="1" @bind="form.Multiplier" />
+            </div>
+            <div style="flex:1;min-width:180px;">
+                <label for="campaign-minimum">Monto minimo</label>
+                <input id="campaign-minimum" type="number" min="0" step="0.01" @bind="form.MinimumPurchaseAmount" />
+            </div>
+            <div style="flex:1;min-width:180px;">
+                <label for="campaign-level">Nivel elegible</label>
+                <select id="campaign-level" @bind="form.LevelEligibility">
+                    <option value="@CampaignLevelEligibility.All">Todos</option>
+                    <option value="@CampaignLevelEligibility.Mist">Mist</option>
+                    <option value="@CampaignLevelEligibility.Glow">Glow</option>
+                    <option value="@CampaignLevelEligibility.Radiance">Radiance</option>
+                </select>
+            </div>
+        </div>
+
+        <div class="kb-form-row">
+            <div>
+                <label for="campaign-description">Descripcion</label>
+                <textarea id="campaign-description" rows="3" @bind="form.Description"></textarea>
+            </div>
+        </div>
+
+        <div class="kb-form-row kb-form-row--horizontal">
+            <div style="min-width:220px;">
+                <label for="campaign-start">Inicio (Tijuana)</label>
+                <input id="campaign-start" type="datetime-local" value="@form.StartsAtLocal" @oninput="OnStartsAtChanged" @onchange="OnStartsAtChanged" />
+            </div>
+            <div style="min-width:220px;">
+                <label for="campaign-end">Fin (Tijuana)</label>
+                <input id="campaign-end" type="datetime-local" value="@form.EndsAtLocal" @oninput="OnEndsAtChanged" @onchange="OnEndsAtChanged" />
+            </div>
+            <label style="display:flex;align-items:center;gap:10px;margin-bottom:12px;">
+                <input type="checkbox" @bind="form.IsActive" style="width:auto;" />
+                Activa
+            </label>
+        </div>
+
+        <div class="kb-actions-inline">
+            <button class="kb-btn kb-btn--primary" @onclick="SaveAsync" disabled="@busy">@(busy ? "Guardando..." : "Guardar")</button>
+            <button class="kb-btn kb-btn--ghost" @onclick="CancelForm" disabled="@busy">Cancelar</button>
+        </div>
+    </section>
+}
+
+@if (campaigns is null)
+{
+    <p>Cargando...</p>
+}
+else if (campaigns.Count == 0)
+{
+    <p class="kb-muted">No hay campanas configuradas.</p>
+}
+else
+{
+    <table class="kb-table kb-table--compact">
+        <thead>
+            <tr>
+                <th>Nombre</th>
+                <th>Multiplicador</th>
+                <th class="kb-cell-number">Monto minimo</th>
+                <th>Nivel</th>
+                <th>Vigencia Tijuana</th>
+                <th>Estado</th>
+                <th>Activa</th>
+                <th>Acciones</th>
+            </tr>
+        </thead>
+        <tbody>
+        @foreach (var campaign in campaigns)
+        {
+            <tr>
+                <td>
+                    <strong>@campaign.Name</strong>
+                    <div class="kb-muted kb-text-truncate" title="@campaign.Description">@campaign.Description</div>
+                </td>
+                <td><span class="kb-badge kb-badge--success">@campaign.Multiplier x</span></td>
+                <td class="kb-cell-number">@FormatMoney(campaign.MinimumPurchaseAmount)</td>
+                <td><span class="kb-badge kb-badge--muted">@LevelText(campaign.LevelEligibility)</span></td>
+                <td class="kb-muted">@FormatValidity(campaign)</td>
+                <td><span class="@CampaignStatusBadgeClass(campaign)">@CampaignStatus(campaign)</span></td>
+                <td><span class="@ActiveBadgeClass(campaign.IsActive)">@(campaign.IsActive ? "Si" : "No")</span></td>
+                <td>
+                    <div class="kb-actions-inline">
+                        <button class="kb-btn kb-btn--ghost kb-btn--small" @onclick="@(() => StartEdit(campaign))" disabled="@busy">Editar</button>
+                        @if (campaign.IsActive)
+                        {
+                            <button class="kb-btn kb-btn--ghost kb-btn--small" @onclick="@(() => DeactivateAsync(campaign.Id))" disabled="@busy">Desactivar</button>
+                        }
+                        else
+                        {
+                            <button class="kb-btn kb-btn--primary kb-btn--small" @onclick="@(() => ActivateAsync(campaign.Id))" disabled="@busy">Activar</button>
+                        }
+                    </div>
+                </td>
+            </tr>
+        }
+        </tbody>
+    </table>
+}
+
+@code {
+    private List<PointCampaignAdminDto>? campaigns;
+    private CampaignFormModel form = CampaignFormModel.CreateDefault();
+    private readonly List<string> validationErrors = new();
+    private Guid? editingId;
+    private string? successMsg;
+    private string? errorMsg;
+    private bool showForm;
+    private bool busy;
+
+    private static TimeZoneInfo TijuanaTimeZone => FindTijuanaTimeZone();
+    private int CurrentCount => campaigns?.Count(c => CampaignStatus(c) == "Vigente") ?? 0;
+    private int ScheduledCount => campaigns?.Count(c => CampaignStatus(c) == "Programada") ?? 0;
+    private string HighestCurrentMultiplierText => campaigns?.Where(c => CampaignStatus(c) == "Vigente").OrderByDescending(c => c.Multiplier).Select(c => $"{c.Multiplier}x").FirstOrDefault() ?? "No disponible";
+
+    protected override async Task OnInitializedAsync() => await ReloadAsync();
+
+    private async Task ReloadAsync()
+    {
+        var result = await Sender.Send(new ListPointCampaignsQuery());
+        if (result.IsSuccess)
+            campaigns = result.Value.ToList();
+        else
+            errorMsg = result.Error;
+    }
+
+    private void StartCreate()
+    {
+        ClearMessages();
+        editingId = null;
+        form = CampaignFormModel.CreateDefault();
+        showForm = true;
+    }
+
+    private void StartEdit(PointCampaignAdminDto campaign)
+    {
+        ClearMessages();
+        editingId = campaign.Id;
+        form = new CampaignFormModel
+        {
+            Name = campaign.Name,
+            Description = campaign.Description,
+            Multiplier = campaign.Multiplier,
+            MinimumPurchaseAmount = campaign.MinimumPurchaseAmount,
+            LevelEligibility = campaign.LevelEligibility,
+            StartsAtLocal = ToLocalInputValue(campaign.StartsAtUtc),
+            EndsAtLocal = ToLocalInputValue(campaign.EndsAtUtc),
+            IsActive = campaign.IsActive
+        };
+        showForm = true;
+    }
+
+    private async Task SaveAsync()
+    {
+        ClearMessages();
+        if (!ValidateForm(out var startsAtUtc, out var endsAtUtc))
+            return;
+
+        busy = true;
+        var result = editingId.HasValue
+            ? await Sender.Send(new UpdatePointCampaignCommand(editingId.Value, form.Name.Trim(), form.Description.Trim(), form.Multiplier, form.MinimumPurchaseAmount, form.LevelEligibility, startsAtUtc, endsAtUtc, form.IsActive))
+            : await Sender.Send(new CreatePointCampaignCommand(form.Name.Trim(), form.Description.Trim(), form.Multiplier, form.MinimumPurchaseAmount, form.LevelEligibility, startsAtUtc, endsAtUtc, form.IsActive));
+        busy = false;
+
+        if (result.IsFailure)
+        {
+            errorMsg = result.Error;
+            return;
+        }
+
+        successMsg = editingId.HasValue ? "Campana actualizada." : "Campana creada.";
+        showForm = false;
+        editingId = null;
+        form = CampaignFormModel.CreateDefault();
+        await ReloadAsync();
+    }
+
+    private async Task ActivateAsync(Guid id)
+    {
+        ClearMessages();
+        busy = true;
+        var result = await Sender.Send(new ActivatePointCampaignCommand(id));
+        busy = false;
+        successMsg = result.IsSuccess ? "Campana activada." : null;
+        errorMsg = result.IsFailure ? result.Error : null;
+        await ReloadAsync();
+    }
+
+    private async Task DeactivateAsync(Guid id)
+    {
+        ClearMessages();
+        busy = true;
+        var result = await Sender.Send(new DeactivatePointCampaignCommand(id));
+        busy = false;
+        successMsg = result.IsSuccess ? "Campana desactivada." : null;
+        errorMsg = result.IsFailure ? result.Error : null;
+        await ReloadAsync();
+    }
+
+    private void CancelForm()
+    {
+        showForm = false;
+        editingId = null;
+        form = CampaignFormModel.CreateDefault();
+        validationErrors.Clear();
+    }
+
+    private bool ValidateForm(out DateTime startsAtUtc, out DateTime endsAtUtc)
+    {
+        startsAtUtc = default;
+        endsAtUtc = default;
+        validationErrors.Clear();
+
+        if (string.IsNullOrWhiteSpace(form.Name))
+            validationErrors.Add("El nombre es obligatorio.");
+        if (string.IsNullOrWhiteSpace(form.Description))
+            validationErrors.Add("La descripcion es obligatoria.");
+        if (form.Multiplier is < 2 or > 5)
+            validationErrors.Add("El multiplicador debe estar entre 2 y 5.");
+        if (form.MinimumPurchaseAmount.HasValue && form.MinimumPurchaseAmount.Value < 0)
+            validationErrors.Add("El monto minimo no puede ser negativo.");
+
+        var hasStart = TryParseLocalInput(form.StartsAtLocal, out startsAtUtc);
+        var hasEnd = TryParseLocalInput(form.EndsAtLocal, out endsAtUtc);
+        if (!hasStart)
+            validationErrors.Add("La fecha de inicio es obligatoria y debe ser valida.");
+        if (!hasEnd)
+            validationErrors.Add("La fecha de fin es obligatoria y debe ser valida.");
+        if (hasStart && hasEnd && endsAtUtc < startsAtUtc)
+            validationErrors.Add("La fecha de fin no puede ser menor que la fecha de inicio.");
+
+        return validationErrors.Count == 0;
+    }
+
+    private void ClearMessages()
+    {
+        successMsg = null;
+        errorMsg = null;
+        validationErrors.Clear();
+    }
+
+    private void OnStartsAtChanged(ChangeEventArgs e) => form.StartsAtLocal = e.Value?.ToString();
+    private void OnEndsAtChanged(ChangeEventArgs e) => form.EndsAtLocal = e.Value?.ToString();
+
+    private static string CampaignStatus(PointCampaignAdminDto campaign)
+    {
+        if (!campaign.IsActive)
+            return "Inactiva";
+        var now = DateTime.UtcNow;
+        if (campaign.StartsAtUtc > now)
+            return "Programada";
+        if (campaign.EndsAtUtc < now)
+            return "Vencida";
+        return "Vigente";
+    }
+
+    private static string CampaignStatusBadgeClass(PointCampaignAdminDto campaign) => CampaignStatus(campaign) switch
+    {
+        "Vigente" => "kb-badge kb-badge--success",
+        "Programada" => "kb-badge kb-badge--warning",
+        "Vencida" => "kb-badge kb-badge--muted",
+        "Inactiva" => "kb-badge kb-badge--muted",
+        _ => "kb-badge"
+    };
+
+    private static string ActiveBadgeClass(bool isActive) => isActive ? "kb-badge kb-badge--success" : "kb-badge kb-badge--muted";
+    private static string LevelText(CampaignLevelEligibility eligibility) => eligibility == CampaignLevelEligibility.All ? "Todos" : eligibility.ToString();
+    private static string FormatMoney(decimal? value) => value.HasValue ? $"${value.Value:N2}" : "Sin minimo";
+    private static string FormatValidity(PointCampaignAdminDto campaign) => $"{FormatLocalDateTime(campaign.StartsAtUtc)} - {FormatLocalDateTime(campaign.EndsAtUtc)}";
+
+    private static string FormatLocalDateTime(DateTime utc)
+    {
+        var local = TimeZoneInfo.ConvertTimeFromUtc(DateTime.SpecifyKind(utc, DateTimeKind.Utc), TijuanaTimeZone);
+        return local.ToString("dd MMM yyyy HH:mm", CultureInfo.InvariantCulture);
+    }
+
+    private static string ToLocalInputValue(DateTime utc)
+    {
+        var local = TimeZoneInfo.ConvertTimeFromUtc(DateTime.SpecifyKind(utc, DateTimeKind.Utc), TijuanaTimeZone);
+        return local.ToString("yyyy-MM-ddTHH:mm", CultureInfo.InvariantCulture);
+    }
+
+    private static bool TryParseLocalInput(string? value, out DateTime utc)
+    {
+        utc = default;
+        if (string.IsNullOrWhiteSpace(value))
+            return false;
+        string[] formats = ["yyyy-MM-ddTHH:mm", "yyyy-MM-ddTHH:mm:ss"];
+        if (!DateTime.TryParseExact(value, formats, CultureInfo.InvariantCulture, DateTimeStyles.None, out var local))
+            return false;
+        while (TijuanaTimeZone.IsInvalidTime(local))
+            local = local.AddMinutes(30);
+        utc = TimeZoneInfo.ConvertTimeToUtc(DateTime.SpecifyKind(local, DateTimeKind.Unspecified), TijuanaTimeZone);
+        return true;
+    }
+
+    private static TimeZoneInfo FindTijuanaTimeZone()
+    {
+        try
+        {
+            return TimeZoneInfo.FindSystemTimeZoneById("America/Tijuana");
+        }
+        catch (TimeZoneNotFoundException)
+        {
+            return TimeZoneInfo.FindSystemTimeZoneById("Pacific Standard Time (Mexico)");
+        }
+    }
+
+    private sealed class CampaignFormModel
+    {
+        public string Name { get; set; } = string.Empty;
+        public string Description { get; set; } = string.Empty;
+        public int Multiplier { get; set; } = 2;
+        public decimal? MinimumPurchaseAmount { get; set; }
+        public CampaignLevelEligibility LevelEligibility { get; set; } = CampaignLevelEligibility.All;
+        public string? StartsAtLocal { get; set; }
+        public string? EndsAtLocal { get; set; }
+        public bool IsActive { get; set; } = true;
+
+        public static CampaignFormModel CreateDefault()
+        {
+            var now = TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow, TijuanaTimeZone);
+            return new CampaignFormModel
+            {
+                StartsAtLocal = now.ToString("yyyy-MM-ddTHH:mm", CultureInfo.InvariantCulture),
+                EndsAtLocal = now.AddDays(7).ToString("yyyy-MM-ddTHH:mm", CultureInfo.InvariantCulture)
+            };
+        }
+    }
+}

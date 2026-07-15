@@ -67,6 +67,7 @@ public static class DependencyInjection
         services.AddScoped<ILoyaltyCardRepository, LoyaltyCardRepository>();
         services.AddScoped<IPointTransactionRepository, PointTransactionRepository>();
         services.AddScoped<IPointLotRepository, PointLotRepository>();
+        services.AddScoped<IPointCampaignRepository, PointCampaignRepository>();
         services.AddScoped<IRedemptionRepository, RedemptionRepository>();
         services.AddScoped<IRewardCatalogRepository, RewardCatalogRepository>();
         services.AddScoped<IProgramConfigRepository, ProgramConfigRepository>();

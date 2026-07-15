@@ -31,6 +31,17 @@ public class PointTransaction : Entity
     /// <summary>Monto de la compra original (solo para Type=Purchase).</summary>
     public decimal? PurchaseAmount { get; private set; }
 
+    /// <summary>Campaña que definió el multiplicador efectivo de la compra, si aplica.</summary>
+    public Guid? CampaignId { get; private set; }
+
+    /// <summary>Puntos base calculados antes de multiplicadores, solo para compras auditables.</summary>
+    public int? BasePoints { get; private set; }
+
+    /// <summary>Multiplicador efectivo aplicado a la compra, solo para compras auditables.</summary>
+    public decimal? AppliedMultiplier { get; private set; }
+
+    public PointCampaign? Campaign { get; private set; }
+
     /// <summary>Timestamp UTC del movimiento.</summary>
     public DateTime CreatedAt { get; private set; }
 
@@ -48,7 +59,10 @@ public class PointTransaction : Entity
         DateTime createdAtUtc,
         BonusType? bonusType = null,
         decimal? purchaseAmount = null,
-        string? createdBy = null) : base(id)
+        string? createdBy = null,
+        Guid? campaignId = null,
+        int? basePoints = null,
+        decimal? appliedMultiplier = null) : base(id)
     {
         if (loyaltyCardId == Guid.Empty)
             throw new ArgumentException("LoyaltyCardId requerido.", nameof(loyaltyCardId));
@@ -63,5 +77,8 @@ public class PointTransaction : Entity
         PurchaseAmount = purchaseAmount;
         CreatedAt = createdAtUtc;
         CreatedBy = createdBy?.Trim();
+        CampaignId = campaignId;
+        BasePoints = basePoints;
+        AppliedMultiplier = appliedMultiplier;
     }
 }

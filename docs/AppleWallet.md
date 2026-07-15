@@ -1396,6 +1396,67 @@ La pantalla `/rewards` muestra:
 
 El Producto del mes no se agrega al frente ni al reverso del pass en esta fase. Una fase futura puede evaluar mostrar una promocion dinamica en el reverso, sin cambiar firma ni endpoints `/v1`.
 
+# Fase 3.8 - Campanas de puntos
+
+El sistema implementa campanas promocionales de multiplicador para compras procesadas por `POST /api/points`.
+
+Reglas implementadas:
+
+- Aplican unicamente a compras (`TransactionType.Purchase`).
+- No aplican a bienvenida, referidos, canjes, reversas, expiracion ni ajustes tecnicos.
+- El multiplicador es entero entre `2` y `5`.
+- El calculo base no cambia: `BasePoints = floor(purchaseAmount / PointsPerPesoUnit)`.
+- `FinalPoints = BasePoints * EffectiveMultiplier`.
+- Se crea una sola `PointTransaction` y un solo `PointLot` con los puntos finales.
+- Si hay campanas traslapadas, se elige una sola: mayor multiplicador, menor monto minimo, inicio mas reciente, `Id`.
+- La elegibilidad por nivel usa el nivel almacenado actual de `LoyaltyCard`, calculado por rolling points.
+- `MinimumPurchaseAmount = null` aplica a cualquier compra; si existe se evalua con `purchaseAmount >= MinimumPurchaseAmount`.
+- Cumpleanos y campana no se acumulan. Se usa `MAX(1, BirthdayMultiplier, CampaignMultiplier)`.
+- En empate entre cumpleanos y campana, se registra la campana como causa efectiva y `BirthdayBonusApplied = false`.
+- Los puntos finales cuentan para saldo, lotes, expiracion FIFO y nivel rolling.
+
+Entidad:
+
+- `PointCampaign`
+- Campos: `Name`, `Description`, `Multiplier`, `MinimumPurchaseAmount`, `LevelEligibility`, `StartsAtUtc`, `EndsAtUtc`, `IsActive`, `CreatedAt`, `UpdatedAt`.
+- Vigencia efectiva: `IsActive && StartsAtUtc <= nowUtc && EndsAtUtc >= nowUtc`.
+- `LevelEligibility`: `All`, `Mist`, `Glow`, `Radiance`.
+
+Auditoria en `PointTransaction`:
+
+- `CampaignId` nullable.
+- `BasePoints` nullable.
+- `AppliedMultiplier` nullable.
+- La FK a `PointCampaigns` usa delete restrict.
+
+API administrativa:
+
+- `GET /api/campaigns`
+- `GET /api/campaigns/{id}`
+- `POST /api/campaigns`
+- `PUT /api/campaigns/{id}`
+- `PUT /api/campaigns/{id}/activate`
+- `PUT /api/campaigns/{id}/deactivate`
+
+Admin:
+
+- Nueva pagina `/campaigns`.
+- Permite listar, crear, editar, activar y desactivar campanas.
+- Muestra estados `Vigente`, `Programada`, `Vencida`, `Inactiva`.
+- Captura fecha/hora local de Tijuana y persiste UTC.
+- Muestra vigencia nuevamente en hora de Tijuana.
+
+Customer Detail:
+
+- El historial de puntos muestra campana y multiplicador cuando la compra tuvo campana efectiva.
+
+Migracion:
+
+- `AddPointCampaignsAndTransactionAudit`.
+- Crea `PointCampaigns`.
+- Agrega `CampaignId`, `BasePoints`, `AppliedMultiplier` a `PointTransactions`.
+- No incluye backfill historico porque el proyecto esta en etapa inicial y la base local puede recrearse.
+
 `RunAtLocalTime` se interpreta en la zona horaria configurada. `America/Tijuana` es la zona funcional de Ensenada/Baja California. En Windows, si el identificador IANA no existe, el servicio intenta usar el equivalente `Pacific Standard Time (Mexico)`.
 
 El servicio calcula la siguiente ejecucion diaria:

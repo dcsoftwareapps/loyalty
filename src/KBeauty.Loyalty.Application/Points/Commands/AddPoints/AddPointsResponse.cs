@@ -10,4 +10,9 @@ public sealed record AddPointsResponse(
     int NewTotal,
     string Level,
     bool LeveledUp,
-    bool BirthdayBonusApplied);
+    bool BirthdayBonusApplied,
+    int BasePoints,
+    int CampaignBonusPoints,
+    decimal AppliedMultiplier,
+    Guid? CampaignId,
+    string? CampaignName);
