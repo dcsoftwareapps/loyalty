@@ -1,7 +1,9 @@
 using KBeauty.Loyalty.Application.Admin.Queries.GetAdminDashboard;
 using KBeauty.Loyalty.Application.Levels.Commands.RecalculateLevels;
+using KBeauty.Loyalty.Application.Notifications.BirthdayBenefit;
 using KBeauty.Loyalty.Application.Notifications.MonthlyProduct;
 using KBeauty.Loyalty.Application.Notifications.PointsExpiration;
+using KBeauty.Loyalty.Application.Notifications.Queries.ListBirthdayBenefitNotificationCandidates;
 using KBeauty.Loyalty.Application.Notifications.Queries.ListMonthlyProductNotificationCandidates;
 using KBeauty.Loyalty.Application.Notifications.Queries.ListPointExpirationNotificationCandidates;
 using KBeauty.Loyalty.Application.Points.Commands.ExpirePoints;
@@ -91,6 +93,24 @@ public sealed class AdminController : ControllerBase
             ct);
         if (result.IsFailure)
             return BadRequest(new ProblemDetails { Title = "Avisos de Producto del mes", Detail = result.Error });
+
+        return Ok(result.Value);
+    }
+
+    /// <summary>GET /api/admin/customers/birthday-notification-candidates - vista previa de avisos de cumpleanos.</summary>
+    [HttpGet("customers/birthday-notification-candidates")]
+    [ProducesResponseType(typeof(BirthdayBenefitNotificationPreviewDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
+    public async Task<IActionResult> GetBirthdayNotificationCandidates(
+        [FromQuery] string timeZoneId = "America/Tijuana",
+        [FromQuery] bool includeAlreadyNotified = false,
+        CancellationToken ct = default)
+    {
+        var result = await _sender.Send(
+            new ListBirthdayBenefitNotificationCandidatesQuery(timeZoneId, includeAlreadyNotified),
+            ct);
+        if (result.IsFailure)
+            return BadRequest(new ProblemDetails { Title = "Avisos de cumpleanos", Detail = result.Error });
 
         return Ok(result.Value);
     }

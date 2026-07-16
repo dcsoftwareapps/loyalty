@@ -9,4 +9,5 @@ public sealed class LoyaltyNotificationOptions
     public int PollIntervalSeconds { get; init; } = 60;
     public int BatchSize { get; init; } = 25;
     public int MaxAttempts { get; init; } = 3;
+    public int VisibleEventPriorityHours { get; init; } = 24;
 }

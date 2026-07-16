@@ -109,22 +109,29 @@ internal sealed class PassGeneratorService : IPassGeneratorService
 
         var progress = BuildLevelProgress(card);
         var displayName = GetWalletDisplayName(customer);
-        var levelChangeMessage = BuildLevelChangeMessage(card, walletContext.LevelChange);
+        var levelChangeMessage = walletContext.RecentVisibleEvent?.Type == NotificationType.LevelChanged
+            ? BuildLevelChangeMessage(card, walletContext.LevelChange)
+            : null;
         var auxiliaryFields = BuildAuxiliaryFields(
             progress,
             levelChangeMessage,
-            walletContext.PointsExpiring,
-            walletContext.MonthlyProduct);
-        var backFields = BuildBackFields(progress, walletContext.News, walletContext.MonthlyProduct);
+            walletContext);
+        var backFields = BuildBackFields(
+            progress,
+            walletContext.News,
+            walletContext.MonthlyProduct,
+            walletContext.BirthdayBenefit);
 
         _logger.LogInformation(
-            "Apple Wallet pass fields for serial {Serial}: levelKey={LevelFieldKey}, levelValue={LevelValue}, levelChangeMessageIncluded={LevelChangeMessageIncluded}, pointsExpiringIncluded={PointsExpiringIncluded}, monthlyProductIncluded={MonthlyProductIncluded}.",
+            "Apple Wallet pass fields for serial {Serial}: levelKey={LevelFieldKey}, levelValue={LevelValue}, levelChangeMessageIncluded={LevelChangeMessageIncluded}, pointsExpiringIncluded={PointsExpiringIncluded}, monthlyProductIncluded={MonthlyProductIncluded}, birthdayBenefitIncluded={BirthdayBenefitIncluded}, recentVisibleEvent={RecentVisibleEvent}.",
             card.SerialNumber,
             LevelFieldKey,
             progress.LevelShortText,
             levelChangeMessage is not null,
             walletContext.PointsExpiring is not null,
-            walletContext.MonthlyProduct is not null);
+            walletContext.MonthlyProduct is not null,
+            walletContext.BirthdayBenefit is not null,
+            walletContext.RecentVisibleEvent?.Type.ToString() ?? "none");
 
         return new
         {
@@ -168,11 +175,10 @@ internal sealed class PassGeneratorService : IPassGeneratorService
         };
     }
 
-    private static object[] BuildAuxiliaryFields(
+    private object[] BuildAuxiliaryFields(
         PassProgress progress,
         string? levelChangeMessage,
-        WalletPointsExpiringMessage? pointsExpiring,
-        WalletMonthlyProductMessage? monthlyProduct)
+        WalletNotificationContext walletContext)
     {
         var fields = new List<object>
         {
@@ -196,29 +202,136 @@ internal sealed class PassGeneratorService : IPassGeneratorService
 
         fields.Add(new { key = "next", label = "PR\u00d3XIMO", value = progress.NextLevelText });
 
-        if (monthlyProduct is not null)
+        object? temporalField;
+        TemporalFieldSelection selection;
+        var source = "RecentVisibleEvent";
+
+        if (walletContext.RecentVisibleEvent is not null)
         {
-            fields.Add(new
-            {
-                key = MonthlyProductFieldKey,
-                label = "PRODUCTO DEL MES",
-                value = monthlyProduct.Value,
-                changeMessage = monthlyProduct.ChangeMessage
-            });
+            temporalField = BuildRecentVisibleField(walletContext, out selection);
+        }
+        else
+        {
+            temporalField = BuildPermanentTemporalField(walletContext, out selection);
+            source = temporalField is null ? "None" : "FallbackPermanent";
         }
 
-        if (pointsExpiring is not null)
+        _logger.LogInformation(
+            "Wallet temporal field selection: RecentVisibleEvent={RecentVisibleEvent}, TemporaryFieldSource={TemporaryFieldSource}, TemporaryFieldKey={TemporaryFieldKey}, TemporaryFieldValue={TemporaryFieldValue}, ChangeMessageIncluded={ChangeMessageIncluded}.",
+            walletContext.RecentVisibleEvent is null ? "null" : walletContext.RecentVisibleEvent.Type.ToString(),
+            source,
+            selection.Key ?? "none",
+            selection.Value ?? "none",
+            selection.ChangeMessageIncluded);
+
+        if (temporalField is not null)
+            fields.Add(temporalField);
+
+        return fields.ToArray();
+    }
+
+    private static object? BuildRecentVisibleField(
+        WalletNotificationContext walletContext,
+        out TemporalFieldSelection selection)
+    {
+        selection = TemporalFieldSelection.None;
+        if (walletContext.RecentVisibleEvent is null)
+            return null;
+
+        return walletContext.RecentVisibleEvent.Type switch
         {
-            fields.Add(new
+            NotificationType.LevelChanged => null,
+            NotificationType.BirthdayBenefitStarted when walletContext.BirthdayBenefit is not null =>
+                BuildBirthdayBenefitField(walletContext.BirthdayBenefit, includeChangeMessage: true, out selection),
+            NotificationType.PointsExpiring when walletContext.PointsExpiring is not null =>
+                BuildPointsExpiringField(walletContext.PointsExpiring, includeChangeMessage: true, out selection),
+            NotificationType.MonthlyProductStarted when walletContext.MonthlyProduct is not null =>
+                BuildMonthlyProductField(walletContext.MonthlyProduct, includeChangeMessage: true, out selection),
+            _ => null
+        };
+    }
+
+    private static object? BuildPermanentTemporalField(
+        WalletNotificationContext walletContext,
+        out TemporalFieldSelection selection)
+    {
+        selection = TemporalFieldSelection.None;
+        if (walletContext.PointsExpiring is not null)
+            return BuildPointsExpiringField(walletContext.PointsExpiring, includeChangeMessage: false, out selection);
+
+        if (walletContext.BirthdayBenefit is not null)
+            return BuildBirthdayBenefitField(walletContext.BirthdayBenefit, includeChangeMessage: false, out selection);
+
+        if (walletContext.MonthlyProduct is not null)
+            return BuildMonthlyProductField(walletContext.MonthlyProduct, includeChangeMessage: false, out selection);
+
+        return null;
+    }
+
+    private static object BuildPointsExpiringField(
+        WalletPointsExpiringMessage pointsExpiring,
+        bool includeChangeMessage,
+        out TemporalFieldSelection selection)
+    {
+        selection = new TemporalFieldSelection(PointsExpiringFieldKey, pointsExpiring.Value, includeChangeMessage);
+        return includeChangeMessage
+            ? new
             {
                 key = PointsExpiringFieldKey,
                 label = "POR EXPIRAR",
                 value = pointsExpiring.Value,
                 changeMessage = pointsExpiring.ChangeMessage
-            });
-        }
+            }
+            : new
+            {
+                key = PointsExpiringFieldKey,
+                label = "POR EXPIRAR",
+                value = pointsExpiring.Value
+            };
+    }
 
-        return fields.ToArray();
+    private static object BuildBirthdayBenefitField(
+        WalletBirthdayBenefitMessage birthdayBenefit,
+        bool includeChangeMessage,
+        out TemporalFieldSelection selection)
+    {
+        selection = new TemporalFieldSelection(BirthdayBenefitFieldKey, birthdayBenefit.Value, includeChangeMessage);
+        return includeChangeMessage
+            ? new
+            {
+                key = BirthdayBenefitFieldKey,
+                label = "CUMPLEA\u00d1OS",
+                value = birthdayBenefit.Value,
+                changeMessage = birthdayBenefit.ChangeMessage
+            }
+            : new
+            {
+                key = BirthdayBenefitFieldKey,
+                label = "CUMPLEA\u00d1OS",
+                value = birthdayBenefit.Value
+            };
+    }
+
+    private static object BuildMonthlyProductField(
+        WalletMonthlyProductMessage monthlyProduct,
+        bool includeChangeMessage,
+        out TemporalFieldSelection selection)
+    {
+        selection = new TemporalFieldSelection(MonthlyProductFieldKey, monthlyProduct.Value, includeChangeMessage);
+        return includeChangeMessage
+            ? new
+            {
+                key = MonthlyProductFieldKey,
+                label = "PRODUCTO DEL MES",
+                value = monthlyProduct.Value,
+                changeMessage = monthlyProduct.ChangeMessage
+            }
+            : new
+            {
+                key = MonthlyProductFieldKey,
+                label = "PRODUCTO DEL MES",
+                value = monthlyProduct.Value
+            };
     }
 
     private string? BuildLevelChangeMessage(LoyaltyCard card, WalletNotificationMessage? walletMessage)
@@ -292,7 +405,8 @@ internal sealed class PassGeneratorService : IPassGeneratorService
     private static object[] BuildBackFields(
         PassProgress progress,
         WalletNotificationMessage? walletMessage,
-        WalletMonthlyProductMessage? monthlyProduct)
+        WalletMonthlyProductMessage? monthlyProduct,
+        WalletBirthdayBenefitMessage? birthdayBenefit)
     {
         var fields = new List<object>();
         if (walletMessage is not null)
@@ -312,6 +426,16 @@ internal sealed class PassGeneratorService : IPassGeneratorService
                 key = "monthly_product_detail",
                 label = "PRODUCTO DEL MES",
                 value = monthlyProduct.BackValue
+            });
+        }
+
+        if (birthdayBenefit is not null)
+        {
+            fields.Add(new
+            {
+                key = "birthday_benefit_detail",
+                label = "BENEFICIO DE CUMPLEA\u00d1OS",
+                value = birthdayBenefit.BackValue
             });
         }
 
@@ -582,4 +706,12 @@ internal sealed class PassGeneratorService : IPassGeneratorService
         string PointsText,
         string NextLevelText,
         string RemainingPointsText);
+
+    private sealed record TemporalFieldSelection(
+        string? Key,
+        string? Value,
+        bool ChangeMessageIncluded)
+    {
+        public static TemporalFieldSelection None { get; } = new(null, null, false);
+    }
 }

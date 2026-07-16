@@ -1377,3 +1377,144 @@ Caso 8 - Pass:
 3. Confirmar que los endpoints `/v1/*` siguen intactos.
 4. Confirmar que la fecha del reverso usa fecha local de Tijuana.
 5. Confirmar que el frente no se rediseno.
+
+## Beneficio de cumpleanos visible - Fase 5.5
+
+Fase 5.5 agrega notificacion automatica Apple Wallet cuando una clienta entra en su mes de cumpleanos.
+
+La regla existente se conserva:
+
+- el beneficio aplica durante todo el mes de cumpleanos;
+- el multiplicador viene de `ProgramConfig:birthday_multiplier`;
+- una compra usa el mayor multiplicador entre cumpleanos y campana;
+- los multiplicadores no se acumulan.
+
+Flujo:
+
+```text
+LoyaltyMaintenanceBackgroundService
+  ->
+CreateBirthdayBenefitStartedNotificationsCommand
+  ->
+LoyaltyNotification BirthdayBenefitStarted
+  ->
+AppleWalletNotificationChannelProcessor
+  ->
+APNs PassKit
+  ->
+Wallet descarga pass actualizado
+```
+
+Preview administrativo:
+
+```powershell
+Invoke-RestMethod `
+  -Method Get `
+  -Uri "https://localhost:55128/api/admin/customers/birthday-notification-candidates?timeZoneId=America/Tijuana"
+```
+
+El preview no crea notificaciones ni envia APNs.
+
+Campo esperado en el pass cuando aplica y no hay campo temporal de mayor prioridad:
+
+```json
+{
+  "key": "birthday_benefit",
+  "label": "CUMPLEAÑOS",
+  "value": "2x puntos",
+  "changeMessage": "🎂 Tu beneficio de cumpleaños está activo: %@"
+}
+```
+
+Prioridad visual de campos temporales:
+
+Primero se evalua si existe un evento visible reciente dentro de `LoyaltyNotifications:VisibleEventPriorityHours`.
+
+Prioridad de eventos recientes:
+
+1. `LevelChanged`;
+2. `BirthdayBenefitStarted`;
+3. `PointsExpiring`;
+4. `MonthlyProductStarted`;
+5. `PointCampaignStarted`;
+6. `Custom`.
+
+Cuando no hay evento reciente, se usa la prioridad permanente:
+
+1. `points_expiring`;
+2. `birthday_benefit`;
+3. `monthly_product`.
+
+El fallback permanente no agrega `changeMessage`; asi se evita una segunda alerta cuando el frente vuelve de `birthday_benefit` a `points_expiring`.
+
+### Escenarios manuales
+
+Caso 1 - Cliente en mes de cumpleanos:
+
+1. Configurar `DateOfBirth` del cliente con el mes local actual.
+2. Confirmar que tiene pass instalado y `DeviceRegistration`.
+3. Ejecutar preview.
+4. Confirmar candidato con `AlreadyNotified=false` y multiplicador correcto.
+5. Ejecutar mantenimiento diario o usar `RunOnStartup=true` temporalmente.
+6. Confirmar:
+   - `LoyaltyNotification` tipo `BirthdayBenefitStarted`;
+   - `NotificationDelivery` Apple Wallet;
+   - APNs;
+   - refresh del pass;
+   - campo `birthday_benefit`;
+   - backField de beneficio de cumpleanos.
+
+Caso 2 - Idempotencia:
+
+1. Ejecutar scheduler otra vez.
+2. Confirmar `NotificationsCreated=0`.
+3. Confirmar `AlreadyNotified=1`.
+4. Confirmar que no hay APNs duplicado.
+
+Caso 3 - Fuera del mes:
+
+1. Cambiar `DateOfBirth` a otro mes.
+2. Refrescar pass.
+3. Confirmar que `birthday_benefit` desaparece.
+
+Caso 4 - Sin DeviceRegistration:
+
+1. Cliente activo sin pass instalado.
+2. Ejecutar preview.
+3. Confirmar que no aparece como candidato.
+
+Caso 5 - Campana y cumpleanos:
+
+1. Crear campana con multiplicador mayor.
+2. Confirmar que Wallet sigue mostrando beneficio de cumpleanos.
+3. Confirmar que una compra usa el multiplicador mayor y no suma multiplicadores.
+
+Caso 6 - Cambio de ano:
+
+1. Confirmar que el correlation del ano siguiente cambia.
+2. Confirmar que permite nueva notificacion anual.
+
+Caso 7 - Visual:
+
+1. Probar cumpleanos solo.
+2. Probar cumpleanos + puntos por expirar.
+3. Probar cumpleanos + Producto del mes.
+4. Probar los tres simultaneamente.
+5. Confirmar prioridad temporal del frente.
+
+Caso 8 - Fin de prioridad reciente:
+
+1. Simular `ProcessedAt` anterior a `VisibleEventPriorityHours`.
+2. Refrescar pass.
+3. Confirmar que vuelve el estado permanente mas relevante.
+4. Confirmar que no se crea otra `LoyaltyNotification`.
+5. Confirmar que no se crea otro `NotificationDelivery`.
+6. Confirmar que no se envia APNs adicional.
+
+Antes de commit final, dejar:
+
+```json
+"LoyaltyMaintenance": {
+  "RunOnStartup": false
+}
+```

@@ -2001,6 +2001,7 @@ Orden actual:
 2. Recalculo de niveles
 3. Avisos de puntos por expirar
 4. Avisos de Producto del mes
+5. Avisos de beneficio de cumpleanos
 ```
 
 No se creo otro `BackgroundService`.
@@ -2112,4 +2113,174 @@ Fase 5.4 no requiere migracion nueva. Reutiliza:
 - `RewardCatalogItems`;
 - `LoyaltyNotifications`;
 - `NotificationDeliveries`;
+- `DeviceRegistrations`.
+
+# Fase 5.5 - Beneficio de cumpleanos visible en Wallet
+
+Fase 5.5 esta implementada y pendiente de validacion manual.
+
+El objetivo es comunicar en Apple Wallet el beneficio de cumpleanos que ya existia en la regla de acumulacion de puntos.
+
+## Regla actual preservada
+
+La regla existente vive en `AddPointsHandler`:
+
+- usa `Customer.DateOfBirth`;
+- evalua `customer.DateOfBirth.IsBirthMonth(now)`;
+- `IsBirthMonth` compara el mes de nacimiento contra el mes actual;
+- el beneficio aplica durante todo el mes de cumpleanos;
+- el multiplicador viene de `ProgramConfig` con key `birthday_multiplier`;
+- si hay campana de puntos, se usa el mayor multiplicador entre cumpleanos y campana;
+- no se acumulan multiplicadores.
+
+Fase 5.5 no cambia esa regla. Solo comunica el beneficio.
+
+## Zona horaria
+
+La deteccion de candidatos usa fecha local de tienda en `America/Tijuana`.
+
+La regla es mensual, por lo que una clienta nacida el 29 de febrero conserva febrero como mes de cumpleanos. No se requiere regla especial de dia en anos no bisiestos.
+
+`DisplayUntilUtc` se calcula como el inicio del primer dia del mes siguiente en `America/Tijuana`, convertido a UTC.
+
+## Destinatarios
+
+Se consideran solo:
+
+- `Customer.IsActive = true`;
+- `LoyaltyCard.IsActive = true`;
+- `DateOfBirth` con mes igual al mes local actual;
+- al menos un `DeviceRegistration`.
+
+No se crean notificaciones para clientas sin pass instalado en esta fase.
+
+## Idempotencia
+
+CorrelationId:
+
+```text
+birthday-benefit:{serialNumber}:{year}
+```
+
+Ejemplo:
+
+```text
+birthday-benefit:KB-JHYL7KK:2026
+```
+
+Esto permite una sola notificacion por tarjeta y ano.
+
+## Scheduler
+
+El scheduler diario ejecuta ahora:
+
+```text
+1. ExpirePointsCommand
+2. RecalculateLevelsCommand
+3. CreatePointExpirationNotificationsCommand
+4. CreateMonthlyProductStartedNotificationsCommand
+5. CreateBirthdayBenefitStartedNotificationsCommand
+```
+
+No se creo otro `BackgroundService`.
+
+## Query administrativa
+
+Endpoint de preview:
+
+```text
+GET /api/admin/customers/birthday-notification-candidates
+```
+
+Query params:
+
+- `timeZoneId`: default `America/Tijuana`;
+- `includeAlreadyNotified`: default `false`.
+
+El preview devuelve candidatos y no crea notificaciones, no envia APNs y no modifica base.
+
+## Apple Wallet
+
+Campo estable:
+
+```json
+{
+  "key": "birthday_benefit",
+  "label": "CUMPLEAÑOS",
+  "value": "2x puntos",
+  "changeMessage": "🎂 Tu beneficio de cumpleaños está activo: %@"
+}
+```
+
+Politica visual del frente:
+
+1. Campos principales siempre visibles:
+   - `points`;
+   - `level`;
+   - `next`.
+2. Solo un campo temporal aparece en `auxiliaryFields`.
+3. Si existe un evento visible reciente dentro de `LoyaltyNotifications:VisibleEventPriorityHours`, ese evento gana temporalmente para permitir `changeMessage`.
+4. Prioridad de eventos recientes:
+   - `LevelChanged`;
+   - `BirthdayBenefitStarted`;
+   - `PointsExpiring`;
+   - `MonthlyProductStarted`;
+   - `PointCampaignStarted`;
+   - `Custom`.
+5. Cuando no hay evento reciente, se usa prioridad permanente:
+   - `points_expiring`;
+   - `birthday_benefit`;
+   - `monthly_product`.
+
+Los detalles de beneficio de cumpleanos y Producto del mes siguen disponibles en `backFields` cuando estan activos.
+
+El fallback permanente no agrega `changeMessage`; de esta forma, cuando termina la ventana reciente y el frente vuelve a mostrar `points_expiring`, no se intenta disparar otra alerta visible ni se envia APNs adicional.
+
+Configuracion:
+
+```json
+"LoyaltyNotifications": {
+  "VisibleEventPriorityHours": 24
+}
+```
+
+Si la configuracion es invalida, el sistema usa 24 horas y no detiene la API.
+
+## Reverso
+
+Mientras el beneficio este activo:
+
+```text
+BENEFICIO DE CUMPLEAÑOS
+
+Este mes tienes 2x puntos en tus compras.
+
+Disponible hasta 31 jul 2026.
+```
+
+## Lectura dinamica
+
+`IWalletNotificationReadService` devuelve `WalletNotificationContext.BirthdayBenefit`.
+
+`WalletNotificationReadService` verifica en tiempo real:
+
+- tarjeta activa;
+- cliente activo;
+- mes local de cumpleanos activo;
+- notificacion `BirthdayBenefitStarted` activa y procesada;
+- multiplicador actual desde `ProgramConfig`.
+
+Si termina el mes, el campo desaparece aunque exista historial.
+
+Si cambia `birthday_multiplier` durante el mes, el pass muestra el multiplicador actual que aplicaria hoy. No se crea una segunda notificacion automaticamente por cambiar la configuracion.
+
+## Migracion
+
+Fase 5.5 no requiere migracion nueva. Reutiliza:
+
+- `Customer.DateOfBirth`;
+- `ProgramConfig`;
+- `LoyaltyNotifications`;
+- `NotificationDeliveries`;
+- `NotificationType.BirthdayBenefitStarted`;
 - `DeviceRegistrations`.

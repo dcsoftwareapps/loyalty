@@ -10,7 +10,9 @@ public sealed record WalletNotificationContext(
     WalletNotificationMessage? News,
     WalletNotificationMessage? LevelChange,
     WalletPointsExpiringMessage? PointsExpiring,
-    WalletMonthlyProductMessage? MonthlyProduct);
+    WalletMonthlyProductMessage? MonthlyProduct,
+    WalletBirthdayBenefitMessage? BirthdayBenefit,
+    WalletRecentVisibleEvent? RecentVisibleEvent);
 
 public sealed record WalletNotificationMessage(
     Guid Id,
@@ -36,3 +38,18 @@ public sealed record WalletMonthlyProductMessage(
     string Value,
     string ChangeMessage,
     string BackValue);
+
+public sealed record WalletBirthdayBenefitMessage(
+    int BenefitYear,
+    int Multiplier,
+    DateOnly DisplayUntilLocalDate,
+    string Value,
+    string ChangeMessage,
+    string BackValue);
+
+public sealed record WalletRecentVisibleEvent(
+    Guid NotificationId,
+    KBeauty.Loyalty.Domain.Enums.NotificationType Type,
+    DateTime CreatedAt,
+    DateTime? ProcessedAt,
+    DateTime DisplayUntilUtc);

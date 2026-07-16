@@ -2,6 +2,7 @@ using System.Diagnostics;
 using System.Globalization;
 using KBeauty.Loyalty.API.Configuration;
 using KBeauty.Loyalty.Application.Levels.Commands.RecalculateLevels;
+using KBeauty.Loyalty.Application.Notifications.Commands.CreateBirthdayBenefitStartedNotifications;
 using KBeauty.Loyalty.Application.Notifications.Commands.CreateMonthlyProductStartedNotifications;
 using KBeauty.Loyalty.Application.Notifications.Commands.CreatePointExpirationNotifications;
 using KBeauty.Loyalty.Application.Points.Commands.ExpirePoints;
@@ -92,6 +93,7 @@ public sealed class LoyaltyMaintenanceBackgroundService : BackgroundService
         await RunLevelRecalculationAsync(sender, ct);
         await RunPointExpirationNotificationsAsync(sender, options, ct);
         await RunMonthlyProductNotificationsAsync(sender, options, ct);
+        await RunBirthdayBenefitNotificationsAsync(sender, options, ct);
 
         stopwatch.Stop();
         _logger.LogInformation(
@@ -169,6 +171,42 @@ public sealed class LoyaltyMaintenanceBackgroundService : BackgroundService
         catch (Exception ex)
         {
             _logger.LogError(ex, "Unexpected error running monthly product notification scan.");
+        }
+    }
+
+    private async Task RunBirthdayBenefitNotificationsAsync(
+        ISender sender,
+        LoyaltyMaintenanceOptions options,
+        CancellationToken ct)
+    {
+        try
+        {
+            var result = await sender.Send(
+                new CreateBirthdayBenefitStartedNotificationsCommand(OperatorId, options.TimeZoneId),
+                ct);
+            if (result.IsFailure)
+            {
+                _logger.LogError("Birthday benefit notification scan failed: {Error}", result.Error);
+                return;
+            }
+
+            var value = result.Value;
+            _logger.LogInformation(
+                "Birthday benefit notification result: localDate={LocalDate}, customersEligible={CustomersEligible}, notificationsCreated={NotificationsCreated}, alreadyNotified={AlreadyNotified}.",
+                value.LocalDate,
+                value.CustomersEligible,
+                value.NotificationsCreated,
+                value.AlreadyNotified);
+
+            LogWarnings("Birthday benefit notifications", value.Warnings);
+        }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Unexpected error running birthday benefit notification scan.");
         }
     }
 

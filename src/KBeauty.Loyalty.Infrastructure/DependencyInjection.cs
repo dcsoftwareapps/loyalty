@@ -89,6 +89,7 @@ public static class DependencyInjection
         services.AddScoped<IWalletNotificationReadService, WalletNotificationReadService>();
         services.AddScoped<IPointsExpirationNotificationReadService, PointsExpirationNotificationReadService>();
         services.AddScoped<IMonthlyProductNotificationReadService, MonthlyProductNotificationReadService>();
+        services.AddScoped<IBirthdayBenefitNotificationReadService, BirthdayBenefitNotificationReadService>();
         services.AddScoped<ILoyaltyNotificationService, LoyaltyNotificationService>();
         services.AddScoped<INotificationChannelProcessor, AppleWalletNotificationChannelProcessor>();
     }
