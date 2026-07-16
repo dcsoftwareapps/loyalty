@@ -1176,3 +1176,204 @@ changeMessage = 🎉 Ahora eres cliente %@
 10. Probar downgrade y confirmar que no se incluye `changeMessage` de felicitacion.
 
 No se debe intentar enviar texto dentro del payload APNs. El texto siempre vive dentro del `.pkpass`.
+
+## Aviso de puntos por expirar - Fase 5.3
+
+El mantenimiento diario ahora busca clientas con puntos que expiran exactamente dentro de 15 dias calendario en `America/Tijuana`.
+
+El flujo es:
+
+```text
+LoyaltyMaintenanceBackgroundService
+  ↓
+ExpirePointsCommand
+  ↓
+RecalculateLevelsCommand
+  ↓
+CreatePointExpirationNotificationsCommand
+  ↓
+LoyaltyNotification PointsExpiring
+  ↓
+AppleWalletNotificationChannelProcessor
+  ↓
+APNs PassKit
+  ↓
+Wallet descarga pass actualizado
+```
+
+Preview administrativo:
+
+```powershell
+Invoke-RestMethod `
+  -Method Get `
+  -Uri "https://localhost:55128/api/admin/points/expiration-notification-candidates?daysAhead=15&timeZoneId=America/Tijuana"
+```
+
+El preview no crea notificaciones ni envia APNs.
+
+Campo esperado en el pass cuando aplica:
+
+```json
+{
+  "key": "points_expiring",
+  "label": "POR EXPIRAR",
+  "value": "250 pts",
+  "changeMessage": "⚠️ %@ vencerán pronto."
+}
+```
+
+### Escenarios manuales
+
+Caso 1 - Crear aviso:
+
+1. Preparar un `PointLot` con `RemainingAmount > 0`.
+2. Ajustar `ExpiresAt` para que caiga dentro del dia local de Tijuana exactamente 15 dias adelante.
+3. Ejecutar mantenimiento diario o usar `RunOnStartup=true` temporalmente.
+4. Confirmar:
+   - una `LoyaltyNotification` tipo `PointsExpiring`;
+   - una `NotificationDelivery`;
+   - APNs PassKit;
+   - Wallet descarga el pass;
+   - `points_expiring` aparece en el pass.
+
+Caso 2 - Idempotencia:
+
+1. Ejecutar mantenimiento otra vez el mismo dia.
+2. Confirmar que no se crea otra notificacion para el mismo serial y fecha.
+
+Caso 3 - Canje antes de expirar:
+
+1. Consumir todos los puntos de los lotes proximos a expirar.
+2. Refrescar Wallet.
+3. Confirmar que `points_expiring` desaparece.
+
+Caso 4 - Expiracion:
+
+1. Dejar que los puntos expiren.
+2. Ejecutar mantenimiento.
+3. Confirmar que `points_expiring` desaparece despues de `ExpirePointsCommand`.
+
+Caso 5 - Lotes multiples:
+
+1. Crear dos lotes del mismo cliente que expiren el mismo dia local.
+2. Confirmar que se crea una sola notificacion con la suma.
+
+No se implementan email, SMS, WhatsApp, campanas ni cumpleanos en esta fase.
+
+## Producto del mes visible - Fase 5.4
+
+Fase 5.4 agrega notificacion automatica Apple Wallet cuando existe un Producto del mes activo y vigente.
+
+Flujo:
+
+```text
+LoyaltyMaintenanceBackgroundService
+  ->
+CreateMonthlyProductStartedNotificationsCommand
+  ->
+LoyaltyNotification MonthlyProductStarted
+  ->
+AppleWalletNotificationChannelProcessor
+  ->
+APNs PassKit
+  ->
+Wallet descarga pass actualizado
+```
+
+Preview administrativo:
+
+```powershell
+Invoke-RestMethod `
+  -Method Get `
+  -Uri "https://localhost:55128/api/admin/rewards/monthly-product-notification-candidates?timeZoneId=America/Tijuana"
+```
+
+El preview no crea notificaciones ni envia APNs.
+
+Campo esperado en el pass cuando aplica:
+
+```json
+{
+  "key": "monthly_product",
+  "label": "PRODUCTO DEL MES",
+  "value": "Centella Ampoule",
+  "changeMessage": "🎁 Nuevo Producto del mes: %@"
+}
+```
+
+Detalle esperado en reverso:
+
+```text
+PRODUCTO DEL MES
+
+Centella Ampoule
+
+700 pts
+
+Disponible hasta 31 jul 2026
+```
+
+### Escenarios manuales
+
+Caso 1 - Producto vigente:
+
+1. Crear un reward con `IsMonthlyProduct = true`, `IsActive = true`, `ValidFrom <= nowUtc` y `ValidTo >= nowUtc`.
+2. Confirmar que al menos una tarjeta activa tenga `DeviceRegistration`.
+3. Ejecutar preview.
+4. Confirmar que aparece producto vigente y tarjetas candidatas.
+5. Activar `LoyaltyMaintenance:RunOnStartup=true` temporalmente o esperar scheduler.
+6. Confirmar:
+   - una `LoyaltyNotification` tipo `MonthlyProductStarted` por tarjeta elegible;
+   - una `NotificationDelivery` Apple Wallet;
+   - APNs PassKit;
+   - Wallet descarga el pass;
+   - el campo `monthly_product` aparece.
+
+Caso 2 - Idempotencia:
+
+1. Ejecutar scheduler otra vez.
+2. Confirmar `NotificationsCreated = 0`.
+3. Confirmar `AlreadyNotified > 0`.
+4. Confirmar que no hay duplicados por `CorrelationId`.
+
+Caso 3 - Producto futuro:
+
+1. Crear Producto del mes activo con `ValidFrom` futuro.
+2. Ejecutar preview.
+3. Confirmar que no hay producto vigente ni candidatos.
+4. Confirmar que el pass no muestra `monthly_product`.
+
+Caso 4 - Producto vencido:
+
+1. Ajustar `ValidTo` al pasado.
+2. Refrescar Wallet.
+3. Confirmar que `monthly_product` desaparece.
+
+Caso 5 - Producto inactivo:
+
+1. Desactivar el Producto del mes.
+2. Refrescar Wallet.
+3. Confirmar que `monthly_product` desaparece.
+
+Caso 6 - Cambio de producto:
+
+1. Terminar Producto A.
+2. Crear o activar Producto B vigente.
+3. Ejecutar scheduler.
+4. Confirmar nueva notificacion con correlation del reward B.
+5. Confirmar que el value del campo cambia y Wallet puede mostrar alerta.
+
+Caso 7 - Sin DeviceRegistration:
+
+1. Crear cliente activo sin pass instalado.
+2. Ejecutar preview.
+3. Confirmar que no aparece como candidato.
+4. Documentar que no se crea notificacion porque no hay canal Apple Wallet real.
+
+Caso 8 - Pass:
+
+1. Descargar `.pkpass`.
+2. Confirmar manifest y firma.
+3. Confirmar que los endpoints `/v1/*` siguen intactos.
+4. Confirmar que la fecha del reverso usa fecha local de Tijuana.
+5. Confirmar que el frente no se rediseno.

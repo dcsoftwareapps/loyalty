@@ -15,10 +15,12 @@
 - Fase 3.8 - Campanas de puntos: Completada
 - Fase 5.1 - Motor base de notificaciones: Implementada, pendiente de validacion manual
 - Fase 5.2 - Notificaciones visibles Apple Wallet con changeMessage: Implementada, pendiente de validacion manual
+- Fase 5.3 - Aviso de puntos por expirar: Implementada, pendiente de validacion manual
+- Fase 5.4 - Producto del mes visible en Wallet: Implementada, pendiente de validacion manual
 
 ## Siguiente
 
-### Fase 5.3 - Canales externos de notificacion
+### Fase 5.5 - Canales externos de notificacion
 
 - Email.
 - SMS.

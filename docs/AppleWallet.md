@@ -1802,3 +1802,314 @@ GET /v1/passes/{passType}/{serial}
 ## Migracion
 
 Fase 5.2 no requiere cambios de esquema ni migracion nueva.
+
+# Fase 5.3 - Aviso de puntos por expirar
+
+Fase 5.3 esta implementada y pendiente de validacion manual.
+
+El objetivo es avisar automaticamente cuando una clienta tenga puntos disponibles que expiran exactamente dentro de 15 dias calendario en la zona `America/Tijuana`.
+
+## Regla
+
+Se crea una notificacion cuando existen `PointLots` que cumplen:
+
+- `RemainingAmount > 0`;
+- `ExpiresAt` cae dentro del dia local objetivo en `America/Tijuana`;
+- faltan exactamente 15 dias calendario locales;
+- no existe una notificacion previa con el mismo `CorrelationId`.
+
+No se crea una notificacion por lote. Los lotes se agrupan por tarjeta y fecha local de expiracion.
+
+Ejemplo:
+
+```text
+100 pts + 80 pts + 70 pts = 250 pts
+```
+
+La clienta recibe una sola notificacion:
+
+```text
+⚠️ 250 puntos vencerán en 15 días.
+
+Úsalos antes de perderlos.
+```
+
+## Idempotencia
+
+La idempotencia usa `LoyaltyNotification.CorrelationId`:
+
+```text
+points-expiring:{serialNumber}:{expirationDate:yyyyMMdd}
+```
+
+Si el scheduler corre varias veces el mismo dia, la segunda ejecucion detecta que ya existe la notificacion y no crea otra.
+
+## Scheduler
+
+Se integra al scheduler diario existente `LoyaltyMaintenanceBackgroundService`.
+
+Orden actual:
+
+```text
+1. Expiracion FIFO
+2. Recalculo de niveles
+3. Avisos de puntos por expirar
+```
+
+No se creo otro `BackgroundService`.
+
+## Query administrativa
+
+Endpoint de preview:
+
+```text
+GET /api/admin/points/expiration-notification-candidates
+```
+
+Query params:
+
+- `daysAhead`: default `15`;
+- `timeZoneId`: default `America/Tijuana`;
+- `includeAlreadyNotified`: default `false`.
+
+Este endpoint solo consulta candidatos. No crea notificaciones y no envia APNs.
+
+## Apple Wallet
+
+Se reutiliza el mecanismo de Fase 5.2.
+
+Mientras existan puntos proximos a expirar, el pass incluye un campo estable:
+
+```json
+{
+  "key": "points_expiring",
+  "label": "POR EXPIRAR",
+  "value": "250 pts",
+  "changeMessage": "⚠️ %@ vencerán pronto."
+}
+```
+
+Reglas:
+
+- la key es fija;
+- el value se calcula desde lotes reales actuales;
+- `changeMessage` usa `%@`;
+- si los puntos se gastan y `RemainingAmount` llega a `0`, el campo desaparece;
+- si los puntos expiran, el campo desaparece despues del mantenimiento diario;
+- no se usan timestamps ni valores artificiales para repetir alertas.
+
+La seccion `NOVEDADES` del reverso sigue existiendo como complemento visible.
+
+## Customer Detail
+
+La pantalla `/customers/{customerId}` conserva la seccion pequeña de proxima expiracion:
+
+```text
+Proxima expiracion
+250 puntos
+31 Jul 2026
+```
+
+Esa lectura se basa en lotes reales con `RemainingAmount > 0`.
+
+## Prueba manual
+
+Caso 1:
+
+1. Crear o ajustar un `PointLot` con `RemainingAmount > 0`.
+2. Configurar `ExpiresAt` para que caiga dentro del dia local de Tijuana exactamente 15 dias adelante.
+3. Ejecutar el scheduler o activar `RunOnStartup` temporalmente.
+4. Verificar:
+   - una `LoyaltyNotification` tipo `PointsExpiring`;
+   - una `NotificationDelivery`;
+   - APNs PassKit;
+   - Wallet descarga el pass;
+   - el campo `points_expiring` aparece con `changeMessage`.
+
+Caso 2:
+
+1. Ejecutar el scheduler otra vez el mismo dia.
+2. Confirmar que no se crea otra notificacion por el mismo serial y fecha.
+
+Caso 3:
+
+1. Consumir todos los puntos de esos lotes con un canje.
+2. Actualizar Wallet.
+3. Confirmar que `points_expiring` desaparece.
+
+Caso 4:
+
+1. Dejar que los puntos expiren.
+2. Ejecutar mantenimiento diario.
+3. Confirmar que `points_expiring` desaparece.
+
+Caso 5:
+
+1. Crear dos o mas lotes que expiren el mismo dia local.
+2. Confirmar que se crea una sola notificacion con la suma total.
+
+## Migracion
+
+Fase 5.3 no requiere migracion nueva. Reutiliza tablas de Fase 5.1:
+
+- `LoyaltyNotifications`;
+- `NotificationDeliveries`;
+- `PointLots`.
+
+# Fase 5.4 - Producto del mes visible en Wallet
+
+Fase 5.4 esta implementada y pendiente de validacion manual.
+
+El objetivo es avisar automaticamente cuando exista un Producto del mes activo y vigente, y mostrarlo en Apple Wallet mientras siga vigente.
+
+## Regla
+
+Un Producto del mes vigente cumple:
+
+- `RewardCatalogItem.IsMonthlyProduct = true`;
+- `RewardCatalogItem.IsActive = true`;
+- `RewardCatalogItem.ValidFrom <= nowUtc`;
+- `RewardCatalogItem.ValidTo >= nowUtc`;
+- `ValidFrom` y `ValidTo` existen.
+
+La persistencia y la comparacion de vigencia siguen en UTC. Las fechas visibles se muestran como fecha local en `America/Tijuana`.
+
+## Destinatarios
+
+La notificacion automatica se crea solo para tarjetas activas con cliente activo y al menos un `DeviceRegistration`.
+
+Decision tecnica: en esta fase no se crean notificaciones para tarjetas sin dispositivo registrado. El motivo es evitar registros logicos sin posibilidad real de entrega Apple Wallet. Si la clienta instala Wallet despues, el pass mostrara el Producto del mes vigente al descargarse porque la lectura del pass consulta el reward vigente dinamicamente.
+
+## Idempotencia
+
+La idempotencia usa `LoyaltyNotification.CorrelationId`:
+
+```text
+monthly-product-started:{rewardId:N}:{serialNumber}
+```
+
+Debe existir solo una notificacion por tarjeta y Producto del mes. Reiniciar la API o ejecutar el scheduler varias veces no debe duplicar notificaciones ni APNs.
+
+## Scheduler
+
+Se integra al scheduler diario existente `LoyaltyMaintenanceBackgroundService`.
+
+Orden actual:
+
+```text
+1. Expiracion FIFO
+2. Recalculo de niveles
+3. Avisos de puntos por expirar
+4. Avisos de Producto del mes
+```
+
+No se creo otro `BackgroundService`.
+
+## Query administrativa
+
+Endpoint de preview:
+
+```text
+GET /api/admin/rewards/monthly-product-notification-candidates
+```
+
+Query params:
+
+- `timeZoneId`: default `America/Tijuana`;
+- `includeAlreadyNotified`: default `false`.
+
+Este endpoint solo consulta candidatos. No crea notificaciones, no envia APNs y no modifica base.
+
+## Command
+
+El scheduler ejecuta:
+
+```text
+CreateMonthlyProductStartedNotificationsCommand
+```
+
+Response:
+
+- `RunAtUtc`;
+- `MonthlyProductId`;
+- `MonthlyProductName`;
+- `CardsEligible`;
+- `NotificationsCreated`;
+- `AlreadyNotified`;
+- `Warnings`.
+
+El command crea `LoyaltyNotification` con:
+
+- `Type = MonthlyProductStarted`;
+- `Title = Nuevo Producto del mes`;
+- `Message = dinamico segun producto, costo y fecha local`;
+- `Channels = [AppleWallet]`;
+- `Source = loyalty-maintenance`;
+- `DisplayUntilUtc = ValidToUtc`;
+- `ProcessImmediately = true`.
+
+## Apple Wallet
+
+Se agrega un campo estable al frente del pass cuando existe Producto del mes vigente:
+
+```json
+{
+  "key": "monthly_product",
+  "label": "PRODUCTO DEL MES",
+  "value": "Centella Ampoule",
+  "changeMessage": "🎁 Nuevo Producto del mes: %@"
+}
+```
+
+Ubicacion elegida: `auxiliaryFields`.
+
+Motivo: es la seccion mas segura para un `changeMessage` visible porque participa en el frente del pass con key estable. El frente ya contiene `points`, `level`, `next` y puede contener `points_expiring`; por eso se mantiene el detalle completo en el reverso y se evita redisenar el layout.
+
+Reglas:
+
+- la key es fija;
+- el campo aparece mientras el producto este vigente;
+- el campo desaparece cuando vence o se desactiva;
+- no se usa timestamp ni valor artificial;
+- Wallet no deberia repetir alerta si vuelve a descargar el mismo valor.
+
+## Reverso
+
+Mientras exista Producto del mes vigente, se agrega:
+
+```text
+PRODUCTO DEL MES
+
+Centella Ampoule
+
+700 pts
+
+Disponible hasta 31 jul 2026
+```
+
+El reverso usa la fecha local de `America/Tijuana`.
+
+## Lectura dinamica
+
+`IWalletNotificationReadService` ahora devuelve `WalletNotificationContext.MonthlyProduct`.
+
+`WalletNotificationReadService` consulta en tiempo real `RewardCatalogItems` y verifica:
+
+- activo;
+- vigente;
+- marcado como Producto del mes.
+
+Si el reward vence o se desactiva, el campo no aparece aunque exista una notificacion historica.
+
+## APNs
+
+No se envia APNs directo desde el scheduler. El command crea `LoyaltyNotification` y reutiliza `AppleWalletNotificationChannelProcessor`.
+
+## Migracion
+
+Fase 5.4 no requiere migracion nueva. Reutiliza:
+
+- `RewardCatalogItems`;
+- `LoyaltyNotifications`;
+- `NotificationDeliveries`;
+- `DeviceRegistrations`.

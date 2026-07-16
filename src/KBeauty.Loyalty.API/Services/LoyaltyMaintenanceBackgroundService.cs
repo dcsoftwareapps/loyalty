@@ -2,6 +2,8 @@ using System.Diagnostics;
 using System.Globalization;
 using KBeauty.Loyalty.API.Configuration;
 using KBeauty.Loyalty.Application.Levels.Commands.RecalculateLevels;
+using KBeauty.Loyalty.Application.Notifications.Commands.CreateMonthlyProductStartedNotifications;
+using KBeauty.Loyalty.Application.Notifications.Commands.CreatePointExpirationNotifications;
 using KBeauty.Loyalty.Application.Points.Commands.ExpirePoints;
 using MediatR;
 using Microsoft.Extensions.Options;
@@ -55,7 +57,7 @@ public sealed class LoyaltyMaintenanceBackgroundService : BackgroundService
             {
                 runOnStartupExecuted = true;
                 _logger.LogInformation("Running loyalty maintenance once on startup.");
-                await RunMaintenanceAsync(stoppingToken);
+                await RunMaintenanceAsync(options, stoppingToken);
             }
 
             var nextRunUtc = CalculateNextRunUtc(DateTimeOffset.UtcNow, runAtLocalTime, timeZone);
@@ -74,11 +76,11 @@ public sealed class LoyaltyMaintenanceBackgroundService : BackgroundService
             if (stoppingToken.IsCancellationRequested)
                 break;
 
-            await RunMaintenanceAsync(stoppingToken);
+            await RunMaintenanceAsync(options, stoppingToken);
         }
     }
 
-    private async Task RunMaintenanceAsync(CancellationToken ct)
+    private async Task RunMaintenanceAsync(LoyaltyMaintenanceOptions options, CancellationToken ct)
     {
         var stopwatch = Stopwatch.StartNew();
         _logger.LogInformation("Starting loyalty maintenance.");
@@ -88,11 +90,86 @@ public sealed class LoyaltyMaintenanceBackgroundService : BackgroundService
 
         await RunExpirationAsync(sender, ct);
         await RunLevelRecalculationAsync(sender, ct);
+        await RunPointExpirationNotificationsAsync(sender, options, ct);
+        await RunMonthlyProductNotificationsAsync(sender, options, ct);
 
         stopwatch.Stop();
         _logger.LogInformation(
             "Finished loyalty maintenance in {ElapsedMilliseconds} ms.",
             stopwatch.ElapsedMilliseconds);
+    }
+
+    private async Task RunPointExpirationNotificationsAsync(
+        ISender sender,
+        LoyaltyMaintenanceOptions options,
+        CancellationToken ct)
+    {
+        try
+        {
+            var result = await sender.Send(
+                new CreatePointExpirationNotificationsCommand(OperatorId, DaysAhead: 15, TimeZoneId: options.TimeZoneId),
+                ct);
+            if (result.IsFailure)
+            {
+                _logger.LogError("Point expiration notification scan failed: {Error}", result.Error);
+                return;
+            }
+
+            var value = result.Value;
+            _logger.LogInformation(
+                "Point expiration notification result: targetExpirationDate={TargetExpirationDate}, candidatesFound={CandidatesFound}, notificationsCreated={NotificationsCreated}, alreadyNotified={AlreadyNotified}.",
+                value.TargetExpirationDate,
+                value.CandidatesFound,
+                value.NotificationsCreated,
+                value.AlreadyNotified);
+
+            LogWarnings("Point expiration notifications", value.Warnings);
+        }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Unexpected error running point expiration notification scan.");
+        }
+    }
+
+    private async Task RunMonthlyProductNotificationsAsync(
+        ISender sender,
+        LoyaltyMaintenanceOptions options,
+        CancellationToken ct)
+    {
+        try
+        {
+            var result = await sender.Send(
+                new CreateMonthlyProductStartedNotificationsCommand(OperatorId, options.TimeZoneId),
+                ct);
+            if (result.IsFailure)
+            {
+                _logger.LogError("Monthly product notification scan failed: {Error}", result.Error);
+                return;
+            }
+
+            var value = result.Value;
+            _logger.LogInformation(
+                "Monthly product notification result: rewardId={RewardId}, product={ProductName}, cardsEligible={CardsEligible}, notificationsCreated={NotificationsCreated}, alreadyNotified={AlreadyNotified}.",
+                value.MonthlyProductId,
+                value.MonthlyProductName,
+                value.CardsEligible,
+                value.NotificationsCreated,
+                value.AlreadyNotified);
+
+            LogWarnings("Monthly product notifications", value.Warnings);
+        }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Unexpected error running monthly product notification scan.");
+        }
     }
 
     private async Task RunExpirationAsync(ISender sender, CancellationToken ct)

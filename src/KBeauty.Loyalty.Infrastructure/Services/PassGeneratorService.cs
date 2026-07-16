@@ -61,8 +61,8 @@ internal sealed class PassGeneratorService : IPassGeneratorService
         ArgumentNullException.ThrowIfNull(card);
         ArgumentNullException.ThrowIfNull(customer);
 
-        var walletMessage = await _walletNotifications.GetActiveMessageAsync(card.Id, ct);
-        var passJson = BuildPassJson(card, customer, walletMessage);
+        var walletContext = await _walletNotifications.GetActiveContextAsync(card.Id, ct);
+        var passJson = BuildPassJson(card, customer, walletContext);
         var passJsonBytes = JsonSerializer.SerializeToUtf8Bytes(passJson, PassJsonOpts);
         var assets = LoadPassAssets();
 
@@ -100,7 +100,7 @@ internal sealed class PassGeneratorService : IPassGeneratorService
     public Task<string> GetPassDownloadUrlAsync(string serialNumber, CancellationToken ct = default) =>
         Task.FromResult($"/api/customers/{serialNumber}/pass");
 
-    private object BuildPassJson(LoyaltyCard card, Customer customer, WalletNotificationMessage? walletMessage)
+    private object BuildPassJson(LoyaltyCard card, Customer customer, WalletNotificationContext walletContext)
     {
         EnsureRequiredOption(_options.PassTypeIdentifier, "Apple:PassTypeIdentifier");
         EnsureRequiredOption(_options.TeamIdentifier, "Apple:TeamIdentifier");
@@ -109,16 +109,22 @@ internal sealed class PassGeneratorService : IPassGeneratorService
 
         var progress = BuildLevelProgress(card);
         var displayName = GetWalletDisplayName(customer);
-        var levelChangeMessage = BuildLevelChangeMessage(card, walletMessage);
-        var auxiliaryFields = BuildAuxiliaryFields(progress, levelChangeMessage);
-        var backFields = BuildBackFields(progress, walletMessage);
+        var levelChangeMessage = BuildLevelChangeMessage(card, walletContext.LevelChange);
+        var auxiliaryFields = BuildAuxiliaryFields(
+            progress,
+            levelChangeMessage,
+            walletContext.PointsExpiring,
+            walletContext.MonthlyProduct);
+        var backFields = BuildBackFields(progress, walletContext.News, walletContext.MonthlyProduct);
 
         _logger.LogInformation(
-            "Apple Wallet pass level field for serial {Serial}: key={FieldKey}, value={LevelValue}, changeMessageIncluded={ChangeMessageIncluded}.",
+            "Apple Wallet pass fields for serial {Serial}: levelKey={LevelFieldKey}, levelValue={LevelValue}, levelChangeMessageIncluded={LevelChangeMessageIncluded}, pointsExpiringIncluded={PointsExpiringIncluded}, monthlyProductIncluded={MonthlyProductIncluded}.",
             card.SerialNumber,
             LevelFieldKey,
             progress.LevelShortText,
-            levelChangeMessage is not null);
+            levelChangeMessage is not null,
+            walletContext.PointsExpiring is not null,
+            walletContext.MonthlyProduct is not null);
 
         return new
         {
@@ -162,7 +168,11 @@ internal sealed class PassGeneratorService : IPassGeneratorService
         };
     }
 
-    private static object[] BuildAuxiliaryFields(PassProgress progress, string? levelChangeMessage)
+    private static object[] BuildAuxiliaryFields(
+        PassProgress progress,
+        string? levelChangeMessage,
+        WalletPointsExpiringMessage? pointsExpiring,
+        WalletMonthlyProductMessage? monthlyProduct)
     {
         var fields = new List<object>
         {
@@ -185,6 +195,29 @@ internal sealed class PassGeneratorService : IPassGeneratorService
         }
 
         fields.Add(new { key = "next", label = "PR\u00d3XIMO", value = progress.NextLevelText });
+
+        if (monthlyProduct is not null)
+        {
+            fields.Add(new
+            {
+                key = MonthlyProductFieldKey,
+                label = "PRODUCTO DEL MES",
+                value = monthlyProduct.Value,
+                changeMessage = monthlyProduct.ChangeMessage
+            });
+        }
+
+        if (pointsExpiring is not null)
+        {
+            fields.Add(new
+            {
+                key = PointsExpiringFieldKey,
+                label = "POR EXPIRAR",
+                value = pointsExpiring.Value,
+                changeMessage = pointsExpiring.ChangeMessage
+            });
+        }
+
         return fields.ToArray();
     }
 
@@ -256,7 +289,10 @@ internal sealed class PassGeneratorService : IPassGeneratorService
         }
     }
 
-    private static object[] BuildBackFields(PassProgress progress, WalletNotificationMessage? walletMessage)
+    private static object[] BuildBackFields(
+        PassProgress progress,
+        WalletNotificationMessage? walletMessage,
+        WalletMonthlyProductMessage? monthlyProduct)
     {
         var fields = new List<object>();
         if (walletMessage is not null)
@@ -266,6 +302,16 @@ internal sealed class PassGeneratorService : IPassGeneratorService
                 key = "news",
                 label = "NOVEDADES",
                 value = walletMessage.Message
+            });
+        }
+
+        if (monthlyProduct is not null)
+        {
+            fields.Add(new
+            {
+                key = "monthly_product_detail",
+                label = "PRODUCTO DEL MES",
+                value = monthlyProduct.BackValue
             });
         }
 
