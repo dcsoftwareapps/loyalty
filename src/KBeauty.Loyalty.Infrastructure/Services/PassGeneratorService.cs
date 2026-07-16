@@ -120,10 +120,11 @@ internal sealed class PassGeneratorService : IPassGeneratorService
             progress,
             walletContext.News,
             walletContext.MonthlyProduct,
-            walletContext.BirthdayBenefit);
+            walletContext.BirthdayBenefit,
+            walletContext.PointCampaign);
 
         _logger.LogInformation(
-            "Apple Wallet pass fields for serial {Serial}: levelKey={LevelFieldKey}, levelValue={LevelValue}, levelChangeMessageIncluded={LevelChangeMessageIncluded}, pointsExpiringIncluded={PointsExpiringIncluded}, monthlyProductIncluded={MonthlyProductIncluded}, birthdayBenefitIncluded={BirthdayBenefitIncluded}, recentVisibleEvent={RecentVisibleEvent}.",
+            "Apple Wallet pass fields for serial {Serial}: levelKey={LevelFieldKey}, levelValue={LevelValue}, levelChangeMessageIncluded={LevelChangeMessageIncluded}, pointsExpiringIncluded={PointsExpiringIncluded}, monthlyProductIncluded={MonthlyProductIncluded}, birthdayBenefitIncluded={BirthdayBenefitIncluded}, pointCampaignIncluded={PointCampaignIncluded}, recentVisibleEvent={RecentVisibleEvent}.",
             card.SerialNumber,
             LevelFieldKey,
             progress.LevelShortText,
@@ -131,6 +132,7 @@ internal sealed class PassGeneratorService : IPassGeneratorService
             walletContext.PointsExpiring is not null,
             walletContext.MonthlyProduct is not null,
             walletContext.BirthdayBenefit is not null,
+            walletContext.PointCampaign is not null,
             walletContext.RecentVisibleEvent?.Type.ToString() ?? "none");
 
         return new
@@ -247,6 +249,8 @@ internal sealed class PassGeneratorService : IPassGeneratorService
                 BuildPointsExpiringField(walletContext.PointsExpiring, includeChangeMessage: true, out selection),
             NotificationType.MonthlyProductStarted when walletContext.MonthlyProduct is not null =>
                 BuildMonthlyProductField(walletContext.MonthlyProduct, includeChangeMessage: true, out selection),
+            NotificationType.PointCampaignStarted when walletContext.PointCampaign is not null =>
+                BuildPointCampaignField(walletContext.PointCampaign, includeChangeMessage: true, out selection),
             _ => null
         };
     }
@@ -261,6 +265,9 @@ internal sealed class PassGeneratorService : IPassGeneratorService
 
         if (walletContext.BirthdayBenefit is not null)
             return BuildBirthdayBenefitField(walletContext.BirthdayBenefit, includeChangeMessage: false, out selection);
+
+        if (walletContext.PointCampaign is not null)
+            return BuildPointCampaignField(walletContext.PointCampaign, includeChangeMessage: false, out selection);
 
         if (walletContext.MonthlyProduct is not null)
             return BuildMonthlyProductField(walletContext.MonthlyProduct, includeChangeMessage: false, out selection);
@@ -331,6 +338,28 @@ internal sealed class PassGeneratorService : IPassGeneratorService
                 key = MonthlyProductFieldKey,
                 label = "PRODUCTO DEL MES",
                 value = monthlyProduct.Value
+            };
+    }
+
+    private static object BuildPointCampaignField(
+        WalletPointCampaignMessage pointCampaign,
+        bool includeChangeMessage,
+        out TemporalFieldSelection selection)
+    {
+        selection = new TemporalFieldSelection(PointCampaignFieldKey, pointCampaign.Value, includeChangeMessage);
+        return includeChangeMessage
+            ? new
+            {
+                key = PointCampaignFieldKey,
+                label = "PROMOCI\u00d3N",
+                value = pointCampaign.Value,
+                changeMessage = pointCampaign.ChangeMessage
+            }
+            : new
+            {
+                key = PointCampaignFieldKey,
+                label = "PROMOCI\u00d3N",
+                value = pointCampaign.Value
             };
     }
 
@@ -406,7 +435,8 @@ internal sealed class PassGeneratorService : IPassGeneratorService
         PassProgress progress,
         WalletNotificationMessage? walletMessage,
         WalletMonthlyProductMessage? monthlyProduct,
-        WalletBirthdayBenefitMessage? birthdayBenefit)
+        WalletBirthdayBenefitMessage? birthdayBenefit,
+        WalletPointCampaignMessage? pointCampaign)
     {
         var fields = new List<object>();
         if (walletMessage is not null)
@@ -436,6 +466,16 @@ internal sealed class PassGeneratorService : IPassGeneratorService
                 key = "birthday_benefit_detail",
                 label = "BENEFICIO DE CUMPLEA\u00d1OS",
                 value = birthdayBenefit.BackValue
+            });
+        }
+
+        if (pointCampaign is not null)
+        {
+            fields.Add(new
+            {
+                key = "point_campaign_detail",
+                label = "CAMPA\u00d1A ACTIVA",
+                value = pointCampaign.BackValue
             });
         }
 

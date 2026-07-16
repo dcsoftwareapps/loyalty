@@ -62,6 +62,7 @@ internal sealed class WalletNotificationReadService : IWalletNotificationReadSer
         var levelChange = rows.FirstOrDefault(n => n.Type == NotificationType.LevelChanged);
         var pointsExpiring = rows.FirstOrDefault(n => n.Type == NotificationType.PointsExpiring);
         var birthdayBenefit = rows.FirstOrDefault(n => n.Type == NotificationType.BirthdayBenefitStarted);
+        var pointCampaignRows = rows.Where(n => n.Type == NotificationType.PointCampaignStarted).ToList();
         var monthlyProduct = await BuildMonthlyProductMessageAsync(ct);
         var pointsExpiringMessage = pointsExpiring is null
             ? null
@@ -69,12 +70,19 @@ internal sealed class WalletNotificationReadService : IWalletNotificationReadSer
         var birthdayBenefitMessage = birthdayBenefit is null
             ? null
             : await BuildBirthdayBenefitMessageAsync(loyaltyCardId, birthdayBenefit.MetadataJson, ct);
+        var pointCampaignMessage = pointCampaignRows.Count == 0
+            ? null
+            : await BuildPointCampaignMessageAsync(
+                loyaltyCardId,
+                pointCampaignRows.Select(r => new WalletNotificationMessage(r.Id, r.Type, r.Title, r.Message, r.MetadataJson)),
+                ct);
 
         var recentVisibleEvent = SelectRecentVisibleEvent(
             rows.Select(r => new WalletRecentVisibleEvent(r.Id, r.Type, r.CreatedAt, r.ProcessedAt, r.DisplayUntilUtc)),
             pointsExpiringMessage,
             monthlyProduct,
             birthdayBenefitMessage,
+            pointCampaignMessage,
             levelChange is not null,
             now);
 
@@ -88,10 +96,11 @@ internal sealed class WalletNotificationReadService : IWalletNotificationReadSer
             pointsExpiringMessage,
             monthlyProduct,
             birthdayBenefitMessage,
+            pointCampaignMessage,
             recentVisibleEvent);
 
         _logger.LogInformation(
-            "WalletNotificationContext for card {CardId}: activeNotifications={NotificationCount}, recentVisibleEvent={RecentVisibleEvent}, levelChange={LevelChange}, pointsExpiring={PointsExpiring}, birthdayBenefit={BirthdayBenefit}, monthlyProduct={MonthlyProduct}.",
+            "WalletNotificationContext for card {CardId}: activeNotifications={NotificationCount}, recentVisibleEvent={RecentVisibleEvent}, levelChange={LevelChange}, pointsExpiring={PointsExpiring}, birthdayBenefit={BirthdayBenefit}, pointCampaign={PointCampaign}, monthlyProduct={MonthlyProduct}.",
             loyaltyCardId,
             rows.Count,
             recentVisibleEvent is null
@@ -100,6 +109,7 @@ internal sealed class WalletNotificationReadService : IWalletNotificationReadSer
             context.LevelChange is null ? "null" : $"{context.LevelChange.Type} id={context.LevelChange.Id}",
             context.PointsExpiring is null ? "null" : $"{context.PointsExpiring.Value} expires={context.PointsExpiring.ExpirationDate}",
             context.BirthdayBenefit is null ? "null" : $"{context.BirthdayBenefit.Value} year={context.BirthdayBenefit.BenefitYear}",
+            context.PointCampaign is null ? "null" : $"{context.PointCampaign.Value} campaign={context.PointCampaign.CampaignId}",
             context.MonthlyProduct is null ? "null" : $"{context.MonthlyProduct.Value} reward={context.MonthlyProduct.RewardId}");
 
         if (recentVisibleEvent is not null)
@@ -124,6 +134,7 @@ internal sealed class WalletNotificationReadService : IWalletNotificationReadSer
         WalletPointsExpiringMessage? pointsExpiring,
         WalletMonthlyProductMessage? monthlyProduct,
         WalletBirthdayBenefitMessage? birthdayBenefit,
+        WalletPointCampaignMessage? pointCampaign,
         bool hasLevelChange,
         DateTime nowUtc)
     {
@@ -132,7 +143,7 @@ internal sealed class WalletNotificationReadService : IWalletNotificationReadSer
 
         var recent = events
             .Where(e => e.ProcessedAt.GetValueOrDefault(e.CreatedAt) >= threshold)
-            .Where(e => IsSupportedAndAvailable(e.Type, hasLevelChange, pointsExpiring, birthdayBenefit, monthlyProduct))
+            .Where(e => IsSupportedAndAvailable(e, hasLevelChange, pointsExpiring, birthdayBenefit, pointCampaign, monthlyProduct))
             .OrderByDescending(e => e.ProcessedAt ?? e.CreatedAt)
             .ThenBy(e => RecentEventPriority(e.Type))
             .ThenByDescending(e => e.CreatedAt)
@@ -143,7 +154,7 @@ internal sealed class WalletNotificationReadService : IWalletNotificationReadSer
         {
             var effectiveAt = candidate.ProcessedAt.GetValueOrDefault(candidate.CreatedAt);
             var inWindow = effectiveAt >= threshold;
-            var supported = IsSupportedAndAvailable(candidate.Type, hasLevelChange, pointsExpiring, birthdayBenefit, monthlyProduct);
+            var supported = IsSupportedAndAvailable(candidate, hasLevelChange, pointsExpiring, birthdayBenefit, pointCampaign, monthlyProduct);
             _logger.LogInformation(
                 "Wallet recent event candidate: id={NotificationId}, type={Type}, createdAt={CreatedAt}, processedAt={ProcessedAt}, displayUntilUtc={DisplayUntilUtc}, threshold={Threshold}, inWindow={InWindow}, supportedAndAvailable={SupportedAndAvailable}.",
                 candidate.NotificationId,
@@ -188,17 +199,19 @@ internal sealed class WalletNotificationReadService : IWalletNotificationReadSer
     }
 
     private static bool IsSupportedAndAvailable(
-        NotificationType type,
+        WalletRecentVisibleEvent candidate,
         bool hasLevelChange,
         WalletPointsExpiringMessage? pointsExpiring,
         WalletBirthdayBenefitMessage? birthdayBenefit,
+        WalletPointCampaignMessage? pointCampaign,
         WalletMonthlyProductMessage? monthlyProduct) =>
-        type switch
+        candidate.Type switch
         {
             NotificationType.LevelChanged => hasLevelChange,
             NotificationType.BirthdayBenefitStarted => birthdayBenefit is not null,
             NotificationType.PointsExpiring => pointsExpiring is not null,
             NotificationType.MonthlyProductStarted => monthlyProduct is not null,
+            NotificationType.PointCampaignStarted => pointCampaign?.NotificationId == candidate.NotificationId,
             _ => false
         };
 
@@ -295,10 +308,96 @@ internal sealed class WalletNotificationReadService : IWalletNotificationReadSer
             $"{product.Name}\n\n{product.PointsCost:N0} pts\n\nDisponible hasta {FormatDate(validToLocalDate)}");
     }
 
+    private async Task<WalletPointCampaignMessage?> BuildPointCampaignMessageAsync(
+        Guid loyaltyCardId,
+        IEnumerable<WalletNotificationMessage> notifications,
+        CancellationToken ct)
+    {
+        var now = DateTime.UtcNow;
+        var card = await (
+            from loyaltyCard in _db.LoyaltyCards.AsNoTracking()
+            join customer in _db.Customers.AsNoTracking() on loyaltyCard.CustomerId equals customer.Id
+            where loyaltyCard.Id == loyaltyCardId
+               && loyaltyCard.IsActive
+               && customer.IsActive
+            select new
+            {
+                loyaltyCard.SerialNumber,
+                loyaltyCard.Level
+            })
+            .FirstOrDefaultAsync(ct);
+
+        if (card is null)
+        {
+            _logger.LogInformation("Point campaign wallet field omitted for card {CardId}: inactive or missing card/customer.", loyaltyCardId);
+            return null;
+        }
+
+        var activeCampaigns = await _db.PointCampaigns
+            .AsNoTracking()
+            .Where(c => c.IsActive
+                     && c.StartsAtUtc <= now
+                     && c.EndsAtUtc >= now)
+            .ToListAsync(ct);
+        var bestCampaign = PointCampaignNotificationReadService.SelectBestCampaign(activeCampaigns, card.Level);
+
+        if (bestCampaign is null)
+        {
+            _logger.LogInformation(
+                "Point campaign wallet field omitted for serial {Serial}: no active eligible campaign for level {Level}.",
+                card.SerialNumber,
+                card.Level);
+            return null;
+        }
+
+        var matchingNotification = notifications.FirstOrDefault(n =>
+            TryReadPointCampaignId(n.MetadataJson, out var campaignId) &&
+            campaignId == bestCampaign.Id);
+
+        if (matchingNotification is null)
+        {
+            _logger.LogInformation(
+                "Point campaign wallet field omitted for serial {Serial}: best campaign {CampaignId} has no active processed notification.",
+                card.SerialNumber,
+                bestCampaign.Id);
+            return null;
+        }
+
+        var timeZoneId = TryReadTimeZone(matchingNotification.MetadataJson) ?? "America/Tijuana";
+        var timeZone = PointsExpirationNotificationReadService.ResolveTimeZone(timeZoneId);
+        var endsAtLocalDate = DateOnly.FromDateTime(TimeZoneInfo.ConvertTimeFromUtc(bestCampaign.EndsAtUtc, timeZone).Date);
+        var value = FormatMultiplier(bestCampaign.Multiplier);
+        var backValue = $"{bestCampaign.Name}\n\n{value}\n\nVigente hasta {FormatDate(endsAtLocalDate)}";
+
+        if (bestCampaign.MinimumPurchaseAmount.HasValue)
+            backValue += $"\n\nCompra m\u00ednima: ${bestCampaign.MinimumPurchaseAmount.Value:N0} MXN";
+
+        _logger.LogInformation(
+            "Point campaign wallet field included for serial {Serial}: campaign={CampaignId}, value={Value}.",
+            card.SerialNumber,
+            bestCampaign.Id,
+            value);
+
+        return new WalletPointCampaignMessage(
+            matchingNotification.Id,
+            bestCampaign.Id,
+            bestCampaign.Name,
+            bestCampaign.Multiplier,
+            bestCampaign.MinimumPurchaseAmount,
+            bestCampaign.EndsAtUtc,
+            endsAtLocalDate,
+            value,
+            "\ud83d\udd25 \u00a1Promoci\u00f3n activa! %@",
+            backValue);
+    }
+
     private static string FormatDate(DateOnly date) =>
         date.ToDateTime(TimeOnly.MinValue).ToString("dd MMM yyyy", SpanishMexico);
 
     private static string FormatBirthdayMultiplier(int multiplier) =>
+        $"Puntos x{Math.Max(1, multiplier).ToString(CultureInfo.InvariantCulture)}";
+
+    private static string FormatMultiplier(int multiplier) =>
         $"Puntos x{Math.Max(1, multiplier).ToString(CultureInfo.InvariantCulture)}";
 
     private async Task<WalletPointsExpiringMessage?> BuildPointsExpiringMessageAsync(
@@ -359,6 +458,25 @@ internal sealed class WalletNotificationReadService : IWalletNotificationReadSer
             }
 
             return true;
+        }
+        catch (JsonException)
+        {
+            return false;
+        }
+    }
+
+    private static bool TryReadPointCampaignId(string? metadataJson, out Guid campaignId)
+    {
+        campaignId = Guid.Empty;
+
+        if (string.IsNullOrWhiteSpace(metadataJson))
+            return false;
+
+        try
+        {
+            using var doc = JsonDocument.Parse(metadataJson);
+            return doc.RootElement.TryGetProperty("campaignId", out var prop) &&
+                   Guid.TryParse(prop.GetString(), out campaignId);
         }
         catch (JsonException)
         {

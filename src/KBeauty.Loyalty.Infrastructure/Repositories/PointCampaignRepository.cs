@@ -1,6 +1,4 @@
-using KBeauty.Loyalty.Common.Constants;
 using KBeauty.Loyalty.Domain.Entities;
-using KBeauty.Loyalty.Domain.Enums;
 using KBeauty.Loyalty.Domain.Repositories;
 using KBeauty.Loyalty.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
@@ -27,32 +25,27 @@ internal sealed class PointCampaignRepository : IPointCampaignRepository
     public Task<PointCampaign?> GetByIdAsync(Guid id, CancellationToken ct = default) =>
         _db.PointCampaigns.FirstOrDefaultAsync(c => c.Id == id, ct);
 
-    public Task<PointCampaign?> GetBestApplicableAsync(
+    public async Task<PointCampaign?> GetBestApplicableAsync(
         DateTime nowUtc,
         decimal purchaseAmount,
         string loyaltyLevel,
         CancellationToken ct = default)
     {
-        var levelEligibility = loyaltyLevel switch
-        {
-            LoyaltyConstants.Levels.Mist => CampaignLevelEligibility.Mist,
-            LoyaltyConstants.Levels.Glow => CampaignLevelEligibility.Glow,
-            LoyaltyConstants.Levels.Radiance => CampaignLevelEligibility.Radiance,
-            _ => CampaignLevelEligibility.All
-        };
-
-        return _db.PointCampaigns
+        var candidates = await _db.PointCampaigns
             .AsNoTracking()
             .Where(c => c.IsActive
                      && c.StartsAtUtc <= nowUtc
                      && c.EndsAtUtc >= nowUtc
-                     && (!c.MinimumPurchaseAmount.HasValue || purchaseAmount >= c.MinimumPurchaseAmount.Value)
-                     && (c.LevelEligibility == CampaignLevelEligibility.All || c.LevelEligibility == levelEligibility))
+                     && (!c.MinimumPurchaseAmount.HasValue || purchaseAmount >= c.MinimumPurchaseAmount.Value))
+            .ToListAsync(ct);
+
+        return candidates
+            .Where(c => c.AppliesToLevel(loyaltyLevel))
             .OrderByDescending(c => c.Multiplier)
             .ThenBy(c => c.MinimumPurchaseAmount ?? 0)
             .ThenByDescending(c => c.StartsAtUtc)
             .ThenBy(c => c.Id)
-            .FirstOrDefaultAsync(ct);
+            .FirstOrDefault();
     }
 
     public async Task AddAsync(PointCampaign campaign, CancellationToken ct = default)

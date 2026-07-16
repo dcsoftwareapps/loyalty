@@ -2,9 +2,11 @@ using KBeauty.Loyalty.Application.Admin.Queries.GetAdminDashboard;
 using KBeauty.Loyalty.Application.Levels.Commands.RecalculateLevels;
 using KBeauty.Loyalty.Application.Notifications.BirthdayBenefit;
 using KBeauty.Loyalty.Application.Notifications.MonthlyProduct;
+using KBeauty.Loyalty.Application.Notifications.PointCampaign;
 using KBeauty.Loyalty.Application.Notifications.PointsExpiration;
 using KBeauty.Loyalty.Application.Notifications.Queries.ListBirthdayBenefitNotificationCandidates;
 using KBeauty.Loyalty.Application.Notifications.Queries.ListMonthlyProductNotificationCandidates;
+using KBeauty.Loyalty.Application.Notifications.Queries.ListPointCampaignNotificationCandidates;
 using KBeauty.Loyalty.Application.Notifications.Queries.ListPointExpirationNotificationCandidates;
 using KBeauty.Loyalty.Application.Points.Commands.ExpirePoints;
 using MediatR;
@@ -111,6 +113,24 @@ public sealed class AdminController : ControllerBase
             ct);
         if (result.IsFailure)
             return BadRequest(new ProblemDetails { Title = "Avisos de cumpleanos", Detail = result.Error });
+
+        return Ok(result.Value);
+    }
+
+    /// <summary>GET /api/admin/campaigns/notification-candidates - vista previa de avisos de campanas de puntos.</summary>
+    [HttpGet("campaigns/notification-candidates")]
+    [ProducesResponseType(typeof(PointCampaignNotificationPreviewDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
+    public async Task<IActionResult> GetPointCampaignNotificationCandidates(
+        [FromQuery] string timeZoneId = "America/Tijuana",
+        [FromQuery] bool includeAlreadyNotified = false,
+        CancellationToken ct = default)
+    {
+        var result = await _sender.Send(
+            new ListPointCampaignNotificationCandidatesQuery(timeZoneId, includeAlreadyNotified),
+            ct);
+        if (result.IsFailure)
+            return BadRequest(new ProblemDetails { Title = "Avisos de campanas", Detail = result.Error });
 
         return Ok(result.Value);
     }

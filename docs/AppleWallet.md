@@ -2207,7 +2207,7 @@ Campo estable:
 {
   "key": "birthday_benefit",
   "label": "CUMPLEAÑOS",
-  "value": "2x puntos",
+  "value": "Puntos x2",
   "changeMessage": "🎂 Tu beneficio de cumpleaños está activo: %@"
 }
 ```
@@ -2230,6 +2230,7 @@ Politica visual del frente:
 5. Cuando no hay evento reciente, se usa prioridad permanente:
    - `points_expiring`;
    - `birthday_benefit`;
+   - `point_campaign`;
    - `monthly_product`.
 
 Los detalles de beneficio de cumpleanos y Producto del mes siguen disponibles en `backFields` cuando estan activos.
@@ -2253,9 +2254,7 @@ Mientras el beneficio este activo:
 ```text
 BENEFICIO DE CUMPLEAÑOS
 
-Este mes tienes 2x puntos en tus compras.
-
-Disponible hasta 31 jul 2026.
+Este mes obtienes Puntos x2 en todas tus compras.
 ```
 
 ## Lectura dinamica
@@ -2283,4 +2282,179 @@ Fase 5.5 no requiere migracion nueva. Reutiliza:
 - `LoyaltyNotifications`;
 - `NotificationDeliveries`;
 - `NotificationType.BirthdayBenefitStarted`;
+- `DeviceRegistrations`.
+
+# Fase 5.6 - Campana de puntos visible en Apple Wallet
+
+Fase 5.6 esta implementada y pendiente de validacion manual.
+
+El objetivo es comunicar en Apple Wallet la mejor campana de puntos vigente aplicable a cada tarjeta instalada.
+
+## Regla funcional
+
+Una campana se considera vigente cuando:
+
+- `PointCampaign.IsActive = true`;
+- `StartsAtUtc <= nowUtc`;
+- `EndsAtUtc >= nowUtc`.
+
+Solo se consideran `Customer` y `LoyaltyCard` activos y con al menos un `DeviceRegistration`.
+
+## Elegibilidad por nivel
+
+La elegibilidad es jerarquica:
+
+- `All`: todos los niveles;
+- `Mist`: Mist, Glow y Radiance;
+- `Glow`: Glow y Radiance;
+- `Radiance`: solo Radiance.
+
+La regla usa el nivel almacenado en `LoyaltyCard.Level`, calculado por niveles rolling de 12 meses. No usa `CurrentPoints`, `LifetimePoints` ni `PointsEarnedThisYear`.
+
+## Seleccion de campana
+
+Si varias campanas aplican a una tarjeta, se elige solo una:
+
+1. mayor `Multiplier`;
+2. menor `MinimumPurchaseAmount`;
+3. `StartsAtUtc` mas reciente;
+4. `Id` como desempate final.
+
+El monto minimo no excluye a la tarjeta de la notificacion porque depende de una compra futura. Si existe, se muestra como condicion.
+
+## Flujo
+
+```text
+LoyaltyMaintenanceBackgroundService
+  ->
+CreatePointCampaignStartedNotificationsCommand
+  ->
+IPointCampaignNotificationReadService
+  ->
+LoyaltyNotification PointCampaignStarted
+  ->
+AppleWalletNotificationChannelProcessor
+  ->
+APNs PassKit
+  ->
+Wallet descarga pass actualizado
+```
+
+El scheduler ejecuta ahora:
+
+```text
+1. ExpirePointsCommand
+2. RecalculateLevelsCommand
+3. CreatePointExpirationNotificationsCommand
+4. CreateMonthlyProductStartedNotificationsCommand
+5. CreateBirthdayBenefitStartedNotificationsCommand
+6. CreatePointCampaignStartedNotificationsCommand
+```
+
+## Idempotencia
+
+CorrelationId:
+
+```text
+point-campaign-started:{campaignId:N}:{serialNumber}
+```
+
+Esto permite una sola notificacion por campana y tarjeta. Reejecutar el scheduler no duplica `LoyaltyNotification`, `NotificationDelivery` ni APNs.
+
+## Preview administrativo
+
+Endpoint:
+
+```text
+GET /api/admin/campaigns/notification-candidates?timeZoneId=America/Tijuana&includeAlreadyNotified=false
+```
+
+Devuelve:
+
+- `CustomerId`;
+- `LoyaltyCardId`;
+- `CustomerName`;
+- `SerialNumber`;
+- `Level`;
+- `CampaignId`;
+- `CampaignName`;
+- `Multiplier`;
+- `MinimumPurchaseAmount`;
+- `StartsAtUtc`;
+- `EndsAtUtc`;
+- `EndsAtLocal`;
+- `CorrelationId`;
+- `AlreadyNotified`.
+
+El preview no crea notificaciones, no crea deliveries, no envia APNs y no modifica base.
+
+## Apple Wallet
+
+Campo estable del frente:
+
+```json
+{
+  "key": "point_campaign",
+  "label": "PROMOCION",
+  "value": "Puntos x5",
+  "changeMessage": "🔥 ¡Promoción activa! %@"
+}
+```
+
+El campo aparece solo mientras la campana siga vigente, activa, aplicable y sea la mejor campana para la tarjeta. El valor usa formato dinamico `Puntos xN`.
+
+El reverso agrega:
+
+```text
+CAMPAÑA ACTIVA
+
+{CampaignName}
+
+Puntos x{Multiplier}
+
+Vigente hasta {EndDateLocal}
+
+Compra minima: ${MinimumPurchaseAmount:N0} MXN
+```
+
+La linea de compra minima solo aparece cuando existe `MinimumPurchaseAmount`.
+
+## Prioridad temporal y fallback
+
+La seleccion de eventos recientes usa:
+
+1. evento mas nuevo por `ProcessedAt ?? CreatedAt`;
+2. solo ante empate real, prioridad por tipo:
+   - `LevelChanged`;
+   - `BirthdayBenefitStarted`;
+   - `PointsExpiring`;
+   - `MonthlyProductStarted`;
+   - `PointCampaignStarted`;
+   - `Custom`.
+
+Mientras el evento reciente este dentro de `LoyaltyNotifications:VisibleEventPriorityHours`, ocupa el unico campo temporal del frente y puede incluir `changeMessage`.
+
+Cuando no hay evento reciente, el fallback permanente usa:
+
+1. `points_expiring`;
+2. `birthday_benefit`;
+3. `point_campaign`;
+4. `monthly_product`.
+
+El fallback no incluye `changeMessage` para evitar alertas repetidas.
+
+## Relacion con compras
+
+Fase 5.6 no cambia `AddPointsHandler`. Las compras siguen usando el mayor multiplicador entre cumpleanos y campana vigente aplicable. No se acumulan multiplicadores.
+
+## Migracion
+
+Fase 5.6 no requiere migracion nueva. Reutiliza:
+
+- `PointCampaign`;
+- `LoyaltyNotifications`;
+- `NotificationDeliveries`;
+- `NotificationType.PointCampaignStarted`;
+- `MetadataJson`;
+- `DisplayUntilUtc`;
 - `DeviceRegistrations`.

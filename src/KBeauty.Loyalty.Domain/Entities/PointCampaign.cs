@@ -82,9 +82,23 @@ public class PointCampaign : Entity
 
     public bool AppliesToLevel(string level) =>
         LevelEligibility == CampaignLevelEligibility.All ||
-        (LevelEligibility == CampaignLevelEligibility.Mist && string.Equals(level, LoyaltyConstants.Levels.Mist, StringComparison.Ordinal)) ||
-        (LevelEligibility == CampaignLevelEligibility.Glow && string.Equals(level, LoyaltyConstants.Levels.Glow, StringComparison.Ordinal)) ||
-        (LevelEligibility == CampaignLevelEligibility.Radiance && string.Equals(level, LoyaltyConstants.Levels.Radiance, StringComparison.Ordinal));
+        LevelRank(level) >= EligibilityRank(LevelEligibility);
+
+    private static int LevelRank(string level) => level switch
+    {
+        LoyaltyConstants.Levels.Mist => 1,
+        LoyaltyConstants.Levels.Glow => 2,
+        LoyaltyConstants.Levels.Radiance => 3,
+        _ => 0
+    };
+
+    private static int EligibilityRank(CampaignLevelEligibility eligibility) => eligibility switch
+    {
+        CampaignLevelEligibility.Mist => 1,
+        CampaignLevelEligibility.Glow => 2,
+        CampaignLevelEligibility.Radiance => 3,
+        _ => 0
+    };
 
     private static void Validate(
         string name,

@@ -19,10 +19,12 @@
 - Fase 5.4 - Producto del mes visible en Wallet: Implementada, pendiente de validacion manual
 - Fase 5.5 - Beneficio de cumpleanos visible en Wallet: Implementada, pendiente de validacion manual
   - Refinamiento: prioridad de eventos visibles recientes para evitar que un estado permanente bloquee `changeMessage`.
+  - Refinamiento: formato visual dinamico `Puntos xN`.
+- Fase 5.6 - Campana de puntos visible en Apple Wallet: Implementada, pendiente de validacion manual
 
 ## Siguiente
 
-### Fase 5.6 - Canales externos de notificacion
+### Fase 5.7 - Canales externos de notificacion
 
 - Email.
 - SMS.

@@ -12,6 +12,7 @@ public sealed record WalletNotificationContext(
     WalletPointsExpiringMessage? PointsExpiring,
     WalletMonthlyProductMessage? MonthlyProduct,
     WalletBirthdayBenefitMessage? BirthdayBenefit,
+    WalletPointCampaignMessage? PointCampaign,
     WalletRecentVisibleEvent? RecentVisibleEvent);
 
 public sealed record WalletNotificationMessage(
@@ -43,6 +44,18 @@ public sealed record WalletBirthdayBenefitMessage(
     int BenefitYear,
     int Multiplier,
     DateOnly DisplayUntilLocalDate,
+    string Value,
+    string ChangeMessage,
+    string BackValue);
+
+public sealed record WalletPointCampaignMessage(
+    Guid NotificationId,
+    Guid CampaignId,
+    string CampaignName,
+    int Multiplier,
+    decimal? MinimumPurchaseAmount,
+    DateTime EndsAtUtc,
+    DateOnly EndsAtLocalDate,
     string Value,
     string ChangeMessage,
     string BackValue);

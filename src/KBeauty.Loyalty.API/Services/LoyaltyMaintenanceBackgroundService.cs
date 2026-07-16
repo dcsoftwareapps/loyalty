@@ -4,6 +4,7 @@ using KBeauty.Loyalty.API.Configuration;
 using KBeauty.Loyalty.Application.Levels.Commands.RecalculateLevels;
 using KBeauty.Loyalty.Application.Notifications.Commands.CreateBirthdayBenefitStartedNotifications;
 using KBeauty.Loyalty.Application.Notifications.Commands.CreateMonthlyProductStartedNotifications;
+using KBeauty.Loyalty.Application.Notifications.Commands.CreatePointCampaignStartedNotifications;
 using KBeauty.Loyalty.Application.Notifications.Commands.CreatePointExpirationNotifications;
 using KBeauty.Loyalty.Application.Points.Commands.ExpirePoints;
 using MediatR;
@@ -94,6 +95,7 @@ public sealed class LoyaltyMaintenanceBackgroundService : BackgroundService
         await RunPointExpirationNotificationsAsync(sender, options, ct);
         await RunMonthlyProductNotificationsAsync(sender, options, ct);
         await RunBirthdayBenefitNotificationsAsync(sender, options, ct);
+        await RunPointCampaignNotificationsAsync(sender, options, ct);
 
         stopwatch.Stop();
         _logger.LogInformation(
@@ -207,6 +209,43 @@ public sealed class LoyaltyMaintenanceBackgroundService : BackgroundService
         catch (Exception ex)
         {
             _logger.LogError(ex, "Unexpected error running birthday benefit notification scan.");
+        }
+    }
+
+    private async Task RunPointCampaignNotificationsAsync(
+        ISender sender,
+        LoyaltyMaintenanceOptions options,
+        CancellationToken ct)
+    {
+        try
+        {
+            var result = await sender.Send(
+                new CreatePointCampaignStartedNotificationsCommand(OperatorId, options.TimeZoneId),
+                ct);
+            if (result.IsFailure)
+            {
+                _logger.LogError("Point campaign notification scan failed: {Error}", result.Error);
+                return;
+            }
+
+            var value = result.Value;
+            _logger.LogInformation(
+                "Point campaign notification result: activeCampaignsFound={ActiveCampaignsFound}, cardsEvaluated={CardsEvaluated}, cardsEligible={CardsEligible}, notificationsCreated={NotificationsCreated}, alreadyNotified={AlreadyNotified}.",
+                value.ActiveCampaignsFound,
+                value.CardsEvaluated,
+                value.CardsEligible,
+                value.NotificationsCreated,
+                value.AlreadyNotified);
+
+            LogWarnings("Point campaign notifications", value.Warnings);
+        }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Unexpected error running point campaign notification scan.");
         }
     }
 

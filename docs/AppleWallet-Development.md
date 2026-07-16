@@ -1421,7 +1421,7 @@ Campo esperado en el pass cuando aplica y no hay campo temporal de mayor priorid
 {
   "key": "birthday_benefit",
   "label": "CUMPLEAÑOS",
-  "value": "2x puntos",
+  "value": "Puntos x2",
   "changeMessage": "🎂 Tu beneficio de cumpleaños está activo: %@"
 }
 ```
@@ -1443,7 +1443,8 @@ Cuando no hay evento reciente, se usa la prioridad permanente:
 
 1. `points_expiring`;
 2. `birthday_benefit`;
-3. `monthly_product`.
+3. `point_campaign`.
+4. `monthly_product`.
 
 El fallback permanente no agrega `changeMessage`; asi se evita una segunda alerta cuando el frente vuelve de `birthday_benefit` a `points_expiring`.
 
@@ -1510,6 +1511,167 @@ Caso 8 - Fin de prioridad reciente:
 4. Confirmar que no se crea otra `LoyaltyNotification`.
 5. Confirmar que no se crea otro `NotificationDelivery`.
 6. Confirmar que no se envia APNs adicional.
+
+Antes de commit final, dejar:
+
+```json
+"LoyaltyMaintenance": {
+  "RunOnStartup": false
+}
+```
+
+## Campana de puntos visible - Fase 5.6
+
+Fase 5.6 agrega notificacion automatica Apple Wallet cuando existe una campana de puntos vigente y aplicable a una clienta con pass instalado.
+
+Reglas:
+
+- solo `PointCampaign.IsActive = true`;
+- `StartsAtUtc <= nowUtc`;
+- `EndsAtUtc >= nowUtc`;
+- customer y loyalty card activos;
+- al menos un `DeviceRegistration`;
+- se usa el nivel almacenado en `LoyaltyCard.Level`;
+- `Mist` aplica a Mist, Glow y Radiance;
+- `Glow` aplica a Glow y Radiance;
+- `Radiance` aplica solo a Radiance;
+- `All` aplica a todos.
+
+Si varias campanas aplican, se notifica solo la mejor:
+
+1. mayor multiplicador;
+2. menor compra minima;
+3. inicio mas reciente;
+4. `Id`.
+
+El monto minimo no excluye del aviso porque depende de una compra futura.
+
+Preview administrativo:
+
+```powershell
+Invoke-RestMethod `
+  -Method Get `
+  -Uri "https://localhost:55128/api/admin/campaigns/notification-candidates?timeZoneId=America/Tijuana"
+```
+
+El preview no modifica base ni envia APNs.
+
+Flujo scheduler:
+
+```text
+LoyaltyMaintenanceBackgroundService
+  ->
+CreatePointCampaignStartedNotificationsCommand
+  ->
+LoyaltyNotification PointCampaignStarted
+  ->
+AppleWalletNotificationChannelProcessor
+  ->
+APNs PassKit
+  ->
+Wallet descarga pass actualizado
+```
+
+Campo esperado en el pass cuando el evento reciente gana:
+
+```json
+{
+  "key": "point_campaign",
+  "label": "PROMOCION",
+  "value": "Puntos x3",
+  "changeMessage": "🔥 ¡Promoción activa! %@"
+}
+```
+
+Reverso esperado:
+
+```text
+CAMPAÑA ACTIVA
+
+Nombre de la campaña
+
+Puntos x3
+
+Vigente hasta 31 jul 2026
+```
+
+Si existe monto minimo:
+
+```text
+Compra minima: $500 MXN
+```
+
+### Escenarios manuales
+
+Caso 1 - Campana All vigente:
+
+1. Crear campana 3x activa, vigente y `LevelEligibility=All`.
+2. Ejecutar preview.
+3. Confirmar que aparecen tarjetas activas con DeviceRegistration.
+4. Ejecutar scheduler.
+5. Confirmar `LoyaltyNotification.Type=PointCampaignStarted`.
+6. Confirmar `NotificationDelivery.Channel=AppleWallet`.
+7. Confirmar APNs y refresh del pass.
+8. Confirmar alerta: `🔥 ¡Promoción activa! Puntos x3`.
+
+Caso 2 - Idempotencia:
+
+1. Ejecutar scheduler otra vez.
+2. Confirmar `NotificationsCreated=0`.
+3. Confirmar `AlreadyNotified > 0`.
+4. Confirmar que no hay duplicados por `CorrelationId`.
+
+Caso 3 - Jerarquia de niveles:
+
+1. Campana Mist: validar Mist, Glow y Radiance.
+2. Campana Glow: validar Glow y Radiance.
+3. Campana Radiance: validar solo Radiance.
+
+Caso 4 - Dos campanas vigentes:
+
+1. Crear campana A 2x.
+2. Crear campana B 5x.
+3. Confirmar que se notifica solo B para tarjetas elegibles.
+4. Confirmar `value = Puntos x5`.
+
+Caso 5 - Monto minimo:
+
+1. Crear campana 4x con minimo 500.
+2. Confirmar que se notifica.
+3. Confirmar que el reverso muestra compra minima.
+4. Confirmar que `AddPointsHandler` solo aplica la campana si la compra cumple el minimo.
+
+Caso 6 - Cumpleanos contra campana:
+
+1. Cumpleanos 5x y campana 3x: la compra usa 5x.
+2. Cumpleanos 2x y campana 4x: la compra usa 4x y registra `CampaignId`.
+3. Confirmar que los multiplicadores no se acumulan.
+
+Caso 7 - Evento reciente simultaneo:
+
+1. Crear `BirthdayBenefitStarted` y `PointCampaignStarted`.
+2. Confirmar que gana el mas reciente.
+3. Solo ante empate aplica prioridad por tipo.
+
+Caso 8 - Fin de prioridad temporal:
+
+1. Mover `ProcessedAt` fuera de `VisibleEventPriorityHours`.
+2. Refrescar pass.
+3. Confirmar fallback permanente.
+4. Confirmar que no se crea otra notificacion ni APNs.
+
+Caso 9 - Campana vencida o inactiva:
+
+1. Vencer o desactivar campana.
+2. Refrescar pass.
+3. Confirmar que desaparece el campo.
+4. Confirmar que no se genera aviso de finalizacion.
+
+Caso 10 - Sin DeviceRegistration:
+
+1. Crear cliente activo sin pass instalado.
+2. Ejecutar preview.
+3. Confirmar que no aparece como candidato.
 
 Antes de commit final, dejar:
 
