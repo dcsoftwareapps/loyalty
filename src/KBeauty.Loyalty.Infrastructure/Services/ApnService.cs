@@ -66,7 +66,19 @@ internal sealed class ApnService : IApnService
         request.Headers.TryAddWithoutValidation("apns-push-type", "background");
         request.Headers.TryAddWithoutValidation("apns-priority", "5");
 
+        _logger.LogInformation(
+            "APNs request sending. reason={Reason}, host={Host}, topic={Topic}, pushType=background, priority=5, token={Token}.",
+            reason,
+            _options.ApnHost,
+            _options.PassTypeIdentifier,
+            SafePushToken(pushToken));
+
         using var response = await _http.SendAsync(request, ct);
+        _logger.LogInformation(
+            "APNs response received. reason={Reason}, status={Status}, token={Token}.",
+            reason,
+            response.StatusCode,
+            SafePushToken(pushToken));
 
         if (response.IsSuccessStatusCode)
         {
@@ -143,4 +155,11 @@ internal sealed class ApnService : IApnService
             .TrimEnd('=')
             .Replace('+', '-')
             .Replace('/', '_');
+
+    private static string SafePushToken(string value) =>
+        string.IsNullOrWhiteSpace(value)
+            ? "empty"
+            : value.Length <= 12
+                ? $"{value[..Math.Min(value.Length, 4)]}..."
+                : $"{value[..6]}...{value[^6..]}";
 }

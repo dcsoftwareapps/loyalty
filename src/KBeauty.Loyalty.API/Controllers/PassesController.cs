@@ -66,8 +66,9 @@ public sealed class PassesController : ControllerBase
         if (customer is null) return NotFound();
 
         _logger.LogInformation(
-            "Apple Wallet downloading pass for serial {Serial}; level={Level}; lastActivityAt={LastActivityAt}.",
+            "Apple Wallet GET pass for serial {Serial}; passType={PassType}; level={Level}; lastActivityAt={LastActivityAt:O}.",
             serialNumber,
+            passTypeIdentifier,
             card.Level,
             card.LastActivityAt);
 
@@ -175,6 +176,13 @@ public sealed class PassesController : ControllerBase
             since = DateTimeOffset.FromUnixTimeSeconds(unixSeconds).UtcDateTime;
         }
 
+        _logger.LogInformation(
+            "Apple Wallet GET registrations for device {Device} and pass type {PassType}; raw passesUpdatedSince={RawSince}, parsedSince={ParsedSince}.",
+            SafeDeviceIdentifier(deviceLibraryIdentifier),
+            passTypeIdentifier,
+            passesUpdatedSince ?? "null",
+            since.HasValue ? since.Value.ToString("O") : "null");
+
         var result = await _sender.Send(
             new GetUpdatableSerialsQuery(deviceLibraryIdentifier, passTypeIdentifier, since),
             ct);
@@ -182,18 +190,18 @@ public sealed class PassesController : ControllerBase
         if (result.IsFailure || result.Value.SerialNumbers.Count == 0)
         {
             _logger.LogInformation(
-                "Apple Wallet requested updated serials for device {Device} and pass type {PassType}; no updates since {Since}.",
+                "Apple Wallet GET registrations result for device {Device} and pass type {PassType}: status=204, passesUpdatedSince={Since}, serialNumbers=[].",
                 SafeDeviceIdentifier(deviceLibraryIdentifier),
                 passTypeIdentifier,
-                passesUpdatedSince ?? "beginning");
+                since.HasValue ? since.Value.ToString("O") : "beginning");
             return StatusCode(StatusCodes.Status204NoContent);
         }
 
         _logger.LogInformation(
-            "Apple Wallet requested updated serials for device {Device} and pass type {PassType}; returning {Count} serial(s), lastUpdated={LastUpdated}.",
+            "Apple Wallet GET registrations result for device {Device} and pass type {PassType}: status=200, serialNumbers=[{SerialNumbers}], lastUpdated={LastUpdated:O}.",
             SafeDeviceIdentifier(deviceLibraryIdentifier),
             passTypeIdentifier,
-            result.Value.SerialNumbers.Count,
+            string.Join(", ", result.Value.SerialNumbers),
             result.Value.LastUpdated);
 
         return Ok(new

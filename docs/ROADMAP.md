@@ -21,10 +21,11 @@
   - Refinamiento: prioridad de eventos visibles recientes para evitar que un estado permanente bloquee `changeMessage`.
   - Refinamiento: formato visual dinamico `Puntos xN`.
 - Fase 5.6 - Campana de puntos visible en Apple Wallet: Implementada, pendiente de validacion manual
+- Fase 5.7 - Centro de mensajes personalizados: Implementada, pendiente de validacion manual
 
 ## Siguiente
 
-### Fase 5.7 - Canales externos de notificacion
+### Fase 5.8 - Canales externos de notificacion
 
 - Email.
 - SMS.

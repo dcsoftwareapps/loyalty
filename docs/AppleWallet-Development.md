@@ -1680,3 +1680,36 @@ Antes de commit final, dejar:
   "RunOnStartup": false
 }
 ```
+## Mensajes personalizados
+
+La Fase 5.7 agrega la pantalla Admin:
+
+```text
+/marketing-notifications
+```
+
+Desde ahi se puede:
+
+- crear mensajes personalizados para Apple Wallet;
+- previsualizar la audiencia;
+- enviar inmediatamente;
+- programar con `ScheduledAtUtc`;
+- cancelar antes de procesar;
+- revisar historial y metricas basicas.
+
+Para desarrollo local, la pantalla requiere:
+
+- SQL LocalDB con la migracion `20260716120000_AddCustomNotificationCampaigns` aplicada manualmente;
+- API y Admin levantados;
+- Apple Wallet real si se desea validar APNs y refresh en iPhone;
+- al menos una clienta con pase instalado y `DeviceRegistration`.
+
+Configuracion:
+
+```json
+"CustomNotificationCampaigns": {
+  "BatchSize": 50
+}
+```
+
+El scheduler `LoyaltyNotificationBackgroundService` procesa primero las campanas personalizadas vencidas y despues las notificaciones pendientes normales.

@@ -2458,3 +2458,83 @@ Fase 5.6 no requiere migracion nueva. Reutiliza:
 - `MetadataJson`;
 - `DisplayUntilUtc`;
 - `DeviceRegistrations`.
+## Fase 5.7 - Centro de mensajes personalizados
+
+El proyecto cuenta con un centro administrativo para crear, previsualizar, enviar y programar mensajes personalizados para clientas con Apple Wallet instalado.
+
+La fase reutiliza el motor existente de notificaciones:
+
+- `LoyaltyNotification`
+- `NotificationDelivery`
+- `NotificationType.Custom`
+- `NotificationChannel.AppleWallet`
+- `ILoyaltyNotificationService`
+- `LoyaltyNotificationBackgroundService`
+- `AppleWalletNotificationChannelProcessor`
+- `IWalletNotificationReadService`
+- `WalletNotificationReadService`
+- `PassGeneratorService`
+- `ScheduledAtUtc`
+- `DisplayUntilUtc`
+- `CorrelationId`
+
+La entidad agregada es `CustomNotificationCampaign`. Guarda el contenido aprobado por administracion: `Title`, `ShortMessage`, `LongMessage`, audiencia, fecha programada, fecha limite de visualizacion, estado y metricas basicas.
+
+El mensaje corto se muestra en el frente del pass como evento reciente:
+
+```json
+{
+  "key": "custom_message",
+  "label": "NOVEDAD",
+  "value": "{ShortMessage}",
+  "changeMessage": "📣 %@"
+}
+```
+
+El mensaje largo se muestra en el reverso del pass:
+
+```text
+NOVEDAD
+
+{Title}
+
+{LongMessage}
+```
+
+El campo frontal `custom_message` solo aparece mientras la notificacion Custom sea un evento reciente dentro de `LoyaltyNotifications:VisibleEventPriorityHours`. El backField se mantiene mientras `DisplayUntilUtc` siga vigente.
+
+Audiencias soportadas:
+
+- `AllWalletUsers`
+- `MistAndAbove`
+- `GlowAndAbove`
+- `RadianceOnly`
+- `MinimumPoints`
+- `PointsExpiring`
+
+La audiencia se resuelve al momento de procesar la campana. En campanas programadas no se congela la audiencia al crearla.
+
+Endpoints:
+
+- `POST /api/custom-notification-campaigns/preview`
+- `GET /api/custom-notification-campaigns`
+- `GET /api/custom-notification-campaigns/{id}`
+- `POST /api/custom-notification-campaigns`
+- `POST /api/custom-notification-campaigns/{id}/send`
+- `PUT /api/custom-notification-campaigns/{id}/cancel`
+
+Admin:
+
+- Ruta: `/marketing-notifications`
+- Permite capturar titulo, mensaje corto, mensaje largo, audiencia, fecha de envio y fecha limite.
+- Incluye contador visual de caracteres.
+- Incluye preview de audiencia.
+- Incluye vista previa simple del campo Wallet.
+- Permite enviar ahora, programar y cancelar antes de procesar.
+
+Migracion:
+
+- `20260716120000_AddCustomNotificationCampaigns`
+- Crea `CustomNotificationCampaigns`.
+- Agrega `CustomNotificationCampaignId`, `ShortMessage` y `LongMessage` a `LoyaltyNotifications`.
+- No se aplica automaticamente.

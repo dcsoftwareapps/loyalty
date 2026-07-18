@@ -18,6 +18,9 @@ public sealed record NotificationDto(
     DateTime? ProcessedAt,
     string? CorrelationId,
     string? Source,
+    Guid? CustomNotificationCampaignId,
+    string? ShortMessage,
+    string? LongMessage,
     string? FailureReason,
     IReadOnlyList<NotificationDeliveryDto> Deliveries);
 

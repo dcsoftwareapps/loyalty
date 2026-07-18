@@ -73,6 +73,7 @@ public static class DependencyInjection
         services.AddScoped<IProgramConfigRepository, ProgramConfigRepository>();
         services.AddScoped<IDeviceRegistrationRepository, DeviceRegistrationRepository>();
         services.AddScoped<ILoyaltyNotificationRepository, LoyaltyNotificationRepository>();
+        services.AddScoped<ICustomNotificationCampaignRepository, CustomNotificationCampaignRepository>();
     }
 
     private static void AddCrossCuttingServices(IServiceCollection services)
@@ -91,6 +92,7 @@ public static class DependencyInjection
         services.AddScoped<IMonthlyProductNotificationReadService, MonthlyProductNotificationReadService>();
         services.AddScoped<IBirthdayBenefitNotificationReadService, BirthdayBenefitNotificationReadService>();
         services.AddScoped<IPointCampaignNotificationReadService, PointCampaignNotificationReadService>();
+        services.AddScoped<ICustomNotificationAudienceReadService, CustomNotificationAudienceReadService>();
         services.AddScoped<ILoyaltyNotificationService, LoyaltyNotificationService>();
         services.AddScoped<INotificationChannelProcessor, AppleWalletNotificationChannelProcessor>();
     }
@@ -102,20 +104,41 @@ public static class DependencyInjection
     {
         var isDevelopment = environment?.IsDevelopment() == true;
         var useRealPassSigning = configuration.GetValue<bool>("Wallet:UseRealPassSigning");
-        var useLocalRealWallet = isDevelopment && useRealPassSigning;
-
-        if (useLocalRealWallet)
-        {
-            services.AddScoped<IAppleWalletSecretsProvider, LocalAppleWalletSecretsProvider>();
-            services.AddScoped<IPassGeneratorService, PassGeneratorService>();
-            AddApnHttpClient(services);
-            return;
-        }
+        var useRealApns = configuration.GetValue<bool>("Wallet:UseRealApns");
 
         if (isDevelopment)
         {
-            services.AddScoped<IPassGeneratorService, DevelopmentPassGeneratorService>();
-            services.AddScoped<IApnService, NoOpApnService>();
+            Console.WriteLine(
+                "Wallet DI: Environment={0}, Wallet.UseRealApns={1}, Wallet.UseRealPassSigning={2}, Registering IApnService={3}",
+                environment?.EnvironmentName ?? "unknown",
+                useRealApns,
+                useRealPassSigning,
+                useRealApns ? nameof(ApnService) : nameof(NoOpApnService));
+
+            if (useRealPassSigning || useRealApns)
+                services.AddScoped<IAppleWalletSecretsProvider, LocalAppleWalletSecretsProvider>();
+
+            if (useRealPassSigning)
+            {
+                services.AddScoped<PassGeneratorService>();
+                services.AddScoped<IPassGeneratorService>(sp => sp.GetRequiredService<PassGeneratorService>());
+            }
+            else
+            {
+                services.AddScoped<DevelopmentPassGeneratorService>();
+                services.AddScoped<IPassGeneratorService>(sp => sp.GetRequiredService<DevelopmentPassGeneratorService>());
+            }
+
+            if (useRealApns)
+            {
+                ValidateLocalApnsConfiguration(configuration);
+                AddApnHttpClient(services);
+            }
+            else
+            {
+                services.AddScoped<IApnService, NoOpApnService>();
+            }
+
             return;
         }
 
@@ -128,7 +151,36 @@ public static class DependencyInjection
         services.AddKBeautyKeyVaultClient(keyVaultUri);
         services.AddScoped<IAppleWalletSecretsProvider, KeyVaultAppleWalletSecretsProvider>();
         services.AddScoped<IPassGeneratorService, PassGeneratorService>();
+        Console.WriteLine(
+            "Wallet DI: Environment={0}, Wallet.UseRealApns={1}, Wallet.UseRealPassSigning={2}, Registering IApnService={3}",
+            environment?.EnvironmentName ?? "unknown",
+            useRealApns,
+            useRealPassSigning,
+            nameof(ApnService));
         AddApnHttpClient(services);
+    }
+
+    private static void ValidateLocalApnsConfiguration(IConfiguration configuration)
+    {
+        Require("Wallet:UseRealApns", configuration["Wallet:UseRealApns"]);
+        Require("Apple:ApnPrivateKeyPath", configuration["Apple:ApnPrivateKeyPath"]);
+        Require("Apple:ApnKeyId", configuration["Apple:ApnKeyId"]);
+        Require("Apple:TeamIdentifier", configuration["Apple:TeamIdentifier"]);
+        Require("Apple:PassTypeIdentifier", configuration["Apple:PassTypeIdentifier"]);
+        Require("Apple:ApnHost", configuration["Apple:ApnHost"]);
+
+        var privateKeyPath = configuration["Apple:ApnPrivateKeyPath"]!;
+        if (!File.Exists(privateKeyPath))
+        {
+            throw new InvalidOperationException(
+                $"Wallet:UseRealApns=true but Apple:ApnPrivateKeyPath does not exist: {privateKeyPath}");
+        }
+
+        static void Require(string key, string? value)
+        {
+            if (string.IsNullOrWhiteSpace(value))
+                throw new InvalidOperationException($"Wallet:UseRealApns=true but {key} is missing.");
+        }
     }
 
     private static void AddApnHttpClient(IServiceCollection services)

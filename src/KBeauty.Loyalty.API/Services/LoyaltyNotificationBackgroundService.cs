@@ -1,4 +1,5 @@
 using KBeauty.Loyalty.API.Configuration;
+using KBeauty.Loyalty.Application.Notifications.Custom.Commands.ProcessDueCustomNotificationCampaigns;
 using KBeauty.Loyalty.Application.Notifications.Commands.ProcessPendingNotifications;
 using MediatR;
 using Microsoft.Extensions.Options;
@@ -11,15 +12,18 @@ public sealed class LoyaltyNotificationBackgroundService : BackgroundService
 
     private readonly IServiceScopeFactory _scopeFactory;
     private readonly IOptionsMonitor<LoyaltyNotificationOptions> _options;
+    private readonly IOptionsMonitor<CustomNotificationCampaignOptions> _campaignOptions;
     private readonly ILogger<LoyaltyNotificationBackgroundService> _logger;
 
     public LoyaltyNotificationBackgroundService(
         IServiceScopeFactory scopeFactory,
         IOptionsMonitor<LoyaltyNotificationOptions> options,
+        IOptionsMonitor<CustomNotificationCampaignOptions> campaignOptions,
         ILogger<LoyaltyNotificationBackgroundService> logger)
     {
         _scopeFactory = scopeFactory;
         _options = options;
+        _campaignOptions = campaignOptions;
         _logger = logger;
     }
 
@@ -57,6 +61,19 @@ public sealed class LoyaltyNotificationBackgroundService : BackgroundService
         {
             using var scope = _scopeFactory.CreateScope();
             var sender = scope.ServiceProvider.GetRequiredService<ISender>();
+            var campaignResult = await sender.Send(
+                new ProcessDueCustomNotificationCampaignsCommand(_campaignOptions.CurrentValue.BatchSize),
+                ct);
+
+            if (campaignResult.IsFailure)
+            {
+                _logger.LogWarning("Custom notification campaign processing failed: {Error}", campaignResult.Error);
+            }
+            else if (campaignResult.Value > 0)
+            {
+                _logger.LogInformation("Processed {Count} due custom notification campaign(s).", campaignResult.Value);
+            }
+
             var result = await sender.Send(new ProcessPendingNotificationsCommand(options.BatchSize, options.MaxAttempts), ct);
 
             if (result.IsFailure)

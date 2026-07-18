@@ -34,4 +34,7 @@ public sealed record CreateLoyaltyNotificationRequest(
     string? CorrelationId,
     string? Source,
     string? MetadataJson,
-    bool ProcessImmediately);
+    bool ProcessImmediately,
+    Guid? CustomNotificationCampaignId = null,
+    string? ShortMessage = null,
+    string? LongMessage = null);

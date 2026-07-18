@@ -15,6 +15,8 @@ internal sealed class LoyaltyNotificationConfiguration : IEntityTypeConfiguratio
         builder.Property(n => n.Status).HasConversion<string>().HasMaxLength(50).IsRequired();
         builder.Property(n => n.Title).HasMaxLength(200).IsRequired();
         builder.Property(n => n.Message).HasMaxLength(1000).IsRequired();
+        builder.Property(n => n.ShortMessage).HasMaxLength(40);
+        builder.Property(n => n.LongMessage).HasMaxLength(500);
         builder.Property(n => n.CorrelationId).HasMaxLength(200);
         builder.Property(n => n.Source).HasMaxLength(100);
         builder.Property(n => n.MetadataJson).HasMaxLength(4000);
@@ -45,8 +47,14 @@ internal sealed class LoyaltyNotificationConfiguration : IEntityTypeConfiguratio
             .HasForeignKey(n => n.LoyaltyCardId)
             .OnDelete(DeleteBehavior.Restrict);
 
+        builder.HasOne<CustomNotificationCampaign>()
+            .WithMany()
+            .HasForeignKey(n => n.CustomNotificationCampaignId)
+            .OnDelete(DeleteBehavior.Restrict);
+
         builder.HasIndex(n => n.CustomerId);
         builder.HasIndex(n => n.LoyaltyCardId);
+        builder.HasIndex(n => n.CustomNotificationCampaignId);
         builder.HasIndex(n => n.Status);
         builder.HasIndex(n => n.ScheduledAtUtc);
         builder.HasIndex(n => n.CreatedAt);

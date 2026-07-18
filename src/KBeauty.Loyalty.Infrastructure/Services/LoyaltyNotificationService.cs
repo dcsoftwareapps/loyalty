@@ -112,7 +112,10 @@ internal sealed class LoyaltyNotificationService : ILoyaltyNotificationService
             request.DisplayUntilUtc,
             request.CorrelationId,
             request.Source,
-            request.MetadataJson);
+            request.MetadataJson,
+            request.CustomNotificationCampaignId,
+            request.ShortMessage,
+            request.LongMessage);
 
         foreach (var channel in channels)
             notification.AddDelivery(new NotificationDelivery(Guid.NewGuid(), notification.Id, channel, now));
@@ -229,6 +232,9 @@ internal sealed class LoyaltyNotificationService : ILoyaltyNotificationService
             notification.ProcessedAt,
             notification.CorrelationId,
             notification.Source,
+            notification.CustomNotificationCampaignId,
+            notification.ShortMessage,
+            notification.LongMessage,
             notification.FailureReason,
             notification.Deliveries.Select(d => new NotificationDeliveryDto(
                 d.Id,

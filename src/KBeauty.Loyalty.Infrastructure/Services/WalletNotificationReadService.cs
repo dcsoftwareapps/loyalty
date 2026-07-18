@@ -50,18 +50,32 @@ internal sealed class WalletNotificationReadService : IWalletNotificationReadSer
                 n.Type,
                 n.Title,
                 n.Message,
+                n.ShortMessage,
+                n.LongMessage,
                 n.MetadataJson,
                 n.CreatedAt,
                 n.ProcessedAt,
                 DisplayUntilUtc = n.DisplayUntilUtc!.Value
             })
-            .Take(10)
+            .Take(25)
             .ToListAsync(ct);
 
-        var news = rows.FirstOrDefault();
+        var news = rows.FirstOrDefault(n => n.Type != NotificationType.Custom);
         var levelChange = rows.FirstOrDefault(n => n.Type == NotificationType.LevelChanged);
         var pointsExpiring = rows.FirstOrDefault(n => n.Type == NotificationType.PointsExpiring);
         var birthdayBenefit = rows.FirstOrDefault(n => n.Type == NotificationType.BirthdayBenefitStarted);
+        var customMessage = rows
+            .Where(n => n.Type == NotificationType.Custom
+                     && !string.IsNullOrWhiteSpace(n.ShortMessage)
+                     && !string.IsNullOrWhiteSpace(n.LongMessage))
+            .Select(n => new WalletCustomMessage(
+                n.Id,
+                n.Title,
+                n.ShortMessage!,
+                n.LongMessage!,
+                n.DisplayUntilUtc,
+                "\ud83d\udce3 %@"))
+            .FirstOrDefault();
         var pointCampaignRows = rows.Where(n => n.Type == NotificationType.PointCampaignStarted).ToList();
         var monthlyProduct = await BuildMonthlyProductMessageAsync(ct);
         var pointsExpiringMessage = pointsExpiring is null
@@ -83,6 +97,7 @@ internal sealed class WalletNotificationReadService : IWalletNotificationReadSer
             monthlyProduct,
             birthdayBenefitMessage,
             pointCampaignMessage,
+            customMessage,
             levelChange is not null,
             now);
 
@@ -97,10 +112,11 @@ internal sealed class WalletNotificationReadService : IWalletNotificationReadSer
             monthlyProduct,
             birthdayBenefitMessage,
             pointCampaignMessage,
+            customMessage,
             recentVisibleEvent);
 
         _logger.LogInformation(
-            "WalletNotificationContext for card {CardId}: activeNotifications={NotificationCount}, recentVisibleEvent={RecentVisibleEvent}, levelChange={LevelChange}, pointsExpiring={PointsExpiring}, birthdayBenefit={BirthdayBenefit}, pointCampaign={PointCampaign}, monthlyProduct={MonthlyProduct}.",
+            "WalletNotificationContext for card {CardId}: activeNotifications={NotificationCount}, recentVisibleEvent={RecentVisibleEvent}, levelChange={LevelChange}, pointsExpiring={PointsExpiring}, birthdayBenefit={BirthdayBenefit}, pointCampaign={PointCampaign}, monthlyProduct={MonthlyProduct}, customMessage={CustomMessage}.",
             loyaltyCardId,
             rows.Count,
             recentVisibleEvent is null
@@ -110,7 +126,8 @@ internal sealed class WalletNotificationReadService : IWalletNotificationReadSer
             context.PointsExpiring is null ? "null" : $"{context.PointsExpiring.Value} expires={context.PointsExpiring.ExpirationDate}",
             context.BirthdayBenefit is null ? "null" : $"{context.BirthdayBenefit.Value} year={context.BirthdayBenefit.BenefitYear}",
             context.PointCampaign is null ? "null" : $"{context.PointCampaign.Value} campaign={context.PointCampaign.CampaignId}",
-            context.MonthlyProduct is null ? "null" : $"{context.MonthlyProduct.Value} reward={context.MonthlyProduct.RewardId}");
+            context.MonthlyProduct is null ? "null" : $"{context.MonthlyProduct.Value} reward={context.MonthlyProduct.RewardId}",
+            context.CustomMessage is null ? "null" : $"{context.CustomMessage.ShortMessage} id={context.CustomMessage.NotificationId}");
 
         if (recentVisibleEvent is not null)
         {
@@ -135,6 +152,7 @@ internal sealed class WalletNotificationReadService : IWalletNotificationReadSer
         WalletMonthlyProductMessage? monthlyProduct,
         WalletBirthdayBenefitMessage? birthdayBenefit,
         WalletPointCampaignMessage? pointCampaign,
+        WalletCustomMessage? customMessage,
         bool hasLevelChange,
         DateTime nowUtc)
     {
@@ -143,7 +161,7 @@ internal sealed class WalletNotificationReadService : IWalletNotificationReadSer
 
         var recent = events
             .Where(e => e.ProcessedAt.GetValueOrDefault(e.CreatedAt) >= threshold)
-            .Where(e => IsSupportedAndAvailable(e, hasLevelChange, pointsExpiring, birthdayBenefit, pointCampaign, monthlyProduct))
+            .Where(e => IsSupportedAndAvailable(e, hasLevelChange, pointsExpiring, birthdayBenefit, pointCampaign, monthlyProduct, customMessage))
             .OrderByDescending(e => e.ProcessedAt ?? e.CreatedAt)
             .ThenBy(e => RecentEventPriority(e.Type))
             .ThenByDescending(e => e.CreatedAt)
@@ -154,7 +172,7 @@ internal sealed class WalletNotificationReadService : IWalletNotificationReadSer
         {
             var effectiveAt = candidate.ProcessedAt.GetValueOrDefault(candidate.CreatedAt);
             var inWindow = effectiveAt >= threshold;
-            var supported = IsSupportedAndAvailable(candidate, hasLevelChange, pointsExpiring, birthdayBenefit, pointCampaign, monthlyProduct);
+            var supported = IsSupportedAndAvailable(candidate, hasLevelChange, pointsExpiring, birthdayBenefit, pointCampaign, monthlyProduct, customMessage);
             _logger.LogInformation(
                 "Wallet recent event candidate: id={NotificationId}, type={Type}, createdAt={CreatedAt}, processedAt={ProcessedAt}, displayUntilUtc={DisplayUntilUtc}, threshold={Threshold}, inWindow={InWindow}, supportedAndAvailable={SupportedAndAvailable}.",
                 candidate.NotificationId,
@@ -204,7 +222,8 @@ internal sealed class WalletNotificationReadService : IWalletNotificationReadSer
         WalletPointsExpiringMessage? pointsExpiring,
         WalletBirthdayBenefitMessage? birthdayBenefit,
         WalletPointCampaignMessage? pointCampaign,
-        WalletMonthlyProductMessage? monthlyProduct) =>
+        WalletMonthlyProductMessage? monthlyProduct,
+        WalletCustomMessage? customMessage) =>
         candidate.Type switch
         {
             NotificationType.LevelChanged => hasLevelChange,
@@ -212,6 +231,7 @@ internal sealed class WalletNotificationReadService : IWalletNotificationReadSer
             NotificationType.PointsExpiring => pointsExpiring is not null,
             NotificationType.MonthlyProductStarted => monthlyProduct is not null,
             NotificationType.PointCampaignStarted => pointCampaign?.NotificationId == candidate.NotificationId,
+            NotificationType.Custom => customMessage?.NotificationId == candidate.NotificationId,
             _ => false
         };
 

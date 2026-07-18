@@ -2,6 +2,7 @@ using KBeauty.Loyalty.API.Middleware;
 using KBeauty.Loyalty.API.Configuration;
 using KBeauty.Loyalty.API.Services;
 using KBeauty.Loyalty.Application;
+using KBeauty.Loyalty.Application.Common.Interfaces;
 using KBeauty.Loyalty.Infrastructure;
 using KBeauty.Loyalty.Infrastructure.KeyVault;
 
@@ -23,6 +24,8 @@ builder.Services.Configure<LoyaltyMaintenanceOptions>(
 builder.Services.AddHostedService<LoyaltyMaintenanceBackgroundService>();
 builder.Services.Configure<LoyaltyNotificationOptions>(
     builder.Configuration.GetSection(LoyaltyNotificationOptions.SectionName));
+builder.Services.Configure<CustomNotificationCampaignOptions>(
+    builder.Configuration.GetSection(CustomNotificationCampaignOptions.SectionName));
 builder.Services.AddHostedService<LoyaltyNotificationBackgroundService>();
 
 // Controllers + OpenAPI/Swagger
@@ -53,6 +56,14 @@ builder.Services.AddCors(options =>
 // =============================================================================
 var app = builder.Build();
 
+using (var scope = app.Services.CreateScope())
+{
+    var apnService = scope.ServiceProvider.GetRequiredService<IApnService>();
+    app.Logger.LogInformation("Resolved IApnService={ApnService}", apnService.GetType().Name);
+    LogConfigurationValueSource(app.Logger, app.Configuration, "Wallet:UseRealApns");
+    LogConfigurationValueSource(app.Logger, app.Configuration, "Wallet:UseRealPassSigning");
+}
+
 app.UseExceptionHandler();
 app.UseStatusCodePages();
 
@@ -76,6 +87,27 @@ app.UseMiddleware<ApplePassAuthMiddleware>();
 app.MapControllers();
 
 app.Run();
+
+static void LogConfigurationValueSource(ILogger logger, IConfiguration configuration, string key)
+{
+    var value = configuration[key] ?? "<null>";
+    var providers = configuration is IConfigurationRoot root
+        ? root.Providers
+            .Where(provider => provider.TryGet(key, out _))
+            .Select(provider =>
+            {
+                provider.TryGet(key, out var providerValue);
+                return $"{provider.GetType().Name}={providerValue ?? "<null>"}";
+            })
+            .ToArray()
+        : [];
+
+    logger.LogInformation(
+        "Configuration {Key}={Value}; Providers={Providers}",
+        key,
+        value,
+        providers.Length == 0 ? "<none>" : string.Join("; ", providers));
+}
 
 /// <summary>Para tests de integración con WebApplicationFactory.</summary>
 public partial class Program { }

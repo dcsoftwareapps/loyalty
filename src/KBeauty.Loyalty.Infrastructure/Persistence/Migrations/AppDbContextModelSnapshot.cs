@@ -64,6 +64,95 @@ namespace KBeauty.Loyalty.Infrastructure.Persistence.Migrations
                     b.ToTable("Customers", (string)null);
                 });
 
+            modelBuilder.Entity("KBeauty.Loyalty.Domain.Entities.CustomNotificationCampaign", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("AudienceType")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
+                    b.Property<DateTime?>("CancelledAt")
+                        .HasColumnType("datetime2(3)");
+
+                    b.Property<DateTime?>("CompletedAt")
+                        .HasColumnType("datetime2(3)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2(3)");
+
+                    b.Property<DateTime>("DisplayUntilUtc")
+                        .HasColumnType("datetime2(3)");
+
+                    b.Property<string>("FailureReason")
+                        .HasMaxLength(1000)
+                        .HasColumnType("nvarchar(1000)");
+
+                    b.Property<int>("IntendedRecipients")
+                        .HasColumnType("int");
+
+                    b.Property<string>("LongMessage")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.Property<int?>("MinimumPoints")
+                        .HasColumnType("int");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(120)
+                        .HasColumnType("nvarchar(120)");
+
+                    b.Property<int>("NotificationsCreated")
+                        .HasColumnType("int");
+
+                    b.Property<int>("NotificationsFailed")
+                        .HasColumnType("int");
+
+                    b.Property<int>("NotificationsSucceeded")
+                        .HasColumnType("int");
+
+                    b.Property<int?>("PointsExpiringDaysAhead")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime?>("ScheduledAtUtc")
+                        .HasColumnType("datetime2(3)");
+
+                    b.Property<string>("ShortMessage")
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .HasColumnType("nvarchar(40)");
+
+                    b.Property<DateTime?>("StartedAt")
+                        .HasColumnType("datetime2(3)");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
+                    b.Property<string>("Title")
+                        .IsRequired()
+                        .HasMaxLength(80)
+                        .HasColumnType("nvarchar(80)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CreatedAt");
+
+                    b.HasIndex("ScheduledAtUtc");
+
+                    b.HasIndex("Status");
+
+                    b.HasIndex("Status", "ScheduledAtUtc");
+
+                    b.ToTable("CustomNotificationCampaigns", (string)null);
+                });
+
             modelBuilder.Entity("KBeauty.Loyalty.Domain.Entities.DeviceRegistration", b =>
                 {
                     b.Property<Guid>("Id")
@@ -175,6 +264,9 @@ namespace KBeauty.Loyalty.Infrastructure.Persistence.Migrations
                     b.Property<Guid>("CustomerId")
                         .HasColumnType("uniqueidentifier");
 
+                    b.Property<Guid?>("CustomNotificationCampaignId")
+                        .HasColumnType("uniqueidentifier");
+
                     b.Property<DateTime?>("DisplayUntilUtc")
                         .HasColumnType("datetime2(3)");
 
@@ -184,6 +276,10 @@ namespace KBeauty.Loyalty.Infrastructure.Persistence.Migrations
 
                     b.Property<Guid>("LoyaltyCardId")
                         .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("LongMessage")
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
 
                     b.Property<string>("Message")
                         .IsRequired()
@@ -202,6 +298,10 @@ namespace KBeauty.Loyalty.Infrastructure.Persistence.Migrations
 
                     b.Property<DateTime?>("ScheduledAtUtc")
                         .HasColumnType("datetime2(3)");
+
+                    b.Property<string>("ShortMessage")
+                        .HasMaxLength(40)
+                        .HasColumnType("nvarchar(40)");
 
                     b.Property<string>("Source")
                         .HasMaxLength(100)
@@ -229,6 +329,8 @@ namespace KBeauty.Loyalty.Infrastructure.Persistence.Migrations
                         .HasFilter("[CorrelationId] IS NOT NULL");
 
                     b.HasIndex("CreatedAt");
+
+                    b.HasIndex("CustomNotificationCampaignId");
 
                     b.HasIndex("CustomerId");
 
@@ -769,6 +871,11 @@ namespace KBeauty.Loyalty.Infrastructure.Persistence.Migrations
 
             modelBuilder.Entity("KBeauty.Loyalty.Domain.Entities.LoyaltyNotification", b =>
                 {
+                    b.HasOne("KBeauty.Loyalty.Domain.Entities.CustomNotificationCampaign", null)
+                        .WithMany()
+                        .HasForeignKey("CustomNotificationCampaignId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
                     b.HasOne("KBeauty.Loyalty.Domain.Entities.Customer", null)
                         .WithMany()
                         .HasForeignKey("CustomerId")

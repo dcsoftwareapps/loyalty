@@ -15,7 +15,17 @@ internal sealed class NoOpApnService : IApnService
 
     public Task SendPassUpdateAsync(string pushToken, PassUpdateReason reason, CancellationToken ct = default)
     {
-        _logger.LogDebug("APN omitido en modo Development mock ({Reason}).", reason);
+        _logger.LogInformation(
+            "APNs skipped because NoOpApnService is registered. reason={Reason}, token={Token}.",
+            reason,
+            SafePushToken(pushToken));
         return Task.CompletedTask;
     }
+
+    private static string SafePushToken(string value) =>
+        string.IsNullOrWhiteSpace(value)
+            ? "empty"
+            : value.Length <= 12
+                ? $"{value[..Math.Min(value.Length, 4)]}..."
+                : $"{value[..6]}...{value[^6..]}";
 }

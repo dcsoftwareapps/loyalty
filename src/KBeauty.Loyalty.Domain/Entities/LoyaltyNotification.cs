@@ -19,6 +19,9 @@ public class LoyaltyNotification : Entity
     public DateTime? ProcessedAt { get; private set; }
     public DateTime? CancelledAt { get; private set; }
     public DateTime? DisplayUntilUtc { get; private set; }
+    public Guid? CustomNotificationCampaignId { get; private set; }
+    public string? ShortMessage { get; private set; }
+    public string? LongMessage { get; private set; }
     public string? CorrelationId { get; private set; }
     public string? Source { get; private set; }
     public string? MetadataJson { get; private set; }
@@ -39,7 +42,10 @@ public class LoyaltyNotification : Entity
         DateTime? displayUntilUtc,
         string? correlationId,
         string? source,
-        string? metadataJson) : base(id)
+        string? metadataJson,
+        Guid? customNotificationCampaignId = null,
+        string? shortMessage = null,
+        string? longMessage = null) : base(id)
     {
         if (customerId == Guid.Empty) throw new ArgumentException("CustomerId requerido.", nameof(customerId));
         if (loyaltyCardId == Guid.Empty) throw new ArgumentException("LoyaltyCardId requerido.", nameof(loyaltyCardId));
@@ -57,6 +63,9 @@ public class LoyaltyNotification : Entity
         CreatedAt = createdAtUtc;
         ScheduledAtUtc = scheduledAtUtc;
         DisplayUntilUtc = displayUntilUtc;
+        CustomNotificationCampaignId = customNotificationCampaignId;
+        ShortMessage = SanitizeOptional(shortMessage);
+        LongMessage = SanitizeOptional(longMessage);
         CorrelationId = string.IsNullOrWhiteSpace(correlationId) ? null : correlationId.Trim();
         Source = string.IsNullOrWhiteSpace(source) ? null : source.Trim();
         MetadataJson = string.IsNullOrWhiteSpace(metadataJson) ? null : metadataJson.Trim();
@@ -98,6 +107,9 @@ public class LoyaltyNotification : Entity
 
     private static string Sanitize(string value) =>
         value.Trim().Replace("<", string.Empty).Replace(">", string.Empty);
+
+    private static string? SanitizeOptional(string? value) =>
+        string.IsNullOrWhiteSpace(value) ? null : Sanitize(value);
 
     private static string? Truncate(string? value, int max)
     {

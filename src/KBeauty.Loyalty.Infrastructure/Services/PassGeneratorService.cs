@@ -33,6 +33,7 @@ internal sealed class PassGeneratorService : IPassGeneratorService
     private const string MonthlyProductFieldKey = "monthly_product";
     private const string PointCampaignFieldKey = "point_campaign";
     private const string BirthdayBenefitFieldKey = "birthday_benefit";
+    private const string CustomMessageFieldKey = "custom_message";
 
     private static readonly PassAssetSpec[] PassAssetSpecs =
     [
@@ -121,7 +122,8 @@ internal sealed class PassGeneratorService : IPassGeneratorService
             walletContext.News,
             walletContext.MonthlyProduct,
             walletContext.BirthdayBenefit,
-            walletContext.PointCampaign);
+            walletContext.PointCampaign,
+            walletContext.CustomMessage);
 
         _logger.LogInformation(
             "Apple Wallet pass fields for serial {Serial}: levelKey={LevelFieldKey}, levelValue={LevelValue}, levelChangeMessageIncluded={LevelChangeMessageIncluded}, pointsExpiringIncluded={PointsExpiringIncluded}, monthlyProductIncluded={MonthlyProductIncluded}, birthdayBenefitIncluded={BirthdayBenefitIncluded}, pointCampaignIncluded={PointCampaignIncluded}, recentVisibleEvent={RecentVisibleEvent}.",
@@ -226,6 +228,12 @@ internal sealed class PassGeneratorService : IPassGeneratorService
             selection.Value ?? "none",
             selection.ChangeMessageIncluded);
 
+        _logger.LogInformation(
+            "custom_message: value={CustomMessageValue}, changeMessage={CustomMessageChangeMessage}, included={CustomMessageIncluded}.",
+            walletContext.CustomMessage?.ShortMessage ?? "null",
+            walletContext.CustomMessage?.ChangeMessage ?? "null",
+            temporalField is not null && string.Equals(selection.Key, CustomMessageFieldKey, StringComparison.Ordinal));
+
         if (temporalField is not null)
             fields.Add(temporalField);
 
@@ -251,6 +259,8 @@ internal sealed class PassGeneratorService : IPassGeneratorService
                 BuildMonthlyProductField(walletContext.MonthlyProduct, includeChangeMessage: true, out selection),
             NotificationType.PointCampaignStarted when walletContext.PointCampaign is not null =>
                 BuildPointCampaignField(walletContext.PointCampaign, includeChangeMessage: true, out selection),
+            NotificationType.Custom when walletContext.CustomMessage is not null =>
+                BuildCustomMessageField(walletContext.CustomMessage, includeChangeMessage: true, out selection),
             _ => null
         };
     }
@@ -294,6 +304,32 @@ internal sealed class PassGeneratorService : IPassGeneratorService
                 key = PointsExpiringFieldKey,
                 label = "POR EXPIRAR",
                 value = pointsExpiring.Value
+            };
+    }
+
+    private static object BuildCustomMessageField(
+        WalletCustomMessage customMessage,
+        bool includeChangeMessage,
+        out TemporalFieldSelection selection)
+    {
+        selection = new TemporalFieldSelection(
+            CustomMessageFieldKey,
+            customMessage.ShortMessage,
+            includeChangeMessage);
+
+        return includeChangeMessage
+            ? new
+            {
+                key = CustomMessageFieldKey,
+                label = "NOVEDAD",
+                value = customMessage.ShortMessage,
+                changeMessage = customMessage.ChangeMessage
+            }
+            : new
+            {
+                key = CustomMessageFieldKey,
+                label = "NOVEDAD",
+                value = customMessage.ShortMessage
             };
     }
 
@@ -436,9 +472,20 @@ internal sealed class PassGeneratorService : IPassGeneratorService
         WalletNotificationMessage? walletMessage,
         WalletMonthlyProductMessage? monthlyProduct,
         WalletBirthdayBenefitMessage? birthdayBenefit,
-        WalletPointCampaignMessage? pointCampaign)
+        WalletPointCampaignMessage? pointCampaign,
+        WalletCustomMessage? customMessage)
     {
         var fields = new List<object>();
+        if (customMessage is not null)
+        {
+            fields.Add(new
+            {
+                key = "custom_message_detail",
+                label = "NOVEDAD",
+                value = $"{customMessage.Title}\n\n{customMessage.LongMessage}"
+            });
+        }
+
         if (walletMessage is not null)
         {
             fields.Add(new

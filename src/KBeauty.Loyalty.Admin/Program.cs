@@ -1,5 +1,6 @@
 using KBeauty.Loyalty.Admin.Auth;
 using KBeauty.Loyalty.Application;
+using KBeauty.Loyalty.Application.Common.Interfaces;
 using KBeauty.Loyalty.Infrastructure;
 using KBeauty.Loyalty.Infrastructure.KeyVault;
 using KBeauty.Loyalty.Infrastructure.Persistence;
@@ -18,6 +19,15 @@ builder.Configuration.AddKBeautyKeyVault(builder.Configuration["Azure:KeyVaultUr
 // Capas de negocio — Admin habla con Application/MediatR in-process, no HTTP.
 builder.Services.AddApplication();
 builder.Services.AddInfrastructure(builder.Configuration, builder.Environment);
+
+var apiBaseUrl = builder.Configuration["Admin:ApiBaseUrl"];
+if (string.IsNullOrWhiteSpace(apiBaseUrl))
+    throw new InvalidOperationException("Falta Admin:ApiBaseUrl para que Admin invoque la API backend.");
+
+builder.Services.AddHttpClient("KBeautyApi", client =>
+{
+    client.BaseAddress = new Uri(apiBaseUrl);
+});
 
 // Blazor Web App con Interactive Server.
 builder.Services.AddRazorComponents()
@@ -56,6 +66,14 @@ builder.Services.AddCascadingAuthenticationState();
 // Pipeline
 // =============================================================================
 var app = builder.Build();
+
+using (var scope = app.Services.CreateScope())
+{
+    var apnService = scope.ServiceProvider.GetRequiredService<IApnService>();
+    app.Logger.LogInformation("Resolved IApnService={ApnService}", apnService.GetType().Name);
+    LogConfigurationValueSource(app.Logger, app.Configuration, "Wallet:UseRealApns");
+    LogConfigurationValueSource(app.Logger, app.Configuration, "Wallet:UseRealPassSigning");
+}
 
 if (app.Environment.IsDevelopment())
 {
@@ -103,3 +121,24 @@ if (app.Environment.IsDevelopment())
 }
 
 app.Run();
+
+static void LogConfigurationValueSource(ILogger logger, IConfiguration configuration, string key)
+{
+    var value = configuration[key] ?? "<null>";
+    var providers = configuration is IConfigurationRoot root
+        ? root.Providers
+            .Where(provider => provider.TryGet(key, out _))
+            .Select(provider =>
+            {
+                provider.TryGet(key, out var providerValue);
+                return $"{provider.GetType().Name}={providerValue ?? "<null>"}";
+            })
+            .ToArray()
+        : [];
+
+    logger.LogInformation(
+        "Configuration {Key}={Value}; Providers={Providers}",
+        key,
+        value,
+        providers.Length == 0 ? "<none>" : string.Join("; ", providers));
+}

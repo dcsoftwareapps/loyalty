@@ -10,4 +10,10 @@ public sealed class WalletOptions
     /// sin depender de Azure Key Vault.
     /// </summary>
     public bool UseRealPassSigning { get; init; }
+
+    /// <summary>
+    /// En Development fuerza APNs real con credenciales locales.
+    /// Si es false, se usa NoOpApnService y no se envian pushes reales.
+    /// </summary>
+    public bool UseRealApns { get; init; }
 }

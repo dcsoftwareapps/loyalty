@@ -26,6 +26,7 @@ public class AppDbContext : DbContext, IUnitOfWork
     public DbSet<Redemption> Redemptions => Set<Redemption>();
     public DbSet<RewardCatalogItem> RewardCatalogItems => Set<RewardCatalogItem>();
     public DbSet<PointCampaign> PointCampaigns => Set<PointCampaign>();
+    public DbSet<CustomNotificationCampaign> CustomNotificationCampaigns => Set<CustomNotificationCampaign>();
     public DbSet<ProgramConfig> ProgramConfigs => Set<ProgramConfig>();
     public DbSet<DeviceRegistration> DeviceRegistrations => Set<DeviceRegistration>();
     public DbSet<LoyaltyNotification> LoyaltyNotifications => Set<LoyaltyNotification>();
