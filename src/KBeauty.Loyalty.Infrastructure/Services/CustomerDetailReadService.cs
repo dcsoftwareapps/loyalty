@@ -2,6 +2,7 @@ using KBeauty.Loyalty.Application.Common.Interfaces;
 using KBeauty.Loyalty.Application.Customers.Queries.GetCustomerDetail;
 using KBeauty.Loyalty.Common.Constants;
 using KBeauty.Loyalty.Common.Services;
+using KBeauty.Loyalty.Domain.Entities;
 using KBeauty.Loyalty.Domain.Enums;
 using KBeauty.Loyalty.Domain.ValueObjects;
 using KBeauty.Loyalty.Infrastructure.Persistence;
@@ -35,6 +36,7 @@ internal sealed class CustomerDetailReadService : ICustomerDetailReadService
                 customer.FullName,
                 customer.Email,
                 customer.Phone,
+                customer.DateOfBirth,
                 customer.CreatedAt,
                 CustomerIsActive = customer.IsActive,
                 CardId = card == null ? (Guid?)null : card.Id,
@@ -306,6 +308,8 @@ internal sealed class CustomerDetailReadService : ICustomerDetailReadService
                 FullName: baseInfo.FullName,
                 Email: baseInfo.Email,
                 Phone: baseInfo.Phone,
+                DateOfBirth: baseInfo.DateOfBirth,
+                BirthdayCaptured: baseInfo.DateOfBirth != Customer.BirthdayNotCaptured,
                 CreatedAt: baseInfo.CreatedAt,
                 IsActive: baseInfo.CustomerIsActive && (!hasCard || baseInfo.CardIsActive),
                 Level: rollingLevel,

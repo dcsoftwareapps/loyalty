@@ -16,7 +16,7 @@ public static class DateTimeExtensions
     /// <param name="dob">Fecha de nacimiento de la clienta.</param>
     /// <param name="now">Fecha "ahora" inyectada (UTC o local, debe ser consistente con dob).</param>
     public static bool IsBirthMonth(this DateTime dob, DateTime now) =>
-        dob.Month == now.Month;
+        dob.Date != new DateTime(1900, 1, 1) && dob.Month == now.Month;
 
     /// <summary>
     /// Determina si la fecha cae dentro del último año respecto a <paramref name="now"/>.

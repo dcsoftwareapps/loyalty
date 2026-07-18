@@ -1,4 +1,5 @@
 using KBeauty.Loyalty.Application.Common.Interfaces;
+using KBeauty.Loyalty.Domain.Entities;
 using KBeauty.Loyalty.Domain.Enums;
 using KBeauty.Loyalty.Domain.ValueObjects;
 using KBeauty.Loyalty.Infrastructure.Persistence;
@@ -261,6 +262,7 @@ internal sealed class WalletNotificationReadService : IWalletNotificationReadSer
             where card.Id == loyaltyCardId
                && card.IsActive
                && customer.IsActive
+               && customer.DateOfBirth != Customer.BirthdayNotCaptured
                && customer.DateOfBirth.Month == localDate.Month
             select new
             {

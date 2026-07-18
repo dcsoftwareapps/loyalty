@@ -1,5 +1,6 @@
 using KBeauty.Loyalty.Application.Common.Interfaces;
 using KBeauty.Loyalty.Application.Notifications.BirthdayBenefit;
+using KBeauty.Loyalty.Domain.Entities;
 using KBeauty.Loyalty.Domain.Enums;
 using KBeauty.Loyalty.Domain.ValueObjects;
 using KBeauty.Loyalty.Infrastructure.Persistence;
@@ -38,6 +39,7 @@ internal sealed class BirthdayBenefitNotificationReadService : IBirthdayBenefitN
             join customer in _db.Customers.AsNoTracking() on card.CustomerId equals customer.Id
             where card.IsActive
                && customer.IsActive
+               && customer.DateOfBirth != Customer.BirthdayNotCaptured
                && customer.DateOfBirth.Month == localDate.Month
                && _db.DeviceRegistrations.AsNoTracking().Any(d => d.SerialNumber == card.SerialNumber)
             select new

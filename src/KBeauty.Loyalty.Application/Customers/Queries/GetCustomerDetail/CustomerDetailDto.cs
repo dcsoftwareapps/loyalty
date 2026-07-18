@@ -16,6 +16,8 @@ public sealed record CustomerSummaryDto(
     string FullName,
     string Email,
     string? Phone,
+    DateTime DateOfBirth,
+    bool BirthdayCaptured,
     DateTime CreatedAt,
     bool IsActive,
     string Level,

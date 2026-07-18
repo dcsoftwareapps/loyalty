@@ -11,6 +11,9 @@ public interface ICustomerRepository
     /// <summary>Busca por email — normalizado a lowercase en la implementación.</summary>
     Task<Customer?> GetByEmailAsync(string email, CancellationToken ct = default);
 
+    /// <summary>Busca por telefono normalizado para evitar duplicados del alta publica.</summary>
+    Task<Customer?> GetByNormalizedPhoneAsync(string normalizedPhone, CancellationToken ct = default);
+
     /// <summary>Busca la clienta a través del serial de su <see cref="LoyaltyCard"/>.</summary>
     Task<Customer?> GetBySerialNumberAsync(string serialNumber, CancellationToken ct = default);
 

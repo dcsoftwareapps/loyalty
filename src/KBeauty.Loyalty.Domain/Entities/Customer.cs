@@ -9,6 +9,9 @@ namespace KBeauty.Loyalty.Domain.Entities;
 /// </summary>
 public class Customer : Entity
 {
+    public static readonly DateTime BirthdayNotCaptured = new(1900, 1, 1);
+    private const int CapturedBirthdayYear = 2000;
+
     /// <summary>Nombre completo (mostrado en el pase de Apple Wallet).</summary>
     public string FullName { get; private set; } = string.Empty;
 
@@ -64,6 +67,18 @@ public class Customer : Entity
 
         FullName = fullName.Trim();
         Phone = phone?.Trim();
+    }
+
+    public bool HasCapturedBirthday() => DateOfBirth.Date != BirthdayNotCaptured.Date;
+
+    public void UpdateBirthday(int day, int month)
+    {
+        if (month is < 1 or > 12)
+            throw new ArgumentOutOfRangeException(nameof(month), "Mes de cumpleanos invalido.");
+        if (day < 1 || day > DateTime.DaysInMonth(CapturedBirthdayYear, month))
+            throw new ArgumentOutOfRangeException(nameof(day), "Dia de cumpleanos invalido.");
+
+        DateOfBirth = new DateTime(CapturedBirthdayYear, month, day);
     }
 
     /// <summary>Da de baja a la clienta (no borra historial).</summary>

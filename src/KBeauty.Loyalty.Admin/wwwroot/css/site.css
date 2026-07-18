@@ -60,7 +60,7 @@ a:hover { text-decoration: underline; }
 
 label { display: block; margin-bottom: 8px; font-size: 0.9rem; color: var(--kb-ink-muted); font-weight: 500; }
 
-input[type=text], input[type=email], input[type=number], input[type=password], input[type=date], select, textarea {
+input[type=text], input[type=email], input[type=number], input[type=password], input[type=date], input[type=tel], select, textarea {
     width: 100%;
     padding: 12px 14px;
     border: 1px solid var(--kb-sand-100);
@@ -262,6 +262,41 @@ input:focus, select:focus, textarea:focus {
     box-shadow: var(--kb-shadow-lg);
 }
 .kb-login-card h1 { text-align: center; margin-bottom: 32px; }
+
+/* ============================================================================
+   Public join page
+   ============================================================================ */
+.kb-join {
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+}
+.kb-join-card {
+    width: 100%;
+    max-width: 430px;
+    background: var(--kb-bg-card);
+    border: 1px solid var(--kb-sand-100);
+    border-radius: var(--kb-radius-lg);
+    padding: 32px 24px;
+    box-shadow: var(--kb-shadow-lg);
+}
+.kb-join-brand {
+    margin-bottom: 12px;
+    color: var(--kb-blush);
+    font-size: 0.82rem;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+}
+.kb-join-card h1 { font-size: 2rem; }
+.kb-join-card .kb-form-row { max-width: none; }
+.kb-join-birthday {
+    margin-top: 28px;
+    padding-top: 24px;
+    border-top: 1px solid var(--kb-sand-100);
+}
 
 /* ============================================================================
    Responsive

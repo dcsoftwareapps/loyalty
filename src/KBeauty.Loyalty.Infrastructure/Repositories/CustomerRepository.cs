@@ -20,6 +20,20 @@ internal sealed class CustomerRepository : ICustomerRepository
         return _db.Customers.FirstOrDefaultAsync(c => c.Email == normalized, ct);
     }
 
+    public Task<Customer?> GetByNormalizedPhoneAsync(string normalizedPhone, CancellationToken ct = default)
+    {
+        var normalized = normalizedPhone.Trim();
+        return _db.Customers.FirstOrDefaultAsync(c =>
+            c.Phone != null
+            && c.Phone
+                .Replace(" ", "")
+                .Replace("-", "")
+                .Replace("(", "")
+                .Replace(")", "")
+                .Replace(".", "")
+                .Replace("+", "") == normalized, ct);
+    }
+
     public Task<Customer?> GetBySerialNumberAsync(string serialNumber, CancellationToken ct = default)
     {
         var normalized = serialNumber.Trim().ToUpperInvariant();

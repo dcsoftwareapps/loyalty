@@ -105,6 +105,26 @@ public sealed class PassesController : ControllerBase
         return File(bytes, LoyaltyConstants.ApplePass.ContentType, $"{serialNumber}.pkpass");
     }
 
+    /// <summary>GET /api/passes/{serialNumber} - descarga publica del .pkpass para alta/reinstalacion.</summary>
+    [HttpGet("~/api/passes/{serialNumber}")]
+    public async Task<IActionResult> DownloadPass(string serialNumber, CancellationToken ct)
+    {
+        var card = await _cards.GetBySerialNumberAsync(serialNumber, ct);
+        if (card is null) return NotFound();
+
+        var customer = await _customers.GetByIdAsync(card.CustomerId, ct);
+        if (customer is null) return NotFound();
+
+        _logger.LogInformation(
+            "Public pass download for serial {Serial}; level={Level}; lastActivityAt={LastActivityAt}.",
+            serialNumber,
+            card.Level,
+            card.LastActivityAt);
+
+        var bytes = await _passes.GeneratePassAsync(card, customer, ct);
+        return File(bytes, LoyaltyConstants.ApplePass.ContentType, $"{serialNumber}.pkpass");
+    }
+
     /// <summary>
     /// POST /v1/devices/{deviceLibraryIdentifier}/registrations/{passTypeIdentifier}/{serialNumber}
     /// El iPhone registra un dispositivo para recibir pushes de update.
