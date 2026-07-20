@@ -640,6 +640,12 @@ internal sealed class PassGeneratorService : IPassGeneratorService
             certPassword,
             X509KeyStorageFlags.EphemeralKeySet | X509KeyStorageFlags.Exportable);
 
+        _logger.LogInformation(
+            "Apple Wallet PKCS#12 loaded using strategy {Strategy}. CertificateCount={CertificateCount}, HasPrivateKey={HasPrivateKey}.",
+            "X509CertificateLoader/EphemeralKeySet+Exportable",
+            certCollection.Count,
+            certCollection.OfType<X509Certificate2>().Any(c => c.HasPrivateKey));
+
         var passCert = certCollection
             .OfType<X509Certificate2>()
             .FirstOrDefault(c => c.HasPrivateKey)
