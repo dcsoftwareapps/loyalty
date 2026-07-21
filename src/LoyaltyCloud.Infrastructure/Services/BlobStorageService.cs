@@ -22,11 +22,16 @@ internal sealed class BlobStorageService : IStorageService
 {
     private readonly BlobContainerClient _container;
     private readonly AzureStorageOptions _options;
+    private readonly ITenantContext _tenantContext;
     private readonly ILogger<BlobStorageService> _logger;
 
-    public BlobStorageService(IOptions<AzureStorageOptions> options, ILogger<BlobStorageService> logger)
+    public BlobStorageService(
+        IOptions<AzureStorageOptions> options,
+        ITenantContext tenantContext,
+        ILogger<BlobStorageService> logger)
     {
         _options = options.Value;
+        _tenantContext = tenantContext;
         _logger = logger;
 
         if (string.IsNullOrWhiteSpace(_options.ConnectionString))
@@ -42,7 +47,7 @@ internal sealed class BlobStorageService : IStorageService
 
     public async Task<string> UploadPassAsync(string serialNumber, byte[] passBytes, CancellationToken ct = default)
     {
-        var blobName = $"{serialNumber}.pkpass";
+        var blobName = GetTenantPassBlobName(serialNumber);
         var blob = _container.GetBlobClient(blobName);
 
         using var stream = new MemoryStream(passBytes);
@@ -54,7 +59,11 @@ internal sealed class BlobStorageService : IStorageService
             },
             ct);
 
-        _logger.LogInformation("Pass uploaded for {Serial} ({Bytes} bytes)", serialNumber, passBytes.Length);
+        _logger.LogInformation(
+            "Pass uploaded for {Serial} at blob {BlobName} ({Bytes} bytes)",
+            serialNumber,
+            blobName,
+            passBytes.Length);
 
         // SAS URL de descarga con expiración corta.
         if (!blob.CanGenerateSasUri)
@@ -74,11 +83,32 @@ internal sealed class BlobStorageService : IStorageService
 
     public async Task<byte[]?> DownloadPassAsync(string serialNumber, CancellationToken ct = default)
     {
-        var blob = _container.GetBlobClient($"{serialNumber}.pkpass");
-        if (!await blob.ExistsAsync(ct)) return null;
+        var blob = _container.GetBlobClient(GetTenantPassBlobName(serialNumber));
+        if (!await blob.ExistsAsync(ct))
+        {
+            var legacyBlob = _container.GetBlobClient($"{serialNumber}.pkpass");
+            if (!await legacyBlob.ExistsAsync(ct))
+                return null;
+
+            _logger.LogWarning(
+                "Pass blob for {Serial} found at legacy path; tenant-scoped path was missing.",
+                serialNumber);
+            blob = legacyBlob;
+        }
 
         using var ms = new MemoryStream();
         await blob.DownloadToAsync(ms, ct);
         return ms.ToArray();
+    }
+
+    private string GetTenantPassBlobName(string serialNumber)
+    {
+        if (_tenantContext.HasTenant)
+            return $"tenants/{_tenantContext.TenantSlug}/passes/{serialNumber}.pkpass";
+
+        _logger.LogWarning(
+            "Uploading/downloading pass {Serial} without tenant context; using legacy blob path.",
+            serialNumber);
+        return $"{serialNumber}.pkpass";
     }
 }

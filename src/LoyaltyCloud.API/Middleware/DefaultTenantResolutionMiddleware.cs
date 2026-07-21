@@ -17,7 +17,18 @@ public sealed class DefaultTenantResolutionMiddleware
 
     public async Task InvokeAsync(HttpContext context, IDefaultTenantResolutionService resolver)
     {
+        if (IsWalletTenantResolvedRoute(context.Request.Path))
+        {
+            await _next(context);
+            return;
+        }
+
         await resolver.ResolveDefaultTenantIfMissingAsync(context.RequestAborted);
         await _next(context);
     }
+
+    private static bool IsWalletTenantResolvedRoute(PathString path) =>
+        path.StartsWithSegments("/v1", StringComparison.OrdinalIgnoreCase)
+        || path.StartsWithSegments("/api/passes", StringComparison.OrdinalIgnoreCase)
+        || path.StartsWithSegments("/api/dev/passes", StringComparison.OrdinalIgnoreCase);
 }

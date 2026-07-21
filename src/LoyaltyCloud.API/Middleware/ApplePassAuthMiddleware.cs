@@ -1,3 +1,4 @@
+using LoyaltyCloud.Application.Common.Interfaces;
 using LoyaltyCloud.Common.Constants;
 using LoyaltyCloud.Domain.Repositories;
 using LoyaltyCloud.Infrastructure.Configuration;
@@ -24,7 +25,7 @@ public sealed class ApplePassAuthMiddleware
     public async Task InvokeAsync(
         HttpContext context,
         ILoyaltyCardRepository cards,
-        IDeviceRegistrationRepository devices,
+        IWalletTenantContextResolver tenantResolver,
         IOptions<ApplePassOptions> options)
     {
         var route = ParseWalletRoute(context.Request.Path.Value ?? string.Empty);
@@ -48,7 +49,7 @@ public sealed class ApplePassAuthMiddleware
 
         if (route.IsRegistrationList)
         {
-            if (!await AuthenticateRegistrationListAsync(context, route, cards, devices))
+            if (!AuthenticateRegistrationList(context, route))
                 return;
 
             await _next(context);
@@ -60,6 +61,22 @@ public sealed class ApplePassAuthMiddleware
         {
             LogInvalidAuthorization(context.Request.Path, auth);
             context.Response.StatusCode = StatusCodes.Status401Unauthorized;
+            return;
+        }
+
+        var tenant = await tenantResolver.ResolveAndSetTenantAsync(
+            route.SerialNumber!,
+            requireOperational: true,
+            context.RequestAborted);
+        if (tenant is null)
+        {
+            context.Response.StatusCode = StatusCodes.Status401Unauthorized;
+            return;
+        }
+
+        if (!tenant.IsOperational)
+        {
+            context.Response.StatusCode = StatusCodes.Status403Forbidden;
             return;
         }
 
@@ -77,18 +94,15 @@ public sealed class ApplePassAuthMiddleware
         }
 
         _logger.LogDebug(
-            "Apple Pass auth valid for serial {Serial}; tokenLength={TokenLength}",
+            "Apple Pass auth valid for serial {Serial}; tokenLength={TokenLength}; tenant={TenantSlug}",
             route.SerialNumber,
-            auth.TokenLength);
+            auth.TokenLength,
+            tenant.TenantSlug);
 
         await _next(context);
     }
 
-    private async Task<bool> AuthenticateRegistrationListAsync(
-        HttpContext context,
-        WalletRoute route,
-        ILoyaltyCardRepository cards,
-        IDeviceRegistrationRepository devices)
+    private bool AuthenticateRegistrationList(HttpContext context, WalletRoute route)
     {
         var auth = ReadAuthorization(context);
 
@@ -108,31 +122,8 @@ public sealed class ApplePassAuthMiddleware
             return false;
         }
 
-        var serials = await devices.GetUpdatableSerialsAsync(
-            route.DeviceLibraryIdentifier!,
-            route.PassTypeIdentifier,
-            since: null,
-            context.RequestAborted);
-
-        foreach (var serial in serials)
-        {
-            var card = await cards.GetBySerialNumberAsync(serial, context.RequestAborted);
-            if (card is not null &&
-                string.Equals(card.AuthenticationToken, auth.Token, StringComparison.Ordinal))
-            {
-                _logger.LogDebug(
-                    "Apple Wallet registration-list auth matched serial {Serial}; tokenLength={TokenLength}",
-                    serial,
-                    auth.TokenLength);
-                return true;
-            }
-        }
-
-        // Este endpoint representa varios pases y el protocolo permite consultarlo
-        // sin un token de pase. Un token no asociado se registra, pero no convierte
-        // una petición de Wallet válida en 401.
-        _logger.LogWarning(
-            "Apple Wallet registration-list Authorization did not match a registered pass; request accepted. Device={Device}, passType={PassType}, tokenLength={TokenLength}",
+        _logger.LogInformation(
+            "Apple Wallet registration-list request has Authorization header; accepted without tenant context. Device={Device}, passType={PassType}, tokenLength={TokenLength}",
             SafeDeviceIdentifier(route.DeviceLibraryIdentifier!),
             route.PassTypeIdentifier,
             auth.TokenLength);
@@ -231,3 +222,4 @@ public sealed class ApplePassAuthMiddleware
         string? DeviceLibraryIdentifier,
         bool IsRegistrationList);
 }
+

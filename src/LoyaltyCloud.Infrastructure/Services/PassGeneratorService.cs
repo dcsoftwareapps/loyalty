@@ -19,6 +19,7 @@ internal sealed class PassGeneratorService : IPassGeneratorService
 {
     private readonly IAppleWalletSecretsProvider _secrets;
     private readonly IWalletNotificationReadService _walletNotifications;
+    private readonly ITenantWalletBrandingReadService _tenantBranding;
     private readonly ApplePassOptions _options;
     private readonly ILogger<PassGeneratorService> _logger;
 
@@ -48,11 +49,13 @@ internal sealed class PassGeneratorService : IPassGeneratorService
     public PassGeneratorService(
         IAppleWalletSecretsProvider secrets,
         IWalletNotificationReadService walletNotifications,
+        ITenantWalletBrandingReadService tenantBranding,
         IOptions<ApplePassOptions> options,
         ILogger<PassGeneratorService> logger)
     {
         _secrets = secrets;
         _walletNotifications = walletNotifications;
+        _tenantBranding = tenantBranding;
         _options = options.Value;
         _logger = logger;
     }
@@ -63,7 +66,8 @@ internal sealed class PassGeneratorService : IPassGeneratorService
         ArgumentNullException.ThrowIfNull(customer);
 
         var walletContext = await _walletNotifications.GetActiveContextAsync(card.Id, ct);
-        var passJson = BuildPassJson(card, customer, walletContext);
+        var branding = await _tenantBranding.GetCurrentAsync(ct);
+        var passJson = BuildPassJson(card, customer, walletContext, branding);
         var passJsonBytes = JsonSerializer.SerializeToUtf8Bytes(passJson, PassJsonOpts);
         var assets = LoadPassAssets();
 
@@ -101,7 +105,11 @@ internal sealed class PassGeneratorService : IPassGeneratorService
     public Task<string> GetPassDownloadUrlAsync(string serialNumber, CancellationToken ct = default) =>
         Task.FromResult($"/api/customers/{serialNumber}/pass");
 
-    private object BuildPassJson(LoyaltyCard card, Customer customer, WalletNotificationContext walletContext)
+    private object BuildPassJson(
+        LoyaltyCard card,
+        Customer customer,
+        WalletNotificationContext walletContext,
+        TenantWalletBrandingDto branding)
     {
         EnsureRequiredOption(_options.PassTypeIdentifier, "Apple:PassTypeIdentifier");
         EnsureRequiredOption(_options.TeamIdentifier, "Apple:TeamIdentifier");
@@ -109,7 +117,7 @@ internal sealed class PassGeneratorService : IPassGeneratorService
         EnsureRequiredOption(_options.OrganizationName, "Apple:OrganizationName");
 
         var progress = BuildLevelProgress(card);
-        var displayName = GetWalletDisplayName(customer);
+        var displayName = GetWalletDisplayName(customer, branding.CustomerFallbackName);
         var levelChangeMessage = walletContext.RecentVisibleEvent?.Type == NotificationType.LevelChanged
             ? BuildLevelChangeMessage(card, walletContext.LevelChange)
             : null;
@@ -123,7 +131,8 @@ internal sealed class PassGeneratorService : IPassGeneratorService
             walletContext.MonthlyProduct,
             walletContext.BirthdayBenefit,
             walletContext.PointCampaign,
-            walletContext.CustomMessage);
+            walletContext.CustomMessage,
+            branding.ContactValue);
 
         _logger.LogInformation(
             "Apple Wallet pass fields for serial {Serial}: levelKey={LevelFieldKey}, levelValue={LevelValue}, levelChangeMessageIncluded={LevelChangeMessageIncluded}, pointsExpiringIncluded={PointsExpiringIncluded}, monthlyProductIncluded={MonthlyProductIncluded}, birthdayBenefitIncluded={BirthdayBenefitIncluded}, pointCampaignIncluded={PointCampaignIncluded}, recentVisibleEvent={RecentVisibleEvent}.",
@@ -145,11 +154,11 @@ internal sealed class PassGeneratorService : IPassGeneratorService
             teamIdentifier = _options.TeamIdentifier,
             webServiceURL = _options.WebServiceURL,
             authenticationToken = card.AuthenticationToken,
-            organizationName = _options.OrganizationName,
-            description = "Tarjeta de Lealtad K-Beauty",
-            backgroundColor = "rgb(250,248,244)",
-            foregroundColor = "rgb(28,28,28)",
-            labelColor = "rgb(132,124,120)",
+            organizationName = branding.OrganizationName,
+            description = branding.Description,
+            backgroundColor = branding.BackgroundColor,
+            foregroundColor = branding.ForegroundColor,
+            labelColor = branding.LabelColor,
             storeCard = new
             {
                 primaryFields = new[]
@@ -473,7 +482,8 @@ internal sealed class PassGeneratorService : IPassGeneratorService
         WalletMonthlyProductMessage? monthlyProduct,
         WalletBirthdayBenefitMessage? birthdayBenefit,
         WalletPointCampaignMessage? pointCampaign,
-        WalletCustomMessage? customMessage)
+        WalletCustomMessage? customMessage,
+        string contactValue)
     {
         var fields = new List<object>();
         if (customMessage is not null)
@@ -542,21 +552,21 @@ internal sealed class PassGeneratorService : IPassGeneratorService
         {
             key = "contact",
             label = string.Empty,
-            value = "@kbeauty_mx\n\nkbeautymx.com\n\n+52 646 238 6962"
+            value = contactValue
         });
 
         return fields.ToArray();
     }
 
-    private static string GetWalletDisplayName(Customer customer)
+    private static string GetWalletDisplayName(Customer customer, string fallbackName)
     {
         var fullName = customer.FullName?.Trim();
         if (string.IsNullOrWhiteSpace(fullName))
-            return "Cliente K-Beauty";
+            return fallbackName;
 
         var firstName = fullName.Split(' ', StringSplitOptions.RemoveEmptyEntries).FirstOrDefault();
         return string.IsNullOrWhiteSpace(firstName)
-            ? "Cliente K-Beauty"
+            ? fallbackName
             : firstName;
     }
 

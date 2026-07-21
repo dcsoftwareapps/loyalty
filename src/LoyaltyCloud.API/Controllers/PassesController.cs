@@ -1,7 +1,6 @@
 using LoyaltyCloud.Application.Common.Interfaces;
 using LoyaltyCloud.Application.Devices.Commands.RegisterDevice;
 using LoyaltyCloud.Application.Devices.Commands.UnregisterDevice;
-using LoyaltyCloud.Application.Devices.Queries.GetUpdatableSerials;
 using LoyaltyCloud.Common.Constants;
 using LoyaltyCloud.Domain.Repositories;
 using LoyaltyCloud.Infrastructure.Configuration;
@@ -24,6 +23,8 @@ public sealed class PassesController : ControllerBase
     private readonly ILoyaltyCardRepository _cards;
     private readonly ICustomerRepository _customers;
     private readonly IPassGeneratorService _passes;
+    private readonly IWalletTenantContextResolver _walletTenantResolver;
+    private readonly IDeviceRegistrationPlatformReadService _deviceRegistrations;
     private readonly IWebHostEnvironment _environment;
     private readonly ApplePassOptions _options;
     private readonly ILogger<PassesController> _logger;
@@ -33,6 +34,8 @@ public sealed class PassesController : ControllerBase
         ILoyaltyCardRepository cards,
         ICustomerRepository customers,
         IPassGeneratorService passes,
+        IWalletTenantContextResolver walletTenantResolver,
+        IDeviceRegistrationPlatformReadService deviceRegistrations,
         IWebHostEnvironment environment,
         IOptions<ApplePassOptions> options,
         ILogger<PassesController> logger)
@@ -41,6 +44,8 @@ public sealed class PassesController : ControllerBase
         _cards = cards;
         _customers = customers;
         _passes = passes;
+        _walletTenantResolver = walletTenantResolver;
+        _deviceRegistrations = deviceRegistrations;
         _environment = environment;
         _options = options.Value;
         _logger = logger;
@@ -58,6 +63,10 @@ public sealed class PassesController : ControllerBase
     {
         if (!IsConfiguredPassType(passTypeIdentifier))
             return NotFound();
+
+        var tenant = await ResolveOperationalTenantAsync(serialNumber, ct);
+        if (tenant is null) return NotFound();
+        if (!tenant.IsOperational) return StatusCode(StatusCodes.Status403Forbidden);
 
         var card = await _cards.GetBySerialNumberAsync(serialNumber, ct);
         if (card is null) return NotFound();
@@ -89,6 +98,10 @@ public sealed class PassesController : ControllerBase
         if (!_environment.IsDevelopment())
             return NotFound();
 
+        var tenant = await ResolveOperationalTenantAsync(serialNumber, ct);
+        if (tenant is null) return NotFound();
+        if (!tenant.IsOperational) return StatusCode(StatusCodes.Status403Forbidden);
+
         var card = await _cards.GetBySerialNumberAsync(serialNumber, ct);
         if (card is null) return NotFound();
 
@@ -109,6 +122,10 @@ public sealed class PassesController : ControllerBase
     [HttpGet("~/api/passes/{serialNumber}")]
     public async Task<IActionResult> DownloadPass(string serialNumber, CancellationToken ct)
     {
+        var tenant = await ResolveOperationalTenantAsync(serialNumber, ct);
+        if (tenant is null) return NotFound();
+        if (!tenant.IsOperational) return StatusCode(StatusCodes.Status403Forbidden);
+
         var card = await _cards.GetBySerialNumberAsync(serialNumber, ct);
         if (card is null) return NotFound();
 
@@ -144,6 +161,10 @@ public sealed class PassesController : ControllerBase
         if (string.IsNullOrWhiteSpace(body?.PushToken))
             return BadRequest();
 
+        var tenant = await ResolveOperationalTenantAsync(serialNumber, ct);
+        if (tenant is null) return NotFound();
+        if (!tenant.IsOperational) return StatusCode(StatusCodes.Status403Forbidden);
+
         var result = await _sender.Send(
             new RegisterDeviceCommand(deviceLibraryIdentifier, passTypeIdentifier, serialNumber, body.PushToken),
             ct);
@@ -168,6 +189,10 @@ public sealed class PassesController : ControllerBase
     {
         if (!IsConfiguredPassType(passTypeIdentifier))
             return NotFound();
+
+        var tenant = await ResolveOperationalTenantAsync(serialNumber, ct);
+        if (tenant is null) return NotFound();
+        if (!tenant.IsOperational) return StatusCode(StatusCodes.Status403Forbidden);
 
         await _sender.Send(
             new UnregisterDeviceCommand(deviceLibraryIdentifier, passTypeIdentifier, serialNumber),
@@ -203,11 +228,13 @@ public sealed class PassesController : ControllerBase
             passesUpdatedSince ?? "null",
             since.HasValue ? since.Value.ToString("O") : "null");
 
-        var result = await _sender.Send(
-            new GetUpdatableSerialsQuery(deviceLibraryIdentifier, passTypeIdentifier, since),
+        var result = await _deviceRegistrations.GetUpdatableSerialsAsync(
+            deviceLibraryIdentifier,
+            passTypeIdentifier,
+            since,
             ct);
 
-        if (result.IsFailure || result.Value.SerialNumbers.Count == 0)
+        if (result.SerialNumbers.Count == 0)
         {
             _logger.LogInformation(
                 "Apple Wallet GET registrations result for device {Device} and pass type {PassType}: status=204, passesUpdatedSince={Since}, serialNumbers=[].",
@@ -221,13 +248,13 @@ public sealed class PassesController : ControllerBase
             "Apple Wallet GET registrations result for device {Device} and pass type {PassType}: status=200, serialNumbers=[{SerialNumbers}], lastUpdated={LastUpdated:O}.",
             SafeDeviceIdentifier(deviceLibraryIdentifier),
             passTypeIdentifier,
-            string.Join(", ", result.Value.SerialNumbers),
-            result.Value.LastUpdated);
+            string.Join(", ", result.SerialNumbers),
+            result.LastUpdated);
 
         return Ok(new
         {
-            serialNumbers = result.Value.SerialNumbers,
-            lastUpdated = ((DateTimeOffset)result.Value.LastUpdated).ToUnixTimeSeconds().ToString()
+            serialNumbers = result.SerialNumbers,
+            lastUpdated = ((DateTimeOffset)result.LastUpdated).ToUnixTimeSeconds().ToString()
         });
     }
 
@@ -276,6 +303,14 @@ public sealed class PassesController : ControllerBase
 
         return isValid;
     }
+
+    private Task<WalletTenantInfo?> ResolveOperationalTenantAsync(
+        string serialNumber,
+        CancellationToken ct) =>
+        _walletTenantResolver.ResolveAndSetTenantAsync(
+            serialNumber,
+            requireOperational: true,
+            ct);
 
     private static string SafeDeviceIdentifier(string value) =>
         value.Length <= 8 ? value : $"{value[..4]}...{value[^4..]}";

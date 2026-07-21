@@ -97,6 +97,10 @@ public static class DependencyInjection
         services.AddScoped<ICustomerDetailReadService, CustomerDetailReadService>();
         services.AddScoped<IRedemptionHistoryReadService, RedemptionHistoryReadService>();
         services.AddScoped<IWalletNotificationReadService, WalletNotificationReadService>();
+        services.AddScoped<ILoyaltyCardTenantLookup, LoyaltyCardTenantLookup>();
+        services.AddScoped<IWalletTenantContextResolver, WalletTenantContextResolver>();
+        services.AddScoped<IDeviceRegistrationPlatformReadService, DeviceRegistrationPlatformReadService>();
+        services.AddScoped<ITenantWalletBrandingReadService, TenantWalletBrandingReadService>();
         services.AddScoped<IPointsExpirationNotificationReadService, PointsExpirationNotificationReadService>();
         services.AddScoped<IMonthlyProductNotificationReadService, MonthlyProductNotificationReadService>();
         services.AddScoped<IBirthdayBenefitNotificationReadService, BirthdayBenefitNotificationReadService>();
