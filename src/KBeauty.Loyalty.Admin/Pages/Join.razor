@@ -1,4 +1,4 @@
-@page "/join"
+﻿@page "/join"
 @layout EmptyLayout
 @attribute [AllowAnonymous]
 @rendermode InteractiveServer
@@ -7,12 +7,12 @@
 @using Microsoft.AspNetCore.Mvc
 @inject IHttpClientFactory HttpClientFactory
 
-<PageTitle>Unete a KBeauty Loyalty</PageTitle>
+<PageTitle>Únete a KBeauty Loyalty</PageTitle>
 
 <main class="kb-join">
     <section class="kb-join-card">
         <div class="kb-join-brand">KBeauty Loyalty</div>
-        <h1>Unete a nuestro programa de lealtad</h1>
+        <h1>Únete a nuestro programa de lealtad</h1>
         <p class="kb-muted">Agrega tu tarjeta a Apple Wallet y acumula puntos en cada compra.</p>
 
         @if (errorMsg is not null)
@@ -32,7 +32,7 @@
                     <input id="last-name" type="text" autocomplete="family-name" @bind="form.LastName" />
                 </div>
                 <div>
-                    <label for="phone">Telefono</label>
+                    <label for="phone">Teléfono</label>
                     <input id="phone" type="tel" inputmode="tel" autocomplete="tel" @bind="form.Phone" />
                 </div>
                 <button class="kb-btn kb-btn--primary kb-btn--block kb-btn--large" @onclick="JoinAsync" disabled="@busy">
@@ -43,7 +43,7 @@
         else
         {
             <div class="kb-form-success">@joinResult.Message</div>
-            <h2>Tu tarjeta de KBeauty Loyalty esta lista.</h2>
+            <h2>Tu tarjeta de KBeauty Loyalty está lista.</h2>
             <a class="kb-btn kb-btn--primary kb-btn--block kb-btn--large" href="@joinResult.PassDownloadUrl">
                 Agregar a Apple Wallet
             </a>
@@ -51,11 +51,11 @@
             @if (!birthdaySaved && !birthdaySkipped)
             {
                 <div class="kb-join-birthday">
-                    <h2>Agrega tu cumpleanos</h2>
+                    <h2>Agrega tu cumpleaños</h2>
                     <p class="kb-muted">Recibe beneficios especiales en tu mes.</p>
                     <div class="kb-form-row kb-form-row--horizontal">
                         <div style="flex:1;min-width:120px;">
-                            <label for="birthday-day">Dia</label>
+                            <label for="birthday-day">Día</label>
                             <select id="birthday-day" @bind="birthday.Day">
                                 @for (var day = 1; day <= 31; day++)
                                 {
@@ -75,7 +75,7 @@
                     </div>
                     <div class="kb-actions-inline" style="width:100%;">
                         <button class="kb-btn kb-btn--primary" @onclick="SaveBirthdayAsync" disabled="@busy">
-                            Guardar cumpleanos
+                            Guardar cumpleaños
                         </button>
                         <button class="kb-btn kb-btn--ghost" @onclick="@(() => birthdaySkipped = true)" disabled="@busy">
                             Omitir por ahora
@@ -85,7 +85,7 @@
             }
             else if (birthdaySaved)
             {
-                <div class="kb-form-success">Cumpleanos guardado.</div>
+                <div class="kb-form-success">Cumpleaños guardado.</div>
             }
         }
     </section>
@@ -109,7 +109,7 @@
             || string.IsNullOrWhiteSpace(form.LastName)
             || string.IsNullOrWhiteSpace(form.Phone))
         {
-            errorMsg = "Captura nombre, apellido y telefono.";
+            errorMsg = "Captura nombre, apellido y teléfono.";
             return;
         }
 
@@ -145,7 +145,7 @@
         errorMsg = null;
         if (birthday.Day < 1 || birthday.Month < 1 || birthday.Month > 12 || birthday.Day > DateTime.DaysInMonth(2000, birthday.Month))
         {
-            errorMsg = "El dia no es valido para el mes seleccionado.";
+            errorMsg = "El día no es válido para el mes seleccionado.";
             return;
         }
 
@@ -187,7 +187,7 @@
 
         var content = await response.Content.ReadAsStringAsync();
         return string.IsNullOrWhiteSpace(content)
-            ? "Ocurrio un problema. Intenta de nuevo."
+            ? "Ocurrió un problema. Intenta de nuevo."
             : content;
     }
 

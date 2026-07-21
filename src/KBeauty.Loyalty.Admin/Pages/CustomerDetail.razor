@@ -49,11 +49,11 @@ else
     </div>
 
     <section style="margin-bottom:32px;">
-        <h2>Estadisticas rapidas</h2>
+        <h2>Estadísticas rápidas</h2>
         <div class="kb-grid">
             <MetricCard Label="Puntos actuales" Value="@FormatNumber(detail.Statistics.CurrentPoints)" />
             <MetricCard Label="Puntos rolling" Value="@FormatNumber(detail.Statistics.RollingPoints)" />
-            <MetricCard Label="Puntos historicos" Value="@FormatNumber(detail.Statistics.LifetimePoints)" />
+            <MetricCard Label="Puntos históricos" Value="@FormatNumber(detail.Statistics.LifetimePoints)" />
             <MetricCard Label="Puntos canjeados" Value="@FormatNumber(detail.Statistics.PointsRedeemed)" />
             <MetricCard Label="Total de canjes" Value="@FormatNumber(detail.Statistics.TotalRedemptions)" />
             <MetricCard Label="Pendientes" Value="@FormatNumber(detail.Statistics.PendingRedemptions)" />
@@ -63,13 +63,13 @@ else
     </section>
 
     <section style="margin-bottom:32px;">
-        <h2>Informacion general</h2>
+        <h2>Información general</h2>
         <div class="kb-card">
             <div class="kb-detail-grid">
                 <DetailItem Label="Nombre completo" Value="@detail.Summary.FullName" />
                 <DetailItem Label="Email" Value="@detail.Summary.Email" />
-                <DetailItem Label="Telefono" Value="@DisplayText(detail.Summary.Phone)" />
-                <DetailItem Label="Cumpleanos" Value="@BirthdayText()" />
+                <DetailItem Label="Teléfono" Value="@DisplayText(detail.Summary.Phone)" />
+                <DetailItem Label="Cumpleaños" Value="@BirthdayText()" />
                 <DetailItem Label="Fecha de registro" Value="@FormatDate(detail.Summary.CreatedAt)" />
                 <DetailItem Label="Estado" Value="@StatusText(detail.Summary.IsActive)" />
                 <DetailItem Label="Nivel actual" Value="@detail.Summary.Level" />
@@ -80,7 +80,7 @@ else
     </section>
 
     <section style="margin-bottom:32px;">
-        <h2>Cumpleanos</h2>
+        <h2>Cumpleaños</h2>
         <div class="kb-card">
             @if (birthdaySuccess is not null)
             {
@@ -92,7 +92,7 @@ else
             }
             <div class="kb-form-row kb-form-row--horizontal">
                 <div style="flex:1;min-width:120px;">
-                    <label for="birthday-day">Dia</label>
+                    <label for="birthday-day">Día</label>
                     <select id="birthday-day" @bind="birthdayDay">
                         @for (var day = 1; day <= 31; day++)
                         {
@@ -110,14 +110,14 @@ else
                     </select>
                 </div>
                 <button class="kb-btn kb-btn--primary" @onclick="SaveBirthdayAsync" disabled="@birthdayBusy">
-                    Guardar cumpleanos
+                    Guardar cumpleaños
                 </button>
             </div>
         </div>
     </section>
 
     <section style="margin-bottom:32px;">
-        <h2>Auditoria de saldo</h2>
+        <h2>Auditoría de saldo</h2>
         <div class="kb-grid">
             <MetricCard Label="Saldo disponible" Value="@FormatNumber(detail.Statistics.CurrentPoints)" />
             <MetricCard Label="Rolling 12 meses" Value="@FormatNumber(detail.LoyaltyAudit.RollingProgress.RollingPoints)" />
@@ -127,11 +127,11 @@ else
     </section>
 
     <section style="margin-bottom:32px;">
-        <h2>Proxima expiracion</h2>
+        <h2>Próxima expiración</h2>
         <div class="kb-card">
             @if (detail.LoyaltyAudit.UpcomingExpiration is null)
             {
-                <p class="kb-muted" style="margin:0;">Sin puntos proximos a expirar.</p>
+                <p class="kb-muted" style="margin:0;">Sin puntos próximos a expirar.</p>
             }
             else
             {
@@ -166,12 +166,12 @@ else
         {
             <div class="kb-card">
                 <div class="kb-detail-grid">
-                    <DetailItem Label="Numero de tarjeta" Value="@DisplayText(detail.Wallet.SerialNumber)" />
+                    <DetailItem Label="Número de tarjeta" Value="@DisplayText(detail.Wallet.SerialNumber)" />
                     <DetailItem Label="Puntos actuales" Value="@FormatNullableNumber(detail.Wallet.CurrentPoints)" />
-                    <DetailItem Label="Fecha de emision" Value="@FormatNullableDate(detail.Wallet.IssuedAt)" />
-                    <DetailItem Label="Ultima actualizacion" Value="@FormatNullableDateTime(detail.Wallet.LastActivityAt)" />
+                    <DetailItem Label="Fecha de emisión" Value="@FormatNullableDate(detail.Wallet.IssuedAt)" />
+                    <DetailItem Label="Última actualización" Value="@FormatNullableDateTime(detail.Wallet.LastActivityAt)" />
                     <DetailItem Label="Dispositivos registrados" Value="@FormatNumber(detail.Wallet.DeviceRegistrationCount)" />
-                    <DetailItem Label="Ultimo push enviado" Value="@FormatNullableDateTime(detail.Wallet.LastPushSentAt)" />
+                    <DetailItem Label="Último push enviado" Value="@FormatNullableDateTime(detail.Wallet.LastPushSentAt)" />
                 </div>
             </div>
         }
@@ -227,10 +227,10 @@ else
                     <tr>
                         <th>Fecha</th>
                         <th>Tipo</th>
-                        <th>Descripcion</th>
-                        <th>Campana</th>
+                        <th>Descripción</th>
+                        <th>Campaña</th>
                         <th class="kb-cell-number">Puntos</th>
-                        <th>Balance despues</th>
+                        <th>Balance después</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -427,7 +427,7 @@ else
         birthdaySuccess = null;
         if (birthdayDay < 1 || birthdayMonth < 1 || birthdayMonth > 12 || birthdayDay > DateTime.DaysInMonth(2000, birthdayMonth))
         {
-            birthdayError = "El dia no es valido para el mes seleccionado.";
+            birthdayError = "El día no es válido para el mes seleccionado.";
             return;
         }
 
@@ -446,7 +446,7 @@ else
                 return;
             }
 
-            birthdaySuccess = "Cumpleanos guardado.";
+            birthdaySuccess = "Cumpleaños guardado.";
             var refreshed = await Sender.Send(new GetCustomerDetailQuery(detail.Summary.CustomerId));
             if (refreshed.IsSuccess)
                 detail = refreshed.Value;

@@ -1,4 +1,4 @@
-@page "/notifications"
+﻿@page "/notifications"
 @attribute [Authorize]
 @rendermode InteractiveServer
 
@@ -18,11 +18,11 @@
     <div>
         <h1>Notificaciones</h1>
         <p class="kb-muted" style="margin-top:-8px;">
-            Mensajes logicos de lealtad y entregas por Apple Wallet.
+            Mensajes lógicos de lealtad y entregas por Apple Wallet.
         </p>
     </div>
     <button class="kb-btn kb-btn--primary" @onclick="ToggleForm" disabled="@busy">
-        @(showForm ? "Cerrar" : "Nueva notificacion")
+        @(showForm ? "Cerrar" : "Nueva notificación")
     </button>
 </div>
 
@@ -46,9 +46,9 @@
 @if (showForm)
 {
     <section class="kb-card" style="margin-bottom:24px;max-width:900px;">
-        <h2>Nueva notificacion manual</h2>
+        <h2>Nueva notificación manual</h2>
         <p class="kb-muted">
-            En Fase 5.1 Apple Wallet solo refresca el pass. El mensaje se muestra dentro del reverso del pass en la seccion NOVEDADES.
+            En Fase 5.1 Apple Wallet solo refresca el pass. El mensaje se muestra dentro del reverso del pass en la sección NOVEDADES.
         </p>
 
         @if (validationErrors.Count > 0)
@@ -67,7 +67,7 @@
                 <input id="notification-serial" type="text" @bind="form.SerialNumber" />
             </div>
             <div style="flex:1;min-width:220px;">
-                <label for="notification-title">Titulo interno</label>
+                <label for="notification-title">Título interno</label>
                 <input id="notification-title" type="text" @bind="form.Title" />
             </div>
             <div style="flex:1;min-width:220px;">
@@ -288,7 +288,7 @@ else
                 return;
             }
 
-            successMsg = "Notificacion creada.";
+            successMsg = "Notificación creada.";
             showForm = false;
             ResetForm();
             await LoadAsync();
@@ -299,9 +299,9 @@ else
         }
     }
 
-    private async Task ProcessAsync(Guid id) => await ExecuteAsync(() => Sender.Send(new ProcessNotificationCommand(id)), "Notificacion procesada.");
-    private async Task RetryAsync(Guid id) => await ExecuteAsync(() => Sender.Send(new RetryNotificationCommand(id)), "Notificacion reintentada.");
-    private async Task CancelAsync(Guid id) => await ExecuteAsync(() => Sender.Send(new CancelNotificationCommand(id)), "Notificacion cancelada.");
+    private async Task ProcessAsync(Guid id) => await ExecuteAsync(() => Sender.Send(new ProcessNotificationCommand(id)), "Notificación procesada.");
+    private async Task RetryAsync(Guid id) => await ExecuteAsync(() => Sender.Send(new RetryNotificationCommand(id)), "Notificación reintentada.");
+    private async Task CancelAsync(Guid id) => await ExecuteAsync(() => Sender.Send(new CancelNotificationCommand(id)), "Notificación cancelada.");
 
     private async Task ExecuteAsync(Func<Task<KBeauty.Loyalty.Common.Results.Result<NotificationDto>>> operation, string success)
     {
@@ -331,7 +331,7 @@ else
         if (string.IsNullOrWhiteSpace(form.SerialNumber))
             validationErrors.Add("El serial Wallet es obligatorio.");
         if (string.IsNullOrWhiteSpace(form.Title))
-            validationErrors.Add("El titulo es obligatorio.");
+            validationErrors.Add("El título es obligatorio.");
         if (string.IsNullOrWhiteSpace(form.Message))
             validationErrors.Add("El mensaje es obligatorio.");
         if (ParseLocalDateTimeAsUtc(form.DisplayUntilLocal) is not { } displayUntil || displayUntil <= DateTime.UtcNow)

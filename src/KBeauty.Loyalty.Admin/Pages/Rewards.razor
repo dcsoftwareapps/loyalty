@@ -17,7 +17,7 @@
     <div>
         <h1>Recompensas</h1>
         <p style="color: var(--kb-ink-muted); margin-top: -8px;">
-            Administra el catalogo de recompensas disponible para canjes.
+            Administra el catálogo de recompensas disponible para canjes.
         </p>
     </div>
     <button class="kb-btn kb-btn--primary" @onclick="StartCreate" disabled="@busy">
@@ -53,7 +53,7 @@
                 <input id="reward-points" type="number" min="1" @bind="form.PointsCost" />
             </div>
             <div style="flex:1;min-width:180px;">
-                <label for="reward-level">Nivel minimo</label>
+                <label for="reward-level">Nivel mínimo</label>
                 <select id="reward-level" @bind="form.MinLevel">
                     <option value="@LoyaltyConstants.Levels.Mist">Mist</option>
                     <option value="@LoyaltyConstants.Levels.Glow">Glow</option>
@@ -64,7 +64,7 @@
 
         <div class="kb-form-row" style="max-width:100%;">
             <div>
-                <label for="reward-description">Descripcion</label>
+                <label for="reward-description">Descripción</label>
                 <textarea id="reward-description" rows="3" @bind="form.Description"></textarea>
             </div>
         </div>
@@ -112,7 +112,7 @@
             <div class="kb-detail-grid">
                 <DetailItem Label="Nombre" Value="@CurrentMonthlyProduct.Name" />
                 <DetailItem Label="Costo" Value="@($"{CurrentMonthlyProduct.PointsCost:N0} pts")" />
-                <DetailItem Label="Nivel minimo" Value="@CurrentMonthlyProduct.MinLevel" />
+                <DetailItem Label="Nivel mínimo" Value="@CurrentMonthlyProduct.MinLevel" />
                 <DetailItem Label="Vigencia" Value="@FormatValidity(CurrentMonthlyProduct)" />
                 <DetailItem Label="Estado" Value="@MonthlyProductStatus(CurrentMonthlyProduct)" />
             </div>
@@ -124,7 +124,7 @@
     <div style="flex:2;min-width:260px;">
         <label for="reward-search">Buscar</label>
         <input id="reward-search" type="text" value="@rewardSearch" @oninput="OnRewardSearchChanged"
-               placeholder="Nombre o descripcion" />
+               placeholder="Nombre o descripción" />
     </div>
     <div class="kb-actions-inline" style="align-self:end;">
         <button class="@RewardFilterButtonClass(RewardFilterAll)" @onclick="ShowAllRewards">Todas</button>
@@ -148,7 +148,7 @@ else
             <tr>
                 <th>Nombre</th>
                 <th class="kb-cell-number">Puntos</th>
-                <th>Nivel minimo</th>
+                <th>Nivel mínimo</th>
                 <th>Mes</th>
                 <th>Vigencia</th>
                 <th>Estado</th>
@@ -388,7 +388,7 @@ else
             validationErrors.Add("El nombre es obligatorio.");
 
         if (string.IsNullOrWhiteSpace(form.Description))
-            validationErrors.Add("La descripcion es obligatoria.");
+            validationErrors.Add("La descripción es obligatoria.");
 
         if (form.PointsCost <= 0)
             validationErrors.Add("Los puntos requeridos deben ser mayores a 0.");
@@ -397,10 +397,10 @@ else
         var hasValidTo = TryParseDateInput(form.ValidToDate, out var validToDate);
 
         if (!hasValidFrom)
-            validationErrors.Add("Vigente desde no tiene un formato valido.");
+            validationErrors.Add("Vigente desde no tiene un formato válido.");
 
         if (!hasValidTo)
-            validationErrors.Add("Vigente hasta no tiene un formato valido.");
+            validationErrors.Add("Vigente hasta no tiene un formato válido.");
 
         if (validFromDate.HasValue && validToDate.HasValue && validToDate.Value < validFromDate.Value)
             validationErrors.Add("Vigente hasta no puede ser menor que Vigente desde.");

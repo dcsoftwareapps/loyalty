@@ -217,6 +217,27 @@ input:focus, select:focus, textarea:focus {
    ============================================================================ */
 .kb-scan { max-width: 480px; margin: 0 auto; padding: 24px; }
 .kb-scan input[type=text], .kb-scan input[type=number] { font-size: 1.5rem; padding: 18px; text-align: center; }
+.kb-qr-scanner {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    padding: 14px;
+    border: 1px solid var(--kb-sand-100);
+    border-radius: var(--kb-radius-sm);
+    background: var(--kb-bg-card);
+}
+.kb-qr-video {
+    width: 100%;
+    aspect-ratio: 4 / 3;
+    object-fit: cover;
+    border-radius: var(--kb-radius-sm);
+    background: #111;
+}
+.kb-qr-scanner p {
+    margin: 0;
+    color: var(--kb-ink-muted);
+    text-align: center;
+}
 
 /* ============================================================================
    Form filas

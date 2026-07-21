@@ -1,4 +1,4 @@
-@page "/campaigns"
+﻿@page "/campaigns"
 @attribute [Authorize]
 @rendermode InteractiveServer
 
@@ -12,14 +12,14 @@
 @using System.Globalization
 @inject ISender Sender
 
-<PageTitle>Campanas - KBeauty</PageTitle>
+<PageTitle>Campañas - KBeauty</PageTitle>
 
 <div style="display:flex;align-items:center;justify-content:space-between;gap:16px;margin-bottom:24px;">
     <div>
-        <h1>Campanas</h1>
+        <h1>Campañas</h1>
         <p style="color: var(--kb-ink-muted); margin-top: -8px;">Administra multiplicadores promocionales para compras.</p>
     </div>
-    <button class="kb-btn kb-btn--primary" @onclick="StartCreate" disabled="@busy">Nueva campana</button>
+    <button class="kb-btn kb-btn--primary" @onclick="StartCreate" disabled="@busy">Nueva campaña</button>
 </div>
 
 @if (successMsg is not null) { <div class="kb-form-success">@successMsg</div> }
@@ -37,7 +37,7 @@
 @if (showForm)
 {
     <section class="kb-card" style="margin-bottom:24px;max-width:960px;">
-        <h2>@(editingId.HasValue ? "Editar campana" : "Nueva campana")</h2>
+        <h2>@(editingId.HasValue ? "Editar campaña" : "Nueva campaña")</h2>
 
         @if (validationErrors.Count > 0)
         {
@@ -59,7 +59,7 @@
                 <input id="campaign-multiplier" type="number" min="2" max="5" step="1" @bind="form.Multiplier" />
             </div>
             <div style="flex:1;min-width:180px;">
-                <label for="campaign-minimum">Monto minimo</label>
+                <label for="campaign-minimum">Monto mínimo</label>
                 <input id="campaign-minimum" type="number" min="0" step="0.01" @bind="form.MinimumPurchaseAmount" />
             </div>
             <div style="flex:1;min-width:180px;">
@@ -75,7 +75,7 @@
 
         <div class="kb-form-row">
             <div>
-                <label for="campaign-description">Descripcion</label>
+                <label for="campaign-description">Descripción</label>
                 <textarea id="campaign-description" rows="3" @bind="form.Description"></textarea>
             </div>
         </div>
@@ -108,7 +108,7 @@
 }
 else if (campaigns.Count == 0)
 {
-    <p class="kb-muted">No hay campanas configuradas.</p>
+    <p class="kb-muted">No hay campañas configuradas.</p>
 }
 else
 {
@@ -117,7 +117,7 @@ else
             <tr>
                 <th>Nombre</th>
                 <th>Multiplicador</th>
-                <th class="kb-cell-number">Monto minimo</th>
+                <th class="kb-cell-number">Monto mínimo</th>
                 <th>Nivel</th>
                 <th>Vigencia Tijuana</th>
                 <th>Estado</th>
@@ -228,7 +228,7 @@ else
             return;
         }
 
-        successMsg = editingId.HasValue ? "Campana actualizada." : "Campana creada.";
+        successMsg = editingId.HasValue ? "Campaña actualizada." : "Campaña creada.";
         showForm = false;
         editingId = null;
         form = CampaignFormModel.CreateDefault();
@@ -241,7 +241,7 @@ else
         busy = true;
         var result = await Sender.Send(new ActivatePointCampaignCommand(id));
         busy = false;
-        successMsg = result.IsSuccess ? "Campana activada." : null;
+        successMsg = result.IsSuccess ? "Campaña activada." : null;
         errorMsg = result.IsFailure ? result.Error : null;
         await ReloadAsync();
     }
@@ -252,7 +252,7 @@ else
         busy = true;
         var result = await Sender.Send(new DeactivatePointCampaignCommand(id));
         busy = false;
-        successMsg = result.IsSuccess ? "Campana desactivada." : null;
+        successMsg = result.IsSuccess ? "Campaña desactivada." : null;
         errorMsg = result.IsFailure ? result.Error : null;
         await ReloadAsync();
     }
@@ -274,11 +274,11 @@ else
         if (string.IsNullOrWhiteSpace(form.Name))
             validationErrors.Add("El nombre es obligatorio.");
         if (string.IsNullOrWhiteSpace(form.Description))
-            validationErrors.Add("La descripcion es obligatoria.");
+            validationErrors.Add("La descripción es obligatoria.");
         if (form.Multiplier is < 2 or > 5)
             validationErrors.Add("El multiplicador debe estar entre 2 y 5.");
         if (form.MinimumPurchaseAmount.HasValue && form.MinimumPurchaseAmount.Value < 0)
-            validationErrors.Add("El monto minimo no puede ser negativo.");
+            validationErrors.Add("El monto mínimo no puede ser negativo.");
 
         var hasStart = TryParseLocalInput(form.StartsAtLocal, out startsAtUtc);
         var hasEnd = TryParseLocalInput(form.EndsAtLocal, out endsAtUtc);
@@ -325,7 +325,7 @@ else
 
     private static string ActiveBadgeClass(bool isActive) => isActive ? "kb-badge kb-badge--success" : "kb-badge kb-badge--muted";
     private static string LevelText(CampaignLevelEligibility eligibility) => eligibility == CampaignLevelEligibility.All ? "Todos" : eligibility.ToString();
-    private static string FormatMoney(decimal? value) => value.HasValue ? $"${value.Value:N2}" : "Sin minimo";
+    private static string FormatMoney(decimal? value) => value.HasValue ? $"${value.Value:N2}" : "Sin mínimo";
     private static string FormatValidity(PointCampaignAdminDto campaign) => $"{FormatLocalDateTime(campaign.StartsAtUtc)} - {FormatLocalDateTime(campaign.EndsAtUtc)}";
 
     private static string FormatLocalDateTime(DateTime utc)

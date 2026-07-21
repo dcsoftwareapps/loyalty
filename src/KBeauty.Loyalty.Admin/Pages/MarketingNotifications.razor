@@ -1,4 +1,4 @@
-@page "/marketing-notifications"
+﻿@page "/marketing-notifications"
 @attribute [Authorize]
 @rendermode InteractiveServer
 
@@ -47,7 +47,7 @@
                         <input id="campaign-name" type="text" @bind="form.Name" />
                     </div>
                     <div style="flex:1;min-width:220px;">
-                        <label for="campaign-title">Titulo</label>
+                        <label for="campaign-title">Título</label>
                         <input id="campaign-title" type="text" maxlength="80" @bind="form.Title" />
                         <div class="kb-muted">@($"{(form.Title?.Length ?? 0)}/80")</div>
                     </div>
@@ -73,21 +73,21 @@
                             <option value="@CustomNotificationAudienceType.MistAndAbove">Mist y superiores</option>
                             <option value="@CustomNotificationAudienceType.GlowAndAbove">Glow y superiores</option>
                             <option value="@CustomNotificationAudienceType.RadianceOnly">Solo Radiance</option>
-                            <option value="@CustomNotificationAudienceType.MinimumPoints">Puntos minimos</option>
+                            <option value="@CustomNotificationAudienceType.MinimumPoints">Puntos mínimos</option>
                             <option value="@CustomNotificationAudienceType.PointsExpiring">Puntos por expirar</option>
                         </select>
                     </div>
                     @if (form.AudienceType == CustomNotificationAudienceType.MinimumPoints)
                     {
                         <div style="flex:1;min-width:180px;">
-                            <label for="minimum-points">Puntos minimos</label>
+                            <label for="minimum-points">Puntos mínimos</label>
                             <input id="minimum-points" type="number" min="0" @bind="form.MinimumPoints" />
                         </div>
                     }
                     @if (form.AudienceType == CustomNotificationAudienceType.PointsExpiring)
                     {
                         <div style="flex:1;min-width:180px;">
-                            <label for="days-ahead">Dias adelante</label>
+                            <label for="days-ahead">Días adelante</label>
                             <input id="days-ahead" type="number" min="1" @bind="form.PointsExpiringDaysAhead" />
                         </div>
                     }
@@ -99,10 +99,10 @@
                         <input id="display-until" type="datetime-local" value="@form.DisplayUntilLocal" @onchange="OnDisplayUntilChanged" />
                     </div>
                     <div style="flex:1;min-width:200px;">
-                        <label for="send-mode">Envio</label>
+                        <label for="send-mode">Envío</label>
                         <select id="send-mode" value="@form.SendMode" @onchange="OnSendModeChanged">
                             <option value="@CustomMessageSendMode.SendNow">Enviar ahora</option>
-                            <option value="@CustomMessageSendMode.Schedule">Programar envio</option>
+                            <option value="@CustomMessageSendMode.Schedule">Programar envío</option>
                         </select>
                     </div>
                     @if (!form.SendImmediately)
@@ -129,7 +129,7 @@
                         <button class="kb-btn kb-btn--primary" @onclick="CreateAsync" disabled="@busy">
                             @(form.SendImmediately ? "Enviar mensaje" : "Programar mensaje")
                         </button>
-                        <button class="kb-btn kb-btn--ghost" @onclick="@(() => confirmSend = false)" disabled="@busy">Cancelar confirmacion</button>
+                        <button class="kb-btn kb-btn--ghost" @onclick="@(() => confirmSend = false)" disabled="@busy">Cancelar confirmación</button>
                     }
                 </div>
             </div>
@@ -185,7 +185,7 @@
                     <th>Audiencia</th>
                     <th>Mensaje</th>
                     <th>Estado</th>
-                    <th>Metricas</th>
+                    <th>Métricas</th>
                     <th>Acciones</th>
                 </tr>
             </thead>
@@ -395,27 +395,27 @@
         if (string.IsNullOrWhiteSpace(form.Name))
             validationErrors.Add("El nombre interno es obligatorio.");
         if (string.IsNullOrWhiteSpace(form.Title) || form.Title.Trim().Length > 80)
-            validationErrors.Add("El titulo es obligatorio y debe tener maximo 80 caracteres.");
+            validationErrors.Add("El título es obligatorio y debe tener máximo 80 caracteres.");
         if (string.IsNullOrWhiteSpace(form.ShortMessage) || form.ShortMessage.Trim().Length > 40)
-            validationErrors.Add("El mensaje corto es obligatorio y debe tener maximo 40 caracteres.");
+            validationErrors.Add("El mensaje corto es obligatorio y debe tener máximo 40 caracteres.");
         if (form.ShortMessage?.Any(c => c is '\n' or '\r' or '\t') == true)
-            validationErrors.Add("El mensaje corto no debe contener saltos de linea ni tabuladores.");
+            validationErrors.Add("El mensaje corto no debe contener saltos de línea ni tabuladores.");
         if (string.IsNullOrWhiteSpace(form.LongMessage) || form.LongMessage.Trim().Length > 500)
-            validationErrors.Add("El mensaje largo es obligatorio y debe tener maximo 500 caracteres.");
+            validationErrors.Add("El mensaje largo es obligatorio y debe tener máximo 500 caracteres.");
         var effectiveSendAtUtc = form.SendImmediately ? DateTime.UtcNow : form.ScheduledAtUtc;
 
         if (form.DisplayUntilUtc <= DateTime.UtcNow)
-            validationErrors.Add("La fecha limite de visualizacion debe ser futura.");
+            validationErrors.Add("La fecha límite de visualización debe ser futura.");
         if (!form.SendImmediately && !form.ScheduledAtUtc.HasValue)
-            validationErrors.Add("La fecha de envio es obligatoria para mensajes programados.");
+            validationErrors.Add("La fecha de envío es obligatoria para mensajes programados.");
         if (!form.SendImmediately && form.ScheduledAtUtc.HasValue && form.ScheduledAtUtc.Value <= DateTime.UtcNow)
-            validationErrors.Add("La fecha de envio debe ser futura.");
+            validationErrors.Add("La fecha de envío debe ser futura.");
         if (effectiveSendAtUtc.HasValue && form.DisplayUntilUtc <= effectiveSendAtUtc.Value)
-            validationErrors.Add("La fecha limite de visualizacion debe ser posterior a la fecha de envio.");
+            validationErrors.Add("La fecha límite de visualización debe ser posterior a la fecha de envío.");
         if (form.AudienceType == CustomNotificationAudienceType.MinimumPoints && form.MinimumPoints.GetValueOrDefault() < 0)
-            validationErrors.Add("Los puntos minimos deben ser cero o mayores.");
+            validationErrors.Add("Los puntos mínimos deben ser cero o mayores.");
         if (form.AudienceType == CustomNotificationAudienceType.PointsExpiring && form.PointsExpiringDaysAhead.GetValueOrDefault() <= 0)
-            validationErrors.Add("Los dias de expiracion deben ser mayores a cero.");
+            validationErrors.Add("Los días de expiración deben ser mayores a cero.");
 
         return validationErrors.Count == 0;
     }
@@ -488,7 +488,7 @@
 
         var content = await response.Content.ReadAsStringAsync();
         return string.IsNullOrWhiteSpace(content)
-            ? $"La API respondio {(int)response.StatusCode} {response.ReasonPhrase}."
+            ? $"La API respondió {(int)response.StatusCode} {response.ReasonPhrase}."
             : content;
     }
 
