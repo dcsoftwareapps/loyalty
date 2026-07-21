@@ -15,8 +15,18 @@ internal sealed class TenantContext : IMutableTenantContext
         if (string.IsNullOrWhiteSpace(tenantSlug))
             throw new ArgumentException("TenantSlug requerido.", nameof(tenantSlug));
 
+        var normalizedSlug = tenantSlug.Trim().ToLowerInvariant();
+        if (HasTenant)
+        {
+            if (TenantId == tenantId && string.Equals(TenantSlug, normalizedSlug, StringComparison.Ordinal))
+                return;
+
+            throw new InvalidOperationException(
+                $"TenantContext ya fue establecido para {TenantSlug} ({TenantId}) y no puede cambiarse a {normalizedSlug} ({tenantId}) dentro del mismo scope.");
+        }
+
         TenantId = tenantId;
-        TenantSlug = tenantSlug.Trim().ToLowerInvariant();
+        TenantSlug = normalizedSlug;
     }
 
     public void Clear()

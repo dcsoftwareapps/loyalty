@@ -35,4 +35,15 @@ public sealed class TenantSubscription
         GracePeriodEndsAt = gracePeriodEndsAt;
         LastPaymentAt = lastPaymentAt;
     }
+
+    public bool IsOperational(DateTime nowUtc) =>
+        IsOperational(Status, GracePeriodEndsAt, nowUtc);
+
+    public static bool IsOperational(
+        TenantSubscriptionStatus status,
+        DateTime? gracePeriodEndsAt,
+        DateTime nowUtc) =>
+        status is TenantSubscriptionStatus.Trial or TenantSubscriptionStatus.Active
+        || (status == TenantSubscriptionStatus.PastDue
+            && (!gracePeriodEndsAt.HasValue || gracePeriodEndsAt.Value >= nowUtc));
 }

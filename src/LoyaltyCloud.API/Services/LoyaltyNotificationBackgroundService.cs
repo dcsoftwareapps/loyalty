@@ -11,18 +11,18 @@ public sealed class LoyaltyNotificationBackgroundService : BackgroundService
 {
     private static readonly TimeSpan MinimumPollInterval = TimeSpan.FromSeconds(15);
 
-    private readonly IServiceScopeFactory _scopeFactory;
+    private readonly ITenantExecutionRunner _tenantRunner;
     private readonly IOptionsMonitor<LoyaltyNotificationOptions> _options;
     private readonly IOptionsMonitor<CustomNotificationCampaignOptions> _campaignOptions;
     private readonly ILogger<LoyaltyNotificationBackgroundService> _logger;
 
     public LoyaltyNotificationBackgroundService(
-        IServiceScopeFactory scopeFactory,
+        ITenantExecutionRunner tenantRunner,
         IOptionsMonitor<LoyaltyNotificationOptions> options,
         IOptionsMonitor<CustomNotificationCampaignOptions> campaignOptions,
         ILogger<LoyaltyNotificationBackgroundService> logger)
     {
-        _scopeFactory = scopeFactory;
+        _tenantRunner = tenantRunner;
         _options = options;
         _campaignOptions = campaignOptions;
         _logger = logger;
@@ -60,33 +60,63 @@ public sealed class LoyaltyNotificationBackgroundService : BackgroundService
     {
         try
         {
-            using var scope = _scopeFactory.CreateScope();
-            var tenantResolver = scope.ServiceProvider.GetRequiredService<IDefaultTenantResolutionService>();
-            await tenantResolver.ResolveDefaultTenantIfMissingAsync(ct);
-            var sender = scope.ServiceProvider.GetRequiredService<ISender>();
-            var campaignResult = await sender.Send(
-                new ProcessDueCustomNotificationCampaignsCommand(_campaignOptions.CurrentValue.BatchSize),
+            var summary = await _tenantRunner.RunForOperationalTenantsAsync(
+                "loyalty-notification-processing",
+                async (serviceProvider, tenant, tenantCt) =>
+                {
+                    var sender = serviceProvider.GetRequiredService<ISender>();
+                    var campaignResult = await sender.Send(
+                        new ProcessDueCustomNotificationCampaignsCommand(_campaignOptions.CurrentValue.BatchSize),
+                        tenantCt);
+
+                    if (campaignResult.IsFailure)
+                    {
+                        _logger.LogWarning(
+                            "Custom notification campaign processing failed. TenantId={TenantId}, TenantSlug={TenantSlug}, Error={Error}",
+                            tenant.TenantId,
+                            tenant.Slug,
+                            campaignResult.Error);
+                    }
+                    else if (campaignResult.Value > 0)
+                    {
+                        _logger.LogInformation(
+                            "Processed {Count} due custom notification campaign(s). TenantId={TenantId}, TenantSlug={TenantSlug}",
+                            campaignResult.Value,
+                            tenant.TenantId,
+                            tenant.Slug);
+                    }
+
+                    var result = await sender.Send(
+                        new ProcessPendingNotificationsCommand(options.BatchSize, options.MaxAttempts),
+                        tenantCt);
+
+                    if (result.IsFailure)
+                    {
+                        _logger.LogWarning(
+                            "Loyalty notification processing failed. TenantId={TenantId}, TenantSlug={TenantSlug}, Error={Error}",
+                            tenant.TenantId,
+                            tenant.Slug,
+                            result.Error);
+                        return;
+                    }
+
+                    if (result.Value > 0)
+                    {
+                        _logger.LogInformation(
+                            "Processed {Count} pending loyalty notifications. TenantId={TenantId}, TenantSlug={TenantSlug}",
+                            result.Value,
+                            tenant.TenantId,
+                            tenant.Slug);
+                    }
+                },
                 ct);
 
-            if (campaignResult.IsFailure)
-            {
-                _logger.LogWarning("Custom notification campaign processing failed: {Error}", campaignResult.Error);
-            }
-            else if (campaignResult.Value > 0)
-            {
-                _logger.LogInformation("Processed {Count} due custom notification campaign(s).", campaignResult.Value);
-            }
-
-            var result = await sender.Send(new ProcessPendingNotificationsCommand(options.BatchSize, options.MaxAttempts), ct);
-
-            if (result.IsFailure)
-            {
-                _logger.LogWarning("Loyalty notification processing failed: {Error}", result.Error);
-                return;
-            }
-
-            if (result.Value > 0)
-                _logger.LogInformation("Processed {Count} pending loyalty notifications.", result.Value);
+            _logger.LogInformation(
+                "Finished loyalty notification processing cycle. EligibleTenantCount={EligibleTenantCount}, SucceededTenantCount={SucceededTenantCount}, FailedTenantCount={FailedTenantCount}, SkippedTenantCount={SkippedTenantCount}.",
+                summary.EligibleTenantCount,
+                summary.SucceededTenantCount,
+                summary.FailedTenantCount,
+                summary.SkippedTenantCount);
         }
         catch (OperationCanceledException) when (ct.IsCancellationRequested)
         {
@@ -94,7 +124,7 @@ public sealed class LoyaltyNotificationBackgroundService : BackgroundService
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Unexpected error processing pending loyalty notifications.");
+            _logger.LogError(ex, "Unexpected error processing pending loyalty notifications tenant cycle.");
         }
     }
 }

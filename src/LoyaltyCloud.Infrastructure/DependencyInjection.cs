@@ -88,6 +88,8 @@ public static class DependencyInjection
         services.AddScoped<ITenantContext>(sp => sp.GetRequiredService<TenantContext>());
         services.AddScoped<IMutableTenantContext>(sp => sp.GetRequiredService<TenantContext>());
         services.AddScoped<IDefaultTenantResolutionService, DefaultTenantResolutionService>();
+        services.AddScoped<IOperationalTenantReadService, OperationalTenantReadService>();
+        services.AddSingleton<ITenantExecutionRunner, TenantExecutionRunner>();
         services.AddScoped<IPasswordHashingService, PasswordHashingService>();
 
         services.AddScoped<IDashboardReadService, DashboardReadService>();

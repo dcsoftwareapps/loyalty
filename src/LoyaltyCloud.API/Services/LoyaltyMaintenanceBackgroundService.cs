@@ -23,16 +23,16 @@ public sealed class LoyaltyMaintenanceBackgroundService : BackgroundService
             ["America/Tijuana"] = "Pacific Standard Time (Mexico)"
         };
 
-    private readonly IServiceScopeFactory _scopeFactory;
+    private readonly ITenantExecutionRunner _tenantRunner;
     private readonly IOptionsMonitor<LoyaltyMaintenanceOptions> _options;
     private readonly ILogger<LoyaltyMaintenanceBackgroundService> _logger;
 
     public LoyaltyMaintenanceBackgroundService(
-        IServiceScopeFactory scopeFactory,
+        ITenantExecutionRunner tenantRunner,
         IOptionsMonitor<LoyaltyMaintenanceOptions> options,
         ILogger<LoyaltyMaintenanceBackgroundService> logger)
     {
-        _scopeFactory = scopeFactory;
+        _tenantRunner = tenantRunner;
         _options = options;
         _logger = logger;
     }
@@ -88,33 +88,52 @@ public sealed class LoyaltyMaintenanceBackgroundService : BackgroundService
         var stopwatch = Stopwatch.StartNew();
         _logger.LogInformation("Starting loyalty maintenance.");
 
-        using var scope = _scopeFactory.CreateScope();
-        var tenantResolver = scope.ServiceProvider.GetRequiredService<IDefaultTenantResolutionService>();
-        await tenantResolver.ResolveDefaultTenantIfMissingAsync(ct);
-        var sender = scope.ServiceProvider.GetRequiredService<ISender>();
+        try
+        {
+            var summary = await _tenantRunner.RunForOperationalTenantsAsync(
+                "loyalty-maintenance",
+                async (serviceProvider, tenant, tenantCt) =>
+                {
+                    var sender = serviceProvider.GetRequiredService<ISender>();
 
-        await RunExpirationAsync(sender, ct);
-        await RunLevelRecalculationAsync(sender, ct);
-        await RunPointExpirationNotificationsAsync(sender, options, ct);
-        await RunMonthlyProductNotificationsAsync(sender, options, ct);
-        await RunBirthdayBenefitNotificationsAsync(sender, options, ct);
-        await RunPointCampaignNotificationsAsync(sender, options, ct);
+                    await RunExpirationAsync(sender, tenantCt);
+                    await RunLevelRecalculationAsync(sender, tenantCt);
+                    await RunPointExpirationNotificationsAsync(sender, tenant.TimeZoneId, tenantCt);
+                    await RunMonthlyProductNotificationsAsync(sender, tenant.TimeZoneId, tenantCt);
+                    await RunBirthdayBenefitNotificationsAsync(sender, tenant.TimeZoneId, tenantCt);
+                    await RunPointCampaignNotificationsAsync(sender, tenant.TimeZoneId, tenantCt);
+                },
+                ct);
 
-        stopwatch.Stop();
-        _logger.LogInformation(
-            "Finished loyalty maintenance in {ElapsedMilliseconds} ms.",
-            stopwatch.ElapsedMilliseconds);
+            stopwatch.Stop();
+            _logger.LogInformation(
+                "Finished loyalty maintenance in {ElapsedMilliseconds} ms. EligibleTenantCount={EligibleTenantCount}, SucceededTenantCount={SucceededTenantCount}, FailedTenantCount={FailedTenantCount}, SkippedTenantCount={SkippedTenantCount}.",
+                stopwatch.ElapsedMilliseconds,
+                summary.EligibleTenantCount,
+                summary.SucceededTenantCount,
+                summary.FailedTenantCount,
+                summary.SkippedTenantCount);
+        }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch (Exception ex)
+        {
+            stopwatch.Stop();
+            _logger.LogError(ex, "Unexpected error running loyalty maintenance tenant cycle.");
+        }
     }
 
     private async Task RunPointExpirationNotificationsAsync(
         ISender sender,
-        LoyaltyMaintenanceOptions options,
+        string timeZoneId,
         CancellationToken ct)
     {
         try
         {
             var result = await sender.Send(
-                new CreatePointExpirationNotificationsCommand(OperatorId, DaysAhead: 15, TimeZoneId: options.TimeZoneId),
+                new CreatePointExpirationNotificationsCommand(OperatorId, DaysAhead: 15, TimeZoneId: timeZoneId),
                 ct);
             if (result.IsFailure)
             {
@@ -144,13 +163,13 @@ public sealed class LoyaltyMaintenanceBackgroundService : BackgroundService
 
     private async Task RunMonthlyProductNotificationsAsync(
         ISender sender,
-        LoyaltyMaintenanceOptions options,
+        string timeZoneId,
         CancellationToken ct)
     {
         try
         {
             var result = await sender.Send(
-                new CreateMonthlyProductStartedNotificationsCommand(OperatorId, options.TimeZoneId),
+                new CreateMonthlyProductStartedNotificationsCommand(OperatorId, timeZoneId),
                 ct);
             if (result.IsFailure)
             {
@@ -181,13 +200,13 @@ public sealed class LoyaltyMaintenanceBackgroundService : BackgroundService
 
     private async Task RunBirthdayBenefitNotificationsAsync(
         ISender sender,
-        LoyaltyMaintenanceOptions options,
+        string timeZoneId,
         CancellationToken ct)
     {
         try
         {
             var result = await sender.Send(
-                new CreateBirthdayBenefitStartedNotificationsCommand(OperatorId, options.TimeZoneId),
+                new CreateBirthdayBenefitStartedNotificationsCommand(OperatorId, timeZoneId),
                 ct);
             if (result.IsFailure)
             {
@@ -217,13 +236,13 @@ public sealed class LoyaltyMaintenanceBackgroundService : BackgroundService
 
     private async Task RunPointCampaignNotificationsAsync(
         ISender sender,
-        LoyaltyMaintenanceOptions options,
+        string timeZoneId,
         CancellationToken ct)
     {
         try
         {
             var result = await sender.Send(
-                new CreatePointCampaignStartedNotificationsCommand(OperatorId, options.TimeZoneId),
+                new CreatePointCampaignStartedNotificationsCommand(OperatorId, timeZoneId),
                 ct);
             if (result.IsFailure)
             {
