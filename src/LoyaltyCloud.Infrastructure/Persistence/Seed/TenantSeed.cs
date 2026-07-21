@@ -7,6 +7,7 @@ namespace LoyaltyCloud.Infrastructure.Persistence.Seed;
 public static class TenantSeed
 {
     public static readonly Guid KBeautyTenantId = Guid.Parse("b1000000-0000-0000-0000-000000000001");
+    public const string KBeautySlug = "kbeauty";
     private static readonly DateTime SeedDate = new(2026, 7, 1, 0, 0, 0, DateTimeKind.Utc);
 
     public static void Apply(ModelBuilder modelBuilder)
@@ -14,7 +15,7 @@ public static class TenantSeed
         modelBuilder.Entity<Tenant>().HasData(new
         {
             Id = KBeautyTenantId,
-            Slug = "kbeauty",
+            Slug = KBeautySlug,
             DisplayName = "KBeauty",
             IsActive = true,
             TimeZoneId = "America/Tijuana",

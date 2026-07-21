@@ -1,4 +1,5 @@
 using System.Data;
+using LoyaltyCloud.Application.Common.Interfaces;
 using LoyaltyCloud.Common.Constants;
 using LoyaltyCloud.Common.Services;
 using LoyaltyCloud.Domain.Entities;
@@ -41,6 +42,9 @@ public static class DevelopmentDataSeeder
             return;
 
         using var scope = services.CreateScope();
+        var tenantContext = scope.ServiceProvider.GetRequiredService<IMutableTenantContext>();
+        tenantContext.SetTenant(TenantSeed.KBeautyTenantId, TenantSeed.KBeautySlug);
+
         var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
         var logger = scope.ServiceProvider
             .GetRequiredService<ILoggerFactory>()

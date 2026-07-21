@@ -2,7 +2,7 @@ using LoyaltyCloud.Domain.Common;
 
 namespace LoyaltyCloud.Domain.Entities;
 
-public sealed class TenantAdminUser : Entity
+public sealed class TenantAdminUser : Entity, ITenantOwned
 {
     public Guid TenantId { get; private set; }
     public string Username { get; private set; } = string.Empty;
