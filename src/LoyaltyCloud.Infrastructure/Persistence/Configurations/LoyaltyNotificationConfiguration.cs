@@ -29,12 +29,6 @@ internal sealed class LoyaltyNotificationConfiguration : IEntityTypeConfiguratio
         builder.Property(n => n.CancelledAt).HasColumnType("datetime2(3)");
         builder.Property(n => n.DisplayUntilUtc).HasColumnType("datetime2(3)");
 
-        builder.HasMany(n => n.Deliveries)
-            .WithOne()
-            .HasPrincipalKey(n => new { n.TenantId, n.Id })
-            .HasForeignKey(d => new { d.TenantId, d.LoyaltyNotificationId })
-            .OnDelete(DeleteBehavior.Cascade);
-
         builder.Navigation(n => n.Deliveries)
             .UsePropertyAccessMode(PropertyAccessMode.Field);
 
@@ -56,12 +50,12 @@ internal sealed class LoyaltyNotificationConfiguration : IEntityTypeConfiguratio
             .HasForeignKey(n => new { n.TenantId, n.CustomNotificationCampaignId })
             .OnDelete(DeleteBehavior.Restrict);
 
-        builder.HasIndex(n => new { n.TenantId, n.Id }).IsUnique();
         builder.HasIndex(n => new { n.TenantId, n.CustomerId });
         builder.HasIndex(n => new { n.TenantId, n.LoyaltyCardId });
         builder.HasIndex(n => new { n.TenantId, n.CustomNotificationCampaignId });
         builder.HasIndex(n => new { n.TenantId, n.Status });
         builder.HasIndex(n => new { n.TenantId, n.ScheduledAtUtc });
+        builder.HasIndex(n => new { n.TenantId, n.Status, n.ScheduledAtUtc });
         builder.HasIndex(n => new { n.TenantId, n.CreatedAt });
         builder.HasIndex(n => new { n.TenantId, n.CorrelationId })
             .IsUnique()

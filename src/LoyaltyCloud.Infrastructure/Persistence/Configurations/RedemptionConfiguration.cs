@@ -23,8 +23,7 @@ internal sealed class RedemptionConfiguration : IEntityTypeConfiguration<Redempt
         builder.Property(r => r.RedeemedAt).HasColumnType("datetime2(3)");
         builder.Property(r => r.ConfirmedAt).HasColumnType("datetime2(3)");
 
-        builder.HasIndex(r => new { r.TenantId, r.Id }).IsUnique();
-        builder.HasIndex(r => new { r.TenantId, r.LoyaltyCardId });
+        builder.HasIndex(r => new { r.TenantId, r.LoyaltyCardId, r.RedeemedAt });
         builder.HasIndex(r => new { r.TenantId, r.Status, r.RedeemedAt });
         builder.HasIndex(r => new { r.TenantId, r.RewardCatalogItemId });
 

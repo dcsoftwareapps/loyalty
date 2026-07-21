@@ -30,6 +30,8 @@ internal sealed class LoyaltyCardConfiguration : IEntityTypeConfiguration<Loyalt
         // Único: un serial nunca se repite.
         builder.HasIndex(c => c.SerialNumber).IsUnique();
 
+        builder.HasAlternateKey(c => new { c.TenantId, c.SerialNumber });
+
         // 1:1 con Customer — un cliente tiene una tarjeta.
         builder.HasIndex(c => new { c.TenantId, c.CustomerId }).IsUnique();
 

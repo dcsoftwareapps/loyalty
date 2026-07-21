@@ -33,7 +33,6 @@ internal sealed class PointCampaignConfiguration : IEntityTypeConfiguration<Poin
         builder.Property(c => c.CreatedAt).HasColumnType("datetime2(3)");
         builder.Property(c => c.UpdatedAt).HasColumnType("datetime2(3)");
 
-        builder.HasIndex(c => new { c.TenantId, c.Id }).IsUnique();
         builder.HasIndex(c => new { c.TenantId, c.IsActive });
         builder.HasIndex(c => new { c.TenantId, c.StartsAtUtc });
         builder.HasIndex(c => new { c.TenantId, c.EndsAtUtc });

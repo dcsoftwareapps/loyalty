@@ -38,6 +38,12 @@ internal sealed class DeviceRegistrationConfiguration : IEntityTypeConfiguration
         builder.HasIndex(d => new { d.TenantId, d.SerialNumber });
         builder.HasIndex(d => new { d.TenantId, d.DeviceLibraryIdentifier });
 
+        builder.HasOne<LoyaltyCard>()
+            .WithMany()
+            .HasPrincipalKey(c => new { c.TenantId, c.SerialNumber })
+            .HasForeignKey(d => new { d.TenantId, d.SerialNumber })
+            .OnDelete(DeleteBehavior.Restrict);
+
         builder.HasOne<Tenant>()
             .WithMany()
             .HasForeignKey(d => d.TenantId)

@@ -21,14 +21,14 @@ internal sealed class NotificationDeliveryConfiguration : IEntityTypeConfigurati
         builder.Property(d => d.CompletedAt).HasColumnType("datetime2(3)");
 
         builder.HasIndex(d => new { d.TenantId, d.LoyaltyNotificationId });
-        builder.HasIndex(d => new { d.TenantId, d.Channel });
         builder.HasIndex(d => new { d.TenantId, d.Status });
+        builder.HasIndex(d => new { d.TenantId, d.Channel, d.Status });
 
         builder.HasOne<LoyaltyNotification>()
-            .WithMany()
+            .WithMany(n => n.Deliveries)
             .HasPrincipalKey(n => new { n.TenantId, n.Id })
             .HasForeignKey(d => new { d.TenantId, d.LoyaltyNotificationId })
-            .OnDelete(DeleteBehavior.Cascade);
+            .OnDelete(DeleteBehavior.Restrict);
 
         builder.HasOne<Tenant>()
             .WithMany()

@@ -41,6 +41,8 @@ internal sealed class CustomerConfiguration : IEntityTypeConfiguration<Customer>
             .IsUnique()
             .HasFilter("[NormalizedPhone] IS NOT NULL AND [NormalizedPhone] <> ''");
 
+        builder.HasIndex(c => new { c.TenantId, c.IsActive });
+
         // Referido: FK opcional al referidor (sin nav property, solo el id).
         builder.HasIndex(c => new { c.TenantId, c.ReferredBy });
 
