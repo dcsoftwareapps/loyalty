@@ -265,7 +265,7 @@ namespace LoyaltyCloud.Infrastructure.Persistence.Migrations
                 columns: new[] { "TenantId", "LoyaltyNotificationId" },
                 principalTable: "LoyaltyNotifications",
                 principalColumns: new[] { "TenantId", "Id" },
-                onDelete: ReferentialAction.Cascade);
+                onDelete: ReferentialAction.Restrict);
 
             migrationBuilder.AddForeignKey(
                 name: "FK_NotificationDeliveries_Tenants_TenantId",

@@ -23,6 +23,11 @@ public static class DevelopmentDataSeeder
     private const string DemoEmailDomain = "@kbeauty.local";
     private const string DemoOperator = "development-seed";
     private const string SentinelEmail = "demo.customer.001@kbeauty.local";
+    private const string SharedIsolationPhone = "6461234567";
+    private const string KBeautyIsolationSerial = "KB-TEST-001";
+    private const string BellaIsolationSerial = "BS-TEST-001";
+    private static readonly Guid BellaTenantId = Guid.Parse("b2000000-0000-0000-0000-000000000001");
+    private const string BellaSlug = "bella-salon";
 
     private static readonly string[] DemoRewardNames =
     {
@@ -85,6 +90,10 @@ public static class DevelopmentDataSeeder
             transactionsCreated += redemptionCounts.Transactions;
             redemptionsCreated += redemptionCounts.Redemptions;
 
+            var isolationCounts = await EnsureKBeautyIsolationSampleAsync(db, ct);
+            customersCreated += isolationCounts.Customers;
+            transactionsCreated += isolationCounts.Transactions;
+
             await db.SaveChangesAsync(ct);
             await tx.CommitAsync(ct);
         });
@@ -96,6 +105,8 @@ public static class DevelopmentDataSeeder
             customersCreated,
             transactionsCreated,
             redemptionsCreated);
+
+        await SeedBellaSalonDevelopmentTenantAsync(services, ct);
     }
 
     private static async Task<int> EnsureProgramConfigAsync(AppDbContext db, CancellationToken ct)
@@ -371,6 +382,247 @@ public static class DevelopmentDataSeeder
         }
 
         return (transactionsCreated, redemptionsCreated);
+    }
+
+    private static async Task<(int Customers, int Transactions)> EnsureKBeautyIsolationSampleAsync(
+        AppDbContext db,
+        CancellationToken ct)
+    {
+        if (await db.LoyaltyCards.AnyAsync(c => c.TenantId == TenantSeed.KBeautyTenantId && c.SerialNumber == KBeautyIsolationSerial, ct))
+            return (0, 0);
+
+        var now = DateTime.UtcNow;
+        var config = ProgramConfigSnapshot.FromEntries(await db.ProgramConfigs.Where(c => c.TenantId == TenantSeed.KBeautyTenantId).ToListAsync(ct));
+        var clock = new MutableClock(now);
+        var customer = new Customer(
+            Guid.Parse("b1000001-0000-0000-0000-000000000101"),
+            TenantSeed.KBeautyTenantId,
+            "KBeauty Test Customer",
+            "isolation.kbeauty@kbeauty.local",
+            new DateTime(1992, 7, 21),
+            now,
+            SharedIsolationPhone);
+        var card = new LoyaltyCard(
+            Guid.Parse("b1000001-0000-0000-0000-000000000201"),
+            TenantSeed.KBeautyTenantId,
+            customer.Id,
+            KBeautyIsolationSerial,
+            now);
+
+        db.Customers.Add(customer);
+        db.LoyaltyCards.Add(card);
+
+        var transactions = AddEarned(
+            db,
+            card,
+            300,
+            TransactionType.Purchase,
+            "Compra seed aislamiento KBeauty",
+            now,
+            config,
+            clock,
+            purchaseAmount: 3000m);
+
+        return (1, transactions);
+    }
+
+    private static async Task SeedBellaSalonDevelopmentTenantAsync(
+        IServiceProvider services,
+        CancellationToken ct)
+    {
+        using var scope = services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        var tenantContext = scope.ServiceProvider.GetRequiredService<IMutableTenantContext>();
+        var logger = scope.ServiceProvider
+            .GetRequiredService<ILoggerFactory>()
+            .CreateLogger("LoyaltyCloud.DevelopmentDataSeeder");
+
+        var strategy = db.Database.CreateExecutionStrategy();
+        await strategy.ExecuteAsync(async () =>
+        {
+            await using var tx = await db.Database.BeginTransactionAsync(IsolationLevel.Serializable, ct);
+
+            await EnsureBellaPlatformRowsAsync(db, ct);
+            tenantContext.SetTenant(BellaTenantId, BellaSlug);
+
+            var configCreated = await EnsureBellaProgramConfigAsync(db, ct);
+            var rewardsCreated = await EnsureBellaRewardsAsync(db, ct);
+            var customersCreated = await EnsureBellaCustomerAsync(db, ct);
+            var campaignsCreated = await EnsureBellaCampaignAsync(db, ct);
+
+            await db.SaveChangesAsync(ct);
+            await tx.CommitAsync(ct);
+
+            logger.LogInformation(
+                "Bella Salon development seed completed. Config: {Config}, Rewards: {Rewards}, Customers: {Customers}, Campaigns: {Campaigns}.",
+                configCreated,
+                rewardsCreated,
+                customersCreated,
+                campaignsCreated);
+        });
+    }
+
+    private static async Task EnsureBellaPlatformRowsAsync(AppDbContext db, CancellationToken ct)
+    {
+        var now = DateTime.UtcNow;
+        if (!await db.Tenants.AnyAsync(t => t.Id == BellaTenantId, ct))
+        {
+            db.Tenants.Add(new Tenant(
+                BellaTenantId,
+                BellaSlug,
+                "Bella Salon",
+                "America/Tijuana",
+                now));
+        }
+
+        if (!await db.TenantBrandings.AnyAsync(b => b.TenantId == BellaTenantId, ct))
+        {
+            db.TenantBrandings.Add(new TenantBranding(
+                BellaTenantId,
+                primaryColor: "#8B5CF6",
+                secondaryColor: "#F5D0FE"));
+        }
+
+        if (!await db.TenantSubscriptions.AnyAsync(s => s.TenantId == BellaTenantId, ct))
+        {
+            db.TenantSubscriptions.Add(new TenantSubscription(
+                BellaTenantId,
+                TenantSubscriptionStatus.Active,
+                "development"));
+        }
+    }
+
+    private static async Task<int> EnsureBellaProgramConfigAsync(AppDbContext db, CancellationToken ct)
+    {
+        var now = DateTime.UtcNow;
+        var existing = await db.ProgramConfigs
+            .Where(c => c.TenantId == BellaTenantId)
+            .Select(c => c.Key)
+            .ToListAsync(ct);
+        var existingSet = existing.ToHashSet(StringComparer.Ordinal);
+
+        var entries = new (string Key, string Value, string Description)[]
+        {
+            (LoyaltyConstants.ConfigKeys.PointsPerPesoUnit, "20", "Pesos MXN por 1 punto Bella."),
+            (LoyaltyConstants.ConfigKeys.WelcomeBonusPoints, "25", "Puntos al registrarse Bella."),
+            (LoyaltyConstants.ConfigKeys.ReferralBonusPoints, "75", "Puntos por referido Bella."),
+            (LoyaltyConstants.ConfigKeys.BirthdayMultiplier, "3", "Multiplicador en mes de cumpleanos Bella."),
+            (LoyaltyConstants.ConfigKeys.LevelMistMin, "0", "Umbral Mist Bella."),
+            (LoyaltyConstants.ConfigKeys.LevelGlowMin, "500", "Umbral Glow Bella."),
+            (LoyaltyConstants.ConfigKeys.LevelRadianceMin, "1500", "Umbral Radiance Bella."),
+            (LoyaltyConstants.ConfigKeys.RadianceRequalificationPoints, "300", "Recalificacion Radiance Bella.")
+        };
+
+        var created = 0;
+        foreach (var entry in entries)
+        {
+            if (existingSet.Contains(entry.Key))
+                continue;
+
+            db.ProgramConfigs.Add(new ProgramConfig(
+                Guid.NewGuid(),
+                BellaTenantId,
+                entry.Key,
+                entry.Value,
+                now,
+                entry.Description,
+                DemoOperator));
+            created++;
+        }
+
+        return created;
+    }
+
+    private static async Task<int> EnsureBellaRewardsAsync(AppDbContext db, CancellationToken ct)
+    {
+        if (await db.RewardCatalogItems.AnyAsync(r => r.TenantId == BellaTenantId && r.Name == "Bella blowout reward", ct))
+            return 0;
+
+        var now = DateTime.UtcNow;
+        db.RewardCatalogItems.Add(new RewardCatalogItem(
+            Guid.Parse("b2000001-0000-0000-0000-000000000301"),
+            BellaTenantId,
+            "Bella blowout reward",
+            "Reward exclusivo de Bella Salon para validar aislamiento.",
+            150,
+            LoyaltyConstants.Levels.Mist,
+            false,
+            now.AddDays(-1),
+            now.AddDays(30)));
+
+        return 1;
+    }
+
+    private static async Task<int> EnsureBellaCustomerAsync(AppDbContext db, CancellationToken ct)
+    {
+        if (await db.LoyaltyCards.AnyAsync(c => c.TenantId == BellaTenantId && c.SerialNumber == BellaIsolationSerial, ct))
+            return 0;
+
+        var now = DateTime.UtcNow;
+        var customer = new Customer(
+            Guid.Parse("b2000001-0000-0000-0000-000000000101"),
+            BellaTenantId,
+            "Bella Test Customer",
+            "isolation.bella@bella-salon.local",
+            new DateTime(1991, 5, 11),
+            now,
+            SharedIsolationPhone);
+        var card = new LoyaltyCard(
+            Guid.Parse("b2000001-0000-0000-0000-000000000201"),
+            BellaTenantId,
+            customer.Id,
+            BellaIsolationSerial,
+            now);
+        var config = ProgramConfigSnapshot.FromEntries(await db.ProgramConfigs.Where(c => c.TenantId == BellaTenantId).ToListAsync(ct));
+        var clock = new MutableClock(now);
+
+        db.Customers.Add(customer);
+        db.LoyaltyCards.Add(card);
+        var transactionId = Guid.Parse("b2000001-0000-0000-0000-000000000401");
+        clock.UtcNow = now;
+        card.EarnPoints(450, TransactionType.Purchase, config, clock);
+        db.PointTransactions.Add(new PointTransaction(
+            transactionId,
+            BellaTenantId,
+            card.Id,
+            450,
+            TransactionType.Purchase,
+            "Compra seed aislamiento Bella Salon",
+            now,
+            purchaseAmount: 9000m,
+            createdBy: DemoOperator));
+        db.PointLots.Add(new PointLot(
+            Guid.Parse("b2000001-0000-0000-0000-000000000501"),
+            BellaTenantId,
+            card.Id,
+            transactionId,
+            450,
+            now,
+            now.AddMonths(12),
+            now));
+
+        return 1;
+    }
+
+    private static async Task<int> EnsureBellaCampaignAsync(AppDbContext db, CancellationToken ct)
+    {
+        if (await db.PointCampaigns.AnyAsync(c => c.TenantId == BellaTenantId && c.Name == "Bella double points", ct))
+            return 0;
+
+        var now = DateTime.UtcNow;
+        db.PointCampaigns.Add(new PointCampaign(
+            Guid.Parse("b2000001-0000-0000-0000-000000000601"),
+            BellaTenantId,
+            "Bella double points",
+            "Campana demo Bella Salon.",
+            2,
+            null,
+            CampaignLevelEligibility.All,
+            now.AddDays(-1),
+            now.AddDays(14),
+            now));
+
+        return 1;
     }
 
     private static int AddEarned(

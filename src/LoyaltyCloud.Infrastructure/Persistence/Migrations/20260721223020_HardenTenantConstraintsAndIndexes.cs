@@ -18,6 +18,14 @@ namespace LoyaltyCloud.Infrastructure.Persistence.Migrations
                 name: "FK_NotificationDeliveries_LoyaltyNotifications_TenantId_LoyaltyNotificationId",
                 table: "NotificationDeliveries");
 
+            migrationBuilder.DropForeignKey(
+                name: "FK_PointLotConsumptions_Redemptions_TenantId_RedemptionId",
+                table: "PointLotConsumptions");
+
+            migrationBuilder.DropForeignKey(
+                name: "FK_PointTransactions_PointCampaigns_TenantId_CampaignId",
+                table: "PointTransactions");
+
             migrationBuilder.DropIndex(
                 name: "IX_Redemptions_TenantId_Id",
                 table: "Redemptions");
@@ -87,6 +95,22 @@ namespace LoyaltyCloud.Infrastructure.Persistence.Migrations
                 principalTable: "LoyaltyNotifications",
                 principalColumns: new[] { "TenantId", "Id" },
                 onDelete: ReferentialAction.Restrict);
+
+            migrationBuilder.AddForeignKey(
+                name: "FK_PointLotConsumptions_Redemptions_TenantId_RedemptionId",
+                table: "PointLotConsumptions",
+                columns: new[] { "TenantId", "RedemptionId" },
+                principalTable: "Redemptions",
+                principalColumns: new[] { "TenantId", "Id" },
+                onDelete: ReferentialAction.Restrict);
+
+            migrationBuilder.AddForeignKey(
+                name: "FK_PointTransactions_PointCampaigns_TenantId_CampaignId",
+                table: "PointTransactions",
+                columns: new[] { "TenantId", "CampaignId" },
+                principalTable: "PointCampaigns",
+                principalColumns: new[] { "TenantId", "Id" },
+                onDelete: ReferentialAction.Restrict);
         }
 
         /// <inheritdoc />
@@ -99,6 +123,14 @@ namespace LoyaltyCloud.Infrastructure.Persistence.Migrations
             migrationBuilder.DropForeignKey(
                 name: "FK_NotificationDeliveries_LoyaltyNotifications_TenantId_LoyaltyNotificationId",
                 table: "NotificationDeliveries");
+
+            migrationBuilder.DropForeignKey(
+                name: "FK_PointLotConsumptions_Redemptions_TenantId_RedemptionId",
+                table: "PointLotConsumptions");
+
+            migrationBuilder.DropForeignKey(
+                name: "FK_PointTransactions_PointCampaigns_TenantId_CampaignId",
+                table: "PointTransactions");
 
             migrationBuilder.DropIndex(
                 name: "IX_RewardCatalogItems_TenantId_MinLevel",
@@ -172,6 +204,22 @@ namespace LoyaltyCloud.Infrastructure.Persistence.Migrations
                 principalTable: "LoyaltyNotifications",
                 principalColumns: new[] { "TenantId", "Id" },
                 onDelete: ReferentialAction.Cascade);
+
+            migrationBuilder.AddForeignKey(
+                name: "FK_PointLotConsumptions_Redemptions_TenantId_RedemptionId",
+                table: "PointLotConsumptions",
+                columns: new[] { "TenantId", "RedemptionId" },
+                principalTable: "Redemptions",
+                principalColumns: new[] { "TenantId", "Id" },
+                onDelete: ReferentialAction.Restrict);
+
+            migrationBuilder.AddForeignKey(
+                name: "FK_PointTransactions_PointCampaigns_TenantId_CampaignId",
+                table: "PointTransactions",
+                columns: new[] { "TenantId", "CampaignId" },
+                principalTable: "PointCampaigns",
+                principalColumns: new[] { "TenantId", "Id" },
+                onDelete: ReferentialAction.Restrict);
         }
     }
 }
