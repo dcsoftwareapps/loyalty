@@ -16,20 +16,25 @@ internal sealed class PointLotConfiguration : IEntityTypeConfiguration<PointLot>
         builder.Property(l => l.ExpiresAt).HasColumnType("datetime2(3)");
         builder.Property(l => l.CreatedAt).HasColumnType("datetime2(3)");
 
-        builder.HasIndex(l => l.SourcePointTransactionId)
-            .IsUnique();
-
-        builder.HasIndex(l => new { l.LoyaltyCardId, l.ExpiresAt, l.EarnedAt });
-        builder.HasIndex(l => new { l.ExpiresAt, l.RemainingAmount });
+        builder.HasIndex(l => new { l.TenantId, l.SourcePointTransactionId }).IsUnique();
+        builder.HasIndex(l => new { l.TenantId, l.LoyaltyCardId, l.ExpiresAt, l.EarnedAt });
+        builder.HasIndex(l => new { l.TenantId, l.ExpiresAt, l.RemainingAmount });
 
         builder.HasOne<LoyaltyCard>()
             .WithMany()
-            .HasForeignKey(l => l.LoyaltyCardId)
+            .HasPrincipalKey(c => new { c.TenantId, c.Id })
+            .HasForeignKey(l => new { l.TenantId, l.LoyaltyCardId })
             .OnDelete(DeleteBehavior.Restrict);
 
         builder.HasOne<PointTransaction>()
             .WithOne()
-            .HasForeignKey<PointLot>(l => l.SourcePointTransactionId)
+            .HasPrincipalKey<PointTransaction>(t => new { t.TenantId, t.Id })
+            .HasForeignKey<PointLot>(l => new { l.TenantId, l.SourcePointTransactionId })
+            .OnDelete(DeleteBehavior.Restrict);
+
+        builder.HasOne<Tenant>()
+            .WithMany()
+            .HasForeignKey(l => l.TenantId)
             .OnDelete(DeleteBehavior.Restrict);
     }
 }

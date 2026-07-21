@@ -100,6 +100,7 @@ public sealed class ExpirePointsHandler : IRequestHandler<ExpirePointsCommand, R
             var transactionId = Guid.NewGuid();
             await _transactions.AddAsync(new PointTransaction(
                 id: transactionId,
+                tenantId: card.TenantId,
                 loyaltyCardId: card.Id,
                 points: -amountToExpire,
                 type: TransactionType.Expired,
@@ -119,6 +120,7 @@ public sealed class ExpirePointsHandler : IRequestHandler<ExpirePointsCommand, R
 
                 await _pointLots.AddConsumptionAsync(new PointLotConsumption(
                     id: Guid.NewGuid(),
+                    tenantId: lot.TenantId,
                     pointLotId: lot.Id,
                     consumingPointTransactionId: transactionId,
                     amount: amount,

@@ -20,8 +20,19 @@ internal sealed class NotificationDeliveryConfiguration : IEntityTypeConfigurati
         builder.Property(d => d.AttemptedAt).HasColumnType("datetime2(3)");
         builder.Property(d => d.CompletedAt).HasColumnType("datetime2(3)");
 
-        builder.HasIndex(d => d.LoyaltyNotificationId);
-        builder.HasIndex(d => d.Channel);
-        builder.HasIndex(d => d.Status);
+        builder.HasIndex(d => new { d.TenantId, d.LoyaltyNotificationId });
+        builder.HasIndex(d => new { d.TenantId, d.Channel });
+        builder.HasIndex(d => new { d.TenantId, d.Status });
+
+        builder.HasOne<LoyaltyNotification>()
+            .WithMany()
+            .HasPrincipalKey(n => new { n.TenantId, n.Id })
+            .HasForeignKey(d => new { d.TenantId, d.LoyaltyNotificationId })
+            .OnDelete(DeleteBehavior.Cascade);
+
+        builder.HasOne<Tenant>()
+            .WithMany()
+            .HasForeignKey(d => d.TenantId)
+            .OnDelete(DeleteBehavior.Restrict);
     }
 }

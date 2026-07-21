@@ -95,6 +95,7 @@ public sealed class CancelRedemptionHandler
 
         await _transactions.AddAsync(new PointTransaction(
             id: Guid.NewGuid(),
+            tenantId: card.TenantId,
             loyaltyCardId: card.Id,
             points: redemption.PointsSpent,
             type: TransactionType.RedemptionReversal,

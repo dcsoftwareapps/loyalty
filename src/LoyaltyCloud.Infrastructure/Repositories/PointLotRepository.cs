@@ -1,3 +1,4 @@
+using LoyaltyCloud.Application.Common.Interfaces;
 using LoyaltyCloud.Domain.Entities;
 using LoyaltyCloud.Domain.Repositories;
 using LoyaltyCloud.Infrastructure.Persistence;
@@ -8,8 +9,13 @@ namespace LoyaltyCloud.Infrastructure.Repositories;
 internal sealed class PointLotRepository : IPointLotRepository
 {
     private readonly AppDbContext _db;
+    private readonly ITenantContext _tenantContext;
 
-    public PointLotRepository(AppDbContext db) => _db = db;
+    public PointLotRepository(AppDbContext db, ITenantContext tenantContext)
+    {
+        _db = db;
+        _tenantContext = tenantContext;
+    }
 
     public async Task AddLotAsync(PointLot lot, CancellationToken ct = default)
     {
@@ -26,8 +32,10 @@ internal sealed class PointLotRepository : IPointLotRepository
         DateTime nowUtc,
         CancellationToken ct = default)
     {
+        var tenantId = _tenantContext.RequireTenantId();
         var lots = await _db.PointLots
-            .Where(l => l.LoyaltyCardId == loyaltyCardId
+            .Where(l => l.TenantId == tenantId
+                     && l.LoyaltyCardId == loyaltyCardId
                      && l.RemainingAmount > 0
                      && l.ExpiresAt > nowUtc)
             .OrderBy(l => l.ExpiresAt)
@@ -42,8 +50,11 @@ internal sealed class PointLotRepository : IPointLotRepository
         Guid redemptionId,
         CancellationToken ct = default)
     {
+        var tenantId = _tenantContext.RequireTenantId();
         var consumptions = await _db.PointLotConsumptions
-            .Where(c => c.RedemptionId == redemptionId && c.ReversedAt == null)
+            .Where(c => c.TenantId == tenantId
+                     && c.RedemptionId == redemptionId
+                     && c.ReversedAt == null)
             .OrderBy(c => c.CreatedAt)
             .ThenBy(c => c.Id)
             .ToListAsync(ct);
@@ -51,13 +62,19 @@ internal sealed class PointLotRepository : IPointLotRepository
         return consumptions.AsReadOnly();
     }
 
-    public Task<PointLot?> GetLotByIdAsync(Guid id, CancellationToken ct = default) =>
-        _db.PointLots.FirstOrDefaultAsync(l => l.Id == id, ct);
+    public Task<PointLot?> GetLotByIdAsync(Guid id, CancellationToken ct = default)
+    {
+        var tenantId = _tenantContext.RequireTenantId();
+        return _db.PointLots.FirstOrDefaultAsync(l => l.TenantId == tenantId && l.Id == id, ct);
+    }
 
     public async Task<IReadOnlyList<PointLot>> GetExpiredLotsAsync(DateTime nowUtc, CancellationToken ct = default)
     {
+        var tenantId = _tenantContext.RequireTenantId();
         var lots = await _db.PointLots
-            .Where(l => l.RemainingAmount > 0 && l.ExpiresAt <= nowUtc)
+            .Where(l => l.TenantId == tenantId
+                     && l.RemainingAmount > 0
+                     && l.ExpiresAt <= nowUtc)
             .OrderBy(l => l.ExpiresAt)
             .ThenBy(l => l.EarnedAt)
             .ThenBy(l => l.Id)

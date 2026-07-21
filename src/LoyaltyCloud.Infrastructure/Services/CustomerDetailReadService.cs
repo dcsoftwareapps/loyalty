@@ -68,7 +68,7 @@ internal sealed class CustomerDetailReadService : ICustomerDetailReadService
         var pointsRedeemed = hasCard
             ? await _db.PointTransactions
                 .AsNoTracking()
-                .Where(t => t.LoyaltyCardId == cardId && t.Type == TransactionType.Redemption && t.Points < 0)
+                .Where(t => t.TenantId == tenantId && t.LoyaltyCardId == cardId && t.Type == TransactionType.Redemption && t.Points < 0)
                 .SumAsync(t => (int?)-t.Points, ct) ?? 0
             : 0;
 
@@ -106,7 +106,8 @@ internal sealed class CustomerDetailReadService : ICustomerDetailReadService
             var windowStart = now.AddMonths(-12);
             rollingPoints = await _db.PointTransactions
                 .AsNoTracking()
-                .Where(t => t.LoyaltyCardId == cardId
+                .Where(t => t.TenantId == tenantId
+                         && t.LoyaltyCardId == cardId
                          && t.CreatedAt >= windowStart
                          && t.Points > 0
                          && LevelProgressTransactionTypes.All.Contains(t.Type))
@@ -133,7 +134,7 @@ internal sealed class CustomerDetailReadService : ICustomerDetailReadService
         var lotRows = hasCard
             ? await (
                 from lot in _db.PointLots.AsNoTracking()
-                where lot.LoyaltyCardId == cardId
+                where lot.TenantId == tenantId && lot.LoyaltyCardId == cardId
                 orderby lot.ExpiresAt, lot.EarnedAt, lot.Id
                 select new
                 {
@@ -147,6 +148,8 @@ internal sealed class CustomerDetailReadService : ICustomerDetailReadService
                         join tx in _db.PointTransactions.AsNoTracking()
                             on consumption.ConsumingPointTransactionId equals tx.Id
                         where consumption.PointLotId == lot.Id
+                           && consumption.TenantId == tenantId
+                           && tx.TenantId == tenantId
                            && consumption.ReversedAt == null
                            && tx.Type == TransactionType.Expired
                         select consumption.Id).Any()
@@ -190,7 +193,10 @@ internal sealed class CustomerDetailReadService : ICustomerDetailReadService
                 join reward in _db.RewardCatalogItems.AsNoTracking()
                     on redemption.RewardCatalogItemId equals reward.Id into rewards
                 from reward in rewards.DefaultIfEmpty()
-                where lot.LoyaltyCardId == cardId
+                where consumption.TenantId == tenantId
+                  && lot.TenantId == tenantId
+                  && tx.TenantId == tenantId
+                  && lot.LoyaltyCardId == cardId
                   && (redemption == null || redemption.TenantId == tenantId)
                   && (reward == null || reward.TenantId == tenantId)
                 orderby lot.ExpiresAt, lot.EarnedAt, lot.Id, consumption.CreatedAt
@@ -240,7 +246,8 @@ internal sealed class CustomerDetailReadService : ICustomerDetailReadService
                 join campaign in _db.PointCampaigns.AsNoTracking()
                     on transaction.CampaignId equals campaign.Id into campaigns
                 from campaign in campaigns.DefaultIfEmpty()
-                where transaction.LoyaltyCardId == cardId
+                where transaction.TenantId == tenantId
+                  && transaction.LoyaltyCardId == cardId
                   && (campaign == null || campaign.TenantId == tenantId)
                 orderby transaction.CreatedAt descending
                 select new

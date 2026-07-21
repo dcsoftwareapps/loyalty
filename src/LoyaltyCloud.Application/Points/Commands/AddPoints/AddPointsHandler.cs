@@ -122,6 +122,7 @@ public sealed class AddPointsHandler : IRequestHandler<AddPointsCommand, Result<
         var transactionCreatedAt = now;
         await _transactions.AddAsync(new PointTransaction(
             id: transactionId,
+            tenantId: card.TenantId,
             loyaltyCardId: card.Id,
             points: finalPoints,
             type: TransactionType.Purchase,
@@ -136,6 +137,7 @@ public sealed class AddPointsHandler : IRequestHandler<AddPointsCommand, Result<
 
         await _pointLots.AddLotAsync(new PointLot(
             id: Guid.NewGuid(),
+            tenantId: card.TenantId,
             loyaltyCardId: card.Id,
             sourcePointTransactionId: transactionId,
             amount: finalPoints,

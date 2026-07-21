@@ -37,7 +37,8 @@ internal sealed class PointsExpirationNotificationReadService : IPointsExpiratio
             from lot in _db.PointLots.AsNoTracking()
             join card in _db.LoyaltyCards.AsNoTracking() on lot.LoyaltyCardId equals card.Id
             join customer in _db.Customers.AsNoTracking() on card.CustomerId equals customer.Id
-            where lot.RemainingAmount > 0
+            where lot.TenantId == tenantId
+               && lot.RemainingAmount > 0
                && lot.ExpiresAt >= startUtc
                && lot.ExpiresAt < endUtc
                && card.TenantId == tenantId

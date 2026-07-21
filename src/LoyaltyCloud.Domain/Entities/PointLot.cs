@@ -6,8 +6,10 @@ namespace LoyaltyCloud.Domain.Entities;
 /// Lote de puntos positivos con su propia fecha de expiracion.
 /// Los consumos se aplican FIFO contra estos lotes.
 /// </summary>
-public class PointLot : Entity
+public class PointLot : Entity, ITenantOwned
 {
+    public Guid TenantId { get; private set; }
+
     public Guid LoyaltyCardId { get; private set; }
     public Guid SourcePointTransactionId { get; private set; }
     public int OriginalAmount { get; private set; }
@@ -20,6 +22,7 @@ public class PointLot : Entity
 
     public PointLot(
         Guid id,
+        Guid tenantId,
         Guid loyaltyCardId,
         Guid sourcePointTransactionId,
         int amount,
@@ -27,6 +30,8 @@ public class PointLot : Entity
         DateTime expiresAtUtc,
         DateTime createdAtUtc) : base(id)
     {
+        if (tenantId == Guid.Empty)
+            throw new ArgumentException("TenantId requerido.", nameof(tenantId));
         if (loyaltyCardId == Guid.Empty)
             throw new ArgumentException("LoyaltyCardId requerido.", nameof(loyaltyCardId));
         if (sourcePointTransactionId == Guid.Empty)
@@ -36,6 +41,7 @@ public class PointLot : Entity
         if (expiresAtUtc <= earnedAtUtc)
             throw new ArgumentException("ExpiresAt debe ser posterior a EarnedAt.", nameof(expiresAtUtc));
 
+        TenantId = tenantId;
         LoyaltyCardId = loyaltyCardId;
         SourcePointTransactionId = sourcePointTransactionId;
         OriginalAmount = amount;

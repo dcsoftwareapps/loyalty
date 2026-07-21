@@ -31,7 +31,8 @@ internal sealed class LoyaltyNotificationConfiguration : IEntityTypeConfiguratio
 
         builder.HasMany(n => n.Deliveries)
             .WithOne()
-            .HasForeignKey(d => d.LoyaltyNotificationId)
+            .HasPrincipalKey(n => new { n.TenantId, n.Id })
+            .HasForeignKey(d => new { d.TenantId, d.LoyaltyNotificationId })
             .OnDelete(DeleteBehavior.Cascade);
 
         builder.Navigation(n => n.Deliveries)

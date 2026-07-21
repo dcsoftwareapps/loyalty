@@ -25,7 +25,6 @@ internal sealed class PointTransactionConfiguration : IEntityTypeConfiguration<P
         builder.Property(t => t.CreatedBy)
             .HasMaxLength(100);
 
-        // Enums como string en DB — más legible en queries ad-hoc y robusto ante reordering.
         builder.Property(t => t.Type)
             .HasConversion<string>()
             .HasMaxLength(30)
@@ -37,20 +36,27 @@ internal sealed class PointTransactionConfiguration : IEntityTypeConfiguration<P
 
         builder.Property(t => t.CreatedAt).HasColumnType("datetime2(3)");
 
-        // Índice para el historial de una tarjeta ordenado por fecha desc.
-        builder.HasIndex(t => new { t.LoyaltyCardId, t.CreatedAt })
-            .IsDescending(false, true);
-
-        builder.HasIndex(t => t.CampaignId);
+        builder.HasIndex(t => new { t.TenantId, t.LoyaltyCardId, t.CreatedAt })
+            .IsDescending(false, false, true);
+        builder.HasIndex(t => new { t.TenantId, t.Type, t.CreatedAt });
+        builder.HasIndex(t => new { t.TenantId, t.CampaignId })
+            .HasFilter("[CampaignId] IS NOT NULL");
 
         builder.HasOne<LoyaltyCard>()
             .WithMany()
-            .HasForeignKey(t => t.LoyaltyCardId)
+            .HasPrincipalKey(c => new { c.TenantId, c.Id })
+            .HasForeignKey(t => new { t.TenantId, t.LoyaltyCardId })
             .OnDelete(DeleteBehavior.Restrict);
 
         builder.HasOne(t => t.Campaign)
             .WithMany()
-            .HasForeignKey(t => t.CampaignId)
+            .HasPrincipalKey(c => new { c.TenantId, c.Id })
+            .HasForeignKey(t => new { t.TenantId, t.CampaignId })
+            .OnDelete(DeleteBehavior.Restrict);
+
+        builder.HasOne<Tenant>()
+            .WithMany()
+            .HasForeignKey(t => t.TenantId)
             .OnDelete(DeleteBehavior.Restrict);
     }
 }

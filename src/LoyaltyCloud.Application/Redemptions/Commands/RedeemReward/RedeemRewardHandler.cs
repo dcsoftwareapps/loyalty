@@ -121,6 +121,7 @@ public sealed class RedeemRewardHandler : IRequestHandler<RedeemRewardCommand, R
         var transactionId = Guid.NewGuid();
         await _transactions.AddAsync(new PointTransaction(
             id: transactionId,
+            tenantId: card.TenantId,
             loyaltyCardId: card.Id,
             points: -reward.PointsCost,
             type: TransactionType.Redemption,
@@ -183,6 +184,7 @@ public sealed class RedeemRewardHandler : IRequestHandler<RedeemRewardCommand, R
 
             await _pointLots.AddConsumptionAsync(new PointLotConsumption(
                 id: Guid.NewGuid(),
+                tenantId: lot.TenantId,
                 pointLotId: lot.Id,
                 consumingPointTransactionId: transactionId,
                 amount: amount,

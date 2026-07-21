@@ -135,6 +135,7 @@ public sealed class RegisterCustomerHandler
             var transactionId = Guid.NewGuid();
             await _transactions.AddAsync(new PointTransaction(
                 id: transactionId,
+                tenantId: card.TenantId,
                 loyaltyCardId: cardId,
                 points: snapshot.WelcomeBonusPoints,
                 type: TransactionType.BonusWelcome,
@@ -144,6 +145,7 @@ public sealed class RegisterCustomerHandler
                 createdBy: operatorName), ct);
             await _pointLots.AddLotAsync(new PointLot(
                 id: Guid.NewGuid(),
+                tenantId: card.TenantId,
                 loyaltyCardId: cardId,
                 sourcePointTransactionId: transactionId,
                 amount: snapshot.WelcomeBonusPoints,
@@ -163,6 +165,7 @@ public sealed class RegisterCustomerHandler
             var transactionId = Guid.NewGuid();
             await _transactions.AddAsync(new PointTransaction(
                 id: transactionId,
+                tenantId: referrerCard.TenantId,
                 loyaltyCardId: referrerCard.Id,
                 points: snapshot.ReferralBonusPoints,
                 type: TransactionType.BonusReferral,
@@ -172,6 +175,7 @@ public sealed class RegisterCustomerHandler
                 createdBy: operatorName), ct);
             await _pointLots.AddLotAsync(new PointLot(
                 id: Guid.NewGuid(),
+                tenantId: referrerCard.TenantId,
                 loyaltyCardId: referrerCard.Id,
                 sourcePointTransactionId: transactionId,
                 amount: snapshot.ReferralBonusPoints,

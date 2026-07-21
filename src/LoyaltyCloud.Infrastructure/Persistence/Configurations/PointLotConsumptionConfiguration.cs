@@ -15,23 +15,33 @@ internal sealed class PointLotConsumptionConfiguration : IEntityTypeConfiguratio
         builder.Property(c => c.CreatedAt).HasColumnType("datetime2(3)");
         builder.Property(c => c.ReversedAt).HasColumnType("datetime2(3)");
 
-        builder.HasIndex(c => c.PointLotId);
-        builder.HasIndex(c => c.ConsumingPointTransactionId);
-        builder.HasIndex(c => c.RedemptionId);
+        builder.HasIndex(c => new { c.TenantId, c.PointLotId });
+        builder.HasIndex(c => new { c.TenantId, c.ConsumingPointTransactionId });
+        builder.HasIndex(c => new { c.TenantId, c.RedemptionId })
+            .HasFilter("[RedemptionId] IS NOT NULL");
+        builder.HasIndex(c => new { c.TenantId, c.CreatedAt });
 
         builder.HasOne<PointLot>()
             .WithMany()
-            .HasForeignKey(c => c.PointLotId)
+            .HasPrincipalKey(l => new { l.TenantId, l.Id })
+            .HasForeignKey(c => new { c.TenantId, c.PointLotId })
             .OnDelete(DeleteBehavior.Restrict);
 
         builder.HasOne<PointTransaction>()
             .WithMany()
-            .HasForeignKey(c => c.ConsumingPointTransactionId)
+            .HasPrincipalKey(t => new { t.TenantId, t.Id })
+            .HasForeignKey(c => new { c.TenantId, c.ConsumingPointTransactionId })
             .OnDelete(DeleteBehavior.Restrict);
 
         builder.HasOne<Redemption>()
             .WithMany()
-            .HasForeignKey(c => c.RedemptionId)
+            .HasPrincipalKey(r => new { r.TenantId, r.Id })
+            .HasForeignKey(c => new { c.TenantId, c.RedemptionId })
+            .OnDelete(DeleteBehavior.Restrict);
+
+        builder.HasOne<Tenant>()
+            .WithMany()
+            .HasForeignKey(c => c.TenantId)
             .OnDelete(DeleteBehavior.Restrict);
     }
 }

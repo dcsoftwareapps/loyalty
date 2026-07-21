@@ -37,7 +37,7 @@ public class RedeemRewardHandlerTests
         pointLots
             .Setup(r => r.GetAvailableLotsAsync(card.Id, It.IsAny<DateTime>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(() => card.CurrentPoints > 0
-                ? new[] { new PointLot(Guid.NewGuid(), card.Id, Guid.NewGuid(), card.CurrentPoints, Now, Now.AddMonths(12), Now) }
+                ? new[] { new PointLot(Guid.NewGuid(), card.TenantId, card.Id, Guid.NewGuid(), card.CurrentPoints, Now, Now.AddMonths(12), Now) }
                 : Array.Empty<PointLot>());
         var config = ConfigRepoWithDefaults();
 

@@ -80,13 +80,15 @@ internal sealed class LoyaltyNotificationService : ILoyaltyNotificationService
             .CountAsync(ct);
         var pushesAttempted = await (
             from delivery in _db.NotificationDeliveries.AsNoTracking()
-            join notification in _db.LoyaltyNotifications.AsNoTracking() on delivery.LoyaltyNotificationId equals notification.Id
-            where notification.TenantId == tenantId
+            join notification in _db.LoyaltyNotifications.AsNoTracking()
+                on new { delivery.TenantId, Id = delivery.LoyaltyNotificationId } equals new { notification.TenantId, notification.Id }
+            where delivery.TenantId == tenantId
             select (int?)delivery.PushesAttempted).SumAsync(ct) ?? 0;
         var pushesFailed = await (
             from delivery in _db.NotificationDeliveries.AsNoTracking()
-            join notification in _db.LoyaltyNotifications.AsNoTracking() on delivery.LoyaltyNotificationId equals notification.Id
-            where notification.TenantId == tenantId
+            join notification in _db.LoyaltyNotifications.AsNoTracking()
+                on new { delivery.TenantId, Id = delivery.LoyaltyNotificationId } equals new { notification.TenantId, notification.Id }
+            where delivery.TenantId == tenantId
             select (int?)delivery.PushesFailed).SumAsync(ct) ?? 0;
         return new NotificationMetricsDto(pending, processed, failed, customersReached, pushesAttempted, pushesFailed);
     }
@@ -131,7 +133,7 @@ internal sealed class LoyaltyNotificationService : ILoyaltyNotificationService
             request.LongMessage);
 
         foreach (var channel in channels)
-            notification.AddDelivery(new NotificationDelivery(Guid.NewGuid(), notification.Id, channel, now));
+            notification.AddDelivery(new NotificationDelivery(Guid.NewGuid(), notification.TenantId, notification.Id, channel, now));
 
         await _notifications.AddAsync(notification, ct);
         await _uow.SaveChangesAsync(ct);

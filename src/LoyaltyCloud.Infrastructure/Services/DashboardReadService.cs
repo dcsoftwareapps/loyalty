@@ -38,11 +38,7 @@ internal sealed class DashboardReadService : IDashboardReadService
 
         var pointsThisMonth = await _db.PointTransactions
             .AsNoTracking()
-            .Join(_db.LoyaltyCards.AsNoTracking().Where(c => c.TenantId == tenantId),
-                t => t.LoyaltyCardId,
-                c => c.Id,
-                (t, c) => t)
-            .Where(t => t.CreatedAt >= monthStart && t.Points > 0)
+            .Where(t => t.TenantId == tenantId && t.CreatedAt >= monthStart && t.Points > 0)
             .SumAsync(t => (int?)t.Points, ct) ?? 0;
 
         var redemptionsThisMonth = await _db.Redemptions
@@ -108,6 +104,7 @@ internal sealed class DashboardReadService : IDashboardReadService
 
         var customersWithPointActivity = _db.PointTransactions
             .AsNoTracking()
+            .Where(t => t.TenantId == tenantId)
             .Select(t => t.LoyaltyCardId);
 
         var customersWithRedemptions = _db.Redemptions
@@ -125,29 +122,17 @@ internal sealed class DashboardReadService : IDashboardReadService
 
         var pointsIssued = await _db.PointTransactions
             .AsNoTracking()
-            .Join(_db.LoyaltyCards.AsNoTracking().Where(c => c.TenantId == tenantId),
-                t => t.LoyaltyCardId,
-                c => c.Id,
-                (t, c) => t)
-            .Where(t => t.Points > 0)
+            .Where(t => t.TenantId == tenantId && t.Points > 0)
             .SumAsync(t => (int?)t.Points, ct) ?? 0;
 
         var pointsRedeemed = await _db.PointTransactions
             .AsNoTracking()
-            .Join(_db.LoyaltyCards.AsNoTracking().Where(c => c.TenantId == tenantId),
-                t => t.LoyaltyCardId,
-                c => c.Id,
-                (t, c) => t)
-            .Where(t => t.Type == TransactionType.Redemption && t.Points < 0)
+            .Where(t => t.TenantId == tenantId && t.Type == TransactionType.Redemption && t.Points < 0)
             .SumAsync(t => (int?)-t.Points, ct) ?? 0;
 
         var pointsExpired = await _db.PointTransactions
             .AsNoTracking()
-            .Join(_db.LoyaltyCards.AsNoTracking().Where(c => c.TenantId == tenantId),
-                t => t.LoyaltyCardId,
-                c => c.Id,
-                (t, c) => t)
-            .Where(t => t.Type == TransactionType.Expired && t.Points < 0)
+            .Where(t => t.TenantId == tenantId && t.Type == TransactionType.Expired && t.Points < 0)
             .SumAsync(t => (int?)-t.Points, ct) ?? 0;
 
         var currentPointBalance = await _db.LoyaltyCards
@@ -202,7 +187,7 @@ internal sealed class DashboardReadService : IDashboardReadService
             from transaction in _db.PointTransactions.AsNoTracking()
             join card in _db.LoyaltyCards.AsNoTracking() on transaction.LoyaltyCardId equals card.Id
             join customer in _db.Customers.AsNoTracking() on card.CustomerId equals customer.Id
-            where card.TenantId == tenantId && customer.TenantId == tenantId
+            where transaction.TenantId == tenantId && card.TenantId == tenantId && customer.TenantId == tenantId
             orderby transaction.CreatedAt descending
             select new DashboardRecentActivityItemDto(
                 "Puntos",

@@ -6,8 +6,10 @@ namespace LoyaltyCloud.Domain.Entities;
 /// Asignacion de un movimiento negativo contra un lote positivo.
 /// Permite revertir cancelaciones sin crear puntos nuevos.
 /// </summary>
-public class PointLotConsumption : Entity
+public class PointLotConsumption : Entity, ITenantOwned
 {
+    public Guid TenantId { get; private set; }
+
     public Guid PointLotId { get; private set; }
     public Guid ConsumingPointTransactionId { get; private set; }
     public Guid? RedemptionId { get; private set; }
@@ -21,12 +23,15 @@ public class PointLotConsumption : Entity
 
     public PointLotConsumption(
         Guid id,
+        Guid tenantId,
         Guid pointLotId,
         Guid consumingPointTransactionId,
         int amount,
         DateTime createdAtUtc,
         Guid? redemptionId = null) : base(id)
     {
+        if (tenantId == Guid.Empty)
+            throw new ArgumentException("TenantId requerido.", nameof(tenantId));
         if (pointLotId == Guid.Empty)
             throw new ArgumentException("PointLotId requerido.", nameof(pointLotId));
         if (consumingPointTransactionId == Guid.Empty)
@@ -34,6 +39,7 @@ public class PointLotConsumption : Entity
         if (amount <= 0)
             throw new ArgumentOutOfRangeException(nameof(amount), "El consumo debe ser positivo.");
 
+        TenantId = tenantId;
         PointLotId = pointLotId;
         ConsumingPointTransactionId = consumingPointTransactionId;
         RedemptionId = redemptionId;

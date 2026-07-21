@@ -325,6 +325,7 @@ public static class DevelopmentDataSeeder
             card.RedeemPoints(reward.PointsCost);
             db.PointTransactions.Add(new PointTransaction(
                 Guid.NewGuid(),
+                card.TenantId,
                 card.Id,
                 -reward.PointsCost,
                 TransactionType.Redemption,
@@ -384,6 +385,7 @@ public static class DevelopmentDataSeeder
         card.EarnPoints(points, type, config, clock);
         db.PointTransactions.Add(new PointTransaction(
             Guid.NewGuid(),
+            card.TenantId,
             card.Id,
             points,
             type,

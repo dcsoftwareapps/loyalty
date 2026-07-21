@@ -3,8 +3,10 @@ using LoyaltyCloud.Domain.Enums;
 
 namespace LoyaltyCloud.Domain.Entities;
 
-public class NotificationDelivery : Entity
+public class NotificationDelivery : Entity, ITenantOwned
 {
+    public Guid TenantId { get; private set; }
+
     public Guid LoyaltyNotificationId { get; private set; }
     public NotificationChannel Channel { get; private set; }
     public NotificationDeliveryStatus Status { get; private set; }
@@ -21,11 +23,14 @@ public class NotificationDelivery : Entity
 
     private NotificationDelivery() { }
 
-    public NotificationDelivery(Guid id, Guid loyaltyNotificationId, NotificationChannel channel, DateTime createdAtUtc) : base(id)
+    public NotificationDelivery(Guid id, Guid tenantId, Guid loyaltyNotificationId, NotificationChannel channel, DateTime createdAtUtc) : base(id)
     {
+        if (tenantId == Guid.Empty)
+            throw new ArgumentException("TenantId requerido.", nameof(tenantId));
         if (loyaltyNotificationId == Guid.Empty)
             throw new ArgumentException("LoyaltyNotificationId requerido.", nameof(loyaltyNotificationId));
 
+        TenantId = tenantId;
         LoyaltyNotificationId = loyaltyNotificationId;
         Channel = channel;
         Status = NotificationDeliveryStatus.Pending;

@@ -1,3 +1,4 @@
+using LoyaltyCloud.Application.Common.Interfaces;
 using LoyaltyCloud.Common.Pagination;
 using LoyaltyCloud.Common.Results;
 using LoyaltyCloud.Common.Services;
@@ -12,18 +13,23 @@ namespace LoyaltyCloud.Infrastructure.Repositories;
 internal sealed class PointTransactionRepository : IPointTransactionRepository
 {
     private readonly AppDbContext _db;
+    private readonly ITenantContext _tenantContext;
 
-    public PointTransactionRepository(AppDbContext db) => _db = db;
+    public PointTransactionRepository(AppDbContext db, ITenantContext tenantContext)
+    {
+        _db = db;
+        _tenantContext = tenantContext;
+    }
 
     public async Task<PagedResult<PointTransaction>> GetByCardIdAsync(
         Guid loyaltyCardId,
         PaginationParams pagination,
         CancellationToken ct = default)
     {
-        // Lectura pura — sin tracking.
+        var tenantId = _tenantContext.RequireTenantId();
         var baseQuery = _db.PointTransactions
             .AsNoTracking()
-            .Where(t => t.LoyaltyCardId == loyaltyCardId);
+            .Where(t => t.TenantId == tenantId && t.LoyaltyCardId == loyaltyCardId);
 
         var total = await baseQuery.CountAsync(ct);
 
@@ -41,11 +47,12 @@ internal sealed class PointTransactionRepository : IPointTransactionRepository
         IDateTimeProvider dt,
         CancellationToken ct = default)
     {
-        // Suma de puntos positivos (Purchase / BonusXxx) en los últimos 12 meses.
+        var tenantId = _tenantContext.RequireTenantId();
         var cutoff = dt.UtcNow.AddYears(-1);
         return _db.PointTransactions
             .AsNoTracking()
-            .Where(t => t.LoyaltyCardId == loyaltyCardId
+            .Where(t => t.TenantId == tenantId
+                     && t.LoyaltyCardId == loyaltyCardId
                      && t.CreatedAt >= cutoff
                      && t.Points > 0
                      && LevelProgressTransactionTypes.All.Contains(t.Type))
@@ -58,9 +65,11 @@ internal sealed class PointTransactionRepository : IPointTransactionRepository
         DateTime windowStartUtc,
         CancellationToken ct = default)
     {
+        var tenantId = _tenantContext.RequireTenantId();
         return _db.PointTransactions
             .AsNoTracking()
-            .Where(t => t.LoyaltyCardId == loyaltyCardId
+            .Where(t => t.TenantId == tenantId
+                     && t.LoyaltyCardId == loyaltyCardId
                      && t.CreatedAt >= windowStartUtc
                      && t.Points > 0
                      && LevelProgressTransactionTypes.All.Contains(t.Type))
@@ -72,9 +81,11 @@ internal sealed class PointTransactionRepository : IPointTransactionRepository
         DateTime windowStartUtc,
         CancellationToken ct = default)
     {
+        var tenantId = _tenantContext.RequireTenantId();
         var rows = await _db.PointTransactions
             .AsNoTracking()
-            .Where(t => t.CreatedAt >= windowStartUtc
+            .Where(t => t.TenantId == tenantId
+                     && t.CreatedAt >= windowStartUtc
                      && t.Points > 0
                      && LevelProgressTransactionTypes.All.Contains(t.Type))
             .GroupBy(t => t.LoyaltyCardId)

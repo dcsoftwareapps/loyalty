@@ -7,8 +7,10 @@ namespace LoyaltyCloud.Domain.Entities;
 /// Registro inmutable de un movimiento de puntos en una tarjeta.
 /// Una vez creado nunca se modifica — es el "diario contable" del programa.
 /// </summary>
-public class PointTransaction : Entity
+public class PointTransaction : Entity, ITenantOwned
 {
+    public Guid TenantId { get; private set; }
+
     /// <summary>Tarjeta a la que pertenece el movimiento.</summary>
     public Guid LoyaltyCardId { get; private set; }
 
@@ -52,6 +54,7 @@ public class PointTransaction : Entity
 
     public PointTransaction(
         Guid id,
+        Guid tenantId,
         Guid loyaltyCardId,
         int points,
         TransactionType type,
@@ -64,11 +67,14 @@ public class PointTransaction : Entity
         int? basePoints = null,
         decimal? appliedMultiplier = null) : base(id)
     {
+        if (tenantId == Guid.Empty)
+            throw new ArgumentException("TenantId requerido.", nameof(tenantId));
         if (loyaltyCardId == Guid.Empty)
             throw new ArgumentException("LoyaltyCardId requerido.", nameof(loyaltyCardId));
         if (points == 0)
             throw new ArgumentException("Una transacción no puede tener 0 puntos.", nameof(points));
 
+        TenantId = tenantId;
         LoyaltyCardId = loyaltyCardId;
         Points = points;
         Type = type;

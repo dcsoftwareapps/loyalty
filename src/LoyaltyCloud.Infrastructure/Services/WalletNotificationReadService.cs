@@ -444,10 +444,12 @@ internal sealed class WalletNotificationReadService : IWalletNotificationReadSer
         if (!TryReadPointsExpirationMetadata(metadataJson, out var expirationDate, out var timeZoneId))
             return null;
 
+        var tenantId = _tenantContext.RequireTenantId();
         var (startUtc, endUtc) = PointsExpirationNotificationReadService.GetLocalDateUtcWindow(expirationDate, timeZoneId);
         var points = await _db.PointLots
             .AsNoTracking()
-            .Where(l => l.LoyaltyCardId == loyaltyCardId
+            .Where(l => l.TenantId == tenantId
+                     && l.LoyaltyCardId == loyaltyCardId
                      && l.RemainingAmount > 0
                      && l.ExpiresAt >= startUtc
                      && l.ExpiresAt < endUtc)
