@@ -1,0 +1,278 @@
+@page "/scan"
+@attribute [Authorize]
+@rendermode InteractiveServer
+@implements IAsyncDisposable
+
+@using System.Text.RegularExpressions
+@using LoyaltyCloud.Application.Customers.Queries.GetCustomerBySerial
+@using LoyaltyCloud.Application.Points.Commands.AddPoints
+@using LoyaltyCloud.Common.Services
+@inject ISender Sender
+@inject IDateTimeProvider Dt
+@inject IJSRuntime JS
+@inject LoyaltyCloud.Application.Common.Interfaces.IDashboardReadService _
+
+<PageTitle>Sumar puntos - LoyaltyCloud</PageTitle>
+
+<div class="kb-scan">
+    <h1>Sumar puntos</h1>
+
+    @if (customer is null)
+    {
+        <div class="kb-form-row">
+            <button class="kb-btn kb-btn--secondary kb-btn--large kb-btn--block"
+                    @onclick="StartScannerAsync"
+                    disabled="@(busy || scanning)">
+                @(scanning ? "Escaneando..." : "Escanear QR")
+            </button>
+
+            @if (scanning)
+            {
+                <div class="kb-qr-scanner">
+                    <video @ref="qrVideo" class="kb-qr-video" autoplay muted playsinline></video>
+                    <p>Apunta al código QR de la tarjeta KBeauty MX</p>
+                    <button class="kb-btn kb-btn--ghost kb-btn--block" @onclick="CancelScannerAsync">
+                        Cancelar
+                    </button>
+                </div>
+            }
+
+            @if (scannerMessage is not null)
+            {
+                <div class="kb-form-success">@scannerMessage</div>
+            }
+
+            <div>
+                <label for="serial">Serial de la clienta</label>
+                <input id="serial" type="text" @bind="serialInput" @bind:event="oninput"
+                       @onkeydown="HandleSerialKeyDownAsync"
+                       placeholder="KB-A7B9C2X" autocomplete="off" />
+            </div>
+            <button class="kb-btn kb-btn--primary kb-btn--large kb-btn--block"
+                    @onclick="SearchAsync" disabled="@(string.IsNullOrWhiteSpace(serialInput) || busy)">
+                @(busy ? "Buscando..." : "Buscar clienta")
+            </button>
+            @if (errorMessage is not null) { <div class="kb-form-error">@errorMessage</div> }
+        </div>
+    }
+    else
+    {
+        <CustomerCard Customer="customer" />
+
+        @if (lastSuccess is not null)
+        {
+            <div class="kb-form-success" style="margin-top:24px;">
+                <strong>+@lastSuccess.PointsAdded pts.</strong>
+                @if (lastSuccess.BirthdayBonusApplied) { <span> Doble por cumpleaños!</span> }
+                @if (lastSuccess.LeveledUp) { <span> - Nuevo nivel: @lastSuccess.Level</span> }
+            </div>
+        }
+
+        <div class="kb-form-row" style="margin-top:24px;">
+            <div>
+                <label for="amount">Monto de la compra (MXN)</label>
+                <input id="amount" type="number" inputmode="decimal" step="0.01" min="0"
+                       @bind="amount" @bind:event="oninput" placeholder="0.00" />
+            </div>
+
+            @if (amount > 0)
+            {
+                <p style="text-align:center;color:var(--kb-ink-muted);margin:0;">
+                    Sumará aprox. <strong style="color:var(--kb-ink);">@PreviewPoints pts</strong>
+                </p>
+            }
+
+            <button class="kb-btn kb-btn--primary kb-btn--large kb-btn--block"
+                    @onclick="ConfirmAsync" disabled="@(amount <= 0 || busy)">
+                @(busy ? "Procesando..." : $"Confirmar compra de ${amount:0.00}")
+            </button>
+
+            <button class="kb-btn kb-btn--ghost kb-btn--block" @onclick="Reset">
+                Buscar otra clienta
+            </button>
+
+            @if (errorMessage is not null) { <div class="kb-form-error">@errorMessage</div> }
+        </div>
+    }
+</div>
+
+@code {
+    private static readonly Regex SerialRegex = new(@"KB-[A-Z0-9]{7}", RegexOptions.IgnoreCase | RegexOptions.Compiled);
+
+    [SupplyParameterFromQuery] public string? Serial { get; set; }
+
+    private string serialInput = string.Empty;
+    private CustomerDetailDto? customer;
+    private decimal amount;
+    private AddPointsResponse? lastSuccess;
+    private string? errorMessage;
+    private string? scannerMessage;
+    private bool busy;
+    private bool scanning;
+    private ElementReference qrVideo;
+    private DotNetObjectReference<Scan>? dotNetRef;
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (!string.IsNullOrWhiteSpace(Serial))
+        {
+            serialInput = Serial;
+            await SearchAsync();
+        }
+    }
+
+    private int PreviewPoints
+    {
+        get
+        {
+            if (customer is null || amount <= 0) return 0;
+            var basePts = (int)(amount / 10);
+            return customer.IsBirthMonth ? basePts * 2 : basePts;
+        }
+    }
+
+    private async Task StartScannerAsync()
+    {
+        errorMessage = null;
+        scannerMessage = null;
+        scanning = true;
+        await InvokeAsync(StateHasChanged);
+        await Task.Yield();
+
+        dotNetRef ??= DotNetObjectReference.Create(this);
+
+        var result = await JS.InvokeAsync<QrScannerStartResult>(
+            "kbeautyQrScanner.start",
+            qrVideo,
+            dotNetRef);
+
+        if (!result.Ok)
+        {
+            scanning = false;
+            errorMessage = result.Message ?? "No se pudo acceder a la cámara. Puedes ingresar el serial manualmente.";
+        }
+    }
+
+    private async Task CancelScannerAsync()
+    {
+        await StopScannerAsync();
+        scannerMessage = null;
+    }
+
+    [JSInvokable]
+    public async Task OnQrDetected(string rawValue)
+    {
+        await InvokeAsync(async () =>
+        {
+            await StopScannerAsync();
+
+            var serial = ExtractSerial(rawValue);
+            if (serial is null)
+            {
+                errorMessage = "Código QR no válido para KBeauty MX.";
+                scannerMessage = null;
+                StateHasChanged();
+                return;
+            }
+
+            serialInput = serial;
+            scannerMessage = $"QR detectado: {serial}";
+            await SearchAsync();
+            StateHasChanged();
+        });
+    }
+
+    private async Task SearchAsync()
+    {
+        var serial = ExtractSerial(serialInput);
+        if (serial is null)
+        {
+            errorMessage = "Ingresa un serial KBeauty válido, por ejemplo KB-A7B9C2X.";
+            return;
+        }
+
+        serialInput = serial;
+        errorMessage = null;
+        busy = true;
+        var result = await Sender.Send(new GetCustomerBySerialQuery(serialInput));
+        busy = false;
+
+        if (result.IsFailure)
+        {
+            errorMessage = result.Error;
+            return;
+        }
+
+        customer = result.Value;
+        lastSuccess = null;
+    }
+
+    private async Task HandleSerialKeyDownAsync(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter")
+            await SearchAsync();
+    }
+
+    private async Task ConfirmAsync()
+    {
+        if (customer is null) return;
+
+        errorMessage = null;
+        busy = true;
+        var cmd = new AddPointsCommand(customer.SerialNumber, amount, "admin-panel");
+        var result = await Sender.Send(cmd);
+        busy = false;
+
+        if (result.IsFailure)
+        {
+            errorMessage = result.Error;
+            return;
+        }
+
+        lastSuccess = result.Value;
+        var refreshed = await Sender.Send(new GetCustomerBySerialQuery(customer.SerialNumber));
+        if (refreshed.IsSuccess) customer = refreshed.Value;
+        amount = 0;
+    }
+
+    private void Reset()
+    {
+        customer = null;
+        amount = 0;
+        serialInput = string.Empty;
+        lastSuccess = null;
+        errorMessage = null;
+        scannerMessage = null;
+    }
+
+    private async Task StopScannerAsync()
+    {
+        scanning = false;
+
+        try
+        {
+            await JS.InvokeVoidAsync("kbeautyQrScanner.stop");
+        }
+        catch (JSDisconnectedException)
+        {
+        }
+    }
+
+    private static string? ExtractSerial(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+            return null;
+
+        var decoded = Uri.UnescapeDataString(value.Trim()).ToUpperInvariant();
+        var match = SerialRegex.Match(decoded);
+        return match.Success ? match.Value.ToUpperInvariant() : null;
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        await StopScannerAsync();
+        dotNetRef?.Dispose();
+    }
+
+    private sealed record QrScannerStartResult(bool Ok, string? Message);
+}

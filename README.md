@@ -1,4 +1,4 @@
-# KBeauty Loyalty
+# LoyaltyCloud
 
 Sistema de lealtad por puntos para KBeauty MX. La solucion permite registrar clientas, emitir tarjetas de lealtad, acumular puntos, consultar historial, canjear rewards y generar pases Apple Wallet (`.pkpass`) para journeys digitales y operacion en tienda.
 
@@ -20,20 +20,20 @@ El repositorio esta organizado con Clean Architecture en .NET 9: API REST, Admin
 ## Architecture
 
 ```text
-KBeauty.Loyalty.API      KBeauty.Loyalty.Admin
+LoyaltyCloud.API      LoyaltyCloud.Admin
         |                         |
         +-----------+-------------+
                     |
                     v
-        KBeauty.Loyalty.Application
+        LoyaltyCloud.Application
         CQRS, MediatR, validation, app contracts
                     |
                     v
-          KBeauty.Loyalty.Domain
+          LoyaltyCloud.Domain
      Entities, value objects, invariants, events
                     |
                     v
-       KBeauty.Loyalty.Infrastructure
+       LoyaltyCloud.Infrastructure
  EF Core, repositories, Key Vault, Blob, APN, pass generation
                     |
                     v
@@ -54,26 +54,26 @@ KBeauty.Loyalty.API      KBeauty.Loyalty.Admin
 
 ```text
 src/
-  KBeauty.Loyalty.Common
-  KBeauty.Loyalty.Domain
-  KBeauty.Loyalty.Application
-  KBeauty.Loyalty.Infrastructure
-  KBeauty.Loyalty.API
-  KBeauty.Loyalty.Admin
+  LoyaltyCloud.Common
+  LoyaltyCloud.Domain
+  LoyaltyCloud.Application
+  LoyaltyCloud.Infrastructure
+  LoyaltyCloud.API
+  LoyaltyCloud.Admin
 
 tests/
-  KBeauty.Loyalty.Tests
+  LoyaltyCloud.Tests
 ```
 
 | Project | Responsibility |
 | --- | --- |
-| `KBeauty.Loyalty.Common` | Shared constants, result types, pagination, cross-cutting interfaces. |
-| `KBeauty.Loyalty.Domain` | Entities, value objects, enums, domain events, domain exceptions, repository contracts. |
-| `KBeauty.Loyalty.Application` | CQRS commands/queries, handlers, validators, MediatR behaviors, application service interfaces. |
-| `KBeauty.Loyalty.Infrastructure` | EF Core, repositories, SQL persistence, Azure Key Vault, Blob Storage, APN, pass generation, read services, development seeder. |
-| `KBeauty.Loyalty.API` | ASP.NET Core REST API, Swagger, Apple pass endpoints, global exception handling. |
-| `KBeauty.Loyalty.Admin` | Blazor Server admin panel, cookie auth, dashboard, customers, scan, redemptions, config, development login. |
-| `KBeauty.Loyalty.Tests` | Unit and integration tests with fakes and EF InMemory. |
+| `LoyaltyCloud.Common` | Shared constants, result types, pagination, cross-cutting interfaces. |
+| `LoyaltyCloud.Domain` | Entities, value objects, enums, domain events, domain exceptions, repository contracts. |
+| `LoyaltyCloud.Application` | CQRS commands/queries, handlers, validators, MediatR behaviors, application service interfaces. |
+| `LoyaltyCloud.Infrastructure` | EF Core, repositories, SQL persistence, Azure Key Vault, Blob Storage, APN, pass generation, read services, development seeder. |
+| `LoyaltyCloud.API` | ASP.NET Core REST API, Swagger, Apple pass endpoints, global exception handling. |
+| `LoyaltyCloud.Admin` | Blazor Server admin panel, cookie auth, dashboard, customers, scan, redemptions, config, development login. |
+| `LoyaltyCloud.Tests` | Unit and integration tests with fakes and EF InMemory. |
 
 ## Runtime URLs and Ports
 
@@ -116,8 +116,8 @@ $env:APPDATA\npm\azurite.cmd --silent --location .\.azurite
 Development configuration is stored in:
 
 ```text
-src/KBeauty.Loyalty.API/appsettings.Development.json
-src/KBeauty.Loyalty.Admin/appsettings.Development.json
+src/LoyaltyCloud.API/appsettings.Development.json
+src/LoyaltyCloud.Admin/appsettings.Development.json
 ```
 
 Local development currently uses:
@@ -150,8 +150,8 @@ Required secrets include:
 ### 1. Restore and Build
 
 ```powershell
-dotnet restore .\KBeauty.Loyalty.sln
-dotnet build .\KBeauty.Loyalty.sln -v minimal
+dotnet restore .\LoyaltyCloud.sln
+dotnet build .\LoyaltyCloud.sln -v minimal
 ```
 
 ### 2. Start Azurite
@@ -166,16 +166,16 @@ Azurite must be running when local pass uploads are tested because development s
 
 ```powershell
 dotnet ef database update `
-  --project src\KBeauty.Loyalty.Infrastructure\KBeauty.Loyalty.Infrastructure.csproj `
-  --startup-project src\KBeauty.Loyalty.API\KBeauty.Loyalty.API.csproj
+  --project src\LoyaltyCloud.Infrastructure\LoyaltyCloud.Infrastructure.csproj `
+  --startup-project src\LoyaltyCloud.API\LoyaltyCloud.API.csproj
 ```
 
 ### 4. Start API
 
 ```powershell
 dotnet run `
-  --project src\KBeauty.Loyalty.API\KBeauty.Loyalty.API.csproj `
-  --launch-profile KBeauty.Loyalty.API
+  --project src\LoyaltyCloud.API\LoyaltyCloud.API.csproj `
+  --launch-profile LoyaltyCloud.API
 ```
 
 Open:
@@ -190,8 +190,8 @@ In a second terminal:
 
 ```powershell
 dotnet run `
-  --project src\KBeauty.Loyalty.Admin\KBeauty.Loyalty.Admin.csproj `
-  --launch-profile KBeauty.Loyalty.Admin
+  --project src\LoyaltyCloud.Admin\LoyaltyCloud.Admin.csproj `
+  --launch-profile LoyaltyCloud.Admin
 ```
 
 Open:
@@ -229,8 +229,8 @@ These features are intentionally restricted to Development.
 
 | Feature | Where | Safety boundary |
 | --- | --- | --- |
-| `Login for Dev` button | `KBeauty.Loyalty.Admin/Pages/Login.razor` | Rendered only when `IHostEnvironment.IsDevelopment()` is true. |
-| `/admin/dev-login` endpoint | `KBeauty.Loyalty.Admin/Program.cs` | Endpoint is mapped only inside `if (app.Environment.IsDevelopment())`. |
+| `Login for Dev` button | `LoyaltyCloud.Admin/Pages/Login.razor` | Rendered only when `IHostEnvironment.IsDevelopment()` is true. |
+| `/admin/dev-login` endpoint | `LoyaltyCloud.Admin/Program.cs` | Endpoint is mapped only inside `if (app.Environment.IsDevelopment())`. |
 | Mock `.pkpass` generator | `DevelopmentPassGeneratorService` | Registered only in Development through DI. Non-dev uses real `PassGeneratorService`. |
 | Demo data seeding | `DevelopmentDataSeeder` | Runs only from Admin in Development and skips EF InMemory provider. |
 | Azurite storage | `UseDevelopmentStorage=true` | Local-only storage emulator. Production must use Azure Blob Storage. |
@@ -299,16 +299,16 @@ Do not seed or use extra level names unless they are first added to `LoyaltyCons
 
 ```powershell
 dotnet ef database update `
-  --project src\KBeauty.Loyalty.Infrastructure\KBeauty.Loyalty.Infrastructure.csproj `
-  --startup-project src\KBeauty.Loyalty.API\KBeauty.Loyalty.API.csproj
+  --project src\LoyaltyCloud.Infrastructure\LoyaltyCloud.Infrastructure.csproj `
+  --startup-project src\LoyaltyCloud.API\LoyaltyCloud.API.csproj
 ```
 
 ### Create a Migration
 
 ```powershell
 dotnet ef migrations add <MigrationName> `
-  --project src\KBeauty.Loyalty.Infrastructure\KBeauty.Loyalty.Infrastructure.csproj `
-  --startup-project src\KBeauty.Loyalty.API\KBeauty.Loyalty.API.csproj `
+  --project src\LoyaltyCloud.Infrastructure\LoyaltyCloud.Infrastructure.csproj `
+  --startup-project src\LoyaltyCloud.API\LoyaltyCloud.API.csproj `
   --output-dir Persistence\Migrations
 ```
 
@@ -333,15 +333,15 @@ Important keys:
 ## Build and Test Commands
 
 ```powershell
-dotnet build .\KBeauty.Loyalty.sln -v minimal
-dotnet test .\KBeauty.Loyalty.sln -v minimal --no-build
+dotnet build .\LoyaltyCloud.sln -v minimal
+dotnet test .\LoyaltyCloud.sln -v minimal --no-build
 ```
 
 Useful run commands:
 
 ```powershell
-dotnet run --project src\KBeauty.Loyalty.API\KBeauty.Loyalty.API.csproj --launch-profile KBeauty.Loyalty.API
-dotnet run --project src\KBeauty.Loyalty.Admin\KBeauty.Loyalty.Admin.csproj --launch-profile KBeauty.Loyalty.Admin
+dotnet run --project src\LoyaltyCloud.API\LoyaltyCloud.API.csproj --launch-profile LoyaltyCloud.API
+dotnet run --project src\LoyaltyCloud.Admin\LoyaltyCloud.Admin.csproj --launch-profile LoyaltyCloud.Admin
 ```
 
 ## Troubleshooting
@@ -363,7 +363,7 @@ Fix:
 ```powershell
 netstat -ano | Select-String ':55128|:55131|:55129|:55130'
 Stop-Process -Id <pid> -Force
-dotnet build .\KBeauty.Loyalty.sln -v minimal
+dotnet build .\LoyaltyCloud.sln -v minimal
 ```
 
 ### Login Redirect Loop / Long ReturnUrl
@@ -418,8 +418,8 @@ Fix:
 
 ```powershell
 dotnet ef database update `
-  --project src\KBeauty.Loyalty.Infrastructure\KBeauty.Loyalty.Infrastructure.csproj `
-  --startup-project src\KBeauty.Loyalty.API\KBeauty.Loyalty.API.csproj
+  --project src\LoyaltyCloud.Infrastructure\LoyaltyCloud.Infrastructure.csproj `
+  --startup-project src\LoyaltyCloud.API\LoyaltyCloud.API.csproj
 ```
 
 ### Azurite Missing or Not Running
@@ -527,4 +527,4 @@ Do not leave behavior documented here that no longer matches the implementation.
 
 ## License
 
-Internal KBeauty MX project.
+LoyaltyCloud MVP for KBeauty MX.

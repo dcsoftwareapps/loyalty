@@ -1,0 +1,27 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <RootNamespace>LoyaltyCloud.Application</RootNamespace>
+    <AssemblyName>LoyaltyCloud.Application</AssemblyName>
+    <Description>
+      Casos de uso CQRS con MediatR. Commands, Queries, Validators y
+      pipeline behaviors. Sin acceso directo a EF Core ni dependencias
+      de infraestructura — toda comunicación con DB/Wallet/storage va
+      a través de interfaces de repositorio o de servicio.
+    </Description>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\LoyaltyCloud.Common\LoyaltyCloud.Common.csproj" />
+    <ProjectReference Include="..\LoyaltyCloud.Domain\LoyaltyCloud.Domain.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="MediatR" Version="12.4.1" />
+    <PackageReference Include="FluentValidation" Version="11.10.0" />
+    <PackageReference Include="FluentValidation.DependencyInjectionExtensions" Version="11.10.0" />
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="9.0.0" />
+    <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="9.0.0" />
+  </ItemGroup>
+
+</Project>

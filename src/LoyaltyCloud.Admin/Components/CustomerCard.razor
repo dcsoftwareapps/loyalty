@@ -1,0 +1,29 @@
+@using LoyaltyCloud.Application.Customers.Queries.GetCustomerBySerial
+
+@*
+  Tarjeta resumen de clienta para la pantalla /scan y reutilizable en otros lados.
+*@
+
+<div class="kb-card">
+    <h2>@Customer.FullName</h2>
+    <p style="color: var(--kb-ink-muted); margin: 0 0 12px 0;">@Customer.Email</p>
+    <LevelBadge Level="@Customer.Level" />
+    @if (Customer.IsBirthMonth)
+    {
+        <span class="kb-level kb-level--radiance" style="margin-left:8px;">🎂 Cumple este mes</span>
+    }
+    <div style="margin-top: 16px;">
+        <PointsDisplay Value="@Customer.CurrentPoints" />
+        <p style="text-align:center;color:var(--kb-ink-muted);margin:8px 0 0 0;">
+            puntos disponibles
+            @if (Customer.PointsToNextLevel > 0)
+            {
+                <span>· faltan @Customer.PointsToNextLevel para subir</span>
+            }
+        </p>
+    </div>
+</div>
+
+@code {
+    [Parameter, EditorRequired] public CustomerDetailDto Customer { get; set; } = default!;
+}

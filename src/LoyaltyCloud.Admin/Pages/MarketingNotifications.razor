@@ -1,0 +1,545 @@
+@page "/marketing-notifications"
+@attribute [Authorize]
+@rendermode InteractiveServer
+
+@using System.Net.Http.Json
+@using LoyaltyCloud.Application.Notifications.Custom
+@using LoyaltyCloud.Domain.Enums
+@using Microsoft.AspNetCore.Mvc
+@inject IHttpClientFactory HttpClientFactory
+
+<PageTitle>Mensajes - LoyaltyCloud</PageTitle>
+
+<div style="display:flex;align-items:flex-start;justify-content:space-between;gap:16px;margin-bottom:24px;">
+    <div>
+        <h1>Mensajes personalizados</h1>
+        <p class="kb-muted" style="margin-top:-8px;">
+            Envia o programa mensajes visibles en Apple Wallet para audiencias con pase instalado.
+        </p>
+    </div>
+    <button class="kb-btn kb-btn--primary" @onclick="ToggleForm" disabled="@busy">
+        @(showForm ? "Cerrar" : "Nuevo mensaje")
+    </button>
+</div>
+
+@if (successMsg is not null) { <div class="kb-form-success">@successMsg</div> }
+@if (errorMsg is not null) { <div class="kb-form-error">@errorMsg</div> }
+
+@if (showForm)
+{
+    <section class="kb-card" style="margin-bottom:24px;">
+        <h2>Mensaje</h2>
+        <div class="kb-grid" style="grid-template-columns:minmax(280px,1.2fr) minmax(260px,.8fr);gap:24px;">
+            <div>
+                @if (validationErrors.Count > 0)
+                {
+                    <div class="kb-form-error">
+                        @foreach (var error in validationErrors)
+                        {
+                            <div>@error</div>
+                        }
+                    </div>
+                }
+
+                <div class="kb-form-row kb-form-row--horizontal">
+                    <div style="flex:1;min-width:220px;">
+                        <label for="campaign-name">Nombre interno</label>
+                        <input id="campaign-name" type="text" @bind="form.Name" />
+                    </div>
+                    <div style="flex:1;min-width:220px;">
+                        <label for="campaign-title">Título</label>
+                        <input id="campaign-title" type="text" maxlength="80" @bind="form.Title" />
+                        <div class="kb-muted">@($"{(form.Title?.Length ?? 0)}/80")</div>
+                    </div>
+                </div>
+
+                <div class="kb-form-row">
+                    <label for="short-message">Mensaje corto</label>
+                    <input id="short-message" type="text" maxlength="40" @bind="form.ShortMessage" />
+                    <div class="kb-muted">@($"{(form.ShortMessage?.Length ?? 0)}/40")</div>
+                </div>
+
+                <div class="kb-form-row">
+                    <label for="long-message">Mensaje largo</label>
+                    <textarea id="long-message" rows="5" maxlength="500" @bind="form.LongMessage"></textarea>
+                    <div class="kb-muted">@($"{(form.LongMessage?.Length ?? 0)}/500")</div>
+                </div>
+
+                <div class="kb-form-row kb-form-row--horizontal">
+                    <div style="flex:1;min-width:220px;">
+                        <label for="audience-type">Audiencia</label>
+                        <select id="audience-type" @bind="form.AudienceType">
+                            <option value="@CustomNotificationAudienceType.AllWalletUsers">Todas con Wallet</option>
+                            <option value="@CustomNotificationAudienceType.MistAndAbove">Mist y superiores</option>
+                            <option value="@CustomNotificationAudienceType.GlowAndAbove">Glow y superiores</option>
+                            <option value="@CustomNotificationAudienceType.RadianceOnly">Solo Radiance</option>
+                            <option value="@CustomNotificationAudienceType.MinimumPoints">Puntos mínimos</option>
+                            <option value="@CustomNotificationAudienceType.PointsExpiring">Puntos por expirar</option>
+                        </select>
+                    </div>
+                    @if (form.AudienceType == CustomNotificationAudienceType.MinimumPoints)
+                    {
+                        <div style="flex:1;min-width:180px;">
+                            <label for="minimum-points">Puntos mínimos</label>
+                            <input id="minimum-points" type="number" min="0" @bind="form.MinimumPoints" />
+                        </div>
+                    }
+                    @if (form.AudienceType == CustomNotificationAudienceType.PointsExpiring)
+                    {
+                        <div style="flex:1;min-width:180px;">
+                            <label for="days-ahead">Días adelante</label>
+                            <input id="days-ahead" type="number" min="1" @bind="form.PointsExpiringDaysAhead" />
+                        </div>
+                    }
+                </div>
+
+                <div class="kb-form-row kb-form-row--horizontal">
+                    <div style="flex:1;min-width:200px;">
+                        <label for="display-until">Mostrar hasta</label>
+                        <input id="display-until" type="datetime-local" value="@form.DisplayUntilLocal" @onchange="OnDisplayUntilChanged" />
+                    </div>
+                    <div style="flex:1;min-width:200px;">
+                        <label for="send-mode">Envío</label>
+                        <select id="send-mode" value="@form.SendMode" @onchange="OnSendModeChanged">
+                            <option value="@CustomMessageSendMode.SendNow">Enviar ahora</option>
+                            <option value="@CustomMessageSendMode.Schedule">Programar envío</option>
+                        </select>
+                    </div>
+                    @if (!form.SendImmediately)
+                    {
+                        <div style="flex:1;min-width:200px;">
+                            <label for="scheduled-at">Enviar en</label>
+                            <input id="scheduled-at" type="datetime-local" value="@form.ScheduledAtLocal" @onchange="OnScheduledAtChanged" />
+                        </div>
+                    }
+                </div>
+
+                <div class="kb-actions-inline">
+                    <button class="kb-btn kb-btn--ghost" @onclick="PreviewAsync" disabled="@busy">
+                        Preview audiencia
+                    </button>
+                    @if (preview is not null && !confirmSend)
+                    {
+                        <button class="kb-btn kb-btn--primary" @onclick="@(() => confirmSend = true)" disabled="@busy">
+                            Confirmar
+                        </button>
+                    }
+                    @if (confirmSend)
+                    {
+                        <button class="kb-btn kb-btn--primary" @onclick="CreateAsync" disabled="@busy">
+                            @(form.SendImmediately ? "Enviar mensaje" : "Programar mensaje")
+                        </button>
+                        <button class="kb-btn kb-btn--ghost" @onclick="@(() => confirmSend = false)" disabled="@busy">Cancelar confirmación</button>
+                    }
+                </div>
+            </div>
+
+            <div>
+                <div class="kb-card" style="background:rgb(250,248,244);border-color:#eee;">
+                    <div class="kb-muted" style="font-size:.78rem;text-transform:uppercase;">Vista previa Wallet</div>
+                    <h3 style="margin-top:8px;">NOVEDAD</h3>
+                    <p style="font-size:1.3rem;font-weight:700;margin-bottom:16px;">@DisplayText(form.ShortMessage)</p>
+                    <div class="kb-muted" style="white-space:pre-line;">@DisplayText(form.LongMessage)</div>
+                </div>
+
+                @if (preview is not null)
+                {
+                    <div class="kb-card" style="margin-top:16px;">
+                        <h3>Audiencia</h3>
+                        <DetailItem Label="Destinatarios" Value="@preview.TotalRecipients.ToString("N0")" />
+                        <DetailItem Label="Sin Wallet" Value="@preview.ExcludedWithoutDeviceRegistration.ToString("N0")" />
+                        <DetailItem Label="Criterio" Value="@preview.Criteria" />
+                        @if (preview.Warnings.Count > 0)
+                        {
+                            <div class="kb-form-error">
+                                @foreach (var warning in preview.Warnings)
+                                {
+                                    <div>@warning</div>
+                                }
+                            </div>
+                        }
+                    </div>
+                }
+            </div>
+        </div>
+    </section>
+}
+
+<section>
+    <h2>Historial</h2>
+    @if (campaigns is null)
+    {
+        <p>Cargando...</p>
+    }
+    else if (campaigns.Count == 0)
+    {
+        <p class="kb-muted">No hay mensajes personalizados.</p>
+    }
+    else
+    {
+        <table class="kb-table kb-table--compact">
+            <thead>
+                <tr>
+                    <th>Creada</th>
+                    <th>Nombre</th>
+                    <th>Audiencia</th>
+                    <th>Mensaje</th>
+                    <th>Estado</th>
+                    <th>Métricas</th>
+                    <th>Acciones</th>
+                </tr>
+            </thead>
+            <tbody>
+            @foreach (var campaign in campaigns)
+            {
+                <tr>
+                    <td class="kb-muted">@FormatDateTime(campaign.CreatedAt)</td>
+                    <td>
+                        <strong>@campaign.Name</strong>
+                        <div class="kb-muted">@campaign.Title</div>
+                    </td>
+                    <td>@campaign.AudienceType</td>
+                    <td>
+                        <strong>@campaign.ShortMessage</strong>
+                        <div class="kb-muted kb-text-truncate" title="@campaign.LongMessage">@campaign.LongMessage</div>
+                    </td>
+                    <td><span class="@CampaignStatusClass(campaign.Status)">@campaign.Status</span></td>
+                    <td class="kb-muted">@($"{campaign.NotificationsSucceeded}/{campaign.IntendedRecipients} entregadas")</td>
+                    <td>
+                        <div class="kb-actions-inline">
+                            @if (campaign.Status == CustomNotificationCampaignStatus.Scheduled)
+                            {
+                                <button class="kb-btn kb-btn--primary kb-btn--small" @onclick="@(() => SendAsync(campaign.Id))" disabled="@busy">Enviar</button>
+                                <button class="kb-btn kb-btn--ghost kb-btn--small" @onclick="@(() => CancelAsync(campaign.Id))" disabled="@busy">Cancelar</button>
+                            }
+                            else
+                            {
+                                <span class="kb-muted">Sin acciones</span>
+                            }
+                        </div>
+                    </td>
+                </tr>
+            }
+            </tbody>
+        </table>
+    }
+</section>
+
+@code {
+    private List<CustomNotificationCampaignDto>? campaigns;
+    private CustomNotificationAudiencePreviewDto? preview;
+    private CustomMessageForm form = CustomMessageForm.CreateDefault();
+    private readonly List<string> validationErrors = new();
+    private string? successMsg;
+    private string? errorMsg;
+    private bool showForm;
+    private bool busy;
+    private bool confirmSend;
+    private HttpClient Api => HttpClientFactory.CreateClient("LoyaltyCloudApi");
+
+    protected override async Task OnInitializedAsync() => await LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        busy = true;
+        errorMsg = null;
+        try
+        {
+            using var response = await Api.GetAsync("api/custom-notification-campaigns?take=100");
+            if (!response.IsSuccessStatusCode)
+            {
+                errorMsg = await ReadApiErrorAsync(response);
+                return;
+            }
+
+            campaigns = (await response.Content.ReadFromJsonAsync<List<CustomNotificationCampaignDto>>()) ?? [];
+        }
+        finally
+        {
+            busy = false;
+        }
+    }
+
+    private void ToggleForm()
+    {
+        showForm = !showForm;
+        successMsg = null;
+        errorMsg = null;
+        confirmSend = false;
+        validationErrors.Clear();
+    }
+
+    private async Task PreviewAsync()
+    {
+        if (!ValidateForm())
+            return;
+
+        busy = true;
+        errorMsg = null;
+        successMsg = null;
+        confirmSend = false;
+        try
+        {
+            using var response = await Api.PostAsJsonAsync("api/custom-notification-campaigns/preview", new PreviewCustomNotificationAudienceRequest(
+                form.AudienceType,
+                form.AudienceType == CustomNotificationAudienceType.MinimumPoints ? form.MinimumPoints : null,
+                form.AudienceType == CustomNotificationAudienceType.PointsExpiring ? form.PointsExpiringDaysAhead : null,
+                25));
+
+            if (!response.IsSuccessStatusCode)
+            {
+                errorMsg = await ReadApiErrorAsync(response);
+                return;
+            }
+
+            preview = await response.Content.ReadFromJsonAsync<CustomNotificationAudiencePreviewDto>();
+        }
+        finally
+        {
+            busy = false;
+        }
+    }
+
+    private async Task CreateAsync()
+    {
+        if (!ValidateForm())
+            return;
+
+        busy = true;
+        errorMsg = null;
+        successMsg = null;
+        try
+        {
+            using var response = await Api.PostAsJsonAsync("api/custom-notification-campaigns", new CustomNotificationCampaignRequest(
+                form.Name.Trim(),
+                form.Title.Trim(),
+                form.ShortMessage.Trim(),
+                form.LongMessage.Trim(),
+                form.AudienceType,
+                form.AudienceType == CustomNotificationAudienceType.MinimumPoints ? form.MinimumPoints : null,
+                form.AudienceType == CustomNotificationAudienceType.PointsExpiring ? form.PointsExpiringDaysAhead : null,
+                form.SendImmediately ? null : form.ScheduledAtUtc,
+                form.DisplayUntilUtc,
+                form.SendImmediately));
+
+            if (!response.IsSuccessStatusCode)
+            {
+                errorMsg = await ReadApiErrorAsync(response);
+                return;
+            }
+
+            successMsg = form.SendImmediately ? "Mensaje enviado." : "Mensaje programado.";
+            form = CustomMessageForm.CreateDefault();
+            preview = null;
+            confirmSend = false;
+            showForm = false;
+            await LoadAsync();
+        }
+        finally
+        {
+            busy = false;
+        }
+    }
+
+    private async Task SendAsync(Guid campaignId)
+    {
+        busy = true;
+        errorMsg = null;
+        successMsg = null;
+        try
+        {
+            using var response = await Api.PostAsync($"api/custom-notification-campaigns/{campaignId}/send", content: null);
+            if (!response.IsSuccessStatusCode)
+            {
+                errorMsg = await ReadApiErrorAsync(response);
+                return;
+            }
+
+            successMsg = "Mensaje enviado.";
+            await LoadAsync();
+        }
+        finally
+        {
+            busy = false;
+        }
+    }
+
+    private async Task CancelAsync(Guid campaignId)
+    {
+        busy = true;
+        errorMsg = null;
+        successMsg = null;
+        try
+        {
+            using var response = await Api.PutAsync($"api/custom-notification-campaigns/{campaignId}/cancel", content: null);
+            if (!response.IsSuccessStatusCode)
+            {
+                errorMsg = await ReadApiErrorAsync(response);
+                return;
+            }
+
+            successMsg = "Mensaje cancelado.";
+            await LoadAsync();
+        }
+        finally
+        {
+            busy = false;
+        }
+    }
+
+    private bool ValidateForm()
+    {
+        validationErrors.Clear();
+        errorMsg = null;
+
+        if (string.IsNullOrWhiteSpace(form.Name))
+            validationErrors.Add("El nombre interno es obligatorio.");
+        if (string.IsNullOrWhiteSpace(form.Title) || form.Title.Trim().Length > 80)
+            validationErrors.Add("El título es obligatorio y debe tener máximo 80 caracteres.");
+        if (string.IsNullOrWhiteSpace(form.ShortMessage) || form.ShortMessage.Trim().Length > 40)
+            validationErrors.Add("El mensaje corto es obligatorio y debe tener máximo 40 caracteres.");
+        if (form.ShortMessage?.Any(c => c is '\n' or '\r' or '\t') == true)
+            validationErrors.Add("El mensaje corto no debe contener saltos de línea ni tabuladores.");
+        if (string.IsNullOrWhiteSpace(form.LongMessage) || form.LongMessage.Trim().Length > 500)
+            validationErrors.Add("El mensaje largo es obligatorio y debe tener máximo 500 caracteres.");
+        var effectiveSendAtUtc = form.SendImmediately ? DateTime.UtcNow : form.ScheduledAtUtc;
+
+        if (form.DisplayUntilUtc <= DateTime.UtcNow)
+            validationErrors.Add("La fecha límite de visualización debe ser futura.");
+        if (!form.SendImmediately && !form.ScheduledAtUtc.HasValue)
+            validationErrors.Add("La fecha de envío es obligatoria para mensajes programados.");
+        if (!form.SendImmediately && form.ScheduledAtUtc.HasValue && form.ScheduledAtUtc.Value <= DateTime.UtcNow)
+            validationErrors.Add("La fecha de envío debe ser futura.");
+        if (effectiveSendAtUtc.HasValue && form.DisplayUntilUtc <= effectiveSendAtUtc.Value)
+            validationErrors.Add("La fecha límite de visualización debe ser posterior a la fecha de envío.");
+        if (form.AudienceType == CustomNotificationAudienceType.MinimumPoints && form.MinimumPoints.GetValueOrDefault() < 0)
+            validationErrors.Add("Los puntos mínimos deben ser cero o mayores.");
+        if (form.AudienceType == CustomNotificationAudienceType.PointsExpiring && form.PointsExpiringDaysAhead.GetValueOrDefault() <= 0)
+            validationErrors.Add("Los días de expiración deben ser mayores a cero.");
+
+        return validationErrors.Count == 0;
+    }
+
+    private void OnDisplayUntilChanged(ChangeEventArgs args)
+    {
+        form.DisplayUntilLocal = args.Value?.ToString() ?? string.Empty;
+        form.DisplayUntilUtc = ParseLocalDateTime(form.DisplayUntilLocal) ?? DateTime.UtcNow.AddDays(7);
+    }
+
+    private void OnScheduledAtChanged(ChangeEventArgs args)
+    {
+        form.ScheduledAtLocal = args.Value?.ToString() ?? string.Empty;
+        form.ScheduledAtUtc = ParseLocalDateTime(form.ScheduledAtLocal);
+    }
+
+    private void OnSendModeChanged(ChangeEventArgs args)
+    {
+        var rawValue = args.Value?.ToString();
+        form.SendMode = Enum.TryParse<CustomMessageSendMode>(rawValue, out var mode)
+            ? mode
+            : CustomMessageSendMode.SendNow;
+
+        if (form.SendImmediately)
+        {
+            form.ScheduledAtLocal = null;
+            form.ScheduledAtUtc = null;
+        }
+    }
+
+    private static DateTime? ParseLocalDateTime(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value) || !DateTime.TryParse(value, out var parsed))
+            return null;
+
+        return DateTime.SpecifyKind(parsed, DateTimeKind.Local).ToUniversalTime();
+    }
+
+    private static string ToInputValue(DateTime utc) =>
+        utc.ToLocalTime().ToString("yyyy-MM-ddTHH:mm");
+
+    private static string FormatDateTime(DateTime value) => value.ToLocalTime().ToString("dd MMM yyyy HH:mm");
+    private static string DisplayText(string? value) => string.IsNullOrWhiteSpace(value) ? "No disponible" : value;
+
+    private static string CampaignStatusClass(CustomNotificationCampaignStatus status) => status switch
+    {
+        CustomNotificationCampaignStatus.Completed => "kb-badge kb-badge--success",
+        CustomNotificationCampaignStatus.PartiallyCompleted => "kb-badge kb-badge--warning",
+        CustomNotificationCampaignStatus.Failed => "kb-badge kb-badge--danger",
+        CustomNotificationCampaignStatus.Cancelled => "kb-badge kb-badge--muted",
+        CustomNotificationCampaignStatus.Scheduled => "kb-badge kb-badge--info",
+        CustomNotificationCampaignStatus.Processing => "kb-badge kb-badge--warning",
+        _ => "kb-badge kb-badge--muted"
+    };
+
+    private static async Task<string> ReadApiErrorAsync(HttpResponseMessage response)
+    {
+        try
+        {
+            var problem = await response.Content.ReadFromJsonAsync<ProblemDetails>();
+            if (!string.IsNullOrWhiteSpace(problem?.Detail))
+                return problem.Detail;
+            if (!string.IsNullOrWhiteSpace(problem?.Title))
+                return problem.Title;
+        }
+        catch
+        {
+            // Fall through to raw content.
+        }
+
+        var content = await response.Content.ReadAsStringAsync();
+        return string.IsNullOrWhiteSpace(content)
+            ? $"La API respondió {(int)response.StatusCode} {response.ReasonPhrase}."
+            : content;
+    }
+
+    private sealed record PreviewCustomNotificationAudienceRequest(
+        CustomNotificationAudienceType AudienceType,
+        int? MinimumPoints,
+        int? PointsExpiringDaysAhead,
+        int? SampleSize);
+
+    private sealed record CustomNotificationCampaignRequest(
+        string Name,
+        string Title,
+        string ShortMessage,
+        string LongMessage,
+        CustomNotificationAudienceType AudienceType,
+        int? MinimumPoints,
+        int? PointsExpiringDaysAhead,
+        DateTime? ScheduledAtUtc,
+        DateTime DisplayUntilUtc,
+        bool SendImmediately);
+
+    private enum CustomMessageSendMode
+    {
+        SendNow,
+        Schedule
+    }
+
+    private sealed class CustomMessageForm
+    {
+        public string Name { get; set; } = string.Empty;
+        public string Title { get; set; } = string.Empty;
+        public string ShortMessage { get; set; } = string.Empty;
+        public string LongMessage { get; set; } = string.Empty;
+        public CustomNotificationAudienceType AudienceType { get; set; } = CustomNotificationAudienceType.AllWalletUsers;
+        public int? MinimumPoints { get; set; } = 0;
+        public int? PointsExpiringDaysAhead { get; set; } = 15;
+        public CustomMessageSendMode SendMode { get; set; } = CustomMessageSendMode.SendNow;
+        public bool SendImmediately => SendMode == CustomMessageSendMode.SendNow;
+        public DateTime? ScheduledAtUtc { get; set; }
+        public DateTime DisplayUntilUtc { get; set; }
+        public string? ScheduledAtLocal { get; set; }
+        public string DisplayUntilLocal { get; set; } = string.Empty;
+
+        public static CustomMessageForm CreateDefault()
+        {
+            var displayUntil = DateTime.UtcNow.AddDays(7);
+            return new CustomMessageForm
+            {
+                DisplayUntilUtc = displayUntil,
+                DisplayUntilLocal = ToInputValue(displayUntil)
+            };
+        }
+    }
+}

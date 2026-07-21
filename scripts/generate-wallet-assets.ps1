@@ -1,6 +1,6 @@
 param(
     [string]$SourceLogo = "C:\Users\chave\OneDrive\K-Beauty\Pass\logo.png",
-    [string]$OutputDir = ".\src\KBeauty.Loyalty.Infrastructure\Assets\AppleWallet"
+    [string]$OutputDir = ".\src\LoyaltyCloud.Infrastructure\Assets\AppleWallet"
 )
 
 $ErrorActionPreference = "Stop"

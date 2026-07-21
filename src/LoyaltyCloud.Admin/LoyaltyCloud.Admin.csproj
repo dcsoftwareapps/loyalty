@@ -1,0 +1,15 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+
+  <PropertyGroup>
+    <RootNamespace>LoyaltyCloud.Admin</RootNamespace>
+    <AssemblyName>LoyaltyCloud.Admin</AssemblyName>
+    <UserSecretsId>kbeauty-loyalty-admin</UserSecretsId>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\LoyaltyCloud.Common\LoyaltyCloud.Common.csproj" />
+    <ProjectReference Include="..\LoyaltyCloud.Application\LoyaltyCloud.Application.csproj" />
+    <ProjectReference Include="..\LoyaltyCloud.Infrastructure\LoyaltyCloud.Infrastructure.csproj" />
+  </ItemGroup>
+
+</Project>

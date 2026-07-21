@@ -1,0 +1,525 @@
+@page "/rewards"
+@attribute [Authorize]
+@rendermode InteractiveServer
+
+@using LoyaltyCloud.Application.Rewards
+@using LoyaltyCloud.Application.Rewards.Commands.ActivateReward
+@using LoyaltyCloud.Application.Rewards.Commands.CreateReward
+@using LoyaltyCloud.Application.Rewards.Commands.DeactivateReward
+@using LoyaltyCloud.Application.Rewards.Commands.UpdateReward
+@using LoyaltyCloud.Application.Rewards.Queries.ListRewards
+@using System.Globalization
+@inject ISender Sender
+
+<PageTitle>Recompensas - LoyaltyCloud</PageTitle>
+
+<div style="display:flex;align-items:center;justify-content:space-between;gap:16px;margin-bottom:24px;">
+    <div>
+        <h1>Recompensas</h1>
+        <p style="color: var(--kb-ink-muted); margin-top: -8px;">
+            Administra el catálogo de recompensas disponible para canjes.
+        </p>
+    </div>
+    <button class="kb-btn kb-btn--primary" @onclick="StartCreate" disabled="@busy">
+        Nueva recompensa
+    </button>
+</div>
+
+@if (successMsg is not null) { <div class="kb-form-success">@successMsg</div> }
+@if (errorMsg is not null) { <div class="kb-form-error">@errorMsg</div> }
+
+@if (showForm)
+{
+    <section class="kb-card" style="margin-bottom:24px;max-width:860px;">
+        <h2>@(editingId.HasValue ? "Editar recompensa" : "Nueva recompensa")</h2>
+
+        @if (validationErrors.Count > 0)
+        {
+            <div class="kb-form-error">
+                @foreach (var error in validationErrors)
+                {
+                    <div>@error</div>
+                }
+            </div>
+        }
+
+        <div class="kb-form-row kb-form-row--horizontal">
+            <div style="flex:1;min-width:240px;">
+                <label for="reward-name">Nombre</label>
+                <input id="reward-name" type="text" @bind="form.Name" />
+            </div>
+            <div style="flex:1;min-width:180px;">
+                <label for="reward-points">Puntos requeridos</label>
+                <input id="reward-points" type="number" min="1" @bind="form.PointsCost" />
+            </div>
+            <div style="flex:1;min-width:180px;">
+                <label for="reward-level">Nivel mínimo</label>
+                <select id="reward-level" @bind="form.MinLevel">
+                    <option value="@LoyaltyConstants.Levels.Mist">Mist</option>
+                    <option value="@LoyaltyConstants.Levels.Glow">Glow</option>
+                    <option value="@LoyaltyConstants.Levels.Radiance">Radiance</option>
+                </select>
+            </div>
+        </div>
+
+        <div class="kb-form-row" style="max-width:100%;">
+            <div>
+                <label for="reward-description">Descripción</label>
+                <textarea id="reward-description" rows="3" @bind="form.Description"></textarea>
+            </div>
+        </div>
+
+        <div class="kb-form-row kb-form-row--horizontal">
+            <div style="min-width:180px;">
+                <label for="reward-from">Vigente desde</label>
+                <input id="reward-from" type="date" value="@form.ValidFromDate" @onchange="OnValidFromDateChanged" />
+            </div>
+            <div style="min-width:180px;">
+                <label for="reward-to">Vigente hasta</label>
+                <input id="reward-to" type="date" value="@form.ValidToDate" @onchange="OnValidToDateChanged" />
+            </div>
+            <label style="display:flex;align-items:center;gap:10px;margin-bottom:12px;">
+                <input type="checkbox" @bind="form.IsMonthlyProduct" style="width:auto;" />
+                Producto del mes
+            </label>
+            <label style="display:flex;align-items:center;gap:10px;margin-bottom:12px;">
+                <input type="checkbox" @bind="form.IsActive" style="width:auto;" />
+                Activa
+            </label>
+        </div>
+
+        <div class="kb-actions-inline">
+            <button class="kb-btn kb-btn--primary" @onclick="SaveAsync" disabled="@busy">
+                @(busy ? "Guardando..." : "Guardar")
+            </button>
+            <button class="kb-btn kb-btn--ghost" @onclick="CancelForm" disabled="@busy">
+                Cancelar
+            </button>
+        </div>
+    </section>
+}
+
+@if (rewards is not null)
+{
+    <section class="kb-card" style="margin-bottom:24px;">
+        <h2>Producto del mes actual</h2>
+        @if (CurrentMonthlyProduct is null)
+        {
+            <p class="kb-muted" style="margin:0;">No hay producto del mes vigente.</p>
+        }
+        else
+        {
+            <div class="kb-detail-grid">
+                <DetailItem Label="Nombre" Value="@CurrentMonthlyProduct.Name" />
+                <DetailItem Label="Costo" Value="@($"{CurrentMonthlyProduct.PointsCost:N0} pts")" />
+                <DetailItem Label="Nivel mínimo" Value="@CurrentMonthlyProduct.MinLevel" />
+                <DetailItem Label="Vigencia" Value="@FormatValidity(CurrentMonthlyProduct)" />
+                <DetailItem Label="Estado" Value="@MonthlyProductStatus(CurrentMonthlyProduct)" />
+            </div>
+        }
+    </section>
+}
+
+<div class="kb-form-row kb-form-row--horizontal" style="margin-bottom:20px;">
+    <div style="flex:2;min-width:260px;">
+        <label for="reward-search">Buscar</label>
+        <input id="reward-search" type="text" value="@rewardSearch" @oninput="OnRewardSearchChanged"
+               placeholder="Nombre o descripción" />
+    </div>
+    <div class="kb-actions-inline" style="align-self:end;">
+        <button class="@RewardFilterButtonClass(RewardFilterAll)" @onclick="ShowAllRewards">Todas</button>
+        <button class="@RewardFilterButtonClass(RewardFilterActive)" @onclick="ShowActiveRewards">Activas</button>
+        <button class="@RewardFilterButtonClass(RewardFilterInactive)" @onclick="ShowInactiveRewards">Inactivas</button>
+    </div>
+</div>
+
+@if (rewards is null)
+{
+    <p>Cargando...</p>
+}
+else if (VisibleRewards.Count == 0)
+{
+    <p style="color: var(--kb-ink-muted);">No hay recompensas para este filtro.</p>
+}
+else
+{
+    <table class="kb-table kb-table--compact">
+        <thead>
+            <tr>
+                <th>Nombre</th>
+                <th class="kb-cell-number">Puntos</th>
+                <th>Nivel mínimo</th>
+                <th>Mes</th>
+                <th>Vigencia</th>
+                <th>Estado</th>
+                <th>Acciones</th>
+            </tr>
+        </thead>
+        <tbody>
+        @foreach (var reward in VisibleRewards)
+        {
+            <tr>
+                <td>
+                    <strong>@reward.Name</strong>
+                    <div class="kb-muted kb-text-truncate" title="@reward.Description">@reward.Description</div>
+                </td>
+                <td class="kb-cell-number" style="font-weight:600;">@reward.PointsCost.ToString("N0") pts</td>
+                <td><LevelBadge Level="@reward.MinLevel" /></td>
+                <td class="kb-cell-center">
+                    @if (reward.IsMonthlyProduct)
+                    {
+                        <span class="@MonthlyProductBadgeClass(reward)">@MonthlyProductStatus(reward)</span>
+                    }
+                    else
+                    {
+                        <span class="kb-muted">—</span>
+                    }
+                </td>
+                <td class="kb-muted">@FormatValidity(reward)</td>
+                <td><span class="@RewardStatusBadgeClass(reward.IsActive)">@(reward.IsActive ? "Activa" : "Inactiva")</span></td>
+                <td>
+                    <div class="kb-actions-inline">
+                        <button class="kb-btn kb-btn--ghost kb-btn--small" @onclick="@(() => StartEdit(reward))" disabled="@busy">
+                            Editar
+                        </button>
+                        @if (reward.IsActive)
+                        {
+                            <button class="kb-btn kb-btn--ghost kb-btn--small" @onclick="@(() => DeactivateAsync(reward.Id))" disabled="@busy">
+                                Desactivar
+                            </button>
+                        }
+                        else
+                        {
+                            <button class="kb-btn kb-btn--primary kb-btn--small" @onclick="@(() => ActivateAsync(reward.Id))" disabled="@busy">
+                                Activar
+                            </button>
+                        }
+                    </div>
+                </td>
+            </tr>
+        }
+        </tbody>
+    </table>
+}
+
+@code {
+    private List<RewardAdminDto>? rewards;
+    private RewardFormModel form = RewardFormModel.CreateDefault();
+    private readonly List<string> validationErrors = new();
+    private const string RewardFilterAll = "all";
+    private const string RewardFilterActive = "active";
+    private const string RewardFilterInactive = "inactive";
+    private Guid? editingId;
+    private string rewardSearch = string.Empty;
+    private string rewardStatusFilter = RewardFilterAll;
+    private string? successMsg;
+    private string? errorMsg;
+    private bool showForm;
+    private bool busy;
+
+    private IReadOnlyList<RewardAdminDto> VisibleRewards => (rewards ?? new List<RewardAdminDto>())
+        .Where(MatchesRewardSearch)
+        .Where(MatchesRewardStatus)
+        .ToList()
+        .AsReadOnly();
+
+    private RewardAdminDto? CurrentMonthlyProduct => rewards?
+        .FirstOrDefault(r => r.IsMonthlyProduct && r.IsActive && r.IsCurrentlyAvailable);
+
+    protected override async Task OnInitializedAsync() => await ReloadAsync();
+
+    private async Task ReloadAsync()
+    {
+        var result = await Sender.Send(new ListRewardsQuery(
+            ActiveOnly: false,
+            IncludeExpired: true,
+            MinLevel: null));
+
+        if (result.IsSuccess)
+        {
+            rewards = result.Value.ToList();
+        }
+        else
+        {
+            errorMsg = result.Error;
+        }
+    }
+
+    private void StartCreate()
+    {
+        ClearMessages();
+        editingId = null;
+        form = RewardFormModel.CreateDefault();
+        showForm = true;
+    }
+
+    private void StartEdit(RewardAdminDto reward)
+    {
+        ClearMessages();
+        editingId = reward.Id;
+        form = new RewardFormModel
+        {
+            Name = reward.Name,
+            Description = reward.Description,
+            PointsCost = reward.PointsCost,
+            MinLevel = reward.MinLevel,
+            IsMonthlyProduct = reward.IsMonthlyProduct,
+            IsActive = reward.IsActive,
+            OriginalValidFrom = reward.ValidFrom,
+            OriginalValidTo = reward.ValidTo,
+            ValidFromDate = ToDateInputValue(reward.ValidFrom),
+            ValidToDate = ToDateInputValue(reward.ValidTo)
+        };
+        showForm = true;
+    }
+
+    private async Task SaveAsync()
+    {
+        ClearMessages();
+        if (!ValidateForm())
+            return;
+
+        busy = true;
+        var validFrom = BuildDateForSave(form.ValidFromDate, form.OriginalValidFrom, endOfDay: false);
+        var validTo = BuildDateForSave(form.ValidToDate, form.OriginalValidTo, endOfDay: true);
+
+        var result = editingId.HasValue
+            ? await Sender.Send(new UpdateRewardCommand(
+                editingId.Value,
+                form.Name.Trim(),
+                form.Description.Trim(),
+                form.PointsCost,
+                form.MinLevel,
+                form.IsMonthlyProduct,
+                validFrom,
+                validTo,
+                form.IsActive))
+            : await Sender.Send(new CreateRewardCommand(
+                form.Name.Trim(),
+                form.Description.Trim(),
+                form.PointsCost,
+                form.MinLevel,
+                form.IsMonthlyProduct,
+                validFrom,
+                validTo,
+                form.IsActive));
+
+        busy = false;
+
+        if (result.IsFailure)
+        {
+            errorMsg = result.Error;
+            return;
+        }
+
+        successMsg = editingId.HasValue ? "Recompensa actualizada." : "Recompensa creada.";
+        showForm = false;
+        editingId = null;
+        form = RewardFormModel.CreateDefault();
+        await ReloadAsync();
+    }
+
+    private async Task ActivateAsync(Guid id)
+    {
+        ClearMessages();
+        busy = true;
+        var result = await Sender.Send(new ActivateRewardCommand(id));
+        busy = false;
+
+        if (result.IsFailure)
+        {
+            errorMsg = result.Error;
+            return;
+        }
+
+        successMsg = "Recompensa activada.";
+        await ReloadAsync();
+    }
+
+    private async Task DeactivateAsync(Guid id)
+    {
+        ClearMessages();
+        busy = true;
+        var result = await Sender.Send(new DeactivateRewardCommand(id));
+        busy = false;
+
+        if (result.IsFailure)
+        {
+            errorMsg = result.Error;
+            return;
+        }
+
+        successMsg = "Recompensa desactivada.";
+        await ReloadAsync();
+    }
+
+    private void CancelForm()
+    {
+        showForm = false;
+        editingId = null;
+        form = RewardFormModel.CreateDefault();
+        validationErrors.Clear();
+    }
+
+    private void OnRewardSearchChanged(ChangeEventArgs e)
+    {
+        rewardSearch = e.Value?.ToString() ?? string.Empty;
+    }
+
+    private void OnValidFromDateChanged(ChangeEventArgs e)
+    {
+        form.ValidFromDate = e.Value?.ToString();
+    }
+
+    private void OnValidToDateChanged(ChangeEventArgs e)
+    {
+        form.ValidToDate = e.Value?.ToString();
+    }
+
+    private void ShowAllRewards() => rewardStatusFilter = RewardFilterAll;
+    private void ShowActiveRewards() => rewardStatusFilter = RewardFilterActive;
+    private void ShowInactiveRewards() => rewardStatusFilter = RewardFilterInactive;
+
+    private bool ValidateForm()
+    {
+        validationErrors.Clear();
+
+        if (string.IsNullOrWhiteSpace(form.Name))
+            validationErrors.Add("El nombre es obligatorio.");
+
+        if (string.IsNullOrWhiteSpace(form.Description))
+            validationErrors.Add("La descripción es obligatoria.");
+
+        if (form.PointsCost <= 0)
+            validationErrors.Add("Los puntos requeridos deben ser mayores a 0.");
+
+        var hasValidFrom = TryParseDateInput(form.ValidFromDate, out var validFromDate);
+        var hasValidTo = TryParseDateInput(form.ValidToDate, out var validToDate);
+
+        if (!hasValidFrom)
+            validationErrors.Add("Vigente desde no tiene un formato válido.");
+
+        if (!hasValidTo)
+            validationErrors.Add("Vigente hasta no tiene un formato válido.");
+
+        if (validFromDate.HasValue && validToDate.HasValue && validToDate.Value < validFromDate.Value)
+            validationErrors.Add("Vigente hasta no puede ser menor que Vigente desde.");
+
+        if (form.IsMonthlyProduct && (!validFromDate.HasValue || !validToDate.HasValue))
+            validationErrors.Add("El Producto del mes requiere fecha de inicio y fecha de fin.");
+
+        return validationErrors.Count == 0;
+    }
+
+    private void ClearMessages()
+    {
+        successMsg = null;
+        errorMsg = null;
+        validationErrors.Clear();
+    }
+
+    private bool MatchesRewardSearch(RewardAdminDto reward)
+    {
+        if (string.IsNullOrWhiteSpace(rewardSearch))
+            return true;
+
+        var term = rewardSearch.Trim();
+        return reward.Name.Contains(term, StringComparison.OrdinalIgnoreCase) ||
+               reward.Description.Contains(term, StringComparison.OrdinalIgnoreCase);
+    }
+
+    private bool MatchesRewardStatus(RewardAdminDto reward) => rewardStatusFilter switch
+    {
+        RewardFilterActive => reward.IsActive,
+        RewardFilterInactive => !reward.IsActive,
+        _ => true
+    };
+
+    private string RewardFilterButtonClass(string value) =>
+        rewardStatusFilter == value ? "kb-btn kb-btn--primary" : "kb-btn kb-btn--ghost";
+
+    private static string RewardStatusBadgeClass(bool isActive) =>
+        isActive ? "kb-badge kb-badge--success" : "kb-badge kb-badge--muted";
+
+    private static string MonthlyProductStatus(RewardAdminDto reward)
+    {
+        if (!reward.IsMonthlyProduct)
+            return "No aplica";
+        if (!reward.IsActive)
+            return "Inactivo";
+
+        var now = DateTime.UtcNow;
+        if (reward.ValidFrom.HasValue && reward.ValidFrom.Value > now)
+            return "Programado";
+        if (reward.ValidTo.HasValue && reward.ValidTo.Value < now)
+            return "Vencido";
+
+        return reward.IsCurrentlyAvailable ? "Vigente" : "Sin vigencia";
+    }
+
+    private static string MonthlyProductBadgeClass(RewardAdminDto reward) => MonthlyProductStatus(reward) switch
+    {
+        "Vigente" => "kb-badge kb-badge--success",
+        "Programado" => "kb-badge kb-badge--warning",
+        "Vencido" => "kb-badge kb-badge--muted",
+        "Inactivo" => "kb-badge kb-badge--muted",
+        _ => "kb-badge"
+    };
+
+    private static string FormatValidity(RewardAdminDto reward)
+    {
+        if (!reward.ValidFrom.HasValue && !reward.ValidTo.HasValue)
+            return "Sin vigencia";
+
+        var from = FormatUtcCalendarDate(reward.ValidFrom, "Inicio abierto");
+        var to = FormatUtcCalendarDate(reward.ValidTo, "Sin fin");
+        return $"{from} - {to}";
+    }
+
+    private static string FormatUtcCalendarDate(DateTime? date, string fallback) =>
+        date.HasValue ? date.Value.ToString("dd MMM yyyy", CultureInfo.InvariantCulture) : fallback;
+
+    private static string? ToDateInputValue(DateTime? date) =>
+        date.HasValue ? date.Value.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture) : null;
+
+    private static bool TryParseDateInput(string? value, out DateTime? date)
+    {
+        date = null;
+        if (string.IsNullOrWhiteSpace(value))
+            return true;
+
+        if (!DateTime.TryParseExact(value, "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out var parsed))
+            return false;
+
+        date = DateTime.SpecifyKind(parsed.Date, DateTimeKind.Utc);
+        return true;
+    }
+
+    private static DateTime? BuildDateForSave(string? value, DateTime? originalValue, bool endOfDay)
+    {
+        if (!TryParseDateInput(value, out var parsedDate) || !parsedDate.HasValue)
+            return null;
+
+        if (ToDateInputValue(originalValue) == value)
+            return originalValue;
+
+        var time = endOfDay ? new TimeSpan(23, 59, 59) : TimeSpan.Zero;
+        return DateTime.SpecifyKind(parsedDate.Value.Date.Add(time), DateTimeKind.Utc);
+    }
+
+    private sealed class RewardFormModel
+    {
+        public string Name { get; set; } = string.Empty;
+        public string Description { get; set; } = string.Empty;
+        public int PointsCost { get; set; } = 1;
+        public string MinLevel { get; set; } = LoyaltyConstants.Levels.Mist;
+        public bool IsMonthlyProduct { get; set; }
+        public bool IsActive { get; set; } = true;
+        public DateTime? OriginalValidFrom { get; set; }
+        public DateTime? OriginalValidTo { get; set; }
+        public string? ValidFromDate { get; set; }
+        public string? ValidToDate { get; set; }
+
+        public static RewardFormModel CreateDefault() => new();
+    }
+}

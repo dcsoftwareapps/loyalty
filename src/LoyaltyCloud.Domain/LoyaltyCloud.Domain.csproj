@@ -1,0 +1,17 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <RootNamespace>LoyaltyCloud.Domain</RootNamespace>
+    <AssemblyName>LoyaltyCloud.Domain</AssemblyName>
+    <Description>
+      Capa de dominio: entidades, value objects, domain events, excepciones
+      de dominio y contratos de repositorio. Sin dependencias de
+      infraestructura, web ni terceros (excepto Common).
+    </Description>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\LoyaltyCloud.Common\LoyaltyCloud.Common.csproj" />
+  </ItemGroup>
+
+</Project>

@@ -1,0 +1,33 @@
+@using LoyaltyCloud.Application.Customers.Queries.GetCustomerTransactions
+@using LoyaltyCloud.Domain.Enums
+
+<tr>
+    <td>
+        <span style="font-size: 1.25rem;">@Icon</span>
+    </td>
+    <td>@Transaction.Description</td>
+    <td>
+        <span style="color: @PointsColor; font-weight: 600;">
+            @(Transaction.Points > 0 ? "+" : "")@Transaction.Points
+        </span>
+    </td>
+    <td style="color: var(--kb-ink-muted);">@Transaction.CreatedAt.ToLocalTime().ToString("dd MMM yyyy HH:mm")</td>
+</tr>
+
+@code {
+    [Parameter, EditorRequired] public TransactionDto Transaction { get; set; } = default!;
+
+    private string Icon => Transaction.Type switch
+    {
+        TransactionType.Purchase => "🛍️",
+        TransactionType.BonusWelcome => "🌸",
+        TransactionType.BonusBirthday => "🎂",
+        TransactionType.BonusReferral => "🤝",
+        TransactionType.Redemption => "🎁",
+        TransactionType.RedemptionReversal => "+",
+        TransactionType.Expiry => "⌛",
+        _ => "•"
+    };
+
+    private string PointsColor => Transaction.Points >= 0 ? "var(--kb-sage)" : "var(--kb-blush)";
+}

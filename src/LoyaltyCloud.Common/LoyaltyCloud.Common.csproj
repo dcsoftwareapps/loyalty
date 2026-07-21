@@ -1,0 +1,18 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <RootNamespace>LoyaltyCloud.Common</RootNamespace>
+    <AssemblyName>LoyaltyCloud.Common</AssemblyName>
+    <Description>
+      Utilidades compartidas sin dependencias de negocio: Result&lt;T&gt;, paginación,
+      extensiones (DateTime, string), constantes del programa y abstracciones de
+      servicios transversales (IDateTimeProvider, ICurrentUserService).
+    </Description>
+  </PropertyGroup>
+
+  <!--
+    Common no referencia ningún otro proyecto interno ni paquetes NuGet
+    de terceros. Es la capa más baja del grafo de dependencias.
+  -->
+
+</Project>

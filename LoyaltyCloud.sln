@@ -1,0 +1,73 @@
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 17
+VisualStudioVersion = 17.10.0.0
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "src", "src", "{AAAA0001-0000-0000-0000-000000000001}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "tests", "tests", "{AAAA0001-0000-0000-0000-000000000002}"
+EndProject
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "LoyaltyCloud.Common", "src\LoyaltyCloud.Common\LoyaltyCloud.Common.csproj", "{BBBB0001-0000-0000-0000-000000000001}"
+EndProject
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "LoyaltyCloud.Domain", "src\LoyaltyCloud.Domain\LoyaltyCloud.Domain.csproj", "{BBBB0001-0000-0000-0000-000000000002}"
+EndProject
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "LoyaltyCloud.Application", "src\LoyaltyCloud.Application\LoyaltyCloud.Application.csproj", "{BBBB0001-0000-0000-0000-000000000003}"
+EndProject
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "LoyaltyCloud.Infrastructure", "src\LoyaltyCloud.Infrastructure\LoyaltyCloud.Infrastructure.csproj", "{BBBB0001-0000-0000-0000-000000000004}"
+EndProject
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "LoyaltyCloud.API", "src\LoyaltyCloud.API\LoyaltyCloud.API.csproj", "{BBBB0001-0000-0000-0000-000000000005}"
+EndProject
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "LoyaltyCloud.Admin", "src\LoyaltyCloud.Admin\LoyaltyCloud.Admin.csproj", "{BBBB0001-0000-0000-0000-000000000006}"
+EndProject
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "LoyaltyCloud.Tests", "tests\LoyaltyCloud.Tests\LoyaltyCloud.Tests.csproj", "{CCCC0001-0000-0000-0000-000000000001}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{BBBB0001-0000-0000-0000-000000000001}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{BBBB0001-0000-0000-0000-000000000001}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{BBBB0001-0000-0000-0000-000000000001}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{BBBB0001-0000-0000-0000-000000000001}.Release|Any CPU.Build.0 = Release|Any CPU
+		{BBBB0001-0000-0000-0000-000000000002}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{BBBB0001-0000-0000-0000-000000000002}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{BBBB0001-0000-0000-0000-000000000002}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{BBBB0001-0000-0000-0000-000000000002}.Release|Any CPU.Build.0 = Release|Any CPU
+		{BBBB0001-0000-0000-0000-000000000003}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{BBBB0001-0000-0000-0000-000000000003}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{BBBB0001-0000-0000-0000-000000000003}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{BBBB0001-0000-0000-0000-000000000003}.Release|Any CPU.Build.0 = Release|Any CPU
+		{BBBB0001-0000-0000-0000-000000000004}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{BBBB0001-0000-0000-0000-000000000004}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{BBBB0001-0000-0000-0000-000000000004}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{BBBB0001-0000-0000-0000-000000000004}.Release|Any CPU.Build.0 = Release|Any CPU
+		{BBBB0001-0000-0000-0000-000000000005}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{BBBB0001-0000-0000-0000-000000000005}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{BBBB0001-0000-0000-0000-000000000005}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{BBBB0001-0000-0000-0000-000000000005}.Release|Any CPU.Build.0 = Release|Any CPU
+		{BBBB0001-0000-0000-0000-000000000006}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{BBBB0001-0000-0000-0000-000000000006}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{BBBB0001-0000-0000-0000-000000000006}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{BBBB0001-0000-0000-0000-000000000006}.Release|Any CPU.Build.0 = Release|Any CPU
+		{CCCC0001-0000-0000-0000-000000000001}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{CCCC0001-0000-0000-0000-000000000001}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{CCCC0001-0000-0000-0000-000000000001}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{CCCC0001-0000-0000-0000-000000000001}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(NestedProjects) = preSolution
+		{BBBB0001-0000-0000-0000-000000000001} = {AAAA0001-0000-0000-0000-000000000001}
+		{BBBB0001-0000-0000-0000-000000000002} = {AAAA0001-0000-0000-0000-000000000001}
+		{BBBB0001-0000-0000-0000-000000000003} = {AAAA0001-0000-0000-0000-000000000001}
+		{BBBB0001-0000-0000-0000-000000000004} = {AAAA0001-0000-0000-0000-000000000001}
+		{BBBB0001-0000-0000-0000-000000000005} = {AAAA0001-0000-0000-0000-000000000001}
+		{BBBB0001-0000-0000-0000-000000000006} = {AAAA0001-0000-0000-0000-000000000001}
+		{CCCC0001-0000-0000-0000-000000000001} = {AAAA0001-0000-0000-0000-000000000002}
+	EndGlobalSection
+	GlobalSection(ExtensibilityGlobals) = postSolution
+		SolutionGuid = {5CF9763D-4AA7-48B2-8F87-16BB7C52F4E7}
+	EndGlobalSection
+EndGlobal

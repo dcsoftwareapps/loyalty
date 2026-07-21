@@ -1,0 +1,26 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+
+  <PropertyGroup>
+    <RootNamespace>LoyaltyCloud.API</RootNamespace>
+    <AssemblyName>LoyaltyCloud.API</AssemblyName>
+    <UserSecretsId>kbeauty-loyalty-api</UserSecretsId>
+    <InvariantGlobalization>false</InvariantGlobalization>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\LoyaltyCloud.Common\LoyaltyCloud.Common.csproj" />
+    <ProjectReference Include="..\LoyaltyCloud.Application\LoyaltyCloud.Application.csproj" />
+    <ProjectReference Include="..\LoyaltyCloud.Infrastructure\LoyaltyCloud.Infrastructure.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- OpenAPI + Swagger -->
+    <PackageReference Include="Microsoft.AspNetCore.OpenApi" Version="9.0.0" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="9.0.0">
+      <PrivateAssets>all</PrivateAssets>
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+    </PackageReference>
+    <PackageReference Include="Swashbuckle.AspNetCore" Version="6.9.0" />
+  </ItemGroup>
+
+</Project>

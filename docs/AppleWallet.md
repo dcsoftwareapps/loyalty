@@ -4,14 +4,14 @@
 
 La implementacion de Apple Wallet vive principalmente en:
 
-- `KBeauty.Loyalty.API`
+- `LoyaltyCloud.API`
   - `PassesController`
   - `ApplePassAuthMiddleware`
-- `KBeauty.Loyalty.Application`
+- `LoyaltyCloud.Application`
   - comandos/queries de devices
   - `RegisterCustomerHandler`
   - `AddPointsHandler`
-- `KBeauty.Loyalty.Infrastructure`
+- `LoyaltyCloud.Infrastructure`
   - `PassGeneratorService`
   - `DevelopmentPassGeneratorService`
   - `ApnService`
@@ -37,7 +37,7 @@ Repository
 SQL Server
 ```
 
-El CRUD existe a nivel API mediante Commands, Queries, Validators, DTOs y repositorio. Tambien existe una pantalla administrativa en `/rewards` que usa MediatR in-process desde `KBeauty.Loyalty.Admin`.
+El CRUD existe a nivel API mediante Commands, Queries, Validators, DTOs y repositorio. Tambien existe una pantalla administrativa en `/rewards` que usa MediatR in-process desde `LoyaltyCloud.Admin`.
 
 ## Estado actual
 
@@ -256,7 +256,7 @@ No existe DELETE fisico para recompensas.
 
 # Fase 2.2 - Reward Administration
 
-El proyecto cuenta con una interfaz administrativa para `RewardCatalogItem` en `KBeauty.Loyalty.Admin`.
+El proyecto cuenta con una interfaz administrativa para `RewardCatalogItem` en `LoyaltyCloud.Admin`.
 
 La pagina disponible es:
 
@@ -738,7 +738,7 @@ Respuesta:
 - `walletsNotified`
 - `warnings`
 
-La migracion `AddPointLotsForExpiration` asume una base nueva de desarrollo. KBeauty Loyalty esta en etapa inicial, por lo que no se implementa estrategia de migracion historica en Fase 3.3.
+La migracion `AddPointLotsForExpiration` asume una base nueva de desarrollo. LoyaltyCloud esta en etapa inicial, por lo que no se implementa estrategia de migracion historica en Fase 3.3.
 
 La migracion se limita a:
 
@@ -851,7 +851,7 @@ El middleware valida `passTypeIdentifier` contra configuracion. Si no coincide, 
 
 El pass actual usa `storeCard`.
 
-Se usa `storeCard` porque Apple lo define para tarjetas de tienda, tarjetas de puntos, tarjetas de regalo y tarjetas de lealtad. KBeauty Loyalty es una tarjeta de lealtad por puntos, por lo que `storeCard` es el tipo semantico correcto.
+Se usa `storeCard` porque Apple lo define para tarjetas de tienda, tarjetas de puntos, tarjetas de regalo y tarjetas de lealtad. LoyaltyCloud implementa una tarjeta de lealtad por puntos para KBeauty MX, por lo que `storeCard` es el tipo semantico correcto.
 
 No se usa `generic` porque es mas apropiado para tarjetas generales/identificacion y no representa especificamente un programa de lealtad por puntos.
 
@@ -1251,7 +1251,7 @@ Nota legacy: `PointsEarnedThisYear` permanece en el modelo por compatibilidad hi
 
 La API hospeda `LoyaltyMaintenanceBackgroundService`, un `BackgroundService` que orquesta procesos diarios ya existentes mediante MediatR.
 
-El servicio vive en `KBeauty.Loyalty.API` porque la API es el host operativo principal: expone los endpoints manuales, registra Application/Infrastructure, tiene acceso a MediatR, repositorios, APNs y configuracion de Wallet. Admin es un proceso separado y no debe ejecutar mantenimiento para evitar duplicidad.
+El servicio vive en `LoyaltyCloud.API` porque la API es el host operativo principal: expone los endpoints manuales, registra Application/Infrastructure, tiene acceso a MediatR, repositorios, APNs y configuracion de Wallet. Admin es un proceso separado y no debe ejecutar mantenimiento para evitar duplicidad.
 
 El hosted service no accede directamente a `AppDbContext` ni inyecta handlers. En cada ejecucion crea un scope con `IServiceScopeFactory`, resuelve `ISender` y ejecuta:
 

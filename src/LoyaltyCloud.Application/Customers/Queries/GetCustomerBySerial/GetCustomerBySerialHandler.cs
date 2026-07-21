@@ -1,0 +1,71 @@
+using LoyaltyCloud.Application.Common.Interfaces;
+using LoyaltyCloud.Common.Extensions;
+using LoyaltyCloud.Common.Results;
+using LoyaltyCloud.Common.Services;
+using LoyaltyCloud.Domain.Repositories;
+using LoyaltyCloud.Domain.ValueObjects;
+using MediatR;
+
+namespace LoyaltyCloud.Application.Customers.Queries.GetCustomerBySerial;
+
+/// <inheritdoc cref="GetCustomerBySerialQuery"/>
+public sealed class GetCustomerBySerialHandler
+    : IRequestHandler<GetCustomerBySerialQuery, Result<CustomerDetailDto>>
+{
+    private readonly ILoyaltyCardRepository _cards;
+    private readonly ICustomerRepository _customers;
+    private readonly IPointTransactionRepository _transactions;
+    private readonly IProgramConfigRepository _config;
+    private readonly ILevelCalculationService _levels;
+    private readonly IDateTimeProvider _dt;
+
+    public GetCustomerBySerialHandler(
+        ILoyaltyCardRepository cards,
+        ICustomerRepository customers,
+        IPointTransactionRepository transactions,
+        IProgramConfigRepository config,
+        ILevelCalculationService levels,
+        IDateTimeProvider dt)
+    {
+        _cards = cards;
+        _customers = customers;
+        _transactions = transactions;
+        _config = config;
+        _levels = levels;
+        _dt = dt;
+    }
+
+    /// <inheritdoc />
+    public async Task<Result<CustomerDetailDto>> Handle(GetCustomerBySerialQuery query, CancellationToken ct)
+    {
+        var card = await _cards.GetBySerialNumberAsync(query.SerialNumber, ct);
+        if (card is null)
+            return Result.Fail<CustomerDetailDto>($"No se encontró tarjeta con serial '{query.SerialNumber}'.");
+
+        var customer = await _customers.GetByIdAsync(card.CustomerId, ct);
+        if (customer is null)
+            return Result.Fail<CustomerDetailDto>("La tarjeta existe pero su clienta no — datos inconsistentes.");
+
+        var snapshot = ProgramConfigSnapshot.FromEntries(await _config.GetAllAsync(ct));
+        var rollingPoints = await _transactions.GetEligibleLevelPointsAsync(card.Id, _dt.UtcNow.AddMonths(-12), ct);
+        var memberLevel = _levels.CalculateLevel(rollingPoints, snapshot);
+
+        return Result.Ok(new CustomerDetailDto(
+            CustomerId: customer.Id,
+            FullName: customer.FullName,
+            Email: customer.Email,
+            Phone: customer.Phone,
+            DateOfBirth: customer.DateOfBirth,
+            IsBirthMonth: customer.DateOfBirth.IsBirthMonth(_dt.UtcNow),
+            SerialNumber: card.SerialNumber,
+            CurrentPoints: card.CurrentPoints,
+            LifetimePoints: card.LifetimePoints,
+            Level: memberLevel.Name,
+            PointsToNextLevel: memberLevel.PointsToNextLevel(rollingPoints),
+            PointsEarnedThisYear: rollingPoints,
+            LevelAchievedAt: card.LevelAchievedAt,
+            LastActivityAt: card.LastActivityAt,
+            CreatedAt: customer.CreatedAt,
+            IsActive: customer.IsActive && card.IsActive));
+    }
+}

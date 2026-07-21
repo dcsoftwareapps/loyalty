@@ -1,15 +1,15 @@
-KBeauty Loyalty - Contexto tecnico actualizado
+LoyaltyCloud - Contexto tecnico actualizado
 
 Fecha de contexto: 2026-06-05
 Workspace: C:\repos\Loyalty\loyalty
-Solucion: KBeauty.Loyalty.sln
+Solucion: LoyaltyCloud.sln
 
 Resumen
 Se implemento y probo un modo LOCAL REAL de Apple Wallet para generar pases .pkpass firmados en Development usando archivos locales, sin Azure Key Vault. Despues se corrigieron los assets visuales de Wallet y la firma PKCS#7 para incluir signed attributes y el certificado intermedio Apple WWDR G4. La validacion con OpenSSL sobre un pass real generado localmente regreso "Verification successful".
 
 Estado verificado
-- dotnet build .\KBeauty.Loyalty.sln -v minimal: OK, 0 errores.
-- dotnet test .\KBeauty.Loyalty.sln -v minimal --no-build: OK, 38/38.
+- dotnet build .\LoyaltyCloud.sln -v minimal: OK, 0 errores.
+- dotnet test .\LoyaltyCloud.sln -v minimal --no-build: OK, 38/38.
 - Se genero un pass real de prueba desde la API local: tmp\KB-STS2XLJ.pkpass.
 - Se extrajo el pass y se valido:
   openssl smime -verify -inform DER -in signature -content manifest.json -noverify
@@ -46,7 +46,7 @@ Archivos locales esperados para Wallet real
   C:\Secrets\KBeauty\AuthKey_68Z2745848.p8
 
 User-secrets esperados para API
-Proyecto: src\KBeauty.Loyalty.API
+Proyecto: src\LoyaltyCloud.API
 
 Apple:PassCertificatePath = C:\Secrets\KBeauty\kbeauty-wallet-pass.p12
 Apple:PassCertificatePassword = KBeautyWallet2026!
@@ -68,16 +68,16 @@ Valores Apple actuales
   https://localhost:55128
 
 Archivos creados/modificados para modo local real
-- src/KBeauty.Loyalty.Infrastructure/Configuration/WalletOptions.cs
-- src/KBeauty.Loyalty.Infrastructure/Services/IAppleWalletSecretsProvider.cs
-- src/KBeauty.Loyalty.Infrastructure/Services/LocalAppleWalletSecretsProvider.cs
-- src/KBeauty.Loyalty.Infrastructure/Services/KeyVaultAppleWalletSecretsProvider.cs
-- src/KBeauty.Loyalty.Infrastructure/Services/NoOpApnService.cs
-- src/KBeauty.Loyalty.Infrastructure/DependencyInjection.cs
-- src/KBeauty.Loyalty.Infrastructure/Services/PassGeneratorService.cs
-- src/KBeauty.Loyalty.Infrastructure/Services/ApnService.cs
-- src/KBeauty.Loyalty.API/Controllers/PassesController.cs
-- src/KBeauty.Loyalty.API/appsettings.Development.json
+- src/LoyaltyCloud.Infrastructure/Configuration/WalletOptions.cs
+- src/LoyaltyCloud.Infrastructure/Services/IAppleWalletSecretsProvider.cs
+- src/LoyaltyCloud.Infrastructure/Services/LocalAppleWalletSecretsProvider.cs
+- src/LoyaltyCloud.Infrastructure/Services/KeyVaultAppleWalletSecretsProvider.cs
+- src/LoyaltyCloud.Infrastructure/Services/NoOpApnService.cs
+- src/LoyaltyCloud.Infrastructure/DependencyInjection.cs
+- src/LoyaltyCloud.Infrastructure/Services/PassGeneratorService.cs
+- src/LoyaltyCloud.Infrastructure/Services/ApnService.cs
+- src/LoyaltyCloud.API/Controllers/PassesController.cs
+- src/LoyaltyCloud.API/appsettings.Development.json
 
 Endpoint local/dev para descargar pass
 Se agrego:
@@ -110,7 +110,7 @@ Comando:
 .\scripts\generate-wallet-assets.ps1 -SourceLogo "C:\Users\chave\OneDrive\K-Beauty\Pass\logo.png"
 
 Assets generados en:
-src\KBeauty.Loyalty.Infrastructure\Assets\AppleWallet
+src\LoyaltyCloud.Infrastructure\Assets\AppleWallet
 
 Archivos generados:
 - icon.png: 29x29
@@ -153,7 +153,7 @@ Correccion aplicada en PassGeneratorService:
 WWDR G4
 El .p12 local solo contiene el certificado Pass Type ID; no incluye el intermedio.
 Se agrego el certificado publico Apple WWDR G4 al proyecto:
-src\KBeauty.Loyalty.Infrastructure\Certificates\AppleWWDRCAG4.cer
+src\LoyaltyCloud.Infrastructure\Certificates\AppleWWDRCAG4.cer
 
 Fuente oficial Apple:
 https://www.apple.com/certificateauthority/
@@ -216,7 +216,7 @@ En PowerShell se necesita el call operator &. Este es el comando correcto.
 
 2. En terminal 2, iniciar API:
 
-dotnet run --project src\KBeauty.Loyalty.API\KBeauty.Loyalty.API.csproj --launch-profile KBeauty.Loyalty.API
+dotnet run --project src\LoyaltyCloud.API\LoyaltyCloud.API.csproj --launch-profile LoyaltyCloud.API
 
 La API usa:
 - HTTPS: https://localhost:55128
@@ -228,7 +228,7 @@ ngrok http --url=goosepimply-quiana-unrudely.ngrok-free.dev https://localhost:55
 
 4. Confirmar que Apple:WebServiceURL apunta a la URL ngrok:
 
-dotnet user-secrets set "Apple:WebServiceURL" "https://goosepimply-quiana-unrudely.ngrok-free.dev" --project src\KBeauty.Loyalty.API
+dotnet user-secrets set "Apple:WebServiceURL" "https://goosepimply-quiana-unrudely.ngrok-free.dev" --project src\LoyaltyCloud.API
 
 Si se cambia WebServiceURL, reiniciar la API antes de generar el pass.
 
@@ -288,13 +288,13 @@ Notas sobre APN:
 Comandos utiles
 
 Aplicar migraciones:
-dotnet ef database update --project src\KBeauty.Loyalty.Infrastructure\KBeauty.Loyalty.Infrastructure.csproj --startup-project src\KBeauty.Loyalty.API\KBeauty.Loyalty.API.csproj
+dotnet ef database update --project src\LoyaltyCloud.Infrastructure\LoyaltyCloud.Infrastructure.csproj --startup-project src\LoyaltyCloud.API\LoyaltyCloud.API.csproj
 
 Build:
-dotnet build .\KBeauty.Loyalty.sln -v minimal
+dotnet build .\LoyaltyCloud.sln -v minimal
 
 Tests:
-dotnet test .\KBeauty.Loyalty.sln -v minimal --no-build
+dotnet test .\LoyaltyCloud.sln -v minimal --no-build
 
 Validacion OpenSSL manual sobre pass extraido:
 openssl smime -verify -inform DER -in signature -content manifest.json -noverify

@@ -66,16 +66,16 @@ Configurar los secrets en el proyecto API:
 ```powershell
 cd C:\repos\Loyalty\loyalty
 
-dotnet user-secrets set "Apple:PassCertificatePath" "C:\Secrets\KBeauty\kbeauty-wallet-pass.p12" --project src\KBeauty.Loyalty.API
-dotnet user-secrets set "Apple:PassCertificatePassword" "KBeautyWallet2026!" --project src\KBeauty.Loyalty.API
-dotnet user-secrets set "Apple:ApnPrivateKeyPath" "C:\Secrets\KBeauty\AuthKey_68Z2745848.p8" --project src\KBeauty.Loyalty.API
-dotnet user-secrets set "Apple:ApnKeyId" "68Z2745848" --project src\KBeauty.Loyalty.API
-dotnet user-secrets set "Apple:TeamIdentifier" "HS2XCFGQ75" --project src\KBeauty.Loyalty.API
-dotnet user-secrets set "Apple:PassTypeIdentifier" "pass.com.kbeautymx.loyalty" --project src\KBeauty.Loyalty.API
-dotnet user-secrets set "Apple:WebServiceURL" "https://goosepimply-quiana-unrudely.ngrok-free.dev" --project src\KBeauty.Loyalty.API
+dotnet user-secrets set "Apple:PassCertificatePath" "C:\Secrets\KBeauty\kbeauty-wallet-pass.p12" --project src\LoyaltyCloud.API
+dotnet user-secrets set "Apple:PassCertificatePassword" "KBeautyWallet2026!" --project src\LoyaltyCloud.API
+dotnet user-secrets set "Apple:ApnPrivateKeyPath" "C:\Secrets\KBeauty\AuthKey_68Z2745848.p8" --project src\LoyaltyCloud.API
+dotnet user-secrets set "Apple:ApnKeyId" "68Z2745848" --project src\LoyaltyCloud.API
+dotnet user-secrets set "Apple:TeamIdentifier" "HS2XCFGQ75" --project src\LoyaltyCloud.API
+dotnet user-secrets set "Apple:PassTypeIdentifier" "pass.com.kbeautymx.loyalty" --project src\LoyaltyCloud.API
+dotnet user-secrets set "Apple:WebServiceURL" "https://goosepimply-quiana-unrudely.ngrok-free.dev" --project src\LoyaltyCloud.API
 ```
 
-Valores no sensibles actuales en `src/KBeauty.Loyalty.API/appsettings.Development.json`:
+Valores no sensibles actuales en `src/LoyaltyCloud.API/appsettings.Development.json`:
 
 ```json
 {
@@ -107,8 +107,8 @@ Aplicar migraciones cuando sea necesario:
 cd C:\repos\Loyalty\loyalty
 
 dotnet ef database update `
-  --project src\KBeauty.Loyalty.Infrastructure\KBeauty.Loyalty.Infrastructure.csproj `
-  --startup-project src\KBeauty.Loyalty.API\KBeauty.Loyalty.API.csproj
+  --project src\LoyaltyCloud.Infrastructure\LoyaltyCloud.Infrastructure.csproj `
+  --startup-project src\LoyaltyCloud.API\LoyaltyCloud.API.csproj
 ```
 
 ## Azurite
@@ -161,7 +161,7 @@ Terminal 2: API
 
 ```powershell
 cd C:\repos\Loyalty\loyalty
-dotnet run --project src\KBeauty.Loyalty.API\KBeauty.Loyalty.API.csproj --launch-profile KBeauty.Loyalty.API
+dotnet run --project src\LoyaltyCloud.API\LoyaltyCloud.API.csproj --launch-profile LoyaltyCloud.API
 ```
 
 La API usa HTTPS local:
@@ -573,7 +573,7 @@ Desde esta pantalla es posible:
 - Activar recompensas.
 - Desactivar recompensas.
 
-La pagina usa MediatR in-process desde `KBeauty.Loyalty.Admin` y reutiliza los Commands/Queries de Fase 2.1. No accede directo a `AppDbContext`.
+La pagina usa MediatR in-process desde `LoyaltyCloud.Admin` y reutiliza los Commands/Queries de Fase 2.1. No accede directo a `AppDbContext`.
 
 Estado Fase 2.2:
 
@@ -789,7 +789,7 @@ No aplicar automaticamente. Cuando se aplique manualmente con `dotnet ef databas
 2. Crea `PointLotConsumptions`.
 3. Inserta las claves de configuracion.
 
-KBeauty Loyalty esta en etapa inicial. En Fase 3.3 no existe estrategia de migracion historica: no se reconstruyen lotes desde transacciones anteriores, no se aplican negativos historicos y no se validan saldos existentes. Para desarrollo local se recomienda borrar y recrear la base.
+LoyaltyCloud esta en etapa inicial. En Fase 3.3 no existe estrategia de migracion historica: no se reconstruyen lotes desde transacciones anteriores, no se aplican negativos historicos y no se validan saldos existentes. Para desarrollo local se recomienda borrar y recrear la base.
 
 Prueba manual sugerida:
 
