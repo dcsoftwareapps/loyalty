@@ -1,4 +1,5 @@
 using LoyaltyCloud.Application.Common.Interfaces;
+using LoyaltyCloud.Application.Customers;
 using LoyaltyCloud.Common.Extensions;
 using LoyaltyCloud.Common.Results;
 using LoyaltyCloud.Common.Services;
@@ -34,6 +35,7 @@ public sealed class RegisterCustomerHandler
     private readonly IPassGeneratorService _passes;
     private readonly IStorageService _storage;
     private readonly ILevelCalculationService _levels;
+    private readonly ITenantContext _tenantContext;
     private readonly IDateTimeProvider _dt;
     private readonly ICurrentUserService _currentUser;
     private readonly IUnitOfWork _uow;
@@ -48,6 +50,7 @@ public sealed class RegisterCustomerHandler
         IPassGeneratorService passes,
         IStorageService storage,
         ILevelCalculationService levels,
+        ITenantContext tenantContext,
         IDateTimeProvider dt,
         ICurrentUserService currentUser,
         IUnitOfWork uow,
@@ -61,6 +64,7 @@ public sealed class RegisterCustomerHandler
         _passes = passes;
         _storage = storage;
         _levels = levels;
+        _tenantContext = tenantContext;
         _dt = dt;
         _currentUser = currentUser;
         _uow = uow;
@@ -73,6 +77,17 @@ public sealed class RegisterCustomerHandler
         CancellationToken ct)
     {
         // 1. Email único
+        var tenantId = _tenantContext.RequireTenantId();
+        var normalizedPhone = string.IsNullOrWhiteSpace(command.Phone)
+            ? null
+            : CustomerPhoneNormalizer.Normalize(command.Phone);
+        if (!string.IsNullOrWhiteSpace(normalizedPhone) &&
+            await _customers.GetByNormalizedPhoneAsync(normalizedPhone, ct) is not null)
+        {
+            return Result.Fail<RegisterCustomerResponse>(
+                "Ya existe una clienta con ese telefono en el tenant actual.");
+        }
+
         var emailNormalized = command.Email.Trim().ToLowerInvariant();
         if (await _customers.EmailExistsAsync(emailNormalized, ct))
             return Result.Fail<RegisterCustomerResponse>($"Ya existe una clienta con email {emailNormalized}.");
@@ -96,6 +111,7 @@ public sealed class RegisterCustomerHandler
         var customerId = Guid.NewGuid();
         var customer = new Customer(
             id: customerId,
+            tenantId: tenantId,
             fullName: command.FullName,
             email: emailNormalized,
             dateOfBirth: command.DateOfBirth,
@@ -105,7 +121,7 @@ public sealed class RegisterCustomerHandler
 
         var cardId = Guid.NewGuid();
         var serial = customerId.ToString("N").ToSerialNumber();
-        var card = new LoyaltyCard(cardId, customerId, serial, now);
+        var card = new LoyaltyCard(cardId, tenantId, customerId, serial, now);
 
         await _customers.AddAsync(customer, ct);
         await _cards.AddAsync(card, ct);

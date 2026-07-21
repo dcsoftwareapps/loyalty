@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using System.Globalization;
 using LoyaltyCloud.API.Configuration;
+using LoyaltyCloud.Application.Common.Interfaces;
 using LoyaltyCloud.Application.Levels.Commands.RecalculateLevels;
 using LoyaltyCloud.Application.Notifications.Commands.CreateBirthdayBenefitStartedNotifications;
 using LoyaltyCloud.Application.Notifications.Commands.CreateMonthlyProductStartedNotifications;
@@ -88,6 +89,8 @@ public sealed class LoyaltyMaintenanceBackgroundService : BackgroundService
         _logger.LogInformation("Starting loyalty maintenance.");
 
         using var scope = _scopeFactory.CreateScope();
+        var tenantResolver = scope.ServiceProvider.GetRequiredService<IDefaultTenantResolutionService>();
+        await tenantResolver.ResolveDefaultTenantIfMissingAsync(ct);
         var sender = scope.ServiceProvider.GetRequiredService<ISender>();
 
         await RunExpirationAsync(sender, ct);

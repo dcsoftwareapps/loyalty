@@ -31,12 +31,18 @@ internal sealed class LoyaltyCardConfiguration : IEntityTypeConfiguration<Loyalt
         builder.HasIndex(c => c.SerialNumber).IsUnique();
 
         // 1:1 con Customer — un cliente tiene una tarjeta.
-        builder.HasIndex(c => c.CustomerId).IsUnique();
+        builder.HasIndex(c => new { c.TenantId, c.CustomerId }).IsUnique();
 
         // FK explícita a Customer (sin nav property en el dominio).
         builder.HasOne<Customer>()
             .WithOne()
-            .HasForeignKey<LoyaltyCard>(c => c.CustomerId)
+            .HasPrincipalKey<Customer>(c => new { c.TenantId, c.Id })
+            .HasForeignKey<LoyaltyCard>(c => new { c.TenantId, c.CustomerId })
+            .OnDelete(DeleteBehavior.Restrict);
+
+        builder.HasOne<Tenant>()
+            .WithMany()
+            .HasForeignKey(c => c.TenantId)
             .OnDelete(DeleteBehavior.Restrict);
     }
 }

@@ -3,10 +3,11 @@ using LoyaltyCloud.Domain.Enums;
 
 namespace LoyaltyCloud.Domain.Entities;
 
-public class LoyaltyNotification : Entity
+public class LoyaltyNotification : Entity, ITenantOwned
 {
     private readonly List<NotificationDelivery> _deliveries = new();
 
+    public Guid TenantId { get; private set; }
     public Guid CustomerId { get; private set; }
     public Guid LoyaltyCardId { get; private set; }
     public NotificationType Type { get; private set; }
@@ -32,6 +33,7 @@ public class LoyaltyNotification : Entity
 
     public LoyaltyNotification(
         Guid id,
+        Guid tenantId,
         Guid customerId,
         Guid loyaltyCardId,
         NotificationType type,
@@ -47,6 +49,7 @@ public class LoyaltyNotification : Entity
         string? shortMessage = null,
         string? longMessage = null) : base(id)
     {
+        if (tenantId == Guid.Empty) throw new ArgumentException("TenantId requerido.", nameof(tenantId));
         if (customerId == Guid.Empty) throw new ArgumentException("CustomerId requerido.", nameof(customerId));
         if (loyaltyCardId == Guid.Empty) throw new ArgumentException("LoyaltyCardId requerido.", nameof(loyaltyCardId));
         if (string.IsNullOrWhiteSpace(title)) throw new ArgumentException("Titulo requerido.", nameof(title));
@@ -54,6 +57,7 @@ public class LoyaltyNotification : Entity
         if (title.Length > 200) throw new ArgumentOutOfRangeException(nameof(title), "Titulo demasiado largo.");
         if (message.Length > 1000) throw new ArgumentOutOfRangeException(nameof(message), "Mensaje demasiado largo.");
 
+        TenantId = tenantId;
         CustomerId = customerId;
         LoyaltyCardId = loyaltyCardId;
         Type = type;

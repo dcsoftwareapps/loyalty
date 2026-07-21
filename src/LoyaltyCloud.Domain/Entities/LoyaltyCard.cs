@@ -13,8 +13,10 @@ namespace LoyaltyCloud.Domain.Entities;
 /// Es el agregado central del dominio — encapsula el saldo, el nivel,
 /// la lógica de acumulación y los domain events de cambio de nivel.
 /// </summary>
-public class LoyaltyCard : Entity
+public class LoyaltyCard : Entity, ITenantOwned
 {
+    public Guid TenantId { get; private set; }
+
     /// <summary>FK a la clienta dueña de esta tarjeta.</summary>
     public Guid CustomerId { get; private set; }
 
@@ -47,13 +49,16 @@ public class LoyaltyCard : Entity
 
     private LoyaltyCard() { }
 
-    public LoyaltyCard(Guid id, Guid customerId, string serialNumber, DateTime nowUtc) : base(id)
+    public LoyaltyCard(Guid id, Guid tenantId, Guid customerId, string serialNumber, DateTime nowUtc) : base(id)
     {
+        if (tenantId == Guid.Empty)
+            throw new ArgumentException("TenantId requerido.", nameof(tenantId));
         if (customerId == Guid.Empty)
             throw new ArgumentException("CustomerId requerido.", nameof(customerId));
         if (string.IsNullOrWhiteSpace(serialNumber))
             throw new ArgumentException("Serial requerido.", nameof(serialNumber));
 
+        TenantId = tenantId;
         CustomerId = customerId;
         SerialNumber = serialNumber.Trim().ToUpperInvariant();
         CurrentPoints = 0;

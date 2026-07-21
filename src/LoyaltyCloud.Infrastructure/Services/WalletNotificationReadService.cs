@@ -15,16 +15,19 @@ internal sealed class WalletNotificationReadService : IWalletNotificationReadSer
 {
     private readonly AppDbContext _db;
     private readonly IConfiguration _configuration;
+    private readonly ITenantContext _tenantContext;
     private readonly ILogger<WalletNotificationReadService> _logger;
     private static readonly CultureInfo SpanishMexico = CultureInfo.GetCultureInfo("es-MX");
 
     public WalletNotificationReadService(
         AppDbContext db,
         IConfiguration configuration,
+        ITenantContext tenantContext,
         ILogger<WalletNotificationReadService> logger)
     {
         _db = db;
         _configuration = configuration;
+        _tenantContext = tenantContext;
         _logger = logger;
     }
 
@@ -37,9 +40,11 @@ internal sealed class WalletNotificationReadService : IWalletNotificationReadSer
     public async Task<WalletNotificationContext> GetActiveContextAsync(Guid loyaltyCardId, CancellationToken ct = default)
     {
         var now = DateTime.UtcNow;
+        var tenantId = _tenantContext.RequireTenantId();
         var rows = await _db.LoyaltyNotifications
             .AsNoTracking()
-            .Where(n => n.LoyaltyCardId == loyaltyCardId
+            .Where(n => n.TenantId == tenantId
+                     && n.LoyaltyCardId == loyaltyCardId
                      && (n.Status == NotificationStatus.Delivered ||
                          n.Status == NotificationStatus.PartiallyDelivered)
                      && n.DisplayUntilUtc.HasValue
@@ -259,7 +264,9 @@ internal sealed class WalletNotificationReadService : IWalletNotificationReadSer
         var row = await (
             from card in _db.LoyaltyCards.AsNoTracking()
             join customer in _db.Customers.AsNoTracking() on card.CustomerId equals customer.Id
-            where card.Id == loyaltyCardId
+            where card.TenantId == _tenantContext.RequireTenantId()
+               && customer.TenantId == _tenantContext.RequireTenantId()
+               && card.Id == loyaltyCardId
                && card.IsActive
                && customer.IsActive
                && customer.DateOfBirth != Customer.BirthdayNotCaptured
@@ -276,7 +283,8 @@ internal sealed class WalletNotificationReadService : IWalletNotificationReadSer
             return null;
         }
 
-        var snapshot = ProgramConfigSnapshot.FromEntries(await _db.ProgramConfigs.AsNoTracking().ToListAsync(ct));
+        var tenantId = _tenantContext.RequireTenantId();
+        var snapshot = ProgramConfigSnapshot.FromEntries(await _db.ProgramConfigs.AsNoTracking().Where(c => c.TenantId == tenantId).ToListAsync(ct));
         var multiplier = Math.Max(1, snapshot.BirthdayMultiplier);
         var multiplierText = FormatBirthdayMultiplier(multiplier);
         var displayUntilLocalDate = new DateOnly(localDate.Year, localDate.Month, DateTime.DaysInMonth(localDate.Year, localDate.Month));
@@ -295,7 +303,8 @@ internal sealed class WalletNotificationReadService : IWalletNotificationReadSer
         var now = DateTime.UtcNow;
         var product = await _db.RewardCatalogItems
             .AsNoTracking()
-            .Where(r => r.IsMonthlyProduct
+            .Where(r => r.TenantId == _tenantContext.RequireTenantId()
+                     && r.IsMonthlyProduct
                      && r.IsActive
                      && r.ValidFrom.HasValue
                      && r.ValidTo.HasValue
@@ -339,7 +348,9 @@ internal sealed class WalletNotificationReadService : IWalletNotificationReadSer
         var card = await (
             from loyaltyCard in _db.LoyaltyCards.AsNoTracking()
             join customer in _db.Customers.AsNoTracking() on loyaltyCard.CustomerId equals customer.Id
-            where loyaltyCard.Id == loyaltyCardId
+            where loyaltyCard.TenantId == _tenantContext.RequireTenantId()
+               && customer.TenantId == _tenantContext.RequireTenantId()
+               && loyaltyCard.Id == loyaltyCardId
                && loyaltyCard.IsActive
                && customer.IsActive
             select new
@@ -357,7 +368,8 @@ internal sealed class WalletNotificationReadService : IWalletNotificationReadSer
 
         var activeCampaigns = await _db.PointCampaigns
             .AsNoTracking()
-            .Where(c => c.IsActive
+            .Where(c => c.TenantId == _tenantContext.RequireTenantId()
+                     && c.IsActive
                      && c.StartsAtUtc <= now
                      && c.EndsAtUtc >= now)
             .ToListAsync(ct);

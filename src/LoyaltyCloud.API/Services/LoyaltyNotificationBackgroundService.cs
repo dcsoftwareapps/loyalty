@@ -1,4 +1,5 @@
 using LoyaltyCloud.API.Configuration;
+using LoyaltyCloud.Application.Common.Interfaces;
 using LoyaltyCloud.Application.Notifications.Custom.Commands.ProcessDueCustomNotificationCampaigns;
 using LoyaltyCloud.Application.Notifications.Commands.ProcessPendingNotifications;
 using MediatR;
@@ -60,6 +61,8 @@ public sealed class LoyaltyNotificationBackgroundService : BackgroundService
         try
         {
             using var scope = _scopeFactory.CreateScope();
+            var tenantResolver = scope.ServiceProvider.GetRequiredService<IDefaultTenantResolutionService>();
+            await tenantResolver.ResolveDefaultTenantIfMissingAsync(ct);
             var sender = scope.ServiceProvider.GetRequiredService<ISender>();
             var campaignResult = await sender.Send(
                 new ProcessDueCustomNotificationCampaignsCommand(_campaignOptions.CurrentValue.BatchSize),

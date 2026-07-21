@@ -11,8 +11,13 @@ namespace LoyaltyCloud.Infrastructure.Services;
 internal sealed class CustomerListReadService : ICustomerListReadService
 {
     private readonly AppDbContext _db;
+    private readonly ITenantContext _tenantContext;
 
-    public CustomerListReadService(AppDbContext db) => _db = db;
+    public CustomerListReadService(AppDbContext db, ITenantContext tenantContext)
+    {
+        _db = db;
+        _tenantContext = tenantContext;
+    }
 
     public async Task<PagedResult<CustomerListItemDto>> SearchAsync(
         string? searchTerm,
@@ -20,9 +25,10 @@ internal sealed class CustomerListReadService : ICustomerListReadService
         PaginationParams pagination,
         CancellationToken ct = default)
     {
+        var tenantId = _tenantContext.RequireTenantId();
         var query = from c in _db.Customers.AsNoTracking()
                     join card in _db.LoyaltyCards.AsNoTracking() on c.Id equals card.CustomerId
-                    where c.IsActive
+                    where c.TenantId == tenantId && card.TenantId == tenantId && c.IsActive
                     select new { c, card };
 
         if (!string.IsNullOrWhiteSpace(searchTerm))

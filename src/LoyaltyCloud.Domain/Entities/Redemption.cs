@@ -9,8 +9,10 @@ namespace LoyaltyCloud.Domain.Entities;
 /// La transición la dispara el operador en el panel admin tras entregar
 /// el beneficio en tienda.
 /// </summary>
-public class Redemption : Entity
+public class Redemption : Entity, ITenantOwned
 {
+    public Guid TenantId { get; private set; }
+
     /// <summary>Tarjeta que canjea.</summary>
     public Guid LoyaltyCardId { get; private set; }
 
@@ -39,11 +41,14 @@ public class Redemption : Entity
 
     public Redemption(
         Guid id,
+        Guid tenantId,
         Guid loyaltyCardId,
         Guid rewardCatalogItemId,
         int pointsSpent,
         DateTime redeemedAtUtc) : base(id)
     {
+        if (tenantId == Guid.Empty)
+            throw new ArgumentException("TenantId requerido.", nameof(tenantId));
         if (loyaltyCardId == Guid.Empty)
             throw new ArgumentException("LoyaltyCardId requerido.", nameof(loyaltyCardId));
         if (rewardCatalogItemId == Guid.Empty)
@@ -51,6 +56,7 @@ public class Redemption : Entity
         if (pointsSpent <= 0)
             throw new ArgumentOutOfRangeException(nameof(pointsSpent), "Debe descontar al menos 1 punto.");
 
+        TenantId = tenantId;
         LoyaltyCardId = loyaltyCardId;
         RewardCatalogItemId = rewardCatalogItemId;
         PointsSpent = pointsSpent;

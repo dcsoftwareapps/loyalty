@@ -52,6 +52,7 @@ public sealed class RegisterDeviceHandler
 
         var registration = new DeviceRegistration(
             id: Guid.NewGuid(),
+            tenantId: card.TenantId,
             deviceLibraryIdentifier: command.DeviceLibraryIdentifier,
             passTypeIdentifier: command.PassTypeIdentifier,
             serialNumber: command.SerialNumber,

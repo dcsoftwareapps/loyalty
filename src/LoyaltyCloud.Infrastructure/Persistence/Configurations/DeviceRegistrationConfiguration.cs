@@ -35,6 +35,12 @@ internal sealed class DeviceRegistrationConfiguration : IEntityTypeConfiguration
             .IsUnique();
 
         // Búsqueda por serial al enviar pushes a todos los dispositivos de una clienta.
-        builder.HasIndex(d => d.SerialNumber);
+        builder.HasIndex(d => new { d.TenantId, d.SerialNumber });
+        builder.HasIndex(d => new { d.TenantId, d.DeviceLibraryIdentifier });
+
+        builder.HasOne<Tenant>()
+            .WithMany()
+            .HasForeignKey(d => d.TenantId)
+            .OnDelete(DeleteBehavior.Restrict);
     }
 }

@@ -8,8 +8,10 @@ namespace LoyaltyCloud.Domain.Entities;
 /// el pase a Wallet, y este registro nos da el push token que necesitamos
 /// para enviar actualizaciones a ese pase específico.
 /// </summary>
-public class DeviceRegistration : Entity
+public class DeviceRegistration : Entity, ITenantOwned
 {
+    public Guid TenantId { get; private set; }
+
     /// <summary>Identificador único del dispositivo (lo asigna Apple).</summary>
     public string DeviceLibraryIdentifier { get; private set; } = string.Empty;
 
@@ -29,12 +31,15 @@ public class DeviceRegistration : Entity
 
     public DeviceRegistration(
         Guid id,
+        Guid tenantId,
         string deviceLibraryIdentifier,
         string passTypeIdentifier,
         string serialNumber,
         string pushToken,
         DateTime createdAtUtc) : base(id)
     {
+        if (tenantId == Guid.Empty)
+            throw new ArgumentException("TenantId requerido.", nameof(tenantId));
         if (string.IsNullOrWhiteSpace(deviceLibraryIdentifier))
             throw new ArgumentException("DeviceLibraryIdentifier requerido.", nameof(deviceLibraryIdentifier));
         if (string.IsNullOrWhiteSpace(passTypeIdentifier))
@@ -44,6 +49,7 @@ public class DeviceRegistration : Entity
         if (string.IsNullOrWhiteSpace(pushToken))
             throw new ArgumentException("PushToken requerido.", nameof(pushToken));
 
+        TenantId = tenantId;
         DeviceLibraryIdentifier = deviceLibraryIdentifier.Trim();
         PassTypeIdentifier = passTypeIdentifier.Trim();
         SerialNumber = serialNumber.Trim();

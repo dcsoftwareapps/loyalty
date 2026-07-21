@@ -52,7 +52,7 @@ public class RedeemRewardHandlerTests
 
         return new RedeemRewardHandler(
             cards.Object, rewards.Object, redemptions.Object, transactions.Object,
-            pointLots.Object, config.Object, devices.Object, apn.Object, LevelCalculator().Object, publisher.Object,
+            pointLots.Object, config.Object, devices.Object, apn.Object, LevelCalculator().Object, TenantContext().Object, publisher.Object,
             clock.Object, uow.Object,
             NullLogger<RedeemRewardHandler>.Instance);
     }
@@ -60,7 +60,7 @@ public class RedeemRewardHandlerTests
     /// <summary>Crea un card con saldo y nivel dados mediante EarnPoints.</summary>
     private static LoyaltyCard CardWith(int points, IDateTimeProvider dt)
     {
-        var card = new LoyaltyCard(Guid.NewGuid(), Guid.NewGuid(), "KB-TEST001", Now);
+        var card = new LoyaltyCard(Guid.NewGuid(), KBeautyTenantId, Guid.NewGuid(), "KB-TEST001", Now);
         if (points > 0)
         {
             var snapshot = new LoyaltyCloud.Domain.ValueObjects.ProgramConfigSnapshot(
@@ -72,7 +72,7 @@ public class RedeemRewardHandlerTests
     }
 
     private static RewardCatalogItem NewReward(int cost, string minLevel) =>
-        new(Guid.NewGuid(), $"Reward {cost}pts", "Test reward", cost, minLevel);
+        new(Guid.NewGuid(), KBeautyTenantId, $"Reward {cost}pts", "Test reward", cost, minLevel);
 
     // =========================================================================
 
@@ -172,6 +172,7 @@ public class RedeemRewardHandlerTests
             new Mock<IDeviceRegistrationRepository>().Object,
             new Mock<IApnService>().Object,
             LevelCalculator().Object,
+            TenantContext().Object,
             new Mock<IPublisher>().Object,
             Clock().Object,
             NoOpUnitOfWork().Object,

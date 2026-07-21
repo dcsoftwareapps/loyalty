@@ -3,8 +3,10 @@ using LoyaltyCloud.Domain.Enums;
 
 namespace LoyaltyCloud.Domain.Entities;
 
-public class CustomNotificationCampaign : Entity
+public class CustomNotificationCampaign : Entity, ITenantOwned
 {
+    public Guid TenantId { get; private set; }
+
     public string Name { get; private set; } = string.Empty;
     public string Title { get; private set; } = string.Empty;
     public string ShortMessage { get; private set; } = string.Empty;
@@ -29,6 +31,7 @@ public class CustomNotificationCampaign : Entity
 
     public CustomNotificationCampaign(
         Guid id,
+        Guid tenantId,
         string name,
         string title,
         string shortMessage,
@@ -40,12 +43,15 @@ public class CustomNotificationCampaign : Entity
         DateTime displayUntilUtc,
         DateTime createdAtUtc) : base(id)
     {
+        if (tenantId == Guid.Empty)
+            throw new ArgumentException("TenantId requerido.", nameof(tenantId));
         var cleanName = Sanitize(name);
         var cleanTitle = Sanitize(title);
         var cleanShortMessage = Sanitize(shortMessage);
         var cleanLongMessage = Sanitize(longMessage);
         Validate(cleanName, cleanTitle, cleanShortMessage, cleanLongMessage, audienceType, minimumPoints, pointsExpiringDaysAhead, scheduledAtUtc, displayUntilUtc, createdAtUtc);
 
+        TenantId = tenantId;
         Name = cleanName;
         Title = cleanTitle;
         ShortMessage = cleanShortMessage;

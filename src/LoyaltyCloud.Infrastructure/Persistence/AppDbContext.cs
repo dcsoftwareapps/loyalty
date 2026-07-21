@@ -31,6 +31,10 @@ public class AppDbContext : DbContext, IUnitOfWork
     public DbSet<DeviceRegistration> DeviceRegistrations => Set<DeviceRegistration>();
     public DbSet<LoyaltyNotification> LoyaltyNotifications => Set<LoyaltyNotification>();
     public DbSet<NotificationDelivery> NotificationDeliveries => Set<NotificationDelivery>();
+    public DbSet<Tenant> Tenants => Set<Tenant>();
+    public DbSet<TenantBranding> TenantBrandings => Set<TenantBranding>();
+    public DbSet<TenantSubscription> TenantSubscriptions => Set<TenantSubscription>();
+    public DbSet<TenantAdminUser> TenantAdminUsers => Set<TenantAdminUser>();
 
     public AppDbContext(DbContextOptions<AppDbContext> options) : base(options) { }
 
@@ -59,6 +63,7 @@ public class AppDbContext : DbContext, IUnitOfWork
 
         // Seed de la configuración del programa con sus valores default.
         ProgramConfigSeed.Apply(modelBuilder);
+        TenantSeed.Apply(modelBuilder);
     }
 
     /// <summary>

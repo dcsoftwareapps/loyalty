@@ -17,6 +17,7 @@ public sealed class GetCustomerBySerialHandler
     private readonly IPointTransactionRepository _transactions;
     private readonly IProgramConfigRepository _config;
     private readonly ILevelCalculationService _levels;
+    private readonly ITenantContext _tenantContext;
     private readonly IDateTimeProvider _dt;
 
     public GetCustomerBySerialHandler(
@@ -25,6 +26,7 @@ public sealed class GetCustomerBySerialHandler
         IPointTransactionRepository transactions,
         IProgramConfigRepository config,
         ILevelCalculationService levels,
+        ITenantContext tenantContext,
         IDateTimeProvider dt)
     {
         _cards = cards;
@@ -32,6 +34,7 @@ public sealed class GetCustomerBySerialHandler
         _transactions = transactions;
         _config = config;
         _levels = levels;
+        _tenantContext = tenantContext;
         _dt = dt;
     }
 
@@ -41,6 +44,9 @@ public sealed class GetCustomerBySerialHandler
         var card = await _cards.GetBySerialNumberAsync(query.SerialNumber, ct);
         if (card is null)
             return Result.Fail<CustomerDetailDto>($"No se encontró tarjeta con serial '{query.SerialNumber}'.");
+
+        if (card.TenantId != _tenantContext.RequireTenantId())
+            return Result.Fail<CustomerDetailDto>("La tarjeta no pertenece al tenant actual.");
 
         var customer = await _customers.GetByIdAsync(card.CustomerId, ct);
         if (customer is null)

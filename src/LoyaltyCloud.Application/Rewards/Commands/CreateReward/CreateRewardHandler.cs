@@ -1,3 +1,4 @@
+using LoyaltyCloud.Application.Common.Interfaces;
 using LoyaltyCloud.Common.Results;
 using LoyaltyCloud.Common.Services;
 using LoyaltyCloud.Domain.Entities;
@@ -9,12 +10,18 @@ namespace LoyaltyCloud.Application.Rewards.Commands.CreateReward;
 public sealed class CreateRewardHandler : IRequestHandler<CreateRewardCommand, Result<RewardAdminDto>>
 {
     private readonly IRewardCatalogRepository _rewards;
+    private readonly ITenantContext _tenantContext;
     private readonly IDateTimeProvider _dt;
     private readonly IUnitOfWork _uow;
 
-    public CreateRewardHandler(IRewardCatalogRepository rewards, IDateTimeProvider dt, IUnitOfWork uow)
+    public CreateRewardHandler(
+        IRewardCatalogRepository rewards,
+        ITenantContext tenantContext,
+        IDateTimeProvider dt,
+        IUnitOfWork uow)
     {
         _rewards = rewards;
+        _tenantContext = tenantContext;
         _dt = dt;
         _uow = uow;
     }
@@ -38,6 +45,7 @@ public sealed class CreateRewardHandler : IRequestHandler<CreateRewardCommand, R
 
         var reward = new RewardCatalogItem(
             id: Guid.NewGuid(),
+            tenantId: _tenantContext.RequireTenantId(),
             name: command.Name,
             description: command.Description,
             pointsCost: command.PointsCost,

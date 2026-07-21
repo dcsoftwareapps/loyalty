@@ -1,3 +1,4 @@
+using LoyaltyCloud.Application.Common.Interfaces;
 using LoyaltyCloud.Common.Pagination;
 using LoyaltyCloud.Common.Results;
 using LoyaltyCloud.Domain.Entities;
@@ -11,11 +12,16 @@ namespace LoyaltyCloud.Infrastructure.Repositories;
 internal sealed class RedemptionRepository : IRedemptionRepository
 {
     private readonly AppDbContext _db;
+    private readonly ITenantContext _tenantContext;
 
-    public RedemptionRepository(AppDbContext db) => _db = db;
+    public RedemptionRepository(AppDbContext db, ITenantContext tenantContext)
+    {
+        _db = db;
+        _tenantContext = tenantContext;
+    }
 
     public Task<Redemption?> GetByIdAsync(Guid id, CancellationToken ct = default) =>
-        _db.Redemptions.FirstOrDefaultAsync(r => r.Id == id, ct);
+        _db.Redemptions.FirstOrDefaultAsync(r => r.TenantId == _tenantContext.RequireTenantId() && r.Id == id, ct);
 
     public async Task<PagedResult<Redemption>> GetByCardIdAsync(
         Guid loyaltyCardId,
@@ -24,7 +30,7 @@ internal sealed class RedemptionRepository : IRedemptionRepository
     {
         var baseQuery = _db.Redemptions
             .AsNoTracking()
-            .Where(r => r.LoyaltyCardId == loyaltyCardId);
+            .Where(r => r.TenantId == _tenantContext.RequireTenantId() && r.LoyaltyCardId == loyaltyCardId);
 
         var total = await baseQuery.CountAsync(ct);
 
@@ -41,7 +47,7 @@ internal sealed class RedemptionRepository : IRedemptionRepository
     {
         var list = await _db.Redemptions
             .AsNoTracking()
-            .Where(r => r.Status == RedemptionStatus.Pending)
+            .Where(r => r.TenantId == _tenantContext.RequireTenantId() && r.Status == RedemptionStatus.Pending)
             .OrderByDescending(r => r.RedeemedAt)
             .ToListAsync(ct);
 

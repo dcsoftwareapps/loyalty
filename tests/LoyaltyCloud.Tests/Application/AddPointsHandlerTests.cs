@@ -55,6 +55,7 @@ public class AddPointsHandlerTests
             devices.Object,
             apn.Object,
             LevelCalculator().Object,
+            TenantContext().Object,
             clock.Object,
             uow.Object,
             NullLogger<AddPointsHandler>.Instance);
@@ -127,7 +128,7 @@ public class AddPointsHandlerTests
         devices.Setup(r => r.GetBySerialNumberAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
                .ReturnsAsync(new[]
                {
-                   new DeviceRegistration(Guid.NewGuid(), "device-1",
+                   new DeviceRegistration(Guid.NewGuid(), KBeautyTenantId, "device-1",
                        "pass.com.kbeautymx.loyalty", "KB-TEST001", "push-token-abc", Now)
                });
 
@@ -137,7 +138,7 @@ public class AddPointsHandlerTests
 
         var handler = new AddPointsHandler(
             cards.Object, customers.Object, transactions.Object, pointLots.Object, config.Object,
-            devices.Object, apn.Object, LevelCalculator().Object, clock.Object, uow.Object,
+            devices.Object, apn.Object, LevelCalculator().Object, TenantContext().Object, clock.Object, uow.Object,
             NullLogger<AddPointsHandler>.Instance);
 
         await handler.Handle(

@@ -9,8 +9,13 @@ namespace LoyaltyCloud.Infrastructure.Services;
 internal sealed class PointsExpirationNotificationReadService : IPointsExpirationNotificationReadService
 {
     private readonly AppDbContext _db;
+    private readonly ITenantContext _tenantContext;
 
-    public PointsExpirationNotificationReadService(AppDbContext db) => _db = db;
+    public PointsExpirationNotificationReadService(AppDbContext db, ITenantContext tenantContext)
+    {
+        _db = db;
+        _tenantContext = tenantContext;
+    }
 
     public async Task<IReadOnlyList<PointsExpirationNotificationCandidateDto>> ListCandidatesAsync(
         int daysAhead,
@@ -22,6 +27,7 @@ internal sealed class PointsExpirationNotificationReadService : IPointsExpiratio
             throw new InvalidOperationException("DaysAhead debe ser mayor a cero.");
 
         var timeZone = ResolveTimeZone(timeZoneId);
+        var tenantId = _tenantContext.RequireTenantId();
         var nowLocal = TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow, timeZone).Date;
         var targetLocalDate = DateOnly.FromDateTime(nowLocal.AddDays(daysAhead));
         var startUtc = ToUtc(targetLocalDate.ToDateTime(TimeOnly.MinValue), timeZone);
@@ -34,6 +40,8 @@ internal sealed class PointsExpirationNotificationReadService : IPointsExpiratio
             where lot.RemainingAmount > 0
                && lot.ExpiresAt >= startUtc
                && lot.ExpiresAt < endUtc
+               && card.TenantId == tenantId
+               && customer.TenantId == tenantId
                && card.IsActive
                && customer.IsActive
             group lot by new
@@ -63,7 +71,8 @@ internal sealed class PointsExpirationNotificationReadService : IPointsExpiratio
             ? new List<string>()
             : await _db.LoyaltyNotifications
                 .AsNoTracking()
-                .Where(n => n.Type == NotificationType.PointsExpiring
+                .Where(n => n.TenantId == tenantId
+                         && n.Type == NotificationType.PointsExpiring
                          && n.CorrelationId != null
                          && correlations.Contains(n.CorrelationId))
                 .Select(n => n.CorrelationId!)

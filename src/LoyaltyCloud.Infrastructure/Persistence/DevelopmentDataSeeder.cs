@@ -4,6 +4,7 @@ using LoyaltyCloud.Common.Services;
 using LoyaltyCloud.Domain.Entities;
 using LoyaltyCloud.Domain.Enums;
 using LoyaltyCloud.Domain.ValueObjects;
+using LoyaltyCloud.Infrastructure.Persistence.Seed;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
@@ -66,7 +67,7 @@ public static class DevelopmentDataSeeder
             rewardsCreated = await EnsureRewardsAsync(db, ct);
             await db.SaveChangesAsync(ct);
 
-            var sentinelExists = await db.Customers.AnyAsync(c => c.Email == SentinelEmail, ct);
+            var sentinelExists = await db.Customers.AnyAsync(c => c.TenantId == TenantSeed.KBeautyTenantId && c.Email == SentinelEmail, ct);
             if (!sentinelExists)
             {
                 var counts = await SeedCustomersAsync(db, ct);
@@ -97,6 +98,7 @@ public static class DevelopmentDataSeeder
     {
         var now = DateTime.UtcNow;
         var existing = await db.ProgramConfigs
+            .Where(c => c.TenantId == TenantSeed.KBeautyTenantId)
             .Select(c => c.Key)
             .ToListAsync(ct);
         var existingSet = existing.ToHashSet(StringComparer.Ordinal);
@@ -127,6 +129,7 @@ public static class DevelopmentDataSeeder
 
             db.ProgramConfigs.Add(new ProgramConfig(
                 Guid.NewGuid(),
+                TenantSeed.KBeautyTenantId,
                 entry.Key,
                 entry.Value,
                 now,
@@ -141,7 +144,7 @@ public static class DevelopmentDataSeeder
     private static async Task<int> EnsureRewardsAsync(AppDbContext db, CancellationToken ct)
     {
         var existing = await db.RewardCatalogItems
-            .Where(r => DemoRewardNames.Contains(r.Name))
+            .Where(r => r.TenantId == TenantSeed.KBeautyTenantId && DemoRewardNames.Contains(r.Name))
             .Select(r => r.Name)
             .ToListAsync(ct);
         var existingSet = existing.ToHashSet(StringComparer.Ordinal);
@@ -164,6 +167,7 @@ public static class DevelopmentDataSeeder
 
             db.RewardCatalogItems.Add(new RewardCatalogItem(
                 Guid.NewGuid(),
+                TenantSeed.KBeautyTenantId,
                 reward.Name,
                 reward.Description,
                 reward.Cost,
@@ -181,7 +185,7 @@ public static class DevelopmentDataSeeder
         AppDbContext db,
         CancellationToken ct)
     {
-        var config = ProgramConfigSnapshot.FromEntries(await db.ProgramConfigs.ToListAsync(ct));
+        var config = ProgramConfigSnapshot.FromEntries(await db.ProgramConfigs.Where(c => c.TenantId == TenantSeed.KBeautyTenantId).ToListAsync(ct));
         var now = DateTime.UtcNow;
         var clock = new MutableClock(now);
         var customerSpecs = DemoCustomers();
@@ -196,12 +200,13 @@ public static class DevelopmentDataSeeder
             var createdAt = now.Date.AddDays(-60 + ordinal * 2).AddHours(16);
             var customer = new Customer(
                 customerId,
+                TenantSeed.KBeautyTenantId,
                 spec.Name,
                 $"{DemoEmailPrefix}{ordinal:000}{DemoEmailDomain}",
                 spec.BirthDate,
                 createdAt,
                 $"+52 646 555 {1000 + ordinal:0000}");
-            var card = new LoyaltyCard(cardId, customerId, $"KB-DEMO{ordinal:000}", createdAt);
+            var card = new LoyaltyCard(cardId, TenantSeed.KBeautyTenantId, customerId, $"KB-DEMO{ordinal:000}", createdAt);
 
             db.Customers.Add(customer);
             db.LoyaltyCards.Add(card);
@@ -277,7 +282,7 @@ public static class DevelopmentDataSeeder
         CancellationToken ct)
     {
         var demoCards = await db.LoyaltyCards
-            .Where(c => c.SerialNumber.StartsWith("KB-DEMO"))
+            .Where(c => c.TenantId == TenantSeed.KBeautyTenantId && c.SerialNumber.StartsWith("KB-DEMO"))
             .OrderBy(c => c.SerialNumber)
             .Take(9)
             .ToListAsync(ct);
@@ -292,13 +297,13 @@ public static class DevelopmentDataSeeder
             return (0, 0);
 
         var rewards = await db.RewardCatalogItems
-            .Where(r => DemoRewardNames.Contains(r.Name))
+            .Where(r => r.TenantId == TenantSeed.KBeautyTenantId && DemoRewardNames.Contains(r.Name))
             .OrderBy(r => r.PointsCost)
             .ToListAsync(ct);
         if (rewards.Count == 0)
             return (0, 0);
 
-        var config = ProgramConfigSnapshot.FromEntries(await db.ProgramConfigs.ToListAsync(ct));
+        var config = ProgramConfigSnapshot.FromEntries(await db.ProgramConfigs.Where(c => c.TenantId == TenantSeed.KBeautyTenantId).ToListAsync(ct));
         var clock = new MutableClock(DateTime.UtcNow);
         var now = DateTime.UtcNow;
         var transactionsCreated = 0;
@@ -331,6 +336,7 @@ public static class DevelopmentDataSeeder
 
             var redemption = new Redemption(
                 Guid.NewGuid(),
+                card.TenantId,
                 card.Id,
                 reward.Id,
                 reward.PointsCost,

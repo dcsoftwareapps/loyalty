@@ -9,18 +9,28 @@ namespace LoyaltyCloud.Infrastructure.Services;
 internal sealed class RedemptionHistoryReadService : IRedemptionHistoryReadService
 {
     private readonly AppDbContext _db;
+    private readonly ITenantContext _tenantContext;
 
-    public RedemptionHistoryReadService(AppDbContext db) => _db = db;
+    public RedemptionHistoryReadService(AppDbContext db, ITenantContext tenantContext)
+    {
+        _db = db;
+        _tenantContext = tenantContext;
+    }
 
     public async Task<IReadOnlyList<RedemptionHistoryItemDto>> ListAsync(
         RedemptionStatus? status,
         string? search,
         CancellationToken ct = default)
     {
+        var tenantId = _tenantContext.RequireTenantId();
         var query = from redemption in _db.Redemptions.AsNoTracking()
                     join card in _db.LoyaltyCards.AsNoTracking() on redemption.LoyaltyCardId equals card.Id
                     join customer in _db.Customers.AsNoTracking() on card.CustomerId equals customer.Id
                     join reward in _db.RewardCatalogItems.AsNoTracking() on redemption.RewardCatalogItemId equals reward.Id
+                    where redemption.TenantId == tenantId
+                       && card.TenantId == tenantId
+                       && customer.TenantId == tenantId
+                       && reward.TenantId == tenantId
                     select new
                     {
                         redemption,

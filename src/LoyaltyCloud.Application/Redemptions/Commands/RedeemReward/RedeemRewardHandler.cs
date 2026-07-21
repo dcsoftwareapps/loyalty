@@ -24,6 +24,7 @@ public sealed class RedeemRewardHandler : IRequestHandler<RedeemRewardCommand, R
     private readonly IDeviceRegistrationRepository _devices;
     private readonly IApnService _apn;
     private readonly ILevelCalculationService _levels;
+    private readonly ITenantContext _tenantContext;
     private readonly IPublisher _publisher;
     private readonly IDateTimeProvider _dt;
     private readonly IUnitOfWork _uow;
@@ -39,6 +40,7 @@ public sealed class RedeemRewardHandler : IRequestHandler<RedeemRewardCommand, R
         IDeviceRegistrationRepository devices,
         IApnService apn,
         ILevelCalculationService levels,
+        ITenantContext tenantContext,
         IPublisher publisher,
         IDateTimeProvider dt,
         IUnitOfWork uow,
@@ -53,6 +55,7 @@ public sealed class RedeemRewardHandler : IRequestHandler<RedeemRewardCommand, R
         _devices = devices;
         _apn = apn;
         _levels = levels;
+        _tenantContext = tenantContext;
         _publisher = publisher;
         _dt = dt;
         _uow = uow;
@@ -65,12 +68,17 @@ public sealed class RedeemRewardHandler : IRequestHandler<RedeemRewardCommand, R
         var card = await _cards.GetBySerialNumberAsync(command.SerialNumber, ct);
         if (card is null)
             return Result.Fail<RedemptionResponse>($"No se encontró tarjeta '{command.SerialNumber}'.");
+        if (card.TenantId != _tenantContext.RequireTenantId())
+            return Result.Fail<RedemptionResponse>("La tarjeta no pertenece al tenant actual.");
         if (!card.IsActive)
             return Result.Fail<RedemptionResponse>("La tarjeta está inactiva.");
 
         var reward = await _rewards.GetByIdAsync(command.RewardCatalogItemId, ct);
         if (reward is null)
             return Result.Fail<RedemptionResponse>("Beneficio no encontrado.");
+
+        if (reward.TenantId != card.TenantId)
+            return Result.Fail<RedemptionResponse>("El beneficio no pertenece al mismo tenant de la tarjeta.");
 
         var now = _dt.UtcNow;
         if (!reward.IsAvailableOn(now))
@@ -102,6 +110,7 @@ public sealed class RedeemRewardHandler : IRequestHandler<RedeemRewardCommand, R
 
         var redemption = new Redemption(
             id: Guid.NewGuid(),
+            tenantId: card.TenantId,
             loyaltyCardId: card.Id,
             rewardCatalogItemId: reward.Id,
             pointsSpent: reward.PointsCost,

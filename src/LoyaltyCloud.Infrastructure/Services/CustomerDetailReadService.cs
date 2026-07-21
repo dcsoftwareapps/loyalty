@@ -15,21 +15,29 @@ internal sealed class CustomerDetailReadService : ICustomerDetailReadService
     private readonly AppDbContext _db;
     private readonly IDateTimeProvider _dt;
     private readonly ILevelCalculationService _levels;
+    private readonly ITenantContext _tenantContext;
 
-    public CustomerDetailReadService(AppDbContext db, IDateTimeProvider dt, ILevelCalculationService levels)
+    public CustomerDetailReadService(
+        AppDbContext db,
+        IDateTimeProvider dt,
+        ILevelCalculationService levels,
+        ITenantContext tenantContext)
     {
         _db = db;
         _dt = dt;
         _levels = levels;
+        _tenantContext = tenantContext;
     }
 
     public async Task<CustomerDetailDto?> GetByCustomerIdAsync(Guid customerId, CancellationToken ct = default)
     {
+        var tenantId = _tenantContext.RequireTenantId();
         var baseInfo = await (
             from customer in _db.Customers.AsNoTracking()
-            where customer.Id == customerId
+            where customer.TenantId == tenantId && customer.Id == customerId
             join card in _db.LoyaltyCards.AsNoTracking() on customer.Id equals card.CustomerId into cards
             from card in cards.DefaultIfEmpty()
+            where card == null || card.TenantId == tenantId
             select new
             {
                 customer.Id,
@@ -67,26 +75,26 @@ internal sealed class CustomerDetailReadService : ICustomerDetailReadService
         var pendingRedemptions = hasCard
             ? await _db.Redemptions
                 .AsNoTracking()
-                .CountAsync(r => r.LoyaltyCardId == cardId && r.Status == RedemptionStatus.Pending, ct)
+                .CountAsync(r => r.TenantId == tenantId && r.LoyaltyCardId == cardId && r.Status == RedemptionStatus.Pending, ct)
             : 0;
 
         var cancelledRedemptions = hasCard
             ? await _db.Redemptions
                 .AsNoTracking()
-                .CountAsync(r => r.LoyaltyCardId == cardId && r.Status == RedemptionStatus.Cancelled, ct)
+                .CountAsync(r => r.TenantId == tenantId && r.LoyaltyCardId == cardId && r.Status == RedemptionStatus.Cancelled, ct)
             : 0;
 
         var confirmedRedemptions = hasCard
             ? await _db.Redemptions
                 .AsNoTracking()
-                .CountAsync(r => r.LoyaltyCardId == cardId && r.Status == RedemptionStatus.Confirmed, ct)
+                .CountAsync(r => r.TenantId == tenantId && r.LoyaltyCardId == cardId && r.Status == RedemptionStatus.Confirmed, ct)
             : 0;
         var totalRedemptions = pendingRedemptions + cancelledRedemptions + confirmedRedemptions;
 
         var deviceCount = !string.IsNullOrWhiteSpace(serial)
             ? await _db.DeviceRegistrations
                 .AsNoTracking()
-                .CountAsync(d => d.SerialNumber == serial, ct)
+                .CountAsync(d => d.TenantId == tenantId && d.SerialNumber == serial, ct)
             : 0;
 
         var now = _dt.UtcNow;
@@ -104,7 +112,7 @@ internal sealed class CustomerDetailReadService : ICustomerDetailReadService
                          && LevelProgressTransactionTypes.All.Contains(t.Type))
                 .SumAsync(t => (int?)t.Points, ct) ?? 0;
 
-            var snapshot = ProgramConfigSnapshot.FromEntries(await _db.ProgramConfigs.AsNoTracking().ToListAsync(ct));
+            var snapshot = ProgramConfigSnapshot.FromEntries(await _db.ProgramConfigs.AsNoTracking().Where(c => c.TenantId == tenantId).ToListAsync(ct));
             var memberLevel = _levels.CalculateLevel(rollingPoints, snapshot);
             rollingLevel = memberLevel.Name;
             var nextLevel = memberLevel.Name switch
@@ -183,6 +191,8 @@ internal sealed class CustomerDetailReadService : ICustomerDetailReadService
                     on redemption.RewardCatalogItemId equals reward.Id into rewards
                 from reward in rewards.DefaultIfEmpty()
                 where lot.LoyaltyCardId == cardId
+                  && (redemption == null || redemption.TenantId == tenantId)
+                  && (reward == null || reward.TenantId == tenantId)
                 orderby lot.ExpiresAt, lot.EarnedAt, lot.Id, consumption.CreatedAt
                 select new
                 {
@@ -231,6 +241,7 @@ internal sealed class CustomerDetailReadService : ICustomerDetailReadService
                     on transaction.CampaignId equals campaign.Id into campaigns
                 from campaign in campaigns.DefaultIfEmpty()
                 where transaction.LoyaltyCardId == cardId
+                  && (campaign == null || campaign.TenantId == tenantId)
                 orderby transaction.CreatedAt descending
                 select new
                 {
@@ -272,7 +283,9 @@ internal sealed class CustomerDetailReadService : ICustomerDetailReadService
             ? await (
                 from redemption in _db.Redemptions.AsNoTracking()
                 join reward in _db.RewardCatalogItems.AsNoTracking() on redemption.RewardCatalogItemId equals reward.Id
-                where redemption.LoyaltyCardId == cardId
+                where redemption.TenantId == tenantId
+                   && reward.TenantId == tenantId
+                   && redemption.LoyaltyCardId == cardId
                 orderby redemption.RedeemedAt descending
                 select new CustomerRedemptionHistoryItemDto(
                     redemption.RedeemedAt,
@@ -285,7 +298,7 @@ internal sealed class CustomerDetailReadService : ICustomerDetailReadService
 
         var notificationHistory = await _db.LoyaltyNotifications
             .AsNoTracking()
-            .Where(n => n.CustomerId == baseInfo.Id)
+            .Where(n => n.TenantId == tenantId && n.CustomerId == baseInfo.Id)
             .OrderByDescending(n => n.CreatedAt)
             .Select(n => new CustomerNotificationHistoryItemDto(
                 n.CreatedAt,

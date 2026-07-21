@@ -1,3 +1,4 @@
+using LoyaltyCloud.Application.Common.Interfaces;
 using LoyaltyCloud.Domain.Entities;
 using LoyaltyCloud.Domain.Enums;
 using LoyaltyCloud.Domain.Repositories;
@@ -9,18 +10,27 @@ namespace LoyaltyCloud.Infrastructure.Repositories;
 internal sealed class CustomNotificationCampaignRepository : ICustomNotificationCampaignRepository
 {
     private readonly AppDbContext _db;
+    private readonly ITenantContext _tenantContext;
 
-    public CustomNotificationCampaignRepository(AppDbContext db) => _db = db;
+    public CustomNotificationCampaignRepository(AppDbContext db, ITenantContext tenantContext)
+    {
+        _db = db;
+        _tenantContext = tenantContext;
+    }
 
     public Task<CustomNotificationCampaign?> GetByIdAsync(Guid id, CancellationToken ct = default) =>
-        _db.CustomNotificationCampaigns.FirstOrDefaultAsync(c => c.Id == id, ct);
+        _db.CustomNotificationCampaigns.FirstOrDefaultAsync(c => c.TenantId == _tenantContext.RequireTenantId() && c.Id == id, ct);
 
     public async Task<IReadOnlyList<CustomNotificationCampaign>> ListAsync(
         CustomNotificationCampaignStatus? status,
         int take,
         CancellationToken ct = default)
     {
-        var query = _db.CustomNotificationCampaigns.AsNoTracking().AsQueryable();
+        var tenantId = _tenantContext.RequireTenantId();
+        var query = _db.CustomNotificationCampaigns
+            .AsNoTracking()
+            .Where(c => c.TenantId == tenantId)
+            .AsQueryable();
         if (status.HasValue)
             query = query.Where(c => c.Status == status.Value);
 
@@ -35,7 +45,8 @@ internal sealed class CustomNotificationCampaignRepository : ICustomNotification
     public async Task<IReadOnlyList<CustomNotificationCampaign>> GetDueAsync(DateTime nowUtc, int take, CancellationToken ct = default)
     {
         var rows = await _db.CustomNotificationCampaigns
-            .Where(c => c.Status == CustomNotificationCampaignStatus.Scheduled
+            .Where(c => c.TenantId == _tenantContext.RequireTenantId()
+                     && c.Status == CustomNotificationCampaignStatus.Scheduled
                      && c.ScheduledAtUtc.HasValue
                      && c.ScheduledAtUtc <= nowUtc)
             .OrderBy(c => c.ScheduledAtUtc)

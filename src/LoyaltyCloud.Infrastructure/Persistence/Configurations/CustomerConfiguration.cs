@@ -23,6 +23,9 @@ internal sealed class CustomerConfiguration : IEntityTypeConfiguration<Customer>
         builder.Property(c => c.Phone)
             .HasMaxLength(30);
 
+        builder.Property(c => c.NormalizedPhone)
+            .HasMaxLength(30);
+
         builder.Property(c => c.DateOfBirth)
             .HasColumnType("date"); // sin componente hora — solo fecha
 
@@ -30,9 +33,20 @@ internal sealed class CustomerConfiguration : IEntityTypeConfiguration<Customer>
             .HasColumnType("datetime2(3)");
 
         // Email único — case-insensitive a nivel SQL (collation default de SQL Server).
-        builder.HasIndex(c => c.Email).IsUnique();
+        builder.HasIndex(c => new { c.TenantId, c.Email })
+            .IsUnique()
+            .HasFilter("[Email] IS NOT NULL AND [Email] <> ''");
+
+        builder.HasIndex(c => new { c.TenantId, c.NormalizedPhone })
+            .IsUnique()
+            .HasFilter("[NormalizedPhone] IS NOT NULL AND [NormalizedPhone] <> ''");
 
         // Referido: FK opcional al referidor (sin nav property, solo el id).
-        builder.HasIndex(c => c.ReferredBy);
+        builder.HasIndex(c => new { c.TenantId, c.ReferredBy });
+
+        builder.HasOne<Tenant>()
+            .WithMany()
+            .HasForeignKey(c => c.TenantId)
+            .OnDelete(DeleteBehavior.Restrict);
     }
 }

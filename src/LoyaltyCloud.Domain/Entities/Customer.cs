@@ -7,12 +7,14 @@ namespace LoyaltyCloud.Domain.Entities;
 /// asociada — la creación de Customer y Card es atómica en
 /// <c>RegisterCustomerHandler</c>.
 /// </summary>
-public class Customer : Entity
+public class Customer : Entity, ITenantOwned
 {
     public static readonly DateTime BirthdayNotCaptured = new(1900, 1, 1);
     private const int CapturedBirthdayYear = 2000;
 
     /// <summary>Nombre completo (mostrado en el pase de Apple Wallet).</summary>
+    public Guid TenantId { get; private set; }
+
     public string FullName { get; private set; } = string.Empty;
 
     /// <summary>Email — único en el sistema, usado como identificador secundario.</summary>
@@ -20,6 +22,8 @@ public class Customer : Entity
 
     /// <summary>Teléfono (opcional, formato libre — la validación de formato vive en Application).</summary>
     public string? Phone { get; private set; }
+
+    public string? NormalizedPhone { get; private set; }
 
     /// <summary>Fecha de nacimiento — usada para el bono x2 en mes de cumpleaños.</summary>
     public DateTime DateOfBirth { get; private set; }
@@ -38,6 +42,7 @@ public class Customer : Entity
 
     public Customer(
         Guid id,
+        Guid tenantId,
         string fullName,
         string email,
         DateTime dateOfBirth,
@@ -45,14 +50,18 @@ public class Customer : Entity
         string? phone = null,
         Guid? referredBy = null) : base(id)
     {
+        if (tenantId == Guid.Empty)
+            throw new ArgumentException("TenantId requerido.", nameof(tenantId));
         if (string.IsNullOrWhiteSpace(fullName))
             throw new ArgumentException("Nombre requerido.", nameof(fullName));
         if (string.IsNullOrWhiteSpace(email))
             throw new ArgumentException("Email requerido.", nameof(email));
 
+        TenantId = tenantId;
         FullName = fullName.Trim();
         Email = email.Trim().ToLowerInvariant();
         Phone = phone?.Trim();
+        NormalizedPhone = NormalizePhone(phone);
         DateOfBirth = dateOfBirth;
         ReferredBy = referredBy;
         CreatedAt = createdAtUtc;
@@ -67,6 +76,7 @@ public class Customer : Entity
 
         FullName = fullName.Trim();
         Phone = phone?.Trim();
+        NormalizedPhone = NormalizePhone(phone);
     }
 
     public bool HasCapturedBirthday() => DateOfBirth.Date != BirthdayNotCaptured.Date;
@@ -86,4 +96,13 @@ public class Customer : Entity
 
     /// <summary>Reactiva una clienta previamente dada de baja.</summary>
     public void Reactivate() => IsActive = true;
+
+    private static string? NormalizePhone(string? phone)
+    {
+        if (string.IsNullOrWhiteSpace(phone))
+            return null;
+
+        var normalized = new string(phone.Where(char.IsDigit).ToArray());
+        return string.IsNullOrWhiteSpace(normalized) ? null : normalized;
+    }
 }

@@ -11,8 +11,10 @@ namespace LoyaltyCloud.Domain.Entities;
 /// <see cref="LoyaltyCloud.Domain.ValueObjects.ProgramConfigSnapshot"/> tipado
 /// para pasarlo al dominio.
 /// </remarks>
-public class ProgramConfig : Entity
+public class ProgramConfig : Entity, ITenantOwned
 {
+    public Guid TenantId { get; private set; }
+
     /// <summary>Clave canónica (ver <c>LoyaltyConstants.ConfigKeys</c>).</summary>
     public string Key { get; private set; } = string.Empty;
 
@@ -30,12 +32,15 @@ public class ProgramConfig : Entity
 
     private ProgramConfig() { }
 
-    public ProgramConfig(Guid id, string key, string value, DateTime updatedAtUtc, string? description = null, string? updatedBy = null)
+    public ProgramConfig(Guid id, Guid tenantId, string key, string value, DateTime updatedAtUtc, string? description = null, string? updatedBy = null)
         : base(id)
     {
+        if (tenantId == Guid.Empty)
+            throw new ArgumentException("TenantId requerido.", nameof(tenantId));
         if (string.IsNullOrWhiteSpace(key))
             throw new ArgumentException("Key requerida.", nameof(key));
 
+        TenantId = tenantId;
         Key = key.Trim();
         Value = value ?? string.Empty;
         Description = description?.Trim();

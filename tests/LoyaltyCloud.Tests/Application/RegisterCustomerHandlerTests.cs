@@ -46,6 +46,7 @@ public class RegisterCustomerHandlerTests
             passesMock.Object,
             storageMock.Object,
             LevelCalculator().Object,
+            TenantContext().Object,
             Clock().Object,
             currentUser.Object,
             (uow ?? NoOpUnitOfWork()).Object,

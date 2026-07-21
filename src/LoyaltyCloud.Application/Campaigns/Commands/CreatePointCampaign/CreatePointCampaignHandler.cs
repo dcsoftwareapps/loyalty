@@ -1,3 +1,4 @@
+using LoyaltyCloud.Application.Common.Interfaces;
 using LoyaltyCloud.Common.Results;
 using LoyaltyCloud.Common.Services;
 using LoyaltyCloud.Domain.Entities;
@@ -9,12 +10,18 @@ namespace LoyaltyCloud.Application.Campaigns.Commands.CreatePointCampaign;
 public sealed class CreatePointCampaignHandler : IRequestHandler<CreatePointCampaignCommand, Result<PointCampaignAdminDto>>
 {
     private readonly IPointCampaignRepository _campaigns;
+    private readonly ITenantContext _tenantContext;
     private readonly IDateTimeProvider _dt;
     private readonly IUnitOfWork _uow;
 
-    public CreatePointCampaignHandler(IPointCampaignRepository campaigns, IDateTimeProvider dt, IUnitOfWork uow)
+    public CreatePointCampaignHandler(
+        IPointCampaignRepository campaigns,
+        ITenantContext tenantContext,
+        IDateTimeProvider dt,
+        IUnitOfWork uow)
     {
         _campaigns = campaigns;
+        _tenantContext = tenantContext;
         _dt = dt;
         _uow = uow;
     }
@@ -23,6 +30,7 @@ public sealed class CreatePointCampaignHandler : IRequestHandler<CreatePointCamp
     {
         var campaign = new PointCampaign(
             Guid.NewGuid(),
+            _tenantContext.RequireTenantId(),
             command.Name,
             command.Description,
             command.Multiplier,

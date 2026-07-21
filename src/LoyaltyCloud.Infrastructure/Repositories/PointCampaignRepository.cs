@@ -1,3 +1,4 @@
+using LoyaltyCloud.Application.Common.Interfaces;
 using LoyaltyCloud.Domain.Entities;
 using LoyaltyCloud.Domain.Repositories;
 using LoyaltyCloud.Infrastructure.Persistence;
@@ -8,13 +9,19 @@ namespace LoyaltyCloud.Infrastructure.Repositories;
 internal sealed class PointCampaignRepository : IPointCampaignRepository
 {
     private readonly AppDbContext _db;
+    private readonly ITenantContext _tenantContext;
 
-    public PointCampaignRepository(AppDbContext db) => _db = db;
+    public PointCampaignRepository(AppDbContext db, ITenantContext tenantContext)
+    {
+        _db = db;
+        _tenantContext = tenantContext;
+    }
 
     public async Task<IReadOnlyList<PointCampaign>> GetAllAsync(CancellationToken ct = default)
     {
         var list = await _db.PointCampaigns
             .AsNoTracking()
+            .Where(c => c.TenantId == _tenantContext.RequireTenantId())
             .OrderByDescending(c => c.StartsAtUtc)
             .ThenBy(c => c.Name)
             .ToListAsync(ct);
@@ -23,7 +30,7 @@ internal sealed class PointCampaignRepository : IPointCampaignRepository
     }
 
     public Task<PointCampaign?> GetByIdAsync(Guid id, CancellationToken ct = default) =>
-        _db.PointCampaigns.FirstOrDefaultAsync(c => c.Id == id, ct);
+        _db.PointCampaigns.FirstOrDefaultAsync(c => c.TenantId == _tenantContext.RequireTenantId() && c.Id == id, ct);
 
     public async Task<PointCampaign?> GetBestApplicableAsync(
         DateTime nowUtc,
@@ -33,7 +40,8 @@ internal sealed class PointCampaignRepository : IPointCampaignRepository
     {
         var candidates = await _db.PointCampaigns
             .AsNoTracking()
-            .Where(c => c.IsActive
+            .Where(c => c.TenantId == _tenantContext.RequireTenantId()
+                     && c.IsActive
                      && c.StartsAtUtc <= nowUtc
                      && c.EndsAtUtc >= nowUtc
                      && (!c.MinimumPurchaseAmount.HasValue || purchaseAmount >= c.MinimumPurchaseAmount.Value))

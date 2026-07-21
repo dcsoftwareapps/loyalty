@@ -3,6 +3,7 @@ using System.Net.Http.Json;
 using System.Text.Json;
 using LoyaltyCloud.Domain.Entities;
 using LoyaltyCloud.Infrastructure.Persistence;
+using LoyaltyCloud.Infrastructure.Persistence.Seed;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 
@@ -161,12 +162,13 @@ public sealed class AppleWalletWebServiceTests : IntegrationTestBase
 
         var customer = new Customer(
             customerId,
+            TenantSeed.KBeautyTenantId,
             "Wallet Integration Test",
             $"wallet-{Guid.NewGuid():N}@test.local",
             new DateTime(1990, 1, 1),
             now);
 
-        var card = new LoyaltyCard(Guid.NewGuid(), customerId, serial, now);
+        var card = new LoyaltyCard(Guid.NewGuid(), TenantSeed.KBeautyTenantId, customerId, serial, now);
         db.Customers.Add(customer);
         db.LoyaltyCards.Add(card);
 
@@ -174,6 +176,7 @@ public sealed class AppleWalletWebServiceTests : IntegrationTestBase
         {
             db.DeviceRegistrations.Add(new DeviceRegistration(
                 Guid.NewGuid(),
+                TenantSeed.KBeautyTenantId,
                 deviceLibraryIdentifier,
                 PassTypeIdentifier,
                 serial,

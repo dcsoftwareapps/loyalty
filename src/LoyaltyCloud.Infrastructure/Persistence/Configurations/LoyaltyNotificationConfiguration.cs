@@ -39,27 +39,36 @@ internal sealed class LoyaltyNotificationConfiguration : IEntityTypeConfiguratio
 
         builder.HasOne<Customer>()
             .WithMany()
-            .HasForeignKey(n => n.CustomerId)
+            .HasPrincipalKey(c => new { c.TenantId, c.Id })
+            .HasForeignKey(n => new { n.TenantId, n.CustomerId })
             .OnDelete(DeleteBehavior.Restrict);
 
         builder.HasOne<LoyaltyCard>()
             .WithMany()
-            .HasForeignKey(n => n.LoyaltyCardId)
+            .HasPrincipalKey(c => new { c.TenantId, c.Id })
+            .HasForeignKey(n => new { n.TenantId, n.LoyaltyCardId })
             .OnDelete(DeleteBehavior.Restrict);
 
         builder.HasOne<CustomNotificationCampaign>()
             .WithMany()
-            .HasForeignKey(n => n.CustomNotificationCampaignId)
+            .HasPrincipalKey(c => new { c.TenantId, c.Id })
+            .HasForeignKey(n => new { n.TenantId, n.CustomNotificationCampaignId })
             .OnDelete(DeleteBehavior.Restrict);
 
-        builder.HasIndex(n => n.CustomerId);
-        builder.HasIndex(n => n.LoyaltyCardId);
-        builder.HasIndex(n => n.CustomNotificationCampaignId);
-        builder.HasIndex(n => n.Status);
-        builder.HasIndex(n => n.ScheduledAtUtc);
-        builder.HasIndex(n => n.CreatedAt);
-        builder.HasIndex(n => n.CorrelationId)
+        builder.HasIndex(n => new { n.TenantId, n.Id }).IsUnique();
+        builder.HasIndex(n => new { n.TenantId, n.CustomerId });
+        builder.HasIndex(n => new { n.TenantId, n.LoyaltyCardId });
+        builder.HasIndex(n => new { n.TenantId, n.CustomNotificationCampaignId });
+        builder.HasIndex(n => new { n.TenantId, n.Status });
+        builder.HasIndex(n => new { n.TenantId, n.ScheduledAtUtc });
+        builder.HasIndex(n => new { n.TenantId, n.CreatedAt });
+        builder.HasIndex(n => new { n.TenantId, n.CorrelationId })
             .IsUnique()
             .HasFilter("[CorrelationId] IS NOT NULL");
+
+        builder.HasOne<Tenant>()
+            .WithMany()
+            .HasForeignKey(n => n.TenantId)
+            .OnDelete(DeleteBehavior.Restrict);
     }
 }

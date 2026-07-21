@@ -74,6 +74,8 @@ public static class DependencyInjection
         services.AddScoped<IDeviceRegistrationRepository, DeviceRegistrationRepository>();
         services.AddScoped<ILoyaltyNotificationRepository, LoyaltyNotificationRepository>();
         services.AddScoped<ICustomNotificationCampaignRepository, CustomNotificationCampaignRepository>();
+        services.AddScoped<ITenantRepository, TenantRepository>();
+        services.AddScoped<ITenantAdminUserRepository, TenantAdminUserRepository>();
     }
 
     private static void AddCrossCuttingServices(IServiceCollection services)
@@ -82,6 +84,11 @@ public static class DependencyInjection
 
         services.AddHttpContextAccessor();
         services.AddScoped<ICurrentUserService, CurrentUserService>();
+        services.AddScoped<TenantContext>();
+        services.AddScoped<ITenantContext>(sp => sp.GetRequiredService<TenantContext>());
+        services.AddScoped<IMutableTenantContext>(sp => sp.GetRequiredService<TenantContext>());
+        services.AddScoped<IDefaultTenantResolutionService, DefaultTenantResolutionService>();
+        services.AddScoped<IPasswordHashingService, PasswordHashingService>();
 
         services.AddScoped<IDashboardReadService, DashboardReadService>();
         services.AddScoped<ICustomerListReadService, CustomerListReadService>();

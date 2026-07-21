@@ -1,3 +1,4 @@
+using LoyaltyCloud.Application.Common.Interfaces;
 using LoyaltyCloud.Domain.Entities;
 using LoyaltyCloud.Domain.Enums;
 using LoyaltyCloud.Domain.Repositories;
@@ -9,18 +10,23 @@ namespace LoyaltyCloud.Infrastructure.Repositories;
 internal sealed class LoyaltyNotificationRepository : ILoyaltyNotificationRepository
 {
     private readonly AppDbContext _db;
+    private readonly ITenantContext _tenantContext;
 
-    public LoyaltyNotificationRepository(AppDbContext db) => _db = db;
+    public LoyaltyNotificationRepository(AppDbContext db, ITenantContext tenantContext)
+    {
+        _db = db;
+        _tenantContext = tenantContext;
+    }
 
     public Task<LoyaltyNotification?> GetByIdAsync(Guid id, CancellationToken ct = default) =>
         _db.LoyaltyNotifications
             .Include(n => n.Deliveries)
-            .FirstOrDefaultAsync(n => n.Id == id, ct);
+            .FirstOrDefaultAsync(n => n.TenantId == _tenantContext.RequireTenantId() && n.Id == id, ct);
 
     public Task<LoyaltyNotification?> GetByCorrelationIdAsync(string correlationId, CancellationToken ct = default) =>
         _db.LoyaltyNotifications
             .Include(n => n.Deliveries)
-            .FirstOrDefaultAsync(n => n.CorrelationId == correlationId, ct);
+            .FirstOrDefaultAsync(n => n.TenantId == _tenantContext.RequireTenantId() && n.CorrelationId == correlationId, ct);
 
     public async Task<IReadOnlyList<LoyaltyNotification>> ListAsync(
         Guid? customerId,
@@ -35,6 +41,7 @@ internal sealed class LoyaltyNotificationRepository : ILoyaltyNotificationReposi
         var query = _db.LoyaltyNotifications
             .AsNoTracking()
             .Include(n => n.Deliveries)
+            .Where(n => n.TenantId == _tenantContext.RequireTenantId())
             .AsQueryable();
 
         if (customerId.HasValue)
@@ -62,7 +69,8 @@ internal sealed class LoyaltyNotificationRepository : ILoyaltyNotificationReposi
     {
         var rows = await _db.LoyaltyNotifications
             .Include(n => n.Deliveries)
-            .Where(n => n.Status == NotificationStatus.Pending
+            .Where(n => n.TenantId == _tenantContext.RequireTenantId()
+                     && n.Status == NotificationStatus.Pending
                      && (!n.ScheduledAtUtc.HasValue || n.ScheduledAtUtc <= nowUtc)
                      && n.Deliveries.Any(d => d.Status == NotificationDeliveryStatus.Pending && d.AttemptCount < maxAttempts))
             .OrderBy(n => n.ScheduledAtUtc ?? n.CreatedAt)

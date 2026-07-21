@@ -27,7 +27,13 @@ internal sealed class RewardCatalogItemConfiguration : IEntityTypeConfiguration<
         builder.Property(r => r.ValidTo).HasColumnType("datetime2(3)");
 
         // Solo un "producto del mes" activo a la vez — filtrado en el repo, no en índice.
-        builder.HasIndex(r => r.IsMonthlyProduct);
-        builder.HasIndex(r => r.IsActive);
+        builder.HasIndex(r => new { r.TenantId, r.IsMonthlyProduct });
+        builder.HasIndex(r => new { r.TenantId, r.IsActive });
+        builder.HasIndex(r => new { r.TenantId, r.IsMonthlyProduct, r.IsActive, r.ValidFrom, r.ValidTo });
+
+        builder.HasOne<Tenant>()
+            .WithMany()
+            .HasForeignKey(r => r.TenantId)
+            .OnDelete(DeleteBehavior.Restrict);
     }
 }

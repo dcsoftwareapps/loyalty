@@ -4,8 +4,10 @@ using LoyaltyCloud.Domain.Enums;
 
 namespace LoyaltyCloud.Domain.Entities;
 
-public class PointCampaign : Entity
+public class PointCampaign : Entity, ITenantOwned
 {
+    public Guid TenantId { get; private set; }
+
     public string Name { get; private set; } = string.Empty;
     public string Description { get; private set; } = string.Empty;
     public int Multiplier { get; private set; }
@@ -21,6 +23,7 @@ public class PointCampaign : Entity
 
     public PointCampaign(
         Guid id,
+        Guid tenantId,
         string name,
         string description,
         int multiplier,
@@ -30,8 +33,11 @@ public class PointCampaign : Entity
         DateTime endsAtUtc,
         DateTime createdAtUtc) : base(id)
     {
+        if (tenantId == Guid.Empty)
+            throw new ArgumentException("TenantId requerido.", nameof(tenantId));
         Validate(name, description, multiplier, minimumPurchaseAmount, startsAtUtc, endsAtUtc);
 
+        TenantId = tenantId;
         Name = name.Trim();
         Description = description.Trim();
         Multiplier = multiplier;

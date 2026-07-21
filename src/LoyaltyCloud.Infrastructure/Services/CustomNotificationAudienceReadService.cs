@@ -11,13 +11,16 @@ namespace LoyaltyCloud.Infrastructure.Services;
 internal sealed class CustomNotificationAudienceReadService : ICustomNotificationAudienceReadService
 {
     private readonly AppDbContext _db;
+    private readonly ITenantContext _tenantContext;
     private readonly ILogger<CustomNotificationAudienceReadService> _logger;
 
     public CustomNotificationAudienceReadService(
         AppDbContext db,
+        ITenantContext tenantContext,
         ILogger<CustomNotificationAudienceReadService> logger)
     {
         _db = db;
+        _tenantContext = tenantContext;
         _logger = logger;
     }
 
@@ -95,10 +98,14 @@ internal sealed class CustomNotificationAudienceReadService : ICustomNotificatio
         bool requireDeviceRegistration,
         CancellationToken ct)
     {
+        var tenantId = _tenantContext.RequireTenantId();
         var query =
             from card in _db.LoyaltyCards.AsNoTracking()
             join customer in _db.Customers.AsNoTracking() on card.CustomerId equals customer.Id
-            where card.IsActive && customer.IsActive
+            where card.TenantId == tenantId
+               && customer.TenantId == tenantId
+               && card.IsActive
+               && customer.IsActive
             select new
             {
                 customer.Id,
@@ -109,7 +116,7 @@ internal sealed class CustomNotificationAudienceReadService : ICustomNotificatio
                 card.CurrentPoints,
                 DeviceRegistrationCount = _db.DeviceRegistrations
                     .AsNoTracking()
-                    .Count(registration => registration.SerialNumber == card.SerialNumber)
+                    .Count(registration => registration.TenantId == tenantId && registration.SerialNumber == card.SerialNumber)
             };
 
         query = audienceType switch
@@ -159,6 +166,7 @@ internal sealed class CustomNotificationAudienceReadService : ICustomNotificatio
     private async Task<List<PointsExpiringCandidateRow>> QueryPointsExpiringCandidateSerialsAsync(int daysAhead, CancellationToken ct)
     {
         var timeZoneId = "America/Tijuana";
+        var tenantId = _tenantContext.RequireTenantId();
         var timeZone = PointsExpirationNotificationReadService.ResolveTimeZone(timeZoneId);
         var nowLocal = TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow, timeZone).Date;
         var targetLocalDate = DateOnly.FromDateTime(nowLocal.AddDays(daysAhead));
@@ -171,6 +179,8 @@ internal sealed class CustomNotificationAudienceReadService : ICustomNotificatio
             where lot.RemainingAmount > 0
                && lot.ExpiresAt >= startUtc
                && lot.ExpiresAt < endUtc
+               && card.TenantId == tenantId
+               && customer.TenantId == tenantId
                && card.IsActive
                && customer.IsActive
             group lot by new
@@ -193,7 +203,7 @@ internal sealed class CustomNotificationAudienceReadService : ICustomNotificatio
                 g.Key.CurrentPoints,
                 _db.DeviceRegistrations
                     .AsNoTracking()
-                    .Count(registration => registration.SerialNumber == g.Key.SerialNumber)))
+                    .Count(registration => registration.TenantId == tenantId && registration.SerialNumber == g.Key.SerialNumber)))
             .ToListAsync(ct);
 
         return rows;

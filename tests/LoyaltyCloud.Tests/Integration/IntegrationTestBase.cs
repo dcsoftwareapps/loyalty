@@ -1,6 +1,7 @@
 using LoyaltyCloud.Common.Constants;
 using LoyaltyCloud.Domain.Entities;
 using LoyaltyCloud.Infrastructure.Persistence;
+using LoyaltyCloud.Infrastructure.Persistence.Seed;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 
@@ -43,6 +44,7 @@ public abstract class IntegrationTestBase : IClassFixture<CustomWebApplicationFa
 
         db.RewardCatalogItems.Add(new RewardCatalogItem(
             Guid.Parse("c0000001-0000-0000-0000-000000000001"),
+            TenantSeed.KBeautyTenantId,
             "Mini producto",
             "Mini producto de regalo en tienda",
             pointsCost: 300,
@@ -50,6 +52,7 @@ public abstract class IntegrationTestBase : IClassFixture<CustomWebApplicationFa
 
         db.RewardCatalogItems.Add(new RewardCatalogItem(
             Guid.Parse("c0000001-0000-0000-0000-000000000002"),
+            TenantSeed.KBeautyTenantId,
             "$50 off",
             "Descuento de $50 MXN en compra",
             pointsCost: 500,

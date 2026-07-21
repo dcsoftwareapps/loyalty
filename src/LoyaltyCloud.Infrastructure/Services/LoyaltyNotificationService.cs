@@ -19,6 +19,7 @@ internal sealed class LoyaltyNotificationService : ILoyaltyNotificationService
     private readonly IDateTimeProvider _dt;
     private readonly IUnitOfWork _uow;
     private readonly AppDbContext _db;
+    private readonly ITenantContext _tenantContext;
     private readonly ILogger<LoyaltyNotificationService> _logger;
 
     public LoyaltyNotificationService(
@@ -29,6 +30,7 @@ internal sealed class LoyaltyNotificationService : ILoyaltyNotificationService
         IDateTimeProvider dt,
         IUnitOfWork uow,
         AppDbContext db,
+        ITenantContext tenantContext,
         ILogger<LoyaltyNotificationService> logger)
     {
         _notifications = notifications;
@@ -38,6 +40,7 @@ internal sealed class LoyaltyNotificationService : ILoyaltyNotificationService
         _dt = dt;
         _uow = uow;
         _db = db;
+        _tenantContext = tenantContext;
         _logger = logger;
     }
 
@@ -66,16 +69,25 @@ internal sealed class LoyaltyNotificationService : ILoyaltyNotificationService
 
     public async Task<NotificationMetricsDto> GetMetricsAsync(CancellationToken ct = default)
     {
-        var pending = await _db.LoyaltyNotifications.AsNoTracking().CountAsync(n => n.Status == NotificationStatus.Pending, ct);
-        var processed = await _db.LoyaltyNotifications.AsNoTracking().CountAsync(n => n.Status == NotificationStatus.Delivered || n.Status == NotificationStatus.PartiallyDelivered, ct);
-        var failed = await _db.LoyaltyNotifications.AsNoTracking().CountAsync(n => n.Status == NotificationStatus.Failed, ct);
+        var tenantId = _tenantContext.RequireTenantId();
+        var pending = await _db.LoyaltyNotifications.AsNoTracking().CountAsync(n => n.TenantId == tenantId && n.Status == NotificationStatus.Pending, ct);
+        var processed = await _db.LoyaltyNotifications.AsNoTracking().CountAsync(n => n.TenantId == tenantId && (n.Status == NotificationStatus.Delivered || n.Status == NotificationStatus.PartiallyDelivered), ct);
+        var failed = await _db.LoyaltyNotifications.AsNoTracking().CountAsync(n => n.TenantId == tenantId && n.Status == NotificationStatus.Failed, ct);
         var customersReached = await _db.LoyaltyNotifications.AsNoTracking()
-            .Where(n => n.Status == NotificationStatus.Delivered || n.Status == NotificationStatus.PartiallyDelivered)
+            .Where(n => n.TenantId == tenantId && (n.Status == NotificationStatus.Delivered || n.Status == NotificationStatus.PartiallyDelivered))
             .Select(n => n.CustomerId)
             .Distinct()
             .CountAsync(ct);
-        var pushesAttempted = await _db.NotificationDeliveries.AsNoTracking().SumAsync(d => (int?)d.PushesAttempted, ct) ?? 0;
-        var pushesFailed = await _db.NotificationDeliveries.AsNoTracking().SumAsync(d => (int?)d.PushesFailed, ct) ?? 0;
+        var pushesAttempted = await (
+            from delivery in _db.NotificationDeliveries.AsNoTracking()
+            join notification in _db.LoyaltyNotifications.AsNoTracking() on delivery.LoyaltyNotificationId equals notification.Id
+            where notification.TenantId == tenantId
+            select (int?)delivery.PushesAttempted).SumAsync(ct) ?? 0;
+        var pushesFailed = await (
+            from delivery in _db.NotificationDeliveries.AsNoTracking()
+            join notification in _db.LoyaltyNotifications.AsNoTracking() on delivery.LoyaltyNotificationId equals notification.Id
+            where notification.TenantId == tenantId
+            select (int?)delivery.PushesFailed).SumAsync(ct) ?? 0;
         return new NotificationMetricsDto(pending, processed, failed, customersReached, pushesAttempted, pushesFailed);
     }
 
@@ -102,6 +114,7 @@ internal sealed class LoyaltyNotificationService : ILoyaltyNotificationService
         var now = _dt.UtcNow;
         var notification = new LoyaltyNotification(
             Guid.NewGuid(),
+            card.TenantId,
             customer.Id,
             card.Id,
             request.Type,
@@ -212,7 +225,9 @@ internal sealed class LoyaltyNotificationService : ILoyaltyNotificationService
         var baseInfo = await (
             from card in _db.LoyaltyCards.AsNoTracking()
             join customer in _db.Customers.AsNoTracking() on card.CustomerId equals customer.Id
-            where card.Id == notification.LoyaltyCardId
+            where card.TenantId == notification.TenantId
+               && customer.TenantId == notification.TenantId
+               && card.Id == notification.LoyaltyCardId
             select new { customer.FullName, card.SerialNumber })
             .FirstOrDefaultAsync(ct);
 

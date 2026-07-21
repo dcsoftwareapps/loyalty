@@ -26,9 +26,14 @@ internal sealed class CustomNotificationCampaignConfiguration : IEntityTypeConfi
         builder.Property(c => c.CompletedAt).HasColumnType("datetime2(3)");
         builder.Property(c => c.CancelledAt).HasColumnType("datetime2(3)");
 
-        builder.HasIndex(c => c.Status);
-        builder.HasIndex(c => c.ScheduledAtUtc);
-        builder.HasIndex(c => c.CreatedAt);
-        builder.HasIndex(c => new { c.Status, c.ScheduledAtUtc });
+        builder.HasIndex(c => new { c.TenantId, c.Status });
+        builder.HasIndex(c => new { c.TenantId, c.ScheduledAtUtc });
+        builder.HasIndex(c => new { c.TenantId, c.CreatedAt });
+        builder.HasIndex(c => new { c.TenantId, c.Status, c.ScheduledAtUtc });
+
+        builder.HasOne<Tenant>()
+            .WithMany()
+            .HasForeignKey(c => c.TenantId)
+            .OnDelete(DeleteBehavior.Restrict);
     }
 }

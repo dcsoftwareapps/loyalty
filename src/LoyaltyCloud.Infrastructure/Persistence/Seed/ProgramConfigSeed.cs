@@ -58,6 +58,7 @@ internal static class ProgramConfigSeed
     private static object New(string id, string key, string value, string description) => new
     {
         Id = Guid.Parse(id),
+        TenantId = TenantSeed.KBeautyTenantId,
         Key = key,
         Value = value,
         Description = description,

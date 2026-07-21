@@ -23,6 +23,7 @@ public sealed class AddPointsHandler : IRequestHandler<AddPointsCommand, Result<
     private readonly IApnService _apn;
     private readonly ILevelCalculationService _levels;
     private readonly IPointCampaignSelector _campaignSelector;
+    private readonly ITenantContext _tenantContext;
     private readonly IDateTimeProvider _dt;
     private readonly IUnitOfWork _uow;
     private readonly ILogger<AddPointsHandler> _logger;
@@ -37,6 +38,7 @@ public sealed class AddPointsHandler : IRequestHandler<AddPointsCommand, Result<
         IApnService apn,
         ILevelCalculationService levels,
         IPointCampaignSelector campaignSelector,
+        ITenantContext tenantContext,
         IDateTimeProvider dt,
         IUnitOfWork uow,
         ILogger<AddPointsHandler> logger)
@@ -50,6 +52,7 @@ public sealed class AddPointsHandler : IRequestHandler<AddPointsCommand, Result<
         _apn = apn;
         _levels = levels;
         _campaignSelector = campaignSelector;
+        _tenantContext = tenantContext;
         _dt = dt;
         _uow = uow;
         _logger = logger;
@@ -64,10 +67,11 @@ public sealed class AddPointsHandler : IRequestHandler<AddPointsCommand, Result<
         IDeviceRegistrationRepository devices,
         IApnService apn,
         ILevelCalculationService levels,
+        ITenantContext tenantContext,
         IDateTimeProvider dt,
         IUnitOfWork uow,
         ILogger<AddPointsHandler> logger)
-        : this(cards, customers, transactions, pointLots, config, devices, apn, levels, NullPointCampaignSelector.Instance, dt, uow, logger)
+        : this(cards, customers, transactions, pointLots, config, devices, apn, levels, NullPointCampaignSelector.Instance, tenantContext, dt, uow, logger)
     {
     }
 
@@ -77,6 +81,8 @@ public sealed class AddPointsHandler : IRequestHandler<AddPointsCommand, Result<
         var card = await _cards.GetBySerialNumberAsync(command.SerialNumber, ct);
         if (card is null)
             return Result.Fail<AddPointsResponse>($"No se encontro tarjeta con serial '{command.SerialNumber}'.");
+        if (card.TenantId != _tenantContext.RequireTenantId())
+            return Result.Fail<AddPointsResponse>("La tarjeta no pertenece al tenant actual.");
         if (!card.IsActive)
             return Result.Fail<AddPointsResponse>("La tarjeta esta inactiva.");
 

@@ -10,13 +10,16 @@ namespace LoyaltyCloud.Infrastructure.Services;
 internal sealed class MonthlyProductNotificationReadService : IMonthlyProductNotificationReadService
 {
     private readonly AppDbContext _db;
+    private readonly ITenantContext _tenantContext;
     private readonly ILogger<MonthlyProductNotificationReadService> _logger;
 
     public MonthlyProductNotificationReadService(
         AppDbContext db,
+        ITenantContext tenantContext,
         ILogger<MonthlyProductNotificationReadService> logger)
     {
         _db = db;
+        _tenantContext = tenantContext;
         _logger = logger;
     }
 
@@ -26,10 +29,12 @@ internal sealed class MonthlyProductNotificationReadService : IMonthlyProductNot
         CancellationToken ct = default)
     {
         var nowUtc = DateTime.UtcNow;
+        var tenantId = _tenantContext.RequireTenantId();
         var timeZone = PointsExpirationNotificationReadService.ResolveTimeZone(timeZoneId);
         var product = await _db.RewardCatalogItems
             .AsNoTracking()
-            .Where(r => r.IsMonthlyProduct
+            .Where(r => r.TenantId == tenantId
+                     && r.IsMonthlyProduct
                      && r.IsActive
                      && r.ValidFrom.HasValue
                      && r.ValidTo.HasValue
@@ -66,9 +71,11 @@ internal sealed class MonthlyProductNotificationReadService : IMonthlyProductNot
         var eligibleCards = await (
             from card in _db.LoyaltyCards.AsNoTracking()
             join customer in _db.Customers.AsNoTracking() on card.CustomerId equals customer.Id
-            where card.IsActive
+            where card.TenantId == tenantId
+               && customer.TenantId == tenantId
+               && card.IsActive
                && customer.IsActive
-               && _db.DeviceRegistrations.AsNoTracking().Any(d => d.SerialNumber == card.SerialNumber)
+               && _db.DeviceRegistrations.AsNoTracking().Any(d => d.TenantId == tenantId && d.SerialNumber == card.SerialNumber)
             select new
             {
                 CustomerId = customer.Id,
@@ -87,7 +94,8 @@ internal sealed class MonthlyProductNotificationReadService : IMonthlyProductNot
             ? new List<string>()
             : await _db.LoyaltyNotifications
                 .AsNoTracking()
-                .Where(n => n.Type == NotificationType.MonthlyProductStarted
+                .Where(n => n.TenantId == tenantId
+                         && n.Type == NotificationType.MonthlyProductStarted
                          && n.CorrelationId != null
                          && correlations.Contains(n.CorrelationId))
                 .Select(n => n.CorrelationId!)

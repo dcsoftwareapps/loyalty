@@ -1,3 +1,4 @@
+using LoyaltyCloud.Application.Common.Interfaces;
 using LoyaltyCloud.Common.Constants;
 using LoyaltyCloud.Domain.Entities;
 using LoyaltyCloud.Domain.Repositories;
@@ -9,11 +10,17 @@ namespace LoyaltyCloud.Infrastructure.Repositories;
 internal sealed class LoyaltyCardRepository : ILoyaltyCardRepository
 {
     private readonly AppDbContext _db;
+    private readonly ITenantContext _tenantContext;
 
-    public LoyaltyCardRepository(AppDbContext db) => _db = db;
+    public LoyaltyCardRepository(AppDbContext db, ITenantContext tenantContext)
+    {
+        _db = db;
+        _tenantContext = tenantContext;
+    }
 
     public Task<LoyaltyCard?> GetByCustomerIdAsync(Guid customerId, CancellationToken ct = default) =>
-        _db.LoyaltyCards.FirstOrDefaultAsync(c => c.CustomerId == customerId, ct);
+        _db.LoyaltyCards.FirstOrDefaultAsync(c =>
+            c.TenantId == _tenantContext.RequireTenantId() && c.CustomerId == customerId, ct);
 
     public Task<LoyaltyCard?> GetBySerialNumberAsync(string serialNumber, CancellationToken ct = default)
     {
@@ -22,7 +29,7 @@ internal sealed class LoyaltyCardRepository : ILoyaltyCardRepository
     }
 
     public Task<LoyaltyCard?> GetByIdAsync(Guid id, CancellationToken ct = default) =>
-        _db.LoyaltyCards.FirstOrDefaultAsync(c => c.Id == id, ct);
+        _db.LoyaltyCards.FirstOrDefaultAsync(c => c.TenantId == _tenantContext.RequireTenantId() && c.Id == id, ct);
 
     public async Task<IReadOnlyList<LoyaltyCard>> GetCardsForLevelRequalificationAsync(CancellationToken ct = default)
     {
@@ -34,7 +41,8 @@ internal sealed class LoyaltyCardRepository : ILoyaltyCardRepository
 
         var cards = await _db.LoyaltyCards
             .AsNoTracking()
-            .Where(c => c.Level == LoyaltyConstants.Levels.Radiance
+            .Where(c => c.TenantId == _tenantContext.RequireTenantId()
+                     && c.Level == LoyaltyConstants.Levels.Radiance
                      && c.IsActive
                      && c.LevelAchievedAt < now.AddYears(-1)
                      && c.PointsEarnedThisYear < min)
@@ -46,7 +54,7 @@ internal sealed class LoyaltyCardRepository : ILoyaltyCardRepository
     public async Task<IReadOnlyList<LoyaltyCard>> GetActiveAsync(CancellationToken ct = default)
     {
         var cards = await _db.LoyaltyCards
-            .Where(c => c.IsActive)
+            .Where(c => c.TenantId == _tenantContext.RequireTenantId() && c.IsActive)
             .OrderBy(c => c.SerialNumber)
             .ToListAsync(ct);
 

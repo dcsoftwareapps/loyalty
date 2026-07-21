@@ -1,3 +1,4 @@
+using LoyaltyCloud.Application.Common.Interfaces;
 using LoyaltyCloud.Common.Constants;
 using LoyaltyCloud.Domain.Entities;
 using LoyaltyCloud.Domain.Repositories;
@@ -10,14 +11,19 @@ namespace LoyaltyCloud.Infrastructure.Repositories;
 internal sealed class RewardCatalogRepository : IRewardCatalogRepository
 {
     private readonly AppDbContext _db;
+    private readonly ITenantContext _tenantContext;
 
-    public RewardCatalogRepository(AppDbContext db) => _db = db;
+    public RewardCatalogRepository(AppDbContext db, ITenantContext tenantContext)
+    {
+        _db = db;
+        _tenantContext = tenantContext;
+    }
 
     public async Task<IReadOnlyList<RewardCatalogItem>> GetAllActiveAsync(CancellationToken ct = default)
     {
         var list = await _db.RewardCatalogItems
             .AsNoTracking()
-            .Where(r => r.IsActive)
+            .Where(r => r.TenantId == _tenantContext.RequireTenantId() && r.IsActive)
             .OrderBy(r => r.PointsCost)
             .ToListAsync(ct);
         return list.AsReadOnly();
@@ -27,6 +33,7 @@ internal sealed class RewardCatalogRepository : IRewardCatalogRepository
     {
         var list = await _db.RewardCatalogItems
             .AsNoTracking()
+            .Where(r => r.TenantId == _tenantContext.RequireTenantId())
             .OrderBy(r => r.Name)
             .ThenBy(r => r.PointsCost)
             .ToListAsync(ct);
@@ -42,7 +49,7 @@ internal sealed class RewardCatalogRepository : IRewardCatalogRepository
         // (es un set chico — 10-20 ítems — no vale la pena complicar la query).
         var all = await _db.RewardCatalogItems
             .AsNoTracking()
-            .Where(r => r.IsActive)
+            .Where(r => r.TenantId == _tenantContext.RequireTenantId() && r.IsActive)
             .ToListAsync(ct);
 
         var eligible = all
@@ -54,14 +61,15 @@ internal sealed class RewardCatalogRepository : IRewardCatalogRepository
     }
 
     public Task<RewardCatalogItem?> GetByIdAsync(Guid id, CancellationToken ct = default) =>
-        _db.RewardCatalogItems.FirstOrDefaultAsync(r => r.Id == id, ct);
+        _db.RewardCatalogItems.FirstOrDefaultAsync(r => r.TenantId == _tenantContext.RequireTenantId() && r.Id == id, ct);
 
     public Task<RewardCatalogItem?> GetCurrentMonthlyProductAsync(CancellationToken ct = default)
     {
         var now = DateTime.UtcNow;
         return _db.RewardCatalogItems
             .AsNoTracking()
-            .Where(r => r.IsActive
+            .Where(r => r.TenantId == _tenantContext.RequireTenantId()
+                     && r.IsActive
                      && r.IsMonthlyProduct
                      && r.ValidFrom <= now
                      && r.ValidTo >= now)
@@ -76,7 +84,8 @@ internal sealed class RewardCatalogRepository : IRewardCatalogRepository
     {
         var query = _db.RewardCatalogItems
             .AsNoTracking()
-            .Where(r => r.IsActive
+            .Where(r => r.TenantId == _tenantContext.RequireTenantId()
+                     && r.IsActive
                      && r.IsMonthlyProduct
                      && r.ValidFrom.HasValue
                      && r.ValidTo.HasValue

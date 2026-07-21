@@ -1,4 +1,5 @@
 using LoyaltyCloud.Admin.Auth;
+using LoyaltyCloud.Admin.Middleware;
 using LoyaltyCloud.Application;
 using LoyaltyCloud.Application.Common.Interfaces;
 using LoyaltyCloud.Infrastructure;
@@ -91,6 +92,7 @@ app.UseStaticFiles();
 app.MapStaticAssets()
     .AllowAnonymous();
 app.UseRouting();
+app.UseMiddleware<DefaultTenantResolutionMiddleware>();
 
 app.UseAuthentication();
 app.UseAuthorization();

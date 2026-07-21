@@ -1,3 +1,4 @@
+using LoyaltyCloud.Application.Common.Interfaces;
 using LoyaltyCloud.Application.Notifications.Custom;
 using LoyaltyCloud.Common.Results;
 using LoyaltyCloud.Common.Services;
@@ -13,6 +14,7 @@ public sealed class CreateCustomNotificationCampaignHandler
     : IRequestHandler<CreateCustomNotificationCampaignCommand, Result<CustomNotificationCampaignDto>>
 {
     private readonly ICustomNotificationCampaignRepository _campaigns;
+    private readonly ITenantContext _tenantContext;
     private readonly IUnitOfWork _uow;
     private readonly IDateTimeProvider _dt;
     private readonly ISender _sender;
@@ -20,12 +22,14 @@ public sealed class CreateCustomNotificationCampaignHandler
 
     public CreateCustomNotificationCampaignHandler(
         ICustomNotificationCampaignRepository campaigns,
+        ITenantContext tenantContext,
         IUnitOfWork uow,
         IDateTimeProvider dt,
         ISender sender,
         ILogger<CreateCustomNotificationCampaignHandler> logger)
     {
         _campaigns = campaigns;
+        _tenantContext = tenantContext;
         _uow = uow;
         _dt = dt;
         _sender = sender;
@@ -40,6 +44,7 @@ public sealed class CreateCustomNotificationCampaignHandler
             var scheduledAt = command.SendImmediately ? null : command.ScheduledAtUtc;
             var campaign = new CustomNotificationCampaign(
                 Guid.NewGuid(),
+                _tenantContext.RequireTenantId(),
                 command.Name,
                 command.Title,
                 command.ShortMessage,

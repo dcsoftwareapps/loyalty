@@ -8,8 +8,10 @@ namespace LoyaltyCloud.Domain.Entities;
 /// Ítem del catálogo de canjes (mini producto, $50 off, FocusSkin, etc.).
 /// El costo y nivel mínimo se editan desde el panel admin sin desplegar código.
 /// </summary>
-public class RewardCatalogItem : Entity
+public class RewardCatalogItem : Entity, ITenantOwned
 {
+    public Guid TenantId { get; private set; }
+
     public string Name { get; private set; } = string.Empty;
     public string Description { get; private set; } = string.Empty;
 
@@ -35,6 +37,7 @@ public class RewardCatalogItem : Entity
 
     public RewardCatalogItem(
         Guid id,
+        Guid tenantId,
         string name,
         string description,
         int pointsCost,
@@ -43,6 +46,8 @@ public class RewardCatalogItem : Entity
         DateTime? validFrom = null,
         DateTime? validTo = null) : base(id)
     {
+        if (tenantId == Guid.Empty)
+            throw new ArgumentException("TenantId requerido.", nameof(tenantId));
         if (string.IsNullOrWhiteSpace(name))
             throw new ArgumentException("Nombre requerido.", nameof(name));
         if (pointsCost <= 0)
@@ -50,6 +55,7 @@ public class RewardCatalogItem : Entity
         if (string.IsNullOrWhiteSpace(minLevel))
             throw new ArgumentException("MinLevel requerido.", nameof(minLevel));
 
+        TenantId = tenantId;
         Name = name.Trim();
         Description = description?.Trim() ?? string.Empty;
         PointsCost = pointsCost;

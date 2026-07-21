@@ -14,6 +14,7 @@ namespace LoyaltyCloud.Tests.Domain;
 public class LoyaltyCardTests
 {
     private static readonly DateTime Now = new(2025, 6, 15, 10, 0, 0, DateTimeKind.Utc);
+    private static readonly Guid KBeautyTenantId = Guid.Parse("b1000000-0000-0000-0000-000000000001");
 
     private static readonly ProgramConfigSnapshot Config = new(
         PointsPerPesoUnit: 10m,
@@ -42,7 +43,7 @@ public class LoyaltyCardTests
     }
 
     private static LoyaltyCard NewCard() =>
-        new(Guid.NewGuid(), Guid.NewGuid(), "KB-TEST001", Now);
+        new(Guid.NewGuid(), KBeautyTenantId, Guid.NewGuid(), "KB-TEST001", Now);
 
     // =========================================================================
     // EarnPoints

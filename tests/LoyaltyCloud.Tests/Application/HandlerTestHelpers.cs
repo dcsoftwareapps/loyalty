@@ -12,6 +12,7 @@ namespace LoyaltyCloud.Tests.Application;
 internal static class HandlerTestHelpers
 {
     public static readonly DateTime Now = new(2025, 6, 15, 10, 0, 0, DateTimeKind.Utc);
+    public static readonly Guid KBeautyTenantId = Guid.Parse("b1000000-0000-0000-0000-000000000001");
 
     public static Mock<IDateTimeProvider> Clock(DateTime? now = null)
     {
@@ -40,6 +41,15 @@ internal static class HandlerTestHelpers
         return mock;
     }
 
+    public static Mock<ITenantContext> TenantContext()
+    {
+        var mock = new Mock<ITenantContext>();
+        mock.Setup(t => t.TenantId).Returns(KBeautyTenantId);
+        mock.Setup(t => t.TenantSlug).Returns("kbeauty");
+        mock.Setup(t => t.HasTenant).Returns(true);
+        return mock;
+    }
+
     public static Mock<ILevelCalculationService> LevelCalculator()
     {
         var mock = new Mock<ILevelCalculationService>();
@@ -65,11 +75,12 @@ internal static class HandlerTestHelpers
 
     public static Customer NewCustomer(string fullName = "Ana López", DateTime? dob = null) =>
         new(Guid.NewGuid(),
+            KBeautyTenantId,
             fullName,
             email: $"{fullName.Replace(" ", ".").ToLowerInvariant()}@test.com",
             dateOfBirth: dob ?? new DateTime(1990, 3, 1),
             createdAtUtc: Now);
 
     public static LoyaltyCard NewCard(Guid? customerId = null, string? serial = null) =>
-        new(Guid.NewGuid(), customerId ?? Guid.NewGuid(), serial ?? "KB-TEST001", Now);
+        new(Guid.NewGuid(), KBeautyTenantId, customerId ?? Guid.NewGuid(), serial ?? "KB-TEST001", Now);
 }

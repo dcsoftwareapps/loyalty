@@ -26,6 +26,11 @@ internal sealed class ProgramConfigConfiguration : IEntityTypeConfiguration<Prog
         builder.Property(c => c.UpdatedAt).HasColumnType("datetime2(3)");
 
         // Key única — toda la lógica del programa la indexa por nombre.
-        builder.HasIndex(c => c.Key).IsUnique();
+        builder.HasIndex(c => new { c.TenantId, c.Key }).IsUnique();
+
+        builder.HasOne<Tenant>()
+            .WithMany()
+            .HasForeignKey(c => c.TenantId)
+            .OnDelete(DeleteBehavior.Restrict);
     }
 }
