@@ -101,6 +101,7 @@ public static class DependencyInjection
         services.AddScoped<IWalletTenantContextResolver, WalletTenantContextResolver>();
         services.AddScoped<IDeviceRegistrationPlatformReadService, DeviceRegistrationPlatformReadService>();
         services.AddScoped<ITenantWalletBrandingReadService, TenantWalletBrandingReadService>();
+        services.AddScoped<IPublicTenantResolver, PublicTenantResolver>();
         services.AddScoped<IPointsExpirationNotificationReadService, PointsExpirationNotificationReadService>();
         services.AddScoped<IMonthlyProductNotificationReadService, MonthlyProductNotificationReadService>();
         services.AddScoped<IBirthdayBenefitNotificationReadService, BirthdayBenefitNotificationReadService>();

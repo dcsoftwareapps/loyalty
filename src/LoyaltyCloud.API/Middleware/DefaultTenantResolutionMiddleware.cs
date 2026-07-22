@@ -30,5 +30,6 @@ public sealed class DefaultTenantResolutionMiddleware
     private static bool IsWalletTenantResolvedRoute(PathString path) =>
         path.StartsWithSegments("/v1", StringComparison.OrdinalIgnoreCase)
         || path.StartsWithSegments("/api/passes", StringComparison.OrdinalIgnoreCase)
-        || path.StartsWithSegments("/api/dev/passes", StringComparison.OrdinalIgnoreCase);
+        || path.StartsWithSegments("/api/dev/passes", StringComparison.OrdinalIgnoreCase)
+        || path.StartsWithSegments("/api/public", StringComparison.OrdinalIgnoreCase);
 }

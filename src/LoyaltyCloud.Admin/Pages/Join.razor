@@ -1,109 +1,210 @@
-﻿@page "/join"
+@page "/join"
+@page "/{TenantSlug}/join"
 @layout EmptyLayout
 @attribute [AllowAnonymous]
 @rendermode InteractiveServer
 
 @using System.Net.Http.Json
+@using System.Text.RegularExpressions
+@using LoyaltyCloud.Application.Common.Interfaces
 @using Microsoft.AspNetCore.Mvc
 @inject IHttpClientFactory HttpClientFactory
+@inject IPublicTenantResolver TenantResolver
+@inject IMutableTenantContext TenantContext
+@inject NavigationManager Navigation
+@inject ILogger<Join> Logger
 
-<PageTitle>Únete al programa de lealtad KBeauty MX</PageTitle>
+<PageTitle>@PageTitleText</PageTitle>
 
-<main class="kb-join">
+<main class="kb-join" style="@JoinStyle">
     <section class="kb-join-card">
-        <div class="kb-join-brand">KBeauty MX</div>
-        <h1>Únete a nuestro programa de lealtad</h1>
-        <p class="kb-muted">Agrega tu tarjeta a Apple Wallet y acumula puntos en cada compra.</p>
-
-        @if (errorMsg is not null)
+        @if (loadingTenant)
         {
-            <div class="kb-form-error">@errorMsg</div>
+            <div class="kb-muted">Cargando programa...</div>
         }
-
-        @if (joinResult is null)
+        else if (tenantError is not null)
         {
-            <div class="kb-form-row">
-                <div>
-                    <label for="first-name">Nombre</label>
-                    <input id="first-name" type="text" autocomplete="given-name" @bind="form.FirstName" />
-                </div>
-                <div>
-                    <label for="last-name">Apellido</label>
-                    <input id="last-name" type="text" autocomplete="family-name" @bind="form.LastName" />
-                </div>
-                <div>
-                    <label for="phone">Teléfono</label>
-                    <input id="phone" type="tel" inputmode="tel" autocomplete="tel" @bind="form.Phone" />
-                </div>
-                <button class="kb-btn kb-btn--primary kb-btn--block kb-btn--large" @onclick="JoinAsync" disabled="@busy">
-                    @(busy ? "Preparando..." : "Agregar a Apple Wallet")
-                </button>
+            <div class="kb-form-error">@tenantError</div>
+        }
+        else if (tenant is not null)
+        {
+            <div class="kb-join-brand">
+                @if (!string.IsNullOrWhiteSpace(tenant.LogoUrl))
+                {
+                    <img src="@tenant.LogoUrl" alt="@tenant.DisplayName" class="kb-join-logo" />
+                }
+                else
+                {
+                    @tenant.DisplayName
+                }
             </div>
-        }
-        else
-        {
-            <div class="kb-form-success">@joinResult.Message</div>
-            <h2>Tu tarjeta de lealtad KBeauty MX está lista.</h2>
-            <a class="kb-btn kb-btn--primary kb-btn--block kb-btn--large" href="@joinResult.PassDownloadUrl">
-                Agregar a Apple Wallet
-            </a>
+            <h1>Únete a nuestro programa de lealtad</h1>
+            <p class="kb-muted">Agrega tu tarjeta a Apple Wallet y acumula puntos en cada compra.</p>
 
-            @if (!birthdaySaved && !birthdaySkipped)
+            @if (errorMsg is not null)
             {
-                <div class="kb-join-birthday">
-                    <h2>Agrega tu cumpleaños</h2>
-                    <p class="kb-muted">Recibe beneficios especiales en tu mes.</p>
-                    <div class="kb-form-row kb-form-row--horizontal">
-                        <div style="flex:1;min-width:120px;">
-                            <label for="birthday-day">Día</label>
-                            <select id="birthday-day" @bind="birthday.Day">
-                                @for (var day = 1; day <= 31; day++)
-                                {
-                                    <option value="@day">@day</option>
-                                }
-                            </select>
-                        </div>
-                        <div style="flex:1;min-width:140px;">
-                            <label for="birthday-month">Mes</label>
-                            <select id="birthday-month" @bind="birthday.Month">
-                                @for (var month = 1; month <= 12; month++)
-                                {
-                                    <option value="@month">@MonthName(month)</option>
-                                }
-                            </select>
-                        </div>
+                <div class="kb-form-error">@errorMsg</div>
+            }
+
+            @if (joinResult is null)
+            {
+                <div class="kb-form-row">
+                    <div>
+                        <label for="first-name">Nombre</label>
+                        <input id="first-name" type="text" autocomplete="given-name" @bind="form.FirstName" />
                     </div>
-                    <div class="kb-actions-inline" style="width:100%;">
-                        <button class="kb-btn kb-btn--primary" @onclick="SaveBirthdayAsync" disabled="@busy">
-                            Guardar cumpleaños
-                        </button>
-                        <button class="kb-btn kb-btn--ghost" @onclick="@(() => birthdaySkipped = true)" disabled="@busy">
-                            Omitir por ahora
-                        </button>
+                    <div>
+                        <label for="last-name">Apellido</label>
+                        <input id="last-name" type="text" autocomplete="family-name" @bind="form.LastName" />
                     </div>
+                    <div>
+                        <label for="phone">Teléfono</label>
+                        <input id="phone" type="tel" inputmode="tel" autocomplete="tel" @bind="form.Phone" />
+                    </div>
+                    <button class="kb-btn kb-btn--primary kb-btn--block kb-btn--large" @onclick="JoinAsync" disabled="@busy">
+                        @(busy ? "Preparando..." : "Agregar a Apple Wallet")
+                    </button>
                 </div>
             }
-            else if (birthdaySaved)
+            else
             {
-                <div class="kb-form-success">Cumpleaños guardado.</div>
+                <div class="kb-form-success">@joinResult.Message</div>
+                <h2>Tu tarjeta de lealtad @tenant.DisplayName está lista.</h2>
+                <a class="kb-btn kb-btn--primary kb-btn--block kb-btn--large" href="@joinResult.PassDownloadUrl">
+                    Agregar a Apple Wallet
+                </a>
+
+                @if (!birthdaySaved && !birthdaySkipped)
+                {
+                    <div class="kb-join-birthday">
+                        <h2>Agrega tu cumpleaños</h2>
+                        <p class="kb-muted">Recibe beneficios especiales en tu mes.</p>
+                        <div class="kb-form-row kb-form-row--horizontal">
+                            <div style="flex:1;min-width:120px;">
+                                <label for="birthday-day">Día</label>
+                                <select id="birthday-day" @bind="birthday.Day">
+                                    @for (var day = 1; day <= 31; day++)
+                                    {
+                                        <option value="@day">@day</option>
+                                    }
+                                </select>
+                            </div>
+                            <div style="flex:1;min-width:140px;">
+                                <label for="birthday-month">Mes</label>
+                                <select id="birthday-month" @bind="birthday.Month">
+                                    @for (var month = 1; month <= 12; month++)
+                                    {
+                                        <option value="@month">@MonthName(month)</option>
+                                    }
+                                </select>
+                            </div>
+                        </div>
+                        <div class="kb-actions-inline" style="width:100%;">
+                            <button class="kb-btn kb-btn--primary" @onclick="SaveBirthdayAsync" disabled="@busy">
+                                Guardar cumpleaños
+                            </button>
+                            <button class="kb-btn kb-btn--ghost" @onclick="@(() => birthdaySkipped = true)" disabled="@busy">
+                                Omitir por ahora
+                            </button>
+                        </div>
+                    </div>
+                }
+                else if (birthdaySaved)
+                {
+                    <div class="kb-form-success">Cumpleaños guardado.</div>
+                }
             }
         }
     </section>
 </main>
 
 @code {
+    private const string LegacyDefaultTenantSlug = "kbeauty";
+
+    [Parameter]
+    public string? TenantSlug { get; set; }
+
     private readonly JoinForm form = new();
     private readonly BirthdayForm birthday = new();
+    private PublicTenantInfo? tenant;
     private PublicJoinResponse? joinResult;
     private string? errorMsg;
+    private string? tenantError;
+    private bool loadingTenant = true;
     private bool busy;
     private bool birthdaySaved;
     private bool birthdaySkipped;
 
     private HttpClient Api => HttpClientFactory.CreateClient("LoyaltyCloudApi");
 
+    private string PageTitleText => tenant is null
+        ? "Únete al programa de lealtad"
+        : $"Únete al programa de lealtad {tenant.DisplayName}";
+
+    private string JoinStyle
+    {
+        get
+        {
+            if (tenant is null)
+                return string.Empty;
+
+            return $"--kb-blush:{CssColorOrFallback(tenant.PrimaryColor, "#E8668E")};--kb-sand-100:{CssColorOrFallback(tenant.SecondaryColor, "#FAF8F4")};";
+        }
+    }
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (string.IsNullOrWhiteSpace(TenantSlug))
+        {
+            Navigation.NavigateTo($"/{LegacyDefaultTenantSlug}/join", replace: true);
+            return;
+        }
+
+        loadingTenant = true;
+        tenantError = null;
+        errorMsg = null;
+        joinResult = null;
+        birthdaySaved = false;
+        birthdaySkipped = false;
+
+        var resolved = await TenantResolver.ResolveBySlugAsync(TenantSlug);
+        if (resolved is null)
+        {
+            Logger.LogWarning("Public join tenant not found. TenantSlug={TenantSlug}", TenantSlug);
+            tenant = null;
+            tenantError = "Programa de lealtad no encontrado.";
+            loadingTenant = false;
+            return;
+        }
+
+        if (!resolved.IsOperational)
+        {
+            Logger.LogWarning(
+                "Public join tenant unavailable. TenantId={TenantId}, TenantSlug={TenantSlug}",
+                resolved.TenantId,
+                resolved.Slug);
+            tenant = null;
+            tenantError = "Este programa de lealtad no está disponible temporalmente.";
+            loadingTenant = false;
+            return;
+        }
+
+        TenantContext.Clear();
+        TenantContext.SetTenant(resolved.TenantId, resolved.Slug);
+        tenant = resolved;
+        loadingTenant = false;
+
+        Logger.LogInformation(
+            "Public join tenant resolved. TenantId={TenantId}, TenantSlug={TenantSlug}",
+            resolved.TenantId,
+            resolved.Slug);
+    }
+
     private async Task JoinAsync()
     {
+        if (tenant is null)
+            return;
+
         errorMsg = null;
         if (string.IsNullOrWhiteSpace(form.FirstName)
             || string.IsNullOrWhiteSpace(form.LastName)
@@ -116,7 +217,7 @@
         busy = true;
         try
         {
-            using var response = await Api.PostAsJsonAsync("api/public/join", new PublicJoinRequest(
+            using var response = await Api.PostAsJsonAsync($"api/public/{tenant.Slug}/join", new PublicJoinRequest(
                 form.FirstName.Trim(),
                 form.LastName.Trim(),
                 form.Phone.Trim()));
@@ -139,7 +240,7 @@
 
     private async Task SaveBirthdayAsync()
     {
-        if (joinResult is null)
+        if (joinResult is null || tenant is null)
             return;
 
         errorMsg = null;
@@ -153,7 +254,7 @@
         try
         {
             using var response = await Api.PutAsJsonAsync(
-                $"api/public/join/{joinResult.SerialNumber}/birthday",
+                $"api/public/{tenant.Slug}/join/{joinResult.SerialNumber}/birthday",
                 new PublicBirthdayRequest(birthday.Day, birthday.Month));
 
             if (!response.IsSuccessStatusCode)
@@ -207,6 +308,15 @@
         12 => "Diciembre",
         _ => month.ToString()
     };
+
+    private static string CssColorOrFallback(string? value, string fallback)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+            return fallback;
+
+        var trimmed = value.Trim();
+        return Regex.IsMatch(trimmed, "^#(?:[0-9a-fA-F]{3}){1,2}$") ? trimmed : fallback;
+    }
 
     private sealed class JoinForm
     {
