@@ -2,6 +2,7 @@ using LoyaltyCloud.Application;
 using LoyaltyCloud.Application.Provisioning;
 using LoyaltyCloud.Infrastructure;
 using LoyaltyCloud.Infrastructure.KeyVault;
+using LoyaltyCloud.Infrastructure.Services;
 using MediatR;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -9,6 +10,19 @@ using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 
 var command = args.FirstOrDefault();
+if (string.Equals(command, "hash-password", StringComparison.OrdinalIgnoreCase))
+{
+    var passwordToHash = Environment.GetEnvironmentVariable("LOYALTYCLOUD_PASSWORD");
+    if (string.IsNullOrWhiteSpace(passwordToHash))
+    {
+        Console.Error.WriteLine("Falta LOYALTYCLOUD_PASSWORD.");
+        return 2;
+    }
+
+    Console.WriteLine(new PasswordHashingService().HashPassword(passwordToHash));
+    return 0;
+}
+
 if (!string.Equals(command, "provision-tenant", StringComparison.OrdinalIgnoreCase))
 {
     PrintUsage();
@@ -127,6 +141,9 @@ static void PrintUsage()
     Uso:
       set LOYALTYCLOUD_PROVISION_ADMIN_PASSWORD=<password>
       dotnet run --project src/LoyaltyCloud.Tools -- provision-tenant --slug beauty-room --display-name "Beauty Room" --admin-username owner
+
+      set LOYALTYCLOUD_PASSWORD=<password>
+      dotnet run --project src/LoyaltyCloud.Tools -- hash-password
     """);
 }
 

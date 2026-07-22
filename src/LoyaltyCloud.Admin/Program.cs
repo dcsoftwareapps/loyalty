@@ -37,6 +37,8 @@ builder.Services.AddRazorComponents()
 // Auth básica con cookie — credenciales desde appsettings.
 builder.Services.Configure<AdminAuthOptions>(builder.Configuration.GetSection(AdminAuthOptions.SectionName));
 builder.Services.AddScoped<AdminAuthService>();
+builder.Services.Configure<SuperAdminAuthOptions>(builder.Configuration.GetSection(SuperAdminAuthOptions.SectionName));
+builder.Services.AddScoped<SuperAdminAuthService>();
 
 builder.Services
     .AddAuthentication(CookieAuthenticationDefaults.AuthenticationScheme)
@@ -55,6 +57,26 @@ builder.Services
             OnValidatePrincipal = async context =>
             {
                 var auth = context.HttpContext.RequestServices.GetRequiredService<AdminAuthService>();
+                await auth.ValidatePrincipalAsync(context);
+            }
+        };
+    })
+    .AddCookie(SuperAdminAuthDefaults.AuthenticationScheme, options =>
+    {
+        options.LoginPath = "/platform/login";
+        options.AccessDeniedPath = "/platform/login";
+        options.ExpireTimeSpan = TimeSpan.FromHours(
+            Math.Max(1, builder.Configuration.GetValue<int?>("SuperAdmin:SessionHours") ?? 8));
+        options.SlidingExpiration = true;
+        options.Cookie.HttpOnly = true;
+        options.Cookie.SameSite = SameSiteMode.Strict;
+        options.Cookie.SecurePolicy = CookieSecurePolicy.SameAsRequest;
+        options.Cookie.Name = "loyaltycloud.platform.auth";
+        options.Events = new CookieAuthenticationEvents
+        {
+            OnValidatePrincipal = async context =>
+            {
+                var auth = context.HttpContext.RequestServices.GetRequiredService<SuperAdminAuthService>();
                 await auth.ValidatePrincipalAsync(context);
             }
         };
@@ -102,6 +124,7 @@ app.MapStaticAssets()
 app.UseRouting();
 
 app.UseAuthentication();
+app.UseMiddleware<SuperAdminAuthenticationMiddleware>();
 app.UseMiddleware<AdminTenantContextMiddleware>();
 app.UseAuthorization();
 
@@ -118,6 +141,12 @@ app.MapPost("/logout", async (HttpContext ctx, AdminAuthService auth) =>
     var loginPath = auth.GetLoginPathForCurrentPrincipal(ctx);
     await auth.SignOutAsync(ctx);
     return Results.Redirect(loginPath);
+});
+
+app.MapPost("/platform/logout", async (HttpContext ctx, SuperAdminAuthService auth) =>
+{
+    await auth.SignOutAsync(ctx);
+    return Results.Redirect("/platform/login");
 });
 
 app.Run();

@@ -13,6 +13,12 @@ public sealed class AdminTenantContextMiddleware
 
     public async Task InvokeAsync(HttpContext context, AdminAuthService auth)
     {
+        if (context.Request.Path.StartsWithSegments("/platform", StringComparison.OrdinalIgnoreCase))
+        {
+            await _next(context);
+            return;
+        }
+
         if (context.User.Identity?.IsAuthenticated == true)
         {
             var resolved = await auth.TrySetTenantContextFromPrincipalAsync(context);

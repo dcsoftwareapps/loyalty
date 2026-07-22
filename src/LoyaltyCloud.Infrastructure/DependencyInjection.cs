@@ -104,6 +104,8 @@ public static class DependencyInjection
         services.AddScoped<ITenantBrandingReadService, TenantBrandingReadService>();
         services.AddScoped<ITenantWalletAssetProvider, TenantWalletAssetProvider>();
         services.AddScoped<ITenantProvisioningService, TenantProvisioningService>();
+        services.AddScoped<ISuperAdminTenantReadService, SuperAdminTenantReadService>();
+        services.AddScoped<ISuperAdminTenantManagementService, SuperAdminTenantManagementService>();
         services.AddScoped<IPublicTenantResolver, PublicTenantResolver>();
         services.AddScoped<IPointsExpirationNotificationReadService, PointsExpirationNotificationReadService>();
         services.AddScoped<IMonthlyProductNotificationReadService, MonthlyProductNotificationReadService>();

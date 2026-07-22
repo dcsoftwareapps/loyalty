@@ -39,6 +39,45 @@ public sealed class TenantSubscription
     public bool IsOperational(DateTime nowUtc) =>
         IsOperational(Status, GracePeriodEndsAt, nowUtc);
 
+    public void Suspend()
+    {
+        Status = TenantSubscriptionStatus.Suspended;
+    }
+
+    public void Reactivate()
+    {
+        Status = TenantSubscriptionStatus.Active;
+    }
+
+    public void Cancel()
+    {
+        Status = TenantSubscriptionStatus.Cancelled;
+    }
+
+    public void ExtendTrial(DateTime newTrialEndUtc)
+    {
+        if (newTrialEndUtc.Kind == DateTimeKind.Local)
+            throw new ArgumentException("La fecha de trial debe estar en UTC.", nameof(newTrialEndUtc));
+
+        if (CurrentPeriodEnd.HasValue && newTrialEndUtc <= CurrentPeriodEnd.Value)
+            throw new ArgumentException("La nueva fecha de trial debe ser posterior a la fecha actual.", nameof(newTrialEndUtc));
+
+        if (Status == TenantSubscriptionStatus.Cancelled)
+            throw new InvalidOperationException("No se puede extender el trial de un tenant cancelado.");
+
+        CurrentPeriodEnd = DateTime.SpecifyKind(newTrialEndUtc, DateTimeKind.Utc);
+    }
+
+    public void ChangeGracePeriod(DateTime? newGracePeriodEndUtc)
+    {
+        if (newGracePeriodEndUtc.HasValue && newGracePeriodEndUtc.Value.Kind == DateTimeKind.Local)
+            throw new ArgumentException("La fecha de gracia debe estar en UTC.", nameof(newGracePeriodEndUtc));
+
+        GracePeriodEndsAt = newGracePeriodEndUtc.HasValue
+            ? DateTime.SpecifyKind(newGracePeriodEndUtc.Value, DateTimeKind.Utc)
+            : null;
+    }
+
     public static bool IsOperational(
         TenantSubscriptionStatus status,
         DateTime? gracePeriodEndsAt,

@@ -3,7 +3,7 @@ using Microsoft.AspNetCore.Identity;
 
 namespace LoyaltyCloud.Infrastructure.Services;
 
-internal sealed class PasswordHashingService : IPasswordHashingService
+public sealed class PasswordHashingService : IPasswordHashingService
 {
     private readonly PasswordHasher<object> _hasher = new();
 

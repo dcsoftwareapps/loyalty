@@ -1,0 +1,83 @@
+@page "/platform/login"
+@layout EmptyLayout
+@attribute [AllowAnonymous]
+@using LoyaltyCloud.Admin.Auth
+@inject SuperAdminAuthService Auth
+
+<PageTitle>Platform Login - LoyaltyCloud</PageTitle>
+
+<div class="kb-login">
+    <div class="kb-login-card">
+        <div class="kb-login-brand">
+            <h1>LoyaltyCloud</h1>
+            <p class="kb-muted">Platform Admin</p>
+        </div>
+
+        @if (error is not null)
+        {
+            <div class="kb-form-error">@error</div>
+        }
+
+        <form method="post" @formname="platform-login" @onsubmit="HandleSubmit" @onsubmit:preventDefault="false">
+            <AntiforgeryToken />
+            <div class="kb-form-row">
+                <div>
+                    <label for="platform-username">Usuario</label>
+                    <input id="platform-username" name="Input.Username" type="text" autocomplete="username" required />
+                </div>
+                <div>
+                    <label for="platform-password">Contraseña</label>
+                    <input id="platform-password" name="Input.Password" type="password" autocomplete="current-password" required />
+                </div>
+                <button type="submit" class="kb-btn kb-btn--primary kb-btn--block kb-btn--large">
+                    Entrar
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
+@code {
+    [CascadingParameter] public HttpContext HttpContext { get; set; } = default!;
+    [SupplyParameterFromForm] public LoginInput Input { get; set; } = new();
+    [SupplyParameterFromQuery] public string? ReturnUrl { get; set; }
+
+    private string? error;
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (HttpMethods.IsGet(HttpContext.Request.Method)
+            && HttpContext.User.Identity?.IsAuthenticated == true
+            && HttpContext.User.IsInRole(SuperAdminAuthDefaults.Role))
+        {
+            HttpContext.Response.Redirect("/platform/tenants");
+            return;
+        }
+
+        if (HttpMethods.IsPost(HttpContext.Request.Method))
+        {
+            var result = await Auth.TrySignInAsync(HttpContext, Input.Username, Input.Password);
+            if (result == SuperAdminLoginResult.Success)
+            {
+                HttpContext.Response.Redirect(IsLocalPlatformReturnUrl(ReturnUrl) ? ReturnUrl! : "/platform/tenants");
+            }
+            else
+            {
+                error = "Usuario o contraseña incorrectos.";
+            }
+        }
+    }
+
+    private void HandleSubmit() { }
+
+    private static bool IsLocalPlatformReturnUrl(string? value) =>
+        !string.IsNullOrWhiteSpace(value)
+        && value.StartsWith("/platform", StringComparison.OrdinalIgnoreCase)
+        && !value.StartsWith("//", StringComparison.Ordinal);
+
+    public sealed class LoginInput
+    {
+        public string Username { get; set; } = string.Empty;
+        public string Password { get; set; } = string.Empty;
+    }
+}

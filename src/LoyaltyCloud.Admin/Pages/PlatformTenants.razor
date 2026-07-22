@@ -1,0 +1,257 @@
+@page "/platform"
+@page "/platform/tenants"
+@layout PlatformLayout
+@attribute [Authorize(AuthenticationSchemes = SuperAdminAuthDefaults.AuthenticationScheme, Roles = SuperAdminAuthDefaults.Role)]
+@rendermode InteractiveServer
+
+@using LoyaltyCloud.Admin.Auth
+@using LoyaltyCloud.Application.Provisioning
+@using LoyaltyCloud.Application.SuperAdmin
+@using LoyaltyCloud.Application.SuperAdmin.Queries.ListPlatformTenants
+@inject ISender Sender
+@inject NavigationManager Nav
+
+<PageTitle>Tenants - LoyaltyCloud Platform</PageTitle>
+
+<div style="display:flex;align-items:center;justify-content:space-between;gap:16px;margin-bottom:24px;">
+    <div>
+        <h1>Tenants</h1>
+        <p class="kb-muted" style="margin-top:-8px;">Administración interna de negocios en LoyaltyCloud.</p>
+    </div>
+    <button class="kb-btn kb-btn--primary" @onclick="StartCreate" disabled="@busy">Crear tenant</button>
+</div>
+
+@if (success is not null) { <div class="kb-form-success">@success</div> }
+@if (error is not null) { <div class="kb-form-error">@error</div> }
+
+@if (showCreate)
+{
+    <section class="kb-card" style="margin-bottom:24px;max-width:920px;">
+        <h2>Nuevo tenant</h2>
+
+        @if (validationErrors.Count > 0)
+        {
+            <div class="kb-form-error">
+                @foreach (var item in validationErrors)
+                {
+                    <div>@item</div>
+                }
+            </div>
+        }
+
+        <div class="kb-form-row kb-form-row--horizontal">
+            <div style="flex:1;min-width:220px;">
+                <label for="tenant-name">Nombre</label>
+                <input id="tenant-name" type="text" @bind="form.DisplayName" />
+            </div>
+            <div style="flex:1;min-width:220px;">
+                <label for="tenant-slug">Slug</label>
+                <input id="tenant-slug" type="text" @bind="form.Slug" />
+            </div>
+            <div style="flex:1;min-width:220px;">
+                <label for="tenant-timezone">Zona horaria</label>
+                <input id="tenant-timezone" type="text" @bind="form.TimeZoneId" />
+            </div>
+        </div>
+
+        <div class="kb-form-row kb-form-row--horizontal">
+            <div style="flex:1;min-width:220px;">
+                <label for="tenant-admin">Usuario admin</label>
+                <input id="tenant-admin" type="text" @bind="form.AdminUsername" />
+            </div>
+            <div style="flex:1;min-width:220px;">
+                <label for="tenant-password">Password inicial</label>
+                <input id="tenant-password" type="password" @bind="form.AdminPassword" />
+            </div>
+        </div>
+
+        <div class="kb-form-row kb-form-row--horizontal">
+            <div style="flex:1;min-width:180px;">
+                <label for="tenant-primary">Color primario</label>
+                <input id="tenant-primary" type="text" @bind="form.PrimaryColor" placeholder="#111827" />
+            </div>
+            <div style="flex:1;min-width:180px;">
+                <label for="tenant-secondary">Color secundario</label>
+                <input id="tenant-secondary" type="text" @bind="form.SecondaryColor" placeholder="#F3F4F6" />
+            </div>
+            <div style="flex:1;min-width:180px;">
+                <label for="tenant-phone">Soporte</label>
+                <input id="tenant-phone" type="text" @bind="form.SupportPhone" />
+            </div>
+        </div>
+
+        <div class="kb-form-row kb-form-row--horizontal">
+            <div style="flex:1;min-width:220px;">
+                <label for="tenant-whatsapp">WhatsApp URL</label>
+                <input id="tenant-whatsapp" type="text" @bind="form.WhatsAppUrl" />
+            </div>
+            <div style="flex:1;min-width:220px;">
+                <label for="tenant-instagram">Instagram URL</label>
+                <input id="tenant-instagram" type="text" @bind="form.InstagramUrl" />
+            </div>
+            <div style="flex:1;min-width:220px;">
+                <label for="tenant-terms">Términos URL</label>
+                <input id="tenant-terms" type="text" @bind="form.TermsUrl" />
+            </div>
+        </div>
+
+        <div class="kb-actions-inline">
+            <button class="kb-btn kb-btn--primary" @onclick="CreateAsync" disabled="@busy">Guardar</button>
+            <button class="kb-btn kb-btn--ghost" @onclick="CancelCreate" disabled="@busy">Cancelar</button>
+        </div>
+    </section>
+}
+
+@if (tenants is null)
+{
+    <p>Cargando…</p>
+}
+else if (tenants.Count == 0)
+{
+    <p class="kb-muted">No hay tenants registrados.</p>
+}
+else
+{
+    <table class="kb-table kb-table--compact">
+        <thead>
+            <tr>
+                <th>Nombre</th>
+                <th>Slug</th>
+                <th>Activo</th>
+                <th>Suscripción</th>
+                <th>Trial termina</th>
+                <th>Gracia</th>
+                <th>Zona horaria</th>
+                <th>Creado</th>
+                <th></th>
+            </tr>
+        </thead>
+        <tbody>
+        @foreach (var tenant in tenants)
+        {
+            <tr>
+                <td>@tenant.DisplayName</td>
+                <td><code>@tenant.Slug</code></td>
+                <td>@(tenant.IsActive ? "Sí" : "No")</td>
+                <td><span class="kb-badge @StatusClass(tenant.SubscriptionStatus?.ToString())">@(tenant.SubscriptionStatus?.ToString() ?? "Sin suscripción")</span></td>
+                <td>@FormatDate(tenant.TrialEndsAt)</td>
+                <td>@FormatDate(tenant.GracePeriodEndsAt)</td>
+                <td>@tenant.TimeZoneId</td>
+                <td>@FormatDate(tenant.CreatedAt)</td>
+                <td><a href="/platform/tenants/@tenant.TenantId">Ver detalle</a></td>
+            </tr>
+        }
+        </tbody>
+    </table>
+}
+
+@code {
+    private IReadOnlyList<PlatformTenantListItemDto>? tenants;
+    private readonly TenantForm form = new();
+    private readonly List<string> validationErrors = new();
+    private bool showCreate;
+    private bool busy;
+    private string? success;
+    private string? error;
+
+    protected override async Task OnInitializedAsync() => await LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        tenants = await Sender.Send(new ListPlatformTenantsQuery());
+    }
+
+    private void StartCreate()
+    {
+        showCreate = true;
+        success = null;
+        error = null;
+    }
+
+    private void CancelCreate()
+    {
+        showCreate = false;
+        validationErrors.Clear();
+        form.Clear();
+    }
+
+    private async Task CreateAsync()
+    {
+        validationErrors.Clear();
+        success = null;
+        error = null;
+
+        if (string.IsNullOrWhiteSpace(form.AdminPassword) || form.AdminPassword.Length < 8)
+            validationErrors.Add("El password inicial debe tener al menos 8 caracteres.");
+        if (validationErrors.Count > 0)
+            return;
+
+        busy = true;
+        try
+        {
+            var result = await Sender.Send(new ProvisionTenantCommand(
+                form.Slug,
+                form.DisplayName,
+                form.TimeZoneId,
+                form.AdminUsername,
+                form.AdminPassword,
+                form.PrimaryColor,
+                form.SecondaryColor,
+                form.SupportPhone,
+                form.WhatsAppUrl,
+                form.InstagramUrl,
+                form.TermsUrl));
+
+            if (result.IsFailure)
+            {
+                validationErrors.AddRange(result.Errors);
+                return;
+            }
+
+            form.Clear();
+            Nav.NavigateTo($"/platform/tenants/{result.Value.TenantId}");
+        }
+        finally
+        {
+            busy = false;
+        }
+    }
+
+    private static string FormatDate(DateTime? value) =>
+        value.HasValue ? value.Value.ToString("dd MMM yyyy") : "No disponible";
+
+    private static string StatusClass(string? status) =>
+        status is "Active" or "Trial" ? "kb-badge--success"
+        : status is "Suspended" or "PastDue" ? "kb-badge--warning"
+        : "kb-badge--muted";
+
+    private sealed class TenantForm
+    {
+        public string Slug { get; set; } = string.Empty;
+        public string DisplayName { get; set; } = string.Empty;
+        public string TimeZoneId { get; set; } = "America/Tijuana";
+        public string AdminUsername { get; set; } = string.Empty;
+        public string AdminPassword { get; set; } = string.Empty;
+        public string? PrimaryColor { get; set; }
+        public string? SecondaryColor { get; set; }
+        public string? SupportPhone { get; set; }
+        public string? WhatsAppUrl { get; set; }
+        public string? InstagramUrl { get; set; }
+        public string? TermsUrl { get; set; }
+
+        public void Clear()
+        {
+            Slug = string.Empty;
+            DisplayName = string.Empty;
+            TimeZoneId = "America/Tijuana";
+            AdminUsername = string.Empty;
+            AdminPassword = string.Empty;
+            PrimaryColor = null;
+            SecondaryColor = null;
+            SupportPhone = null;
+            WhatsAppUrl = null;
+            InstagramUrl = null;
+            TermsUrl = null;
+        }
+    }
+}

@@ -1,0 +1,22 @@
+@inherits LayoutComponentBase
+
+<div class="kb-app kb-platform">
+    <nav class="kb-sidebar">
+        <div class="kb-sidebar-brand">
+            <h1>LoyaltyCloud</h1>
+            <span>Platform</span>
+        </div>
+        <NavLink href="/platform/tenants" Match="NavLinkMatch.Prefix">Tenants</NavLink>
+
+        <form method="post" action="/platform/logout" class="kb-signout">
+            <AntiforgeryToken />
+            <button type="submit" class="kb-btn kb-btn--ghost" style="width:100%;margin-top:8px;">
+                Cerrar sesión
+            </button>
+        </form>
+    </nav>
+
+    <main class="kb-main">
+        @Body
+    </main>
+</div>

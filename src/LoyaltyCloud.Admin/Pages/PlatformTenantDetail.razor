@@ -1,0 +1,290 @@
+@page "/platform/tenants/{TenantId:guid}"
+@layout PlatformLayout
+@attribute [Authorize(AuthenticationSchemes = SuperAdminAuthDefaults.AuthenticationScheme, Roles = SuperAdminAuthDefaults.Role)]
+@rendermode InteractiveServer
+
+@using LoyaltyCloud.Admin.Auth
+@using LoyaltyCloud.Application.SuperAdmin
+@using LoyaltyCloud.Application.SuperAdmin.Commands.CancelTenant
+@using LoyaltyCloud.Application.SuperAdmin.Commands.ExtendTenantTrial
+@using LoyaltyCloud.Application.SuperAdmin.Commands.ReactivateTenant
+@using LoyaltyCloud.Application.SuperAdmin.Commands.SuspendTenant
+@using LoyaltyCloud.Application.SuperAdmin.Commands.UpdateTenantGracePeriod
+@using LoyaltyCloud.Application.SuperAdmin.Queries.GetPlatformTenant
+@using LoyaltyCloud.Domain.Enums
+@inject ISender Sender
+@inject NavigationManager Nav
+
+<PageTitle>Tenant - LoyaltyCloud Platform</PageTitle>
+
+<div style="display:flex;align-items:center;justify-content:space-between;gap:16px;margin-bottom:24px;">
+    <div>
+        <h1>@(tenant?.DisplayName ?? "Tenant")</h1>
+        @if (tenant is not null)
+        {
+            <p class="kb-muted" style="margin-top:-8px;"><code>@tenant.Slug</code> · @tenant.TenantId</p>
+        }
+    </div>
+    <button class="kb-btn kb-btn--ghost" @onclick="@(() => Nav.NavigateTo("/platform/tenants"))">Volver</button>
+</div>
+
+@if (success is not null) { <div class="kb-form-success">@success</div> }
+@if (error is not null) { <div class="kb-form-error">@error</div> }
+
+@if (tenant is null)
+{
+    <p>Cargando…</p>
+}
+else
+{
+    <section class="kb-grid">
+        <div class="kb-card">
+            <div class="kb-card-label">Estado técnico</div>
+            <div class="kb-card-value" style="font-size:2rem;">@(tenant.IsActive ? "Activo" : "Inactivo")</div>
+        </div>
+        <div class="kb-card">
+            <div class="kb-card-label">Suscripción</div>
+            <div class="kb-card-value" style="font-size:2rem;">@(tenant.Subscription?.Status.ToString() ?? "Sin suscripción")</div>
+        </div>
+        <div class="kb-card">
+            <div class="kb-card-label">Trial termina</div>
+            <div class="kb-card-value" style="font-size:1.55rem;">@FormatDate(tenant.Subscription?.CurrentPeriodEnd)</div>
+        </div>
+    </section>
+
+    <section class="kb-detail-grid">
+        <div class="kb-card">
+            <h2>Tenant</h2>
+            <p><strong>TenantId:</strong> @tenant.TenantId</p>
+            <p><strong>Slug:</strong> <code>@tenant.Slug</code></p>
+            <p><strong>Nombre:</strong> @tenant.DisplayName</p>
+            <p><strong>Zona horaria:</strong> @tenant.TimeZoneId</p>
+            <p><strong>Creado:</strong> @FormatDateTime(tenant.CreatedAt)</p>
+            <p><strong>Actualizado:</strong> @FormatDateTime(tenant.UpdatedAt)</p>
+        </div>
+
+        <div class="kb-card">
+            <h2>Suscripción</h2>
+            @if (tenant.Subscription is null)
+            {
+                <p class="kb-muted">No disponible.</p>
+            }
+            else
+            {
+                <p><strong>Status:</strong> <span class="kb-badge @StatusClass(tenant.Subscription.Status)">@tenant.Subscription.Status</span></p>
+                <p><strong>Plan:</strong> @tenant.Subscription.PlanCode</p>
+                <p><strong>Periodo inicia:</strong> @FormatDateTime(tenant.Subscription.CurrentPeriodStart)</p>
+                <p><strong>Periodo termina:</strong> @FormatDateTime(tenant.Subscription.CurrentPeriodEnd)</p>
+                <p><strong>Gracia termina:</strong> @FormatDateTime(tenant.Subscription.GracePeriodEndsAt)</p>
+                <p><strong>Último pago:</strong> @FormatDateTime(tenant.Subscription.LastPaymentAt)</p>
+            }
+        </div>
+
+        <div class="kb-card">
+            <h2>Branding</h2>
+            @if (tenant.Branding is null)
+            {
+                <p class="kb-muted">No disponible.</p>
+            }
+            else
+            {
+                <p><strong>Color primario:</strong> @tenant.Branding.PrimaryColor</p>
+                <p><strong>Color secundario:</strong> @tenant.Branding.SecondaryColor</p>
+                <p><strong>Logo URL:</strong> @Display(tenant.Branding.LogoUrl)</p>
+                <p><strong>Soporte:</strong> @Display(tenant.Branding.SupportPhone)</p>
+                <p><strong>WhatsApp:</strong> @Display(tenant.Branding.WhatsAppUrl)</p>
+                <p><strong>Instagram:</strong> @Display(tenant.Branding.InstagramUrl)</p>
+                <p><strong>Términos:</strong> @Display(tenant.Branding.TermsUrl)</p>
+            }
+        </div>
+    </section>
+
+    <section class="kb-card" style="margin-top:24px;">
+        <h2>Acciones</h2>
+        <div class="kb-form-row kb-form-row--horizontal">
+            <button class="kb-btn kb-btn--ghost" @onclick="SuspendAsync" disabled="@(!CanSuspend || busy)">Suspender</button>
+            <button class="kb-btn kb-btn--ghost" @onclick="ReactivateAsync" disabled="@(!CanReactivate || busy)">Reactivar</button>
+            <button class="kb-btn kb-btn--ghost" @onclick="CancelAsync" disabled="@(!CanCancel || busy)">Cancelar</button>
+        </div>
+
+        <div class="kb-form-row kb-form-row--horizontal" style="margin-top:12px;">
+            <label style="display:flex;align-items:center;gap:8px;margin:0;">
+                <input type="checkbox" @bind="confirmSuspend" />
+                Confirmo suspensión
+            </label>
+            <label style="display:flex;align-items:center;gap:8px;margin:0;">
+                <input type="checkbox" @bind="confirmCancel" />
+                Confirmo cancelación definitiva
+            </label>
+        </div>
+    </section>
+
+    <section class="kb-detail-grid" style="margin-top:24px;">
+        <div class="kb-card">
+            <h2>Extender trial</h2>
+            <div class="kb-form-row">
+                <div>
+                    <label for="trial-end">Nueva fecha de fin</label>
+                    <input id="trial-end" type="date" value="@trialEndDate" @onchange="OnTrialEndDateChanged" />
+                </div>
+                <button class="kb-btn kb-btn--primary" @onclick="ExtendTrialAsync" disabled="@busy">Guardar trial</button>
+            </div>
+        </div>
+
+        <div class="kb-card">
+            <h2>Periodo de gracia</h2>
+            <p class="kb-muted">Disponible para tenants en estado PastDue.</p>
+            <div class="kb-form-row">
+                <div>
+                    <label for="grace-end">Nueva fecha de gracia</label>
+                    <input id="grace-end" type="date" value="@graceEndDate" @onchange="OnGraceEndDateChanged" />
+                </div>
+                <button class="kb-btn kb-btn--primary" @onclick="UpdateGracePeriodAsync" disabled="@busy">Guardar gracia</button>
+            </div>
+        </div>
+    </section>
+}
+
+@code {
+    [Parameter] public Guid TenantId { get; set; }
+
+    private PlatformTenantDetailDto? tenant;
+    private bool busy;
+    private bool confirmSuspend;
+    private bool confirmCancel;
+    private string? trialEndDate;
+    private string? graceEndDate;
+    private string? success;
+    private string? error;
+
+    private bool CanSuspend => tenant?.Subscription?.Status is not null
+        && tenant.Subscription.Status is not TenantSubscriptionStatus.Suspended and not TenantSubscriptionStatus.Cancelled;
+    private bool CanReactivate => tenant?.Subscription?.Status == TenantSubscriptionStatus.Suspended;
+    private bool CanCancel => tenant?.Subscription?.Status != TenantSubscriptionStatus.Cancelled;
+
+    protected override async Task OnInitializedAsync() => await LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        tenant = await Sender.Send(new GetPlatformTenantQuery(TenantId));
+        trialEndDate = ToDateInput(tenant?.Subscription?.CurrentPeriodEnd);
+        graceEndDate = ToDateInput(tenant?.Subscription?.GracePeriodEndsAt);
+    }
+
+    private async Task SuspendAsync()
+    {
+        if (!confirmSuspend)
+        {
+            error = "Confirma la suspensión antes de continuar.";
+            return;
+        }
+
+        await ExecuteAsync(() => Sender.Send(new SuspendTenantCommand(TenantId)), "Tenant suspendido.");
+        confirmSuspend = false;
+    }
+
+    private async Task ReactivateAsync() =>
+        await ExecuteAsync(() => Sender.Send(new ReactivateTenantCommand(TenantId)), "Tenant reactivado.");
+
+    private async Task CancelAsync()
+    {
+        if (!confirmCancel)
+        {
+            error = "Confirma la cancelación antes de continuar.";
+            return;
+        }
+
+        await ExecuteAsync(() => Sender.Send(new CancelTenantCommand(TenantId)), "Tenant cancelado.");
+        confirmCancel = false;
+    }
+
+    private async Task ExtendTrialAsync()
+    {
+        if (!TryParseDate(trialEndDate, out var date))
+        {
+            error = "Selecciona una fecha de trial válida.";
+            return;
+        }
+
+        await ExecuteAsync(() => Sender.Send(new ExtendTenantTrialCommand(TenantId, date)), "Trial actualizado.");
+    }
+
+    private void OnTrialEndDateChanged(ChangeEventArgs args)
+    {
+        trialEndDate = args.Value?.ToString();
+    }
+
+    private void OnGraceEndDateChanged(ChangeEventArgs args)
+    {
+        graceEndDate = args.Value?.ToString();
+    }
+
+    private async Task UpdateGracePeriodAsync()
+    {
+        DateTime? date = null;
+        if (!string.IsNullOrWhiteSpace(graceEndDate))
+        {
+            if (!TryParseDate(graceEndDate, out var parsed))
+            {
+                error = "Selecciona una fecha de gracia válida.";
+                return;
+            }
+
+            date = parsed;
+        }
+
+        await ExecuteAsync(() => Sender.Send(new UpdateTenantGracePeriodCommand(TenantId, date)), "Periodo de gracia actualizado.");
+    }
+
+    private async Task ExecuteAsync(Func<Task<LoyaltyCloud.Common.Results.Result>> action, string okMessage)
+    {
+        busy = true;
+        success = null;
+        error = null;
+        try
+        {
+            var result = await action();
+            if (result.IsFailure)
+            {
+                error = string.Join(" ", result.Errors);
+                return;
+            }
+
+            success = okMessage;
+            await LoadAsync();
+        }
+        finally
+        {
+            busy = false;
+        }
+    }
+
+    private static bool TryParseDate(string? value, out DateTime utc)
+    {
+        if (DateTime.TryParse(value, out var parsed))
+        {
+            utc = DateTime.SpecifyKind(parsed.Date, DateTimeKind.Utc);
+            return true;
+        }
+
+        utc = default;
+        return false;
+    }
+
+    private static string? ToDateInput(DateTime? value) =>
+        value.HasValue ? value.Value.ToString("yyyy-MM-dd") : null;
+
+    private static string FormatDate(DateTime? value) =>
+        value.HasValue ? value.Value.ToString("dd MMM yyyy") : "No disponible";
+
+    private static string FormatDateTime(DateTime? value) =>
+        value.HasValue ? value.Value.ToString("dd MMM yyyy HH:mm") : "No disponible";
+
+    private static string Display(string? value) =>
+        string.IsNullOrWhiteSpace(value) ? "No disponible" : value;
+
+    private static string StatusClass(TenantSubscriptionStatus status) =>
+        status is TenantSubscriptionStatus.Active or TenantSubscriptionStatus.Trial ? "kb-badge--success"
+        : status is TenantSubscriptionStatus.Suspended or TenantSubscriptionStatus.PastDue ? "kb-badge--warning"
+        : "kb-badge--muted";
+}
