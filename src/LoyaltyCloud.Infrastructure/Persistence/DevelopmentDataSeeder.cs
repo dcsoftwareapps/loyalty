@@ -7,6 +7,7 @@ using LoyaltyCloud.Domain.Enums;
 using LoyaltyCloud.Domain.ValueObjects;
 using LoyaltyCloud.Infrastructure.Persistence.Seed;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
@@ -51,6 +52,8 @@ public static class DevelopmentDataSeeder
         tenantContext.SetTenant(TenantSeed.KBeautyTenantId, TenantSeed.KBeautySlug);
 
         var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        var configuration = scope.ServiceProvider.GetRequiredService<IConfiguration>();
+        var passwordHasher = scope.ServiceProvider.GetRequiredService<IPasswordHashingService>();
         var logger = scope.ServiceProvider
             .GetRequiredService<ILoggerFactory>()
             .CreateLogger("LoyaltyCloud.DevelopmentDataSeeder");
@@ -74,6 +77,15 @@ public static class DevelopmentDataSeeder
 
             configCreated = await EnsureProgramConfigAsync(db, ct);
             rewardsCreated = await EnsureRewardsAsync(db, ct);
+            await EnsureDevelopmentAdminUserAsync(
+                db,
+                passwordHasher,
+                logger,
+                TenantSeed.KBeautyTenantId,
+                "KBeauty",
+                configuration["DevelopmentTenants:KBeauty:AdminUsername"],
+                configuration["DevelopmentTenants:KBeauty:AdminPassword"],
+                ct);
             await db.SaveChangesAsync(ct);
 
             var sentinelExists = await db.Customers.AnyAsync(c => c.TenantId == TenantSeed.KBeautyTenantId && c.Email == SentinelEmail, ct);
@@ -433,6 +445,8 @@ public static class DevelopmentDataSeeder
         using var scope = services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
         var tenantContext = scope.ServiceProvider.GetRequiredService<IMutableTenantContext>();
+        var configuration = scope.ServiceProvider.GetRequiredService<IConfiguration>();
+        var passwordHasher = scope.ServiceProvider.GetRequiredService<IPasswordHashingService>();
         var logger = scope.ServiceProvider
             .GetRequiredService<ILoggerFactory>()
             .CreateLogger("LoyaltyCloud.DevelopmentDataSeeder");
@@ -449,6 +463,15 @@ public static class DevelopmentDataSeeder
             var rewardsCreated = await EnsureBellaRewardsAsync(db, ct);
             var customersCreated = await EnsureBellaCustomerAsync(db, ct);
             var campaignsCreated = await EnsureBellaCampaignAsync(db, ct);
+            await EnsureDevelopmentAdminUserAsync(
+                db,
+                passwordHasher,
+                logger,
+                BellaTenantId,
+                "BellaSalon",
+                configuration["DevelopmentTenants:BellaSalon:AdminUsername"],
+                configuration["DevelopmentTenants:BellaSalon:AdminPassword"],
+                ct);
 
             await db.SaveChangesAsync(ct);
             await tx.CommitAsync(ct);
@@ -490,6 +513,37 @@ public static class DevelopmentDataSeeder
                 TenantSubscriptionStatus.Active,
                 "development"));
         }
+    }
+
+    private static async Task EnsureDevelopmentAdminUserAsync(
+        AppDbContext db,
+        IPasswordHashingService passwordHasher,
+        ILogger logger,
+        Guid tenantId,
+        string tenantKey,
+        string? username,
+        string? password,
+        CancellationToken ct)
+    {
+        if (string.IsNullOrWhiteSpace(username) || string.IsNullOrWhiteSpace(password))
+        {
+            logger.LogWarning(
+                "Development admin user seed skipped for TenantId={TenantId}, TenantKey={TenantKey}. Configure DevelopmentTenants section admin username and password for this tenant.",
+                tenantId,
+                tenantKey);
+            return;
+        }
+
+        var normalizedUsername = TenantAdminUser.NormalizeUsername(username);
+        if (await db.TenantAdminUsers.AnyAsync(u => u.TenantId == tenantId && u.NormalizedUsername == normalizedUsername, ct))
+            return;
+
+        db.TenantAdminUsers.Add(new TenantAdminUser(
+            Guid.NewGuid(),
+            tenantId,
+            username.Trim(),
+            passwordHasher.HashPassword(password),
+            DateTime.UtcNow));
     }
 
     private static async Task<int> EnsureBellaProgramConfigAsync(AppDbContext db, CancellationToken ct)

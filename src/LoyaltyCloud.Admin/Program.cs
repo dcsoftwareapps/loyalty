@@ -50,6 +50,14 @@ builder.Services
         options.Cookie.SameSite = SameSiteMode.Strict;
         options.Cookie.SecurePolicy = CookieSecurePolicy.SameAsRequest;
         options.Cookie.Name = "loyaltycloud.admin.auth";
+        options.Events = new CookieAuthenticationEvents
+        {
+            OnValidatePrincipal = async context =>
+            {
+                var auth = context.HttpContext.RequestServices.GetRequiredService<AdminAuthService>();
+                await auth.ValidatePrincipalAsync(context);
+            }
+        };
     });
 
 // Política por defecto: todo requiere autenticación; las páginas que no la
@@ -92,9 +100,9 @@ app.UseStaticFiles();
 app.MapStaticAssets()
     .AllowAnonymous();
 app.UseRouting();
-app.UseMiddleware<DefaultTenantResolutionMiddleware>();
 
 app.UseAuthentication();
+app.UseMiddleware<AdminTenantContextMiddleware>();
 app.UseAuthorization();
 
 app.UseAntiforgery();
@@ -107,20 +115,10 @@ app.MapRazorComponents<LoyaltyCloud.Admin.App>()
 // (necesita el HttpContext durante el ciclo de response), así que va por MVC mínimo.
 app.MapPost("/logout", async (HttpContext ctx, AdminAuthService auth) =>
 {
+    var loginPath = auth.GetLoginPathForCurrentPrincipal(ctx);
     await auth.SignOutAsync(ctx);
-    return Results.Redirect("/login");
+    return Results.Redirect(loginPath);
 });
-
-if (app.Environment.IsDevelopment())
-{
-    app.MapPost("/admin/dev-login", async (HttpContext ctx, AdminAuthService auth) =>
-    {
-        await auth.SignInAsync(ctx, "dev-owner");
-        return Results.Redirect("/dashboard");
-    })
-    .AllowAnonymous()
-    .DisableAntiforgery();
-}
 
 app.Run();
 

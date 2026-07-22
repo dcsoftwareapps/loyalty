@@ -17,9 +17,9 @@ internal sealed class CurrentUserService : ICurrentUserService
 
     private ClaimsPrincipal? User => _accessor.HttpContext?.User;
 
-    public string? UserId => User?.FindFirstValue(ClaimTypes.NameIdentifier) ?? User?.Identity?.Name;
+    public string? UserId => User?.FindFirstValue("sub") ?? User?.FindFirstValue(ClaimTypes.NameIdentifier) ?? User?.Identity?.Name;
 
-    public string? UserName => User?.Identity?.Name;
+    public string? UserName => User?.Identity?.Name ?? User?.FindFirstValue("name");
 
     public bool IsAuthenticated => User?.Identity?.IsAuthenticated ?? false;
 }

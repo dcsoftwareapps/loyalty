@@ -1,17 +1,14 @@
 namespace LoyaltyCloud.Admin.Auth;
 
 /// <summary>
-/// Credenciales del único operador del MVP, bindeadas desde la sección
-/// <c>Admin:Auth</c> de configuration. En producción el password debe vivir
-/// en Key Vault (override por env var <c>Admin__Auth__Password</c>).
+/// Opciones de cookie del Admin. Las credenciales se validan contra
+/// TenantAdminUser; Admin:Auth:Username y Admin:Auth:Password quedaron fuera
+/// del flujo activo.
 /// </summary>
 public sealed class AdminAuthOptions
 {
     public const string SectionName = "Admin:Auth";
 
-    public string Username { get; init; } = string.Empty;
-    public string Password { get; init; } = string.Empty;
-
-    /// <summary>Duración de la cookie de sesión (horas).</summary>
+    /// <summary>Duración de la cookie de sesión, en horas.</summary>
     public int SessionHours { get; init; } = 8;
 }

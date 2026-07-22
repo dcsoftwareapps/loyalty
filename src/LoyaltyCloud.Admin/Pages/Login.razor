@@ -1,10 +1,9 @@
 @page "/login"
+@page "/{TenantSlug}/login"
 @layout EmptyLayout
 @attribute [AllowAnonymous]
 @using LoyaltyCloud.Admin.Auth
 @inject AdminAuthService Auth
-@inject NavigationManager Nav
-@inject IHostEnvironment Env
 
 @*
   Renderizada como Static SSR (sin @rendermode). Necesario porque la firma
@@ -38,19 +37,18 @@
             </div>
         </form>
 
-        @if (Env.IsDevelopment())
+        @if (!string.IsNullOrWhiteSpace(TenantSlug))
         {
-            <form method="post" action="/admin/dev-login" style="margin-top: 14px;">
-                <button type="submit" class="kb-btn kb-btn--secondary kb-btn--block">
-                    Login for Dev
-                </button>
-            </form>
+            <p class="kb-muted" style="margin-top: 16px;">Programa: @TenantSlug</p>
         }
     </div>
 </div>
 
 @code {
+    private const string LegacyDefaultTenantSlug = "kbeauty";
+
     [CascadingParameter] public HttpContext HttpContext { get; set; } = default!;
+    [Parameter] public string? TenantSlug { get; set; }
     [SupplyParameterFromForm] public LoginInput Input { get; set; } = new();
     [SupplyParameterFromQuery] public string? ReturnUrl { get; set; }
 
@@ -58,6 +56,15 @@
 
     protected override async Task OnInitializedAsync()
     {
+        if (string.IsNullOrWhiteSpace(TenantSlug))
+        {
+            var suffix = string.IsNullOrWhiteSpace(ReturnUrl)
+                ? string.Empty
+                : $"?returnUrl={Uri.EscapeDataString(ReturnUrl)}";
+            HttpContext.Response.Redirect($"/{LegacyDefaultTenantSlug}/login{suffix}");
+            return;
+        }
+
         if (HttpMethods.IsGet(HttpContext.Request.Method) &&
             HttpContext.User.Identity?.IsAuthenticated == true)
         {
@@ -65,23 +72,32 @@
             return;
         }
 
-        // Solo procesar POST — para GET solo renderizamos el form.
         if (HttpMethods.IsPost(HttpContext.Request.Method))
         {
-            var ok = await Auth.TrySignInAsync(HttpContext, Input.Username, Input.Password);
-            if (ok)
+            var result = await Auth.TrySignInAsync(HttpContext, TenantSlug, Input.Username, Input.Password);
+            if (result == AdminLoginResult.Success)
             {
-                var dest = string.IsNullOrWhiteSpace(ReturnUrl) ? "/dashboard" : ReturnUrl;
+                var dest = IsLocalReturnUrl(ReturnUrl) ? ReturnUrl! : "/dashboard";
                 HttpContext.Response.Redirect(dest);
             }
             else
             {
-                error = "Usuario o contraseña incorrectos.";
+                error = result switch
+                {
+                    AdminLoginResult.TenantNotFound => "Programa no encontrado.",
+                    AdminLoginResult.TenantUnavailable => "Este programa está suspendido temporalmente.",
+                    _ => "Usuario o contraseña incorrectos."
+                };
             }
         }
     }
 
     private void HandleSubmit() { /* el procesamiento ocurre en OnInitializedAsync tras el postback */ }
+
+    private static bool IsLocalReturnUrl(string? value) =>
+        !string.IsNullOrWhiteSpace(value)
+        && value.StartsWith('/')
+        && !value.StartsWith("//");
 
     public sealed class LoginInput
     {
