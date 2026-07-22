@@ -187,7 +187,7 @@ public sealed class AdminAuthService
     {
         var tenantSlug = context.User.FindFirstValue(AdminClaimTypes.TenantSlug);
         return string.IsNullOrWhiteSpace(tenantSlug)
-            ? "/kbeauty/login"
+            ? "/login"
             : $"/{tenantSlug}/login";
     }
 

@@ -18,7 +18,7 @@ public sealed class AdminTenantContextMiddleware
             var resolved = await auth.TrySetTenantContextFromPrincipalAsync(context);
             if (!resolved)
             {
-                context.Response.Redirect("/kbeauty/login");
+                context.Response.Redirect(auth.GetLoginPathForCurrentPrincipal(context));
                 return;
             }
         }

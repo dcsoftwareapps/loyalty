@@ -34,6 +34,7 @@ public sealed class TenantAdminAuthTests
 
     [Fact]
     [Trait("Category", "TenantAdminAuth")]
+    [Trait("Category", "NoDefaultTenant")]
     public async Task KBeauty_admin_can_login_on_kbeauty_slug()
     {
         await using var env = await AuthTestEnvironment.CreateAsync();
@@ -46,6 +47,7 @@ public sealed class TenantAdminAuthTests
 
     [Fact]
     [Trait("Category", "TenantAdminAuth")]
+    [Trait("Category", "NoDefaultTenant")]
     public async Task Bella_admin_can_login_on_bella_slug()
     {
         await using var env = await AuthTestEnvironment.CreateAsync();
@@ -129,6 +131,7 @@ public sealed class TenantAdminAuthTests
 
     [Fact]
     [Trait("Category", "TenantAdminAuth")]
+    [Trait("Category", "NoDefaultTenant")]
     public async Task TenantContext_is_set_from_cookie_claims()
     {
         await using var env = await AuthTestEnvironment.CreateAsync();
@@ -164,7 +167,8 @@ public sealed class TenantAdminAuthTests
 
     [Fact]
     [Trait("Category", "TenantAdminAuth")]
-    public void Legacy_login_route_redirect_is_declared()
+    [Trait("Category", "NoDefaultTenant")]
+    public void Root_login_route_is_not_declared()
     {
         var source = File.ReadAllText(Path.Combine(
             AppContext.BaseDirectory,
@@ -178,9 +182,10 @@ public sealed class TenantAdminAuthTests
             "Pages",
             "Login.razor"));
 
-        Assert.Contains("@page \"/login\"", source);
+        Assert.DoesNotContain("@page \"/login\"", source);
         Assert.Contains("@page \"/{TenantSlug}/login\"", source);
-        Assert.Contains("HttpContext.Response.Redirect($\"/{LegacyDefaultTenantSlug}/login{suffix}\");", source);
+        Assert.DoesNotContain("Legacy" + "Default" + "Tenant" + "Slug", source);
+        Assert.DoesNotContain("kbeauty/login", source);
     }
 
     [Fact]

@@ -35,6 +35,7 @@ public sealed class PublicJoinTenantRoutingTests : IClassFixture<CustomWebApplic
 
     [Fact]
     [Trait("Category", "PublicJoin")]
+    [Trait("Category", "NoDefaultTenant")]
     public async Task KBeauty_slug_registers_customer_in_kbeauty_tenant()
     {
         var phone = UniquePhone();
@@ -48,6 +49,7 @@ public sealed class PublicJoinTenantRoutingTests : IClassFixture<CustomWebApplic
 
     [Fact]
     [Trait("Category", "PublicJoin")]
+    [Trait("Category", "NoDefaultTenant")]
     public async Task Bella_slug_registers_customer_in_bella_tenant()
     {
         var phone = UniquePhone();
@@ -61,6 +63,7 @@ public sealed class PublicJoinTenantRoutingTests : IClassFixture<CustomWebApplic
 
     [Fact]
     [Trait("Category", "PublicJoin")]
+    [Trait("Category", "NoDefaultTenant")]
     public async Task Unknown_slug_is_blocked()
     {
         var response = await JoinAsync("tenant-inexistente", "Ana", "Prueba", UniquePhone());
@@ -72,6 +75,7 @@ public sealed class PublicJoinTenantRoutingTests : IClassFixture<CustomWebApplic
 
     [Fact]
     [Trait("Category", "PublicJoin")]
+    [Trait("Category", "NoDefaultTenant")]
     public async Task Suspended_tenant_is_blocked()
     {
         await SetBellaSubscriptionStatusAsync(TenantSubscriptionStatus.Suspended);
@@ -110,7 +114,8 @@ public sealed class PublicJoinTenantRoutingTests : IClassFixture<CustomWebApplic
 
     [Fact]
     [Trait("Category", "PublicJoin")]
-    public void Legacy_join_route_redirects_to_kbeauty_join()
+    [Trait("Category", "NoDefaultTenant")]
+    public void Root_join_route_is_not_declared()
     {
         var source = File.ReadAllText(Path.Combine(
             AppContext.BaseDirectory,
@@ -124,9 +129,37 @@ public sealed class PublicJoinTenantRoutingTests : IClassFixture<CustomWebApplic
             "Pages",
             "Join.razor"));
 
-        Assert.Contains("@page \"/join\"", source);
-        Assert.Contains("Navigation.NavigateTo($\"/{LegacyDefaultTenantSlug}/join\", replace: true);", source);
-        Assert.Contains("LegacyDefaultTenantSlug = \"kbeauty\"", source);
+        Assert.DoesNotContain("@page \"/join\"", source);
+        Assert.Contains("@page \"/{TenantSlug}/join\"", source);
+        Assert.DoesNotContain("Navigation.NavigateTo", source);
+        Assert.DoesNotContain("Legacy" + "Default" + "Tenant" + "Slug", source);
+    }
+
+    [Fact]
+    [Trait("Category", "NoDefaultTenant")]
+    public async Task Legacy_public_join_endpoint_is_not_declared()
+    {
+        using var response = await _client.PostAsJsonAsync("api/public/join", new
+        {
+            firstName = "Legacy",
+            lastName = "Route",
+            phone = UniquePhone()
+        });
+
+        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+    }
+
+    [Fact]
+    [Trait("Category", "NoDefaultTenant")]
+    public async Task Legacy_public_birthday_endpoint_does_not_fall_back_to_kbeauty()
+    {
+        using var response = await _client.PutAsJsonAsync("api/public/join/KB-NOFALL/birthday", new
+        {
+            day = 1,
+            month = 1
+        });
+
+        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
     }
 
     private async Task<HttpResponseMessage> JoinAsync(string slug, string firstName, string lastName, string phone) =>

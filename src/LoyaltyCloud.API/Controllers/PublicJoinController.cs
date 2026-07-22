@@ -13,7 +13,6 @@ namespace LoyaltyCloud.API.Controllers;
 [Produces("application/json")]
 public sealed class PublicJoinController : ControllerBase
 {
-    private const string LegacyDefaultTenantSlug = "kbeauty";
     private readonly ISender _sender;
     private readonly IPublicTenantResolver _tenantResolver;
     private readonly IMutableTenantContext _tenantContext;
@@ -33,12 +32,6 @@ public sealed class PublicJoinController : ControllerBase
         _environment = environment;
         _options = options.Value;
     }
-
-    [HttpPost("join")]
-    [ProducesResponseType(typeof(PublicJoinResponse), StatusCodes.Status200OK)]
-    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
-    public Task<IActionResult> JoinLegacy([FromBody] PublicJoinRequest body, CancellationToken ct) =>
-        Join(LegacyDefaultTenantSlug, body, ct);
 
     [HttpPost("{tenantSlug}/join")]
     [ProducesResponseType(typeof(PublicJoinResponse), StatusCodes.Status200OK)]
@@ -64,15 +57,6 @@ public sealed class PublicJoinController : ControllerBase
 
         return Ok(ToResponse(result.Value, tenant.Info!));
     }
-
-    [HttpPut("join/{serialNumber}/birthday")]
-    [ProducesResponseType(typeof(PublicBirthdayResponse), StatusCodes.Status200OK)]
-    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
-    public Task<IActionResult> UpdateBirthdayLegacy(
-        string serialNumber,
-        [FromBody] PublicBirthdayRequest body,
-        CancellationToken ct) =>
-        UpdateBirthday(LegacyDefaultTenantSlug, serialNumber, body, ct);
 
     [HttpPut("{tenantSlug}/join/{serialNumber}/birthday")]
     [ProducesResponseType(typeof(PublicBirthdayResponse), StatusCodes.Status200OK)]

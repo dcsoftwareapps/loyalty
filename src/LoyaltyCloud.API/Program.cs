@@ -79,7 +79,6 @@ else
 }
 
 app.UseCors();
-app.UseMiddleware<DefaultTenantResolutionMiddleware>();
 
 // Middleware Apple Pass — corre ANTES que MapControllers para bloquear /v1/*
 // con auth inválida sin llegar al controller.

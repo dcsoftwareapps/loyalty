@@ -210,6 +210,7 @@ public sealed class MultiTenantIsolationTests
 
     [Fact]
     [Trait("Category", "MultiTenant")]
+    [Trait("Category", "NoDefaultTenant")]
     public async Task Without_tenant_context_commercial_queries_return_zero_and_writes_fail()
     {
         await using var env = await MultiTenantTestEnvironment.CreateAsync();
@@ -262,6 +263,7 @@ public sealed class MultiTenantIsolationTests
 
     [Fact]
     [Trait("Category", "MultiTenant")]
+    [Trait("Category", "NoDefaultTenant")]
     public async Task Wallet_resolution_sets_the_correct_tenant_by_serial()
     {
         await using var env = await MultiTenantTestEnvironment.CreateAsync();
@@ -305,6 +307,7 @@ public sealed class MultiTenantIsolationTests
 
     [Fact]
     [Trait("Category", "MultiTenant")]
+    [Trait("Category", "NoDefaultTenant")]
     public async Task Suspended_tenant_is_excluded_from_operational_jobs()
     {
         await using var env = await MultiTenantTestEnvironment.CreateAsync();
