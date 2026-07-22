@@ -2,7 +2,9 @@
 @layout EmptyLayout
 @attribute [AllowAnonymous]
 @using LoyaltyCloud.Admin.Auth
+@using LoyaltyCloud.Application.Common.Interfaces
 @inject AdminAuthService Auth
+@inject IPublicTenantResolver TenantResolver
 
 @*
   Renderizada como Static SSR (sin @rendermode). Necesario porque la firma
@@ -10,9 +12,19 @@
   empiece a fluir la response al cliente.
 *@
 
-<div class="kb-login">
+<div class="kb-login" style="@TenantStyle">
     <div class="kb-login-card">
-        <h1>LoyaltyCloud</h1>
+        <div class="kb-login-brand">
+            @if (!string.IsNullOrWhiteSpace(tenant?.LogoUrl))
+            {
+                <img src="@tenant.LogoUrl" alt="@tenant.DisplayName" class="kb-brand-logo" />
+            }
+            else
+            {
+                <h1>@(tenant?.DisplayName ?? "LoyaltyCloud")</h1>
+            }
+            <p class="kb-muted">Acceso administrativo</p>
+        </div>
 
         @if (error is not null)
         {
@@ -38,7 +50,7 @@
 
         @if (!string.IsNullOrWhiteSpace(TenantSlug))
         {
-            <p class="kb-muted" style="margin-top: 16px;">Programa: @TenantSlug</p>
+            <p class="kb-muted" style="margin-top: 16px;">Programa: @(tenant?.DisplayName ?? TenantSlug)</p>
         }
     </div>
 </div>
@@ -49,7 +61,12 @@
     [SupplyParameterFromForm] public LoginInput Input { get; set; } = new();
     [SupplyParameterFromQuery] public string? ReturnUrl { get; set; }
 
+    private PublicTenantInfo? tenant;
     private string? error;
+    private string TenantStyle =>
+        tenant is null
+            ? string.Empty
+            : $"--kb-blush:{tenant.PrimaryColor};--kb-sand-100:{tenant.SecondaryColor};";
 
     protected override async Task OnInitializedAsync()
     {
@@ -57,6 +74,21 @@
         {
             HttpContext.Response.StatusCode = StatusCodes.Status404NotFound;
             error = "Programa no encontrado.";
+            return;
+        }
+
+        tenant = await TenantResolver.ResolveBySlugAsync(TenantSlug);
+        if (tenant is null)
+        {
+            HttpContext.Response.StatusCode = StatusCodes.Status404NotFound;
+            error = "Programa no encontrado.";
+            return;
+        }
+
+        if (!tenant.IsOperational)
+        {
+            HttpContext.Response.StatusCode = StatusCodes.Status403Forbidden;
+            error = "Este programa está suspendido temporalmente.";
             return;
         }
 

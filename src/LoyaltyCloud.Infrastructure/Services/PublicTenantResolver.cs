@@ -50,8 +50,8 @@ internal sealed class PublicTenantResolver : IPublicTenantResolver
                 tenant.DisplayName,
                 tenant.IsActive,
                 LogoUrl = tenant.Branding == null ? null : tenant.Branding.LogoUrl,
-                PrimaryColor = tenant.Branding == null ? "#1C1C1C" : tenant.Branding.PrimaryColor,
-                SecondaryColor = tenant.Branding == null ? "#E8668E" : tenant.Branding.SecondaryColor,
+                PrimaryColor = tenant.Branding == null ? null : tenant.Branding.PrimaryColor,
+                SecondaryColor = tenant.Branding == null ? null : tenant.Branding.SecondaryColor,
                 SupportPhone = tenant.Branding == null ? null : tenant.Branding.SupportPhone,
                 WhatsAppUrl = tenant.Branding == null ? null : tenant.Branding.WhatsAppUrl,
                 InstagramUrl = tenant.Branding == null ? null : tenant.Branding.InstagramUrl,
@@ -103,12 +103,12 @@ internal sealed class PublicTenantResolver : IPublicTenantResolver
             row.IsActive,
             row.SubscriptionStatus?.ToString(),
             isOperational,
-            row.PrimaryColor,
-            row.SecondaryColor,
-            row.LogoUrl,
+            TenantBrandingSanitizer.ColorOrDefault(row.PrimaryColor, TenantBrandingSanitizer.DefaultPrimaryColor, row.Id, "PrimaryColor", _logger),
+            TenantBrandingSanitizer.ColorOrDefault(row.SecondaryColor, TenantBrandingSanitizer.DefaultSecondaryColor, row.Id, "SecondaryColor", _logger),
+            TenantBrandingSanitizer.UrlOrNull(row.LogoUrl, row.Id, "LogoUrl", _logger, Uri.UriSchemeHttps, Uri.UriSchemeHttp),
             row.SupportPhone,
-            row.WhatsAppUrl,
-            row.InstagramUrl,
-            row.TermsUrl);
+            TenantBrandingSanitizer.UrlOrNull(row.WhatsAppUrl, row.Id, "WhatsAppUrl", _logger, Uri.UriSchemeHttps, Uri.UriSchemeHttp, "tel"),
+            TenantBrandingSanitizer.UrlOrNull(row.InstagramUrl, row.Id, "InstagramUrl", _logger, Uri.UriSchemeHttps, Uri.UriSchemeHttp),
+            TenantBrandingSanitizer.UrlOrNull(row.TermsUrl, row.Id, "TermsUrl", _logger, Uri.UriSchemeHttps, Uri.UriSchemeHttp));
     }
 }

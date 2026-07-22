@@ -6,6 +6,8 @@ public interface ITenantWalletBrandingReadService
 }
 
 public sealed record TenantWalletBrandingDto(
+    Guid TenantId,
+    string TenantSlug,
     string DisplayName,
     string OrganizationName,
     string Description,
@@ -16,4 +18,3 @@ public sealed record TenantWalletBrandingDto(
     string CustomerFallbackName,
     bool UsesBundledAssetsFallback,
     bool UsesLegacyContactFallback);
-

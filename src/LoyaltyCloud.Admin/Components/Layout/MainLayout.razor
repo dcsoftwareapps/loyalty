@@ -1,8 +1,19 @@
-﻿@inherits LayoutComponentBase
+@inherits LayoutComponentBase
+@inject LoyaltyCloud.Application.Common.Interfaces.ITenantBrandingReadService Branding
 
-<div class="kb-app">
+<div class="kb-app" style="@TenantStyle">
     <nav class="kb-sidebar">
-        <h1>LoyaltyCloud</h1>
+        <div class="kb-sidebar-brand">
+            @if (!string.IsNullOrWhiteSpace(branding?.LogoUrl))
+            {
+                <img src="@branding.LogoUrl" alt="@branding.DisplayName" class="kb-brand-logo" />
+            }
+            else
+            {
+                <h1>@(branding?.DisplayName ?? "LoyaltyCloud")</h1>
+            }
+            <span>LoyaltyCloud</span>
+        </div>
         <NavLink href="/dashboard" Match="NavLinkMatch.All">Dashboard</NavLink>
         <NavLink href="/scan">Sumar puntos</NavLink>
         <NavLink href="/customers">Clientas</NavLink>
@@ -25,3 +36,24 @@
         @Body
     </main>
 </div>
+
+@code {
+    private LoyaltyCloud.Application.Common.Interfaces.TenantBrandingInfo? branding;
+
+    private string TenantStyle =>
+        branding is null
+            ? string.Empty
+            : $"--kb-blush:{branding.PrimaryColor};--kb-sand-100:{branding.SecondaryColor};";
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            branding = await Branding.GetCurrentAsync();
+        }
+        catch
+        {
+            branding = null;
+        }
+    }
+}

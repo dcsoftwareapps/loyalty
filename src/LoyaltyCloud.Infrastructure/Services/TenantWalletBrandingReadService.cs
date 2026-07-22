@@ -12,7 +12,7 @@ internal sealed class TenantWalletBrandingReadService : ITenantWalletBrandingRea
     private const string DefaultBackgroundColor = "rgb(250,248,244)";
     private const string DefaultForegroundColor = "rgb(28,28,28)";
     private const string DefaultLabelColor = "rgb(132,124,120)";
-    private const string LegacyKBeautyContact = "@kbeauty_mx\n\nkbeautymx.com\n\n+52 646 238 6962";
+    private const string GenericContactFallback = "LoyaltyCloud";
 
     private readonly AppDbContext _db;
     private readonly ITenantContext _tenantContext;
@@ -41,6 +41,7 @@ internal sealed class TenantWalletBrandingReadService : ITenantWalletBrandingRea
             .Select(tenant => new
             {
                 tenant.DisplayName,
+                tenant.Slug,
                 LogoUrl = tenant.Branding == null ? null : tenant.Branding.LogoUrl,
                 PrimaryColor = tenant.Branding == null ? null : tenant.Branding.PrimaryColor,
                 SecondaryColor = tenant.Branding == null ? null : tenant.Branding.SecondaryColor,
@@ -55,33 +56,32 @@ internal sealed class TenantWalletBrandingReadService : ITenantWalletBrandingRea
             throw new InvalidOperationException($"Tenant actual no existe: {tenantId}.");
 
         var contactValue = BuildContactValue(row.InstagramUrl, row.TermsUrl, row.WhatsAppUrl, row.SupportPhone);
-        var usesLegacyContactFallback = string.IsNullOrWhiteSpace(contactValue);
-        if (usesLegacyContactFallback)
+        var usesContactFallback = string.IsNullOrWhiteSpace(contactValue);
+        if (usesContactFallback)
         {
-            contactValue = LegacyKBeautyContact;
+            contactValue = GenericContactFallback;
             _logger.LogWarning(
-                "Tenant {TenantId} does not have wallet contact branding; using bundled KBeauty contact fallback.",
-                tenantId);
-        }
-
-        if (string.IsNullOrWhiteSpace(row.LogoUrl))
-        {
-            _logger.LogWarning(
-                "Tenant {TenantId} does not have wallet asset branding; using bundled KBeauty Apple Wallet assets.",
+                "Tenant {TenantId} does not have wallet contact branding; using generic LoyaltyCloud contact fallback.",
                 tenantId);
         }
 
         return new TenantWalletBrandingDto(
+            TenantId: tenantId,
+            TenantSlug: row.Slug,
             DisplayName: row.DisplayName,
             OrganizationName: row.DisplayName,
             Description: $"Tarjeta de Lealtad {row.DisplayName}",
             BackgroundColor: DefaultBackgroundColor,
-            ForegroundColor: ToRgbColor(row.PrimaryColor, DefaultForegroundColor),
-            LabelColor: ToRgbColor(row.SecondaryColor, DefaultLabelColor),
+            ForegroundColor: TenantBrandingSanitizer.ToRgbColor(
+                TenantBrandingSanitizer.ColorOrDefault(row.PrimaryColor, TenantBrandingSanitizer.DefaultPrimaryColor, tenantId, "PrimaryColor", _logger),
+                DefaultForegroundColor),
+            LabelColor: TenantBrandingSanitizer.ToRgbColor(
+                TenantBrandingSanitizer.ColorOrDefault(row.SecondaryColor, TenantBrandingSanitizer.DefaultSecondaryColor, tenantId, "SecondaryColor", _logger),
+                DefaultLabelColor),
             ContactValue: contactValue!,
             CustomerFallbackName: $"Cliente {row.DisplayName}",
-            UsesBundledAssetsFallback: string.IsNullOrWhiteSpace(row.LogoUrl),
-            UsesLegacyContactFallback: usesLegacyContactFallback);
+            UsesBundledAssetsFallback: false,
+            UsesLegacyContactFallback: false);
     }
 
     private static string? BuildContactValue(params string?[] values)
@@ -97,20 +97,4 @@ internal sealed class TenantWalletBrandingReadService : ITenantWalletBrandingRea
             : string.Join("\n\n", lines);
     }
 
-    private static string ToRgbColor(string? value, string fallback)
-    {
-        if (string.IsNullOrWhiteSpace(value))
-            return fallback;
-
-        var color = value.Trim();
-        if (!color.StartsWith('#') || color.Length != 7)
-            return fallback;
-
-        return int.TryParse(color.AsSpan(1, 2), System.Globalization.NumberStyles.HexNumber, null, out var r)
-            && int.TryParse(color.AsSpan(3, 2), System.Globalization.NumberStyles.HexNumber, null, out var g)
-            && int.TryParse(color.AsSpan(5, 2), System.Globalization.NumberStyles.HexNumber, null, out var b)
-            ? $"rgb({r},{g},{b})"
-            : fallback;
-    }
 }
-

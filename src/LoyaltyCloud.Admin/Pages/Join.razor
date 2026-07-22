@@ -40,6 +40,20 @@
             <h1>Únete a nuestro programa de lealtad</h1>
             <p class="kb-muted">Agrega tu tarjeta a Apple Wallet y acumula puntos en cada compra.</p>
 
+            @if (!string.IsNullOrWhiteSpace(tenant.InstagramUrl) || !string.IsNullOrWhiteSpace(tenant.WhatsAppUrl))
+            {
+                <div class="kb-public-links">
+                    @if (!string.IsNullOrWhiteSpace(tenant.InstagramUrl))
+                    {
+                        <a href="@tenant.InstagramUrl" target="_blank" rel="noopener noreferrer">Instagram</a>
+                    }
+                    @if (!string.IsNullOrWhiteSpace(tenant.WhatsAppUrl))
+                    {
+                        <a href="@tenant.WhatsAppUrl" target="_blank" rel="noopener noreferrer">WhatsApp</a>
+                    }
+                </div>
+            }
+
             @if (errorMsg is not null)
             {
                 <div class="kb-form-error">@errorMsg</div>
@@ -145,7 +159,7 @@
             if (tenant is null)
                 return string.Empty;
 
-            return $"--kb-blush:{CssColorOrFallback(tenant.PrimaryColor, "#E8668E")};--kb-sand-100:{CssColorOrFallback(tenant.SecondaryColor, "#FAF8F4")};";
+            return $"--kb-blush:{CssColorOrFallback(tenant.PrimaryColor, "#111827")};--kb-sand-100:{CssColorOrFallback(tenant.SecondaryColor, "#F3F4F6")};";
         }
     }
 

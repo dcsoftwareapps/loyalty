@@ -77,6 +77,7 @@ public static class DevelopmentDataSeeder
 
             configCreated = await EnsureProgramConfigAsync(db, ct);
             rewardsCreated = await EnsureRewardsAsync(db, ct);
+            await EnsureKBeautyBrandingAsync(db, ct);
             await EnsureDevelopmentAdminUserAsync(
                 db,
                 passwordHasher,
@@ -498,12 +499,26 @@ public static class DevelopmentDataSeeder
                 now));
         }
 
-        if (!await db.TenantBrandings.AnyAsync(b => b.TenantId == BellaTenantId, ct))
+        var bellaBranding = await db.TenantBrandings.FirstOrDefaultAsync(b => b.TenantId == BellaTenantId, ct);
+        if (bellaBranding is null)
         {
             db.TenantBrandings.Add(new TenantBranding(
                 BellaTenantId,
                 primaryColor: "#8B5CF6",
-                secondaryColor: "#F5D0FE"));
+                secondaryColor: "#F5D0FE",
+                supportPhone: "+52 646 000 0000",
+                whatsAppUrl: "https://wa.me/526460000000",
+                instagramUrl: "https://instagram.com/bella_salon",
+                termsUrl: "https://bella-salon.example/terminos"));
+        }
+        else
+        {
+            db.Entry(bellaBranding).Property(nameof(TenantBranding.PrimaryColor)).CurrentValue = "#8B5CF6";
+            db.Entry(bellaBranding).Property(nameof(TenantBranding.SecondaryColor)).CurrentValue = "#F5D0FE";
+            db.Entry(bellaBranding).Property(nameof(TenantBranding.SupportPhone)).CurrentValue = "+52 646 000 0000";
+            db.Entry(bellaBranding).Property(nameof(TenantBranding.WhatsAppUrl)).CurrentValue = "https://wa.me/526460000000";
+            db.Entry(bellaBranding).Property(nameof(TenantBranding.InstagramUrl)).CurrentValue = "https://instagram.com/bella_salon";
+            db.Entry(bellaBranding).Property(nameof(TenantBranding.TermsUrl)).CurrentValue = "https://bella-salon.example/terminos";
         }
 
         if (!await db.TenantSubscriptions.AnyAsync(s => s.TenantId == BellaTenantId, ct))
@@ -513,6 +528,30 @@ public static class DevelopmentDataSeeder
                 TenantSubscriptionStatus.Active,
                 "development"));
         }
+    }
+
+    private static async Task EnsureKBeautyBrandingAsync(AppDbContext db, CancellationToken ct)
+    {
+        var branding = await db.TenantBrandings.FirstOrDefaultAsync(b => b.TenantId == TenantSeed.KBeautyTenantId, ct);
+        if (branding is null)
+        {
+            db.TenantBrandings.Add(new TenantBranding(
+                TenantSeed.KBeautyTenantId,
+                primaryColor: "#1C1C1C",
+                secondaryColor: "#E8668E",
+                supportPhone: "+52 646 238 6962",
+                whatsAppUrl: "https://wa.me/526462386962",
+                instagramUrl: "https://instagram.com/kbeauty_mx",
+                termsUrl: "https://kbeautymx.com"));
+            return;
+        }
+
+        db.Entry(branding).Property(nameof(TenantBranding.PrimaryColor)).CurrentValue = "#1C1C1C";
+        db.Entry(branding).Property(nameof(TenantBranding.SecondaryColor)).CurrentValue = "#E8668E";
+        db.Entry(branding).Property(nameof(TenantBranding.SupportPhone)).CurrentValue = "+52 646 238 6962";
+        db.Entry(branding).Property(nameof(TenantBranding.WhatsAppUrl)).CurrentValue = "https://wa.me/526462386962";
+        db.Entry(branding).Property(nameof(TenantBranding.InstagramUrl)).CurrentValue = "https://instagram.com/kbeauty_mx";
+        db.Entry(branding).Property(nameof(TenantBranding.TermsUrl)).CurrentValue = "https://kbeautymx.com";
     }
 
     private static async Task EnsureDevelopmentAdminUserAsync(

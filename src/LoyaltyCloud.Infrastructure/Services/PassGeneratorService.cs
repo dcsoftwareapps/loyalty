@@ -20,6 +20,7 @@ internal sealed class PassGeneratorService : IPassGeneratorService
     private readonly IAppleWalletSecretsProvider _secrets;
     private readonly IWalletNotificationReadService _walletNotifications;
     private readonly ITenantWalletBrandingReadService _tenantBranding;
+    private readonly ITenantWalletAssetProvider _walletAssets;
     private readonly ApplePassOptions _options;
     private readonly ILogger<PassGeneratorService> _logger;
 
@@ -36,26 +37,18 @@ internal sealed class PassGeneratorService : IPassGeneratorService
     private const string BirthdayBenefitFieldKey = "birthday_benefit";
     private const string CustomMessageFieldKey = "custom_message";
 
-    private static readonly PassAssetSpec[] PassAssetSpecs =
-    [
-        new("icon.png", 29, 29),
-        new("icon@2x.png", 58, 58),
-        new("icon@3x.png", 87, 87),
-        new("logo.png", 160, 50),
-        new("logo@2x.png", 320, 100),
-        new("logo@3x.png", 480, 150)
-    ];
-
     public PassGeneratorService(
         IAppleWalletSecretsProvider secrets,
         IWalletNotificationReadService walletNotifications,
         ITenantWalletBrandingReadService tenantBranding,
+        ITenantWalletAssetProvider walletAssets,
         IOptions<ApplePassOptions> options,
         ILogger<PassGeneratorService> logger)
     {
         _secrets = secrets;
         _walletNotifications = walletNotifications;
         _tenantBranding = tenantBranding;
+        _walletAssets = walletAssets;
         _options = options.Value;
         _logger = logger;
     }
@@ -69,7 +62,7 @@ internal sealed class PassGeneratorService : IPassGeneratorService
         var branding = await _tenantBranding.GetCurrentAsync(ct);
         var passJson = BuildPassJson(card, customer, walletContext, branding);
         var passJsonBytes = JsonSerializer.SerializeToUtf8Bytes(passJson, PassJsonOpts);
-        var assets = LoadPassAssets();
+        var assets = await _walletAssets.LoadAssetsAsync(branding.TenantSlug, ct);
 
         var manifest = new Dictionary<string, string>(StringComparer.Ordinal)
         {
@@ -604,42 +597,6 @@ internal sealed class PassGeneratorService : IPassGeneratorService
             $"{remainingPoints} pts");
     }
 
-    private IReadOnlyList<PassAsset> LoadPassAssets()
-    {
-        var assetsDir = Path.Combine(AppContext.BaseDirectory, "Assets", "AppleWallet");
-        var assets = new List<PassAsset>(PassAssetSpecs.Length);
-
-        foreach (var spec in PassAssetSpecs)
-        {
-            var path = Path.Combine(assetsDir, spec.Name);
-            if (!File.Exists(path))
-                throw new FileNotFoundException(
-                    $"Asset requerido para Apple Wallet no existe. Ruta esperada: {path}. " +
-                    "Regeneralo con scripts/generate-wallet-assets.ps1.",
-                    path);
-
-            var bytes = File.ReadAllBytes(path);
-            var (width, height) = ReadPngDimensions(bytes, path);
-
-            if (width != spec.Width || height != spec.Height)
-                throw new InvalidOperationException(
-                    $"Asset Apple Wallet '{path}' tiene dimensiones {width}x{height}; " +
-                    $"se esperaba {spec.Width}x{spec.Height}. " +
-                    "Regeneralo con scripts/generate-wallet-assets.ps1.");
-
-            _logger.LogInformation(
-                "Asset Apple Wallet agregado: {File} ({Width}x{Height}, {Bytes} bytes)",
-                spec.Name,
-                width,
-                height,
-                bytes.Length);
-
-            assets.Add(new PassAsset(spec.Name, bytes));
-        }
-
-        return assets;
-    }
-
     private async Task<byte[]> SignManifestAsync(byte[] manifestBytes, CancellationToken ct)
     {
         var certBytes = await _secrets.GetPassCertificateBytesAsync(ct);
@@ -778,30 +735,6 @@ internal sealed class PassGeneratorService : IPassGeneratorService
         using var stream = entry.Open();
         stream.Write(content, 0, content.Length);
     }
-
-    private static (int Width, int Height) ReadPngDimensions(byte[] bytes, string path)
-    {
-        if (bytes.Length < 24 ||
-            bytes[0] != 0x89 ||
-            bytes[1] != 0x50 ||
-            bytes[2] != 0x4E ||
-            bytes[3] != 0x47)
-        {
-            throw new InvalidOperationException($"Asset Apple Wallet '{path}' no es un PNG valido.");
-        }
-
-        return (ReadBigEndianInt32(bytes, 16), ReadBigEndianInt32(bytes, 20));
-    }
-
-    private static int ReadBigEndianInt32(byte[] bytes, int offset) =>
-        (bytes[offset] << 24) |
-        (bytes[offset + 1] << 16) |
-        (bytes[offset + 2] << 8) |
-        bytes[offset + 3];
-
-    private sealed record PassAsset(string Name, byte[] Bytes);
-
-    private sealed record PassAssetSpec(string Name, int Width, int Height);
 
     private sealed record PassProgress(
         string LevelDisplay,

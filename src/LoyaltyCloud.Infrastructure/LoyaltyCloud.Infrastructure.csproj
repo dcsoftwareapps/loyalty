@@ -49,6 +49,7 @@
 
   <ItemGroup>
     <Content Include="Assets\AppleWallet\*.png" CopyToOutputDirectory="PreserveNewest" />
+    <Content Include="Assets\AppleWalletGeneric\*.png" CopyToOutputDirectory="PreserveNewest" />
     <Content Include="Certificates\*.cer" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
