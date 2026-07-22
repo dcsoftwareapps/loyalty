@@ -59,6 +59,7 @@ public static class DependencyInjection
         services.Configure<ApplePassOptions>(configuration.GetSection(ApplePassOptions.SectionName));
         services.Configure<AzureStorageOptions>(configuration.GetSection(AzureStorageOptions.SectionName));
         services.Configure<WalletOptions>(configuration.GetSection(WalletOptions.SectionName));
+        services.Configure<ProvisioningOptions>(configuration.GetSection(ProvisioningOptions.SectionName));
     }
 
     private static void AddRepositories(IServiceCollection services)
@@ -102,6 +103,7 @@ public static class DependencyInjection
         services.AddScoped<ITenantWalletBrandingReadService, TenantWalletBrandingReadService>();
         services.AddScoped<ITenantBrandingReadService, TenantBrandingReadService>();
         services.AddScoped<ITenantWalletAssetProvider, TenantWalletAssetProvider>();
+        services.AddScoped<ITenantProvisioningService, TenantProvisioningService>();
         services.AddScoped<IPublicTenantResolver, PublicTenantResolver>();
         services.AddScoped<IPointsExpirationNotificationReadService, PointsExpirationNotificationReadService>();
         services.AddScoped<IMonthlyProductNotificationReadService, MonthlyProductNotificationReadService>();
