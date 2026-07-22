@@ -81,7 +81,7 @@ public class Result<T> : Result
     }
 
     /// <summary>Crea un resultado tipado exitoso con el valor dado.</summary>
-    public static new Result<T> Ok(T value) => new(value);
+    public static Result<T> Ok(T value) => new(value);
 
     /// <summary>Crea un resultado tipado fallido con un mensaje de error.</summary>
     public static new Result<T> Fail(string error) => new(new[] { error });

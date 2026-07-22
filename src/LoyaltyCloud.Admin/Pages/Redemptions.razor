@@ -19,7 +19,7 @@
     <div style="flex:2;min-width:260px;">
         <label for="redemption-search">Buscar</label>
         <input id="redemption-search" type="text" @bind="searchTerm" @bind:event="oninput"
-               @onkeydown="@(e => { if (e.Key == "Enter") ReloadAsync(); })"
+               @onkeydown="HandleSearchKeyDownAsync"
                placeholder="Cliente, serial o recompensa" />
     </div>
     <button class="kb-btn kb-btn--primary" style="align-self:end;" @onclick="ReloadAsync">Buscar</button>
@@ -160,6 +160,12 @@ else
     {
         searchTerm = string.Empty;
         await ReloadAsync();
+    }
+
+    private async Task HandleSearchKeyDownAsync(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter")
+            await ReloadAsync();
     }
 
     private void Confirm(Guid id)

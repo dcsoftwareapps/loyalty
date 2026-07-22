@@ -42,39 +42,37 @@ internal sealed class PointTransactionRepository : IPointTransactionRepository
         return PagedResult<PointTransaction>.From(items.AsReadOnly(), total, pagination);
     }
 
-    public Task<int> GetPointsEarnedThisYearAsync(
+    public async Task<int> GetPointsEarnedThisYearAsync(
         Guid loyaltyCardId,
         IDateTimeProvider dt,
         CancellationToken ct = default)
     {
         var tenantId = _tenantContext.RequireTenantId();
         var cutoff = dt.UtcNow.AddYears(-1);
-        return _db.PointTransactions
+        return await _db.PointTransactions
             .AsNoTracking()
             .Where(t => t.TenantId == tenantId
                      && t.LoyaltyCardId == loyaltyCardId
                      && t.CreatedAt >= cutoff
                      && t.Points > 0
                      && LevelProgressTransactionTypes.All.Contains(t.Type))
-            .SumAsync(t => (int?)t.Points, ct)
-            .ContinueWith(x => x.Result ?? 0, ct);
+            .SumAsync(t => (int?)t.Points, ct) ?? 0;
     }
 
-    public Task<int> GetEligibleLevelPointsAsync(
+    public async Task<int> GetEligibleLevelPointsAsync(
         Guid loyaltyCardId,
         DateTime windowStartUtc,
         CancellationToken ct = default)
     {
         var tenantId = _tenantContext.RequireTenantId();
-        return _db.PointTransactions
+        return await _db.PointTransactions
             .AsNoTracking()
             .Where(t => t.TenantId == tenantId
                      && t.LoyaltyCardId == loyaltyCardId
                      && t.CreatedAt >= windowStartUtc
                      && t.Points > 0
                      && LevelProgressTransactionTypes.All.Contains(t.Type))
-            .SumAsync(t => (int?)t.Points, ct)
-            .ContinueWith(x => x.Result ?? 0, ct);
+            .SumAsync(t => (int?)t.Points, ct) ?? 0;
     }
 
     public async Task<IReadOnlyDictionary<Guid, int>> GetEligibleLevelPointsByCardAsync(

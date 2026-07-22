@@ -14,7 +14,7 @@
     <div style="flex: 2; min-width: 240px;">
         <label for="search">Buscar (nombre, email o serial)</label>
         <input id="search" type="text" @bind="searchTerm" @bind:event="oninput"
-               @onkeydown="@(e => { if (e.Key == "Enter") ReloadAsync(); })" />
+               @onkeydown="HandleSearchKeyDownAsync" />
     </div>
     <div style="flex: 1; min-width: 160px;">
         <label for="level">Nivel</label>
@@ -95,4 +95,10 @@ else
 
     private async Task PrevPage() { pageNumber = Math.Max(1, pageNumber - 1); await ReloadAsync(); }
     private async Task NextPage() { pageNumber++; await ReloadAsync(); }
+
+    private async Task HandleSearchKeyDownAsync(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter")
+            await ReloadAsync();
+    }
 }

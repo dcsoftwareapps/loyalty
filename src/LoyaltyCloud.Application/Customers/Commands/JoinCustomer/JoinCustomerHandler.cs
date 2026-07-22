@@ -41,7 +41,7 @@ public sealed class JoinCustomerHandler : IRequestHandler<JoinCustomerCommand, R
                 existingCustomer.FullName,
                 phone,
                 AlreadyExists: true,
-                "Ya tienes una cuenta de KBeauty MX. Puedes volver a agregar tu tarjeta a Apple Wallet."));
+                "Ya tienes una cuenta. Puedes volver a agregar tu tarjeta a Apple Wallet."));
         }
 
         var fullName = $"{command.FirstName.Trim()} {command.LastName.Trim()}".Trim();
@@ -65,9 +65,9 @@ public sealed class JoinCustomerHandler : IRequestHandler<JoinCustomerCommand, R
             FullName: fullName,
             Phone: phone,
             AlreadyExists: false,
-            "Listo. Tu tarjeta de lealtad KBeauty MX esta lista."));
+            "Listo. Tu tarjeta de lealtad esta lista."));
     }
 
     private static string BuildInternalEmail(string normalizedPhone) =>
-        $"phone-{normalizedPhone}@kbeauty.local";
+        $"phone-{normalizedPhone}@loyaltycloud.local";
 }

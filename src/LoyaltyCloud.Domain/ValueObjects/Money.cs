@@ -1,14 +1,12 @@
 namespace LoyaltyCloud.Domain.ValueObjects;
 
 /// <summary>
-/// Value object para montos monetarios con moneda explícita.
-/// Evita confundir MXN con USD en cálculos de puntos.
+/// Value object para montos monetarios con moneda explicita.
+/// Evita confundir MXN con USD en calculos de puntos.
 /// </summary>
-/// <param name="Amount">Cantidad — se redondea a 2 decimales en la construcción.</param>
-/// <param name="Currency">Código ISO 4217 (ej: "MXN"). Default: MXN.</param>
 public sealed record Money
 {
-    /// <summary>Moneda nativa de la tienda (Ensenada, México).</summary>
+    /// <summary>Moneda nativa de la tienda.</summary>
     public const string DefaultCurrency = "MXN";
 
     public decimal Amount { get; }

@@ -30,7 +30,7 @@
             {
                 <div class="kb-qr-scanner">
                     <video @ref="qrVideo" class="kb-qr-video" autoplay muted playsinline></video>
-                    <p>Apunta al código QR de la tarjeta KBeauty MX</p>
+                    <p>Apunta al código QR de la tarjeta de lealtad</p>
                     <button class="kb-btn kb-btn--ghost kb-btn--block" @onclick="CancelScannerAsync">
                         Cancelar
                     </button>
@@ -169,7 +169,7 @@
             var serial = ExtractSerial(rawValue);
             if (serial is null)
             {
-                errorMessage = "Código QR no válido para KBeauty MX.";
+                errorMessage = "Código QR no válido para LoyaltyCloud.";
                 scannerMessage = null;
                 StateHasChanged();
                 return;
@@ -187,7 +187,7 @@
         var serial = ExtractSerial(serialInput);
         if (serial is null)
         {
-            errorMessage = "Ingresa un serial KBeauty válido, por ejemplo KB-A7B9C2X.";
+            errorMessage = "Ingresa un serial válido, por ejemplo KB-A7B9C2X.";
             return;
         }
 
