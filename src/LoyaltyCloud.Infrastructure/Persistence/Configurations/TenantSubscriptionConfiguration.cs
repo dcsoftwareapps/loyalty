@@ -16,6 +16,10 @@ internal sealed class TenantSubscriptionConfiguration : IEntityTypeConfiguration
             .HasMaxLength(50)
             .IsRequired();
 
+        builder.Property(s => s.SuspensionReason)
+            .HasConversion<string>()
+            .HasMaxLength(50);
+
         builder.Property(s => s.PlanCode)
             .HasMaxLength(50)
             .IsRequired();

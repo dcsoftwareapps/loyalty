@@ -14,6 +14,7 @@ public sealed record PlatformTenantListItemDto(
     DateTime? TrialEndsAt,
     DateTime? PaidThroughUtc,
     DateTime? GracePeriodEndsAt,
+    string? SuspensionReason,
     bool IsOperational);
 
 public sealed record PlatformTenantDetailDto(
@@ -35,7 +36,8 @@ public sealed record PlatformTenantSubscriptionDto(
     DateTime? CurrentPeriodEnd,
     DateTime? PaidThroughUtc,
     DateTime? GracePeriodEndsAt,
-    DateTime? LastPaymentAt);
+    DateTime? LastPaymentAt,
+    string? SuspensionReason);
 
 public sealed record PlatformTenantBrandingDto(
     string PrimaryColor,

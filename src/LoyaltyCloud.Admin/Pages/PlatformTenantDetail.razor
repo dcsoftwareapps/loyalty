@@ -12,6 +12,7 @@
 @using LoyaltyCloud.Application.SuperAdmin.Commands.SuspendTenant
 @using LoyaltyCloud.Application.SuperAdmin.Commands.UpdateTenantGracePeriod
 @using LoyaltyCloud.Application.SuperAdmin.Queries.GetPlatformTenant
+@using LoyaltyCloud.Domain.Entities
 @using LoyaltyCloud.Domain.Enums
 @inject ISender Sender
 @inject NavigationManager Nav
@@ -77,6 +78,7 @@ else
             else
             {
                 <p><strong>Status:</strong> <span class="kb-badge @StatusClass(tenant.Subscription.Status)">@tenant.Subscription.Status</span></p>
+                <p><strong>Suspensión:</strong> @DisplaySuspensionReason(tenant.Subscription)</p>
                 <p><strong>Plan:</strong> @tenant.Subscription.PlanCode</p>
                 <p><strong>Periodo inicia:</strong> @FormatDateTime(tenant.Subscription.CurrentPeriodStart)</p>
                 <p><strong>Trial termina:</strong> @FormatDateTime(tenant.Subscription.CurrentPeriodEnd)</p>
@@ -84,6 +86,10 @@ else
                 <p><strong>Gracia termina:</strong> @FormatDateTime(tenant.Subscription.GracePeriodEndsAt)</p>
                 <p><strong>Último pago:</strong> @FormatDateTime(tenant.Subscription.LastPaymentAt)</p>
                 <p><strong>Operativo:</strong> @(tenant.IsOperational ? "Sí" : "No")</p>
+                @if (tenant.Subscription.Status == TenantSubscriptionStatus.Active && !tenant.Subscription.PaidThroughUtc.HasValue)
+                {
+                    <div class="kb-form-error">Vigencia de pago no configurada.</div>
+                }
             }
         </div>
 
@@ -140,7 +146,11 @@ else
                 </select>
             </div>
             <div style="min-width:260px;">
-                <label>Nueva vigencia estimada</label>
+                <label>Vigencia actual</label>
+                <p style="margin:10px 0 0;">@FormatDate(tenant.Subscription?.PaidThroughUtc)</p>
+            </div>
+            <div style="min-width:260px;">
+                <label>Nueva vigencia</label>
                 <p style="margin:10px 0 0;">@FormatDate(EstimatedPaidThrough)</p>
             </div>
             <label style="display:flex;align-items:center;gap:8px;margin:0;">
@@ -194,10 +204,14 @@ else
     private bool CanSuspend => tenant?.Subscription?.Status is not null
         && tenant.Subscription.Status is not TenantSubscriptionStatus.Suspended and not TenantSubscriptionStatus.Cancelled;
     private bool CanReactivate => tenant?.Subscription?.Status == TenantSubscriptionStatus.Suspended
+        && tenant.Subscription.SuspensionReason == nameof(TenantSuspensionReason.Administrative)
         && tenant.Subscription.PaidThroughUtc.HasValue
         && tenant.Subscription.PaidThroughUtc.Value > DateTime.UtcNow;
     private bool CanCancel => tenant?.Subscription?.Status != TenantSubscriptionStatus.Cancelled;
-    private bool CanRecordPayment => tenant?.Subscription?.Status != TenantSubscriptionStatus.Cancelled && confirmPayment;
+    private bool CanRecordPayment => confirmPayment
+        && tenant?.Subscription?.Status != TenantSubscriptionStatus.Cancelled
+        && !(tenant?.Subscription?.Status == TenantSubscriptionStatus.Suspended
+             && tenant.Subscription.SuspensionReason is null or nameof(TenantSuspensionReason.Administrative));
     private bool CanExtendTrial => tenant?.Subscription?.Status == TenantSubscriptionStatus.Trial;
     private bool CanUpdateGrace => tenant?.Subscription?.Status == TenantSubscriptionStatus.PastDue;
     private DateTime? EstimatedPaidThrough
@@ -206,11 +220,10 @@ else
         {
             if (tenant?.Subscription is null || tenant.Subscription.Status == TenantSubscriptionStatus.Cancelled)
                 return null;
-            var now = DateTime.UtcNow;
-            var startsFrom = tenant.Subscription.PaidThroughUtc.HasValue && tenant.Subscription.PaidThroughUtc.Value > now
-                ? tenant.Subscription.PaidThroughUtc.Value
-                : now;
-            return startsFrom.AddMonths(paymentMonths);
+            return TenantSubscription.CalculateManualPaymentPaidThrough(
+                tenant.Subscription.PaidThroughUtc,
+                paymentMonths,
+                DateTime.UtcNow);
         }
     }
 
@@ -364,6 +377,11 @@ else
 
     private static string Display(string? value) =>
         string.IsNullOrWhiteSpace(value) ? "No disponible" : value;
+
+    private static string DisplaySuspensionReason(PlatformTenantSubscriptionDto subscription) =>
+        subscription.Status == TenantSubscriptionStatus.Suspended
+            ? subscription.SuspensionReason ?? "Legacy/Unspecified"
+            : "—";
 
     private static string StatusClass(TenantSubscriptionStatus status) =>
         status is TenantSubscriptionStatus.Active or TenantSubscriptionStatus.Trial ? "kb-badge--success"

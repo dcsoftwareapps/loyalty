@@ -37,9 +37,13 @@ internal sealed class SuperAdminTenantManagementService : ISuperAdminTenantManag
         if (tenant.Subscription.Status == TenantSubscriptionStatus.Cancelled)
             return Result.Fail("No se puede suspender un tenant cancelado.");
 
-        tenant.Subscription.Suspend();
+        tenant.Subscription.SuspendAdministratively();
         await _db.SaveChangesAsync(cancellationToken);
-        _logger.LogInformation("Tenant suspended. TenantId={TenantId}, TenantSlug={TenantSlug}", tenant.Id, tenant.Slug);
+        _logger.LogInformation(
+            "Tenant suspended. TenantId={TenantId}, TenantSlug={TenantSlug}, SuspensionReason={SuspensionReason}",
+            tenant.Id,
+            tenant.Slug,
+            tenant.Subscription.SuspensionReason);
         return Result.Ok();
     }
 
@@ -50,12 +54,15 @@ internal sealed class SuperAdminTenantManagementService : ISuperAdminTenantManag
         if (tenant.Subscription is null) return Result.Fail("El tenant no tiene suscripcion configurada.");
         if (tenant.Subscription.Status == TenantSubscriptionStatus.Cancelled)
             return Result.Fail("No se puede reactivar un tenant cancelado.");
+        if (tenant.Subscription.Status != TenantSubscriptionStatus.Suspended
+            || tenant.Subscription.SuspensionReason != TenantSuspensionReason.Administrative)
+            return Result.Fail("Solo se puede reactivar una suspension administrativa.");
         if (!tenant.Subscription.PaidThroughUtc.HasValue || tenant.Subscription.PaidThroughUtc.Value <= _clock.UtcNow)
             return Result.Fail("No se puede reactivar sin una vigencia pagada vigente. Registra un pago primero.");
 
         try
         {
-            tenant.Subscription.Reactivate();
+            tenant.Subscription.Reactivate(_clock.UtcNow);
         }
         catch (InvalidOperationException ex)
         {

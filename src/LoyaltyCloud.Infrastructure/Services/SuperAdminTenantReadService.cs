@@ -37,7 +37,8 @@ internal sealed class SuperAdminTenantReadService : ISuperAdminTenantReadService
                 PlanCode = t.Subscription == null ? null : t.Subscription.PlanCode,
                 TrialEndsAt = t.Subscription == null ? null : t.Subscription.CurrentPeriodEnd,
                 PaidThroughUtc = t.Subscription == null ? null : t.Subscription.PaidThroughUtc,
-                GracePeriodEndsAt = t.Subscription == null ? null : t.Subscription.GracePeriodEndsAt
+                GracePeriodEndsAt = t.Subscription == null ? null : t.Subscription.GracePeriodEndsAt,
+                SuspensionReason = t.Subscription == null ? null : t.Subscription.SuspensionReason
             })
             .ToListAsync(cancellationToken);
 
@@ -54,6 +55,7 @@ internal sealed class SuperAdminTenantReadService : ISuperAdminTenantReadService
                 t.TrialEndsAt,
                 t.PaidThroughUtc,
                 t.GracePeriodEndsAt,
+                t.SuspensionReason?.ToString(),
                 t.IsActive && t.SubscriptionStatus.HasValue && TenantSubscription.IsOperational(
                     t.SubscriptionStatus.Value,
                     t.TrialEndsAt,
@@ -80,16 +82,14 @@ internal sealed class SuperAdminTenantReadService : ISuperAdminTenantReadService
                 t.TimeZoneId,
                 t.CreatedAt,
                 t.UpdatedAt,
-                Subscription = t.Subscription == null
-                    ? null
-                    : new PlatformTenantSubscriptionDto(
-                        t.Subscription.Status,
-                        t.Subscription.PlanCode,
-                        t.Subscription.CurrentPeriodStart,
-                        t.Subscription.CurrentPeriodEnd,
-                        t.Subscription.PaidThroughUtc,
-                        t.Subscription.GracePeriodEndsAt,
-                        t.Subscription.LastPaymentAt),
+                SubscriptionStatus = t.Subscription == null ? null : (LoyaltyCloud.Domain.Enums.TenantSubscriptionStatus?)t.Subscription.Status,
+                PlanCode = t.Subscription == null ? null : t.Subscription.PlanCode,
+                CurrentPeriodStart = t.Subscription == null ? null : t.Subscription.CurrentPeriodStart,
+                CurrentPeriodEnd = t.Subscription == null ? null : t.Subscription.CurrentPeriodEnd,
+                PaidThroughUtc = t.Subscription == null ? null : t.Subscription.PaidThroughUtc,
+                GracePeriodEndsAt = t.Subscription == null ? null : t.Subscription.GracePeriodEndsAt,
+                LastPaymentAt = t.Subscription == null ? null : t.Subscription.LastPaymentAt,
+                SuspensionReason = t.Subscription == null ? null : t.Subscription.SuspensionReason,
                 Branding = t.Branding == null
                     ? null
                     : new PlatformTenantBrandingDto(
@@ -107,13 +107,24 @@ internal sealed class SuperAdminTenantReadService : ISuperAdminTenantReadService
             return null;
 
         var isOperational = row.IsActive
-            && row.Subscription is not null
+            && row.SubscriptionStatus.HasValue
             && TenantSubscription.IsOperational(
-                row.Subscription.Status,
-                row.Subscription.CurrentPeriodEnd,
-                row.Subscription.PaidThroughUtc,
-                row.Subscription.GracePeriodEndsAt,
+                row.SubscriptionStatus.Value,
+                row.CurrentPeriodEnd,
+                row.PaidThroughUtc,
+                row.GracePeriodEndsAt,
                 now);
+        var subscription = row.SubscriptionStatus.HasValue
+            ? new PlatformTenantSubscriptionDto(
+                row.SubscriptionStatus.Value,
+                row.PlanCode ?? string.Empty,
+                row.CurrentPeriodStart,
+                row.CurrentPeriodEnd,
+                row.PaidThroughUtc,
+                row.GracePeriodEndsAt,
+                row.LastPaymentAt,
+                row.SuspensionReason?.ToString())
+            : null;
 
         return new PlatformTenantDetailDto(
             row.Id,
@@ -124,7 +135,7 @@ internal sealed class SuperAdminTenantReadService : ISuperAdminTenantReadService
             row.CreatedAt,
             row.UpdatedAt,
             isOperational,
-            row.Subscription,
+            subscription,
             row.Branding);
     }
 }

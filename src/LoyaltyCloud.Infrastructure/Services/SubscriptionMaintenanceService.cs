@@ -65,9 +65,10 @@ internal sealed class SubscriptionMaintenanceService : ISubscriptionMaintenanceS
                 {
                     trialsSuspended++;
                     _logger.LogInformation(
-                        "Trial subscription expired. TenantId={TenantId}, TenantSlug={TenantSlug}.",
+                        "Trial subscription expired. TenantId={TenantId}, TenantSlug={TenantSlug}, SuspensionReason={SuspensionReason}.",
                         tenant.Id,
-                        tenant.Slug);
+                        tenant.Slug,
+                        subscription.SuspensionReason);
                 }
                 else if (previousStatus == TenantSubscriptionStatus.Active
                          && subscription.Status == TenantSubscriptionStatus.PastDue)
@@ -84,9 +85,10 @@ internal sealed class SubscriptionMaintenanceService : ISubscriptionMaintenanceS
                 {
                     pastDueSuspended++;
                     _logger.LogInformation(
-                        "Subscription grace expired. TenantId={TenantId}, TenantSlug={TenantSlug}.",
+                        "Subscription grace expired. TenantId={TenantId}, TenantSlug={TenantSlug}, SuspensionReason={SuspensionReason}.",
                         tenant.Id,
-                        tenant.Slug);
+                        tenant.Slug,
+                        subscription.SuspensionReason);
                 }
             }
             catch (Exception ex)
