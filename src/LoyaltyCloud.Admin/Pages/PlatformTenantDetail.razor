@@ -8,6 +8,7 @@
 @using LoyaltyCloud.Application.SuperAdmin.Commands.CancelTenant
 @using LoyaltyCloud.Application.SuperAdmin.Commands.ExtendTenantTrial
 @using LoyaltyCloud.Application.SuperAdmin.Commands.ReactivateTenant
+@using LoyaltyCloud.Application.SuperAdmin.Commands.RecordManualSubscriptionPayment
 @using LoyaltyCloud.Application.SuperAdmin.Commands.SuspendTenant
 @using LoyaltyCloud.Application.SuperAdmin.Commands.UpdateTenantGracePeriod
 @using LoyaltyCloud.Application.SuperAdmin.Queries.GetPlatformTenant
@@ -47,8 +48,12 @@ else
             <div class="kb-card-value" style="font-size:2rem;">@(tenant.Subscription?.Status.ToString() ?? "Sin suscripción")</div>
         </div>
         <div class="kb-card">
-            <div class="kb-card-label">Trial termina</div>
-            <div class="kb-card-value" style="font-size:1.55rem;">@FormatDate(tenant.Subscription?.CurrentPeriodEnd)</div>
+            <div class="kb-card-label">Operativo</div>
+            <div class="kb-card-value" style="font-size:2rem;">@(tenant.IsOperational ? "Sí" : "No")</div>
+        </div>
+        <div class="kb-card">
+            <div class="kb-card-label">Pagado hasta</div>
+            <div class="kb-card-value" style="font-size:1.55rem;">@FormatDate(tenant.Subscription?.PaidThroughUtc)</div>
         </div>
     </section>
 
@@ -74,9 +79,11 @@ else
                 <p><strong>Status:</strong> <span class="kb-badge @StatusClass(tenant.Subscription.Status)">@tenant.Subscription.Status</span></p>
                 <p><strong>Plan:</strong> @tenant.Subscription.PlanCode</p>
                 <p><strong>Periodo inicia:</strong> @FormatDateTime(tenant.Subscription.CurrentPeriodStart)</p>
-                <p><strong>Periodo termina:</strong> @FormatDateTime(tenant.Subscription.CurrentPeriodEnd)</p>
+                <p><strong>Trial termina:</strong> @FormatDateTime(tenant.Subscription.CurrentPeriodEnd)</p>
+                <p><strong>Pagado hasta:</strong> @FormatDateTime(tenant.Subscription.PaidThroughUtc)</p>
                 <p><strong>Gracia termina:</strong> @FormatDateTime(tenant.Subscription.GracePeriodEndsAt)</p>
                 <p><strong>Último pago:</strong> @FormatDateTime(tenant.Subscription.LastPaymentAt)</p>
+                <p><strong>Operativo:</strong> @(tenant.IsOperational ? "Sí" : "No")</p>
             }
         </div>
 
@@ -119,6 +126,31 @@ else
         </div>
     </section>
 
+    <section class="kb-card" style="margin-top:24px;">
+        <h2>Registrar pago</h2>
+        <p class="kb-muted">Cada clic confirmado representa un pago manual validado por transferencia.</p>
+        <div class="kb-form-row kb-form-row--horizontal">
+            <div style="min-width:180px;">
+                <label for="payment-months">Vigencia</label>
+                <select id="payment-months" @bind="paymentMonths">
+                    <option value="1">+1 mes</option>
+                    <option value="3">+3 meses</option>
+                    <option value="6">+6 meses</option>
+                    <option value="12">+12 meses</option>
+                </select>
+            </div>
+            <div style="min-width:260px;">
+                <label>Nueva vigencia estimada</label>
+                <p style="margin:10px 0 0;">@FormatDate(EstimatedPaidThrough)</p>
+            </div>
+            <label style="display:flex;align-items:center;gap:8px;margin:0;">
+                <input type="checkbox" @bind="confirmPayment" />
+                Confirmo pago
+            </label>
+            <button class="kb-btn kb-btn--primary" @onclick="RecordPaymentAsync" disabled="@(!CanRecordPayment || busy)">Registrar pago</button>
+        </div>
+    </section>
+
     <section class="kb-detail-grid" style="margin-top:24px;">
         <div class="kb-card">
             <h2>Extender trial</h2>
@@ -127,7 +159,7 @@ else
                     <label for="trial-end">Nueva fecha de fin</label>
                     <input id="trial-end" type="date" value="@trialEndDate" @onchange="OnTrialEndDateChanged" />
                 </div>
-                <button class="kb-btn kb-btn--primary" @onclick="ExtendTrialAsync" disabled="@busy">Guardar trial</button>
+                <button class="kb-btn kb-btn--primary" @onclick="ExtendTrialAsync" disabled="@(!CanExtendTrial || busy)">Guardar trial</button>
             </div>
         </div>
 
@@ -139,7 +171,7 @@ else
                     <label for="grace-end">Nueva fecha de gracia</label>
                     <input id="grace-end" type="date" value="@graceEndDate" @onchange="OnGraceEndDateChanged" />
                 </div>
-                <button class="kb-btn kb-btn--primary" @onclick="UpdateGracePeriodAsync" disabled="@busy">Guardar gracia</button>
+                <button class="kb-btn kb-btn--primary" @onclick="UpdateGracePeriodAsync" disabled="@(!CanUpdateGrace || busy)">Guardar gracia</button>
             </div>
         </div>
     </section>
@@ -152,6 +184,8 @@ else
     private bool busy;
     private bool confirmSuspend;
     private bool confirmCancel;
+    private bool confirmPayment;
+    private int paymentMonths = 1;
     private string? trialEndDate;
     private string? graceEndDate;
     private string? success;
@@ -159,8 +193,26 @@ else
 
     private bool CanSuspend => tenant?.Subscription?.Status is not null
         && tenant.Subscription.Status is not TenantSubscriptionStatus.Suspended and not TenantSubscriptionStatus.Cancelled;
-    private bool CanReactivate => tenant?.Subscription?.Status == TenantSubscriptionStatus.Suspended;
+    private bool CanReactivate => tenant?.Subscription?.Status == TenantSubscriptionStatus.Suspended
+        && tenant.Subscription.PaidThroughUtc.HasValue
+        && tenant.Subscription.PaidThroughUtc.Value > DateTime.UtcNow;
     private bool CanCancel => tenant?.Subscription?.Status != TenantSubscriptionStatus.Cancelled;
+    private bool CanRecordPayment => tenant?.Subscription?.Status != TenantSubscriptionStatus.Cancelled && confirmPayment;
+    private bool CanExtendTrial => tenant?.Subscription?.Status == TenantSubscriptionStatus.Trial;
+    private bool CanUpdateGrace => tenant?.Subscription?.Status == TenantSubscriptionStatus.PastDue;
+    private DateTime? EstimatedPaidThrough
+    {
+        get
+        {
+            if (tenant?.Subscription is null || tenant.Subscription.Status == TenantSubscriptionStatus.Cancelled)
+                return null;
+            var now = DateTime.UtcNow;
+            var startsFrom = tenant.Subscription.PaidThroughUtc.HasValue && tenant.Subscription.PaidThroughUtc.Value > now
+                ? tenant.Subscription.PaidThroughUtc.Value
+                : now;
+            return startsFrom.AddMonths(paymentMonths);
+        }
+    }
 
     protected override async Task OnInitializedAsync() => await LoadAsync();
 
@@ -185,6 +237,36 @@ else
 
     private async Task ReactivateAsync() =>
         await ExecuteAsync(() => Sender.Send(new ReactivateTenantCommand(TenantId)), "Tenant reactivado.");
+
+    private async Task RecordPaymentAsync()
+    {
+        if (!confirmPayment)
+        {
+            error = "Confirma el pago antes de continuar.";
+            return;
+        }
+
+        busy = true;
+        success = null;
+        error = null;
+        try
+        {
+            var result = await Sender.Send(new RecordManualSubscriptionPaymentCommand(TenantId, paymentMonths));
+            if (result.IsFailure)
+            {
+                error = string.Join(" ", result.Errors);
+                return;
+            }
+
+            success = $"Pago registrado. Nueva vigencia: {FormatDate(result.Value.PaidThroughUtc)}.";
+            confirmPayment = false;
+            await LoadAsync();
+        }
+        finally
+        {
+            busy = false;
+        }
+    }
 
     private async Task CancelAsync()
     {

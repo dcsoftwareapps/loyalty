@@ -60,6 +60,7 @@ public static class DependencyInjection
         services.Configure<AzureStorageOptions>(configuration.GetSection(AzureStorageOptions.SectionName));
         services.Configure<WalletOptions>(configuration.GetSection(WalletOptions.SectionName));
         services.Configure<ProvisioningOptions>(configuration.GetSection(ProvisioningOptions.SectionName));
+        services.Configure<BillingOptions>(configuration.GetSection(BillingOptions.SectionName));
     }
 
     private static void AddRepositories(IServiceCollection services)
@@ -106,6 +107,7 @@ public static class DependencyInjection
         services.AddScoped<ITenantProvisioningService, TenantProvisioningService>();
         services.AddScoped<ISuperAdminTenantReadService, SuperAdminTenantReadService>();
         services.AddScoped<ISuperAdminTenantManagementService, SuperAdminTenantManagementService>();
+        services.AddScoped<ISubscriptionMaintenanceService, SubscriptionMaintenanceService>();
         services.AddScoped<IPublicTenantResolver, PublicTenantResolver>();
         services.AddScoped<IPointsExpirationNotificationReadService, PointsExpirationNotificationReadService>();
         services.AddScoped<IMonthlyProductNotificationReadService, MonthlyProductNotificationReadService>();

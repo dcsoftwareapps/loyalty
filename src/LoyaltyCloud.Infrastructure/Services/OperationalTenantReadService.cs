@@ -32,6 +32,12 @@ internal sealed class OperationalTenantReadService : IOperationalTenantReadServi
                 SubscriptionStatus = t.Subscription == null
                     ? (TenantSubscriptionStatus?)null
                     : t.Subscription.Status,
+                CurrentPeriodEnd = t.Subscription == null
+                    ? null
+                    : t.Subscription.CurrentPeriodEnd,
+                PaidThroughUtc = t.Subscription == null
+                    ? null
+                    : t.Subscription.PaidThroughUtc,
                 GracePeriodEndsAt = t.Subscription == null
                     ? null
                     : t.Subscription.GracePeriodEndsAt
@@ -42,7 +48,12 @@ internal sealed class OperationalTenantReadService : IOperationalTenantReadServi
             .Select(row =>
             {
                 var isSubscriptionOperational = row.SubscriptionStatus.HasValue
-                    && TenantSubscription.IsOperational(row.SubscriptionStatus.Value, row.GracePeriodEndsAt, _clock.UtcNow);
+                    && TenantSubscription.IsOperational(
+                        row.SubscriptionStatus.Value,
+                        row.CurrentPeriodEnd,
+                        row.PaidThroughUtc,
+                        row.GracePeriodEndsAt,
+                        _clock.UtcNow);
                 var isOperational = row.IsActive && isSubscriptionOperational;
                 var skipReason = GetSkipReason(row.IsActive, row.SubscriptionStatus, row.GracePeriodEndsAt);
                 return new TenantExecutionInfo(

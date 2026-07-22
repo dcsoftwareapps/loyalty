@@ -22,6 +22,7 @@ internal sealed class TenantSubscriptionConfiguration : IEntityTypeConfiguration
 
         builder.Property(s => s.CurrentPeriodStart).HasColumnType("datetime2(3)");
         builder.Property(s => s.CurrentPeriodEnd).HasColumnType("datetime2(3)");
+        builder.Property(s => s.PaidThroughUtc).HasColumnType("datetime2(3)");
         builder.Property(s => s.GracePeriodEndsAt).HasColumnType("datetime2(3)");
         builder.Property(s => s.LastPaymentAt).HasColumnType("datetime2(3)");
 

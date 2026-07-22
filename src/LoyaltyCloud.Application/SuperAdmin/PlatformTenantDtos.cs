@@ -12,7 +12,9 @@ public sealed record PlatformTenantListItemDto(
     TenantSubscriptionStatus? SubscriptionStatus,
     string? PlanCode,
     DateTime? TrialEndsAt,
-    DateTime? GracePeriodEndsAt);
+    DateTime? PaidThroughUtc,
+    DateTime? GracePeriodEndsAt,
+    bool IsOperational);
 
 public sealed record PlatformTenantDetailDto(
     Guid TenantId,
@@ -22,6 +24,7 @@ public sealed record PlatformTenantDetailDto(
     string TimeZoneId,
     DateTime CreatedAt,
     DateTime? UpdatedAt,
+    bool IsOperational,
     PlatformTenantSubscriptionDto? Subscription,
     PlatformTenantBrandingDto? Branding);
 
@@ -30,6 +33,7 @@ public sealed record PlatformTenantSubscriptionDto(
     string PlanCode,
     DateTime? CurrentPeriodStart,
     DateTime? CurrentPeriodEnd,
+    DateTime? PaidThroughUtc,
     DateTime? GracePeriodEndsAt,
     DateTime? LastPaymentAt);
 

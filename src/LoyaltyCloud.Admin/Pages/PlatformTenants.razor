@@ -120,7 +120,9 @@ else
                 <th>Activo</th>
                 <th>Suscripción</th>
                 <th>Trial termina</th>
+                <th>Pagado hasta</th>
                 <th>Gracia</th>
+                <th>Operativo</th>
                 <th>Zona horaria</th>
                 <th>Creado</th>
                 <th></th>
@@ -135,7 +137,9 @@ else
                 <td>@(tenant.IsActive ? "Sí" : "No")</td>
                 <td><span class="kb-badge @StatusClass(tenant.SubscriptionStatus?.ToString())">@(tenant.SubscriptionStatus?.ToString() ?? "Sin suscripción")</span></td>
                 <td>@FormatDate(tenant.TrialEndsAt)</td>
+                <td>@FormatDate(tenant.PaidThroughUtc)</td>
                 <td>@FormatDate(tenant.GracePeriodEndsAt)</td>
+                <td><span class="kb-badge @(tenant.IsOperational ? "kb-badge--success" : "kb-badge--muted")">@(tenant.IsOperational ? "Sí" : "No")</span></td>
                 <td>@tenant.TimeZoneId</td>
                 <td>@FormatDate(tenant.CreatedAt)</td>
                 <td><a href="/platform/tenants/@tenant.TenantId">Ver detalle</a></td>

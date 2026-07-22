@@ -47,6 +47,12 @@ internal sealed class DeviceRegistrationPlatformReadService : IDeviceRegistratio
                 SubscriptionStatus = tenant.Subscription == null
                     ? null
                     : (LoyaltyCloud.Domain.Enums.TenantSubscriptionStatus?)tenant.Subscription.Status,
+                CurrentPeriodEnd = tenant.Subscription == null
+                    ? null
+                    : tenant.Subscription.CurrentPeriodEnd,
+                PaidThroughUtc = tenant.Subscription == null
+                    ? null
+                    : tenant.Subscription.PaidThroughUtc,
                 GracePeriodEndsAt = tenant.Subscription == null
                     ? null
                     : tenant.Subscription.GracePeriodEndsAt
@@ -59,6 +65,8 @@ internal sealed class DeviceRegistrationPlatformReadService : IDeviceRegistratio
                        && row.SubscriptionStatus.HasValue
                        && TenantSubscription.IsOperational(
                            row.SubscriptionStatus.Value,
+                           row.CurrentPeriodEnd,
+                           row.PaidThroughUtc,
                            row.GracePeriodEndsAt,
                            now))
             .OrderBy(row => row.LastActivityAt)

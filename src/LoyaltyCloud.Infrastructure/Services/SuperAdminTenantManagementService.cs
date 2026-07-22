@@ -1,4 +1,5 @@
 using LoyaltyCloud.Application.Common.Interfaces;
+using LoyaltyCloud.Application.SuperAdmin.Commands.RecordManualSubscriptionPayment;
 using LoyaltyCloud.Common.Results;
 using LoyaltyCloud.Common.Services;
 using LoyaltyCloud.Domain.Entities;
@@ -49,8 +50,17 @@ internal sealed class SuperAdminTenantManagementService : ISuperAdminTenantManag
         if (tenant.Subscription is null) return Result.Fail("El tenant no tiene suscripcion configurada.");
         if (tenant.Subscription.Status == TenantSubscriptionStatus.Cancelled)
             return Result.Fail("No se puede reactivar un tenant cancelado.");
+        if (!tenant.Subscription.PaidThroughUtc.HasValue || tenant.Subscription.PaidThroughUtc.Value <= _clock.UtcNow)
+            return Result.Fail("No se puede reactivar sin una vigencia pagada vigente. Registra un pago primero.");
 
-        tenant.Subscription.Reactivate();
+        try
+        {
+            tenant.Subscription.Reactivate();
+        }
+        catch (InvalidOperationException ex)
+        {
+            return Result.Fail(ex.Message);
+        }
         await _db.SaveChangesAsync(cancellationToken);
         _logger.LogInformation("Tenant reactivated. TenantId={TenantId}, TenantSlug={TenantSlug}", tenant.Id, tenant.Slug);
         return Result.Ok();
@@ -83,6 +93,8 @@ internal sealed class SuperAdminTenantManagementService : ISuperAdminTenantManag
         var tenant = await LoadTenantAsync(tenantId, cancellationToken);
         if (tenant is null) return Result.Fail("Tenant no encontrado.");
         if (tenant.Subscription is null) return Result.Fail("El tenant no tiene suscripcion configurada.");
+        if (tenant.Subscription.Status != TenantSubscriptionStatus.Trial)
+            return Result.Fail("Solo se puede extender el trial de una suscripcion en Trial.");
 
         try
         {
@@ -100,6 +112,38 @@ internal sealed class SuperAdminTenantManagementService : ISuperAdminTenantManag
             tenant.Slug,
             normalizedDate);
         return Result.Ok();
+    }
+
+    public async Task<Result<RecordManualSubscriptionPaymentResult>> RecordPaymentAsync(
+        Guid tenantId,
+        int months,
+        CancellationToken cancellationToken = default)
+    {
+        var tenant = await LoadTenantAsync(tenantId, cancellationToken);
+        if (tenant is null)
+            return Result.Fail<RecordManualSubscriptionPaymentResult>("Tenant no encontrado.");
+        if (tenant.Subscription is null)
+            return Result.Fail<RecordManualSubscriptionPaymentResult>("El tenant no tiene suscripcion configurada.");
+
+        DateTime paidThrough;
+        try
+        {
+            paidThrough = tenant.Subscription.RecordManualPayment(months, _clock.UtcNow);
+        }
+        catch (Exception ex) when (ex is ArgumentException or InvalidOperationException)
+        {
+            return Result.Fail<RecordManualSubscriptionPaymentResult>(ex.Message);
+        }
+
+        await _db.SaveChangesAsync(cancellationToken);
+        _logger.LogInformation(
+            "Manual subscription payment recorded. TenantId={TenantId}, TenantSlug={TenantSlug}, Months={Months}, PaidThroughUtc={PaidThroughUtc}",
+            tenant.Id,
+            tenant.Slug,
+            months,
+            paidThrough);
+
+        return Result.Ok(new RecordManualSubscriptionPaymentResult(tenant.Id, tenant.Slug, months, paidThrough));
     }
 
     public async Task<Result> UpdateGracePeriodAsync(

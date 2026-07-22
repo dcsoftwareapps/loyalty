@@ -24,15 +24,18 @@ public sealed class LoyaltyMaintenanceBackgroundService : BackgroundService
         };
 
     private readonly ITenantExecutionRunner _tenantRunner;
+    private readonly IServiceScopeFactory _scopeFactory;
     private readonly IOptionsMonitor<LoyaltyMaintenanceOptions> _options;
     private readonly ILogger<LoyaltyMaintenanceBackgroundService> _logger;
 
     public LoyaltyMaintenanceBackgroundService(
         ITenantExecutionRunner tenantRunner,
+        IServiceScopeFactory scopeFactory,
         IOptionsMonitor<LoyaltyMaintenanceOptions> options,
         ILogger<LoyaltyMaintenanceBackgroundService> logger)
     {
         _tenantRunner = tenantRunner;
+        _scopeFactory = scopeFactory;
         _options = options;
         _logger = logger;
     }
@@ -90,6 +93,8 @@ public sealed class LoyaltyMaintenanceBackgroundService : BackgroundService
 
         try
         {
+            await RunSubscriptionMaintenanceAsync(ct);
+
             var summary = await _tenantRunner.RunForOperationalTenantsAsync(
                 "loyalty-maintenance",
                 async (serviceProvider, tenant, tenantCt) =>
@@ -122,6 +127,31 @@ public sealed class LoyaltyMaintenanceBackgroundService : BackgroundService
         {
             stopwatch.Stop();
             _logger.LogError(ex, "Unexpected error running loyalty maintenance tenant cycle.");
+        }
+    }
+
+    private async Task RunSubscriptionMaintenanceAsync(CancellationToken ct)
+    {
+        try
+        {
+            using var scope = _scopeFactory.CreateScope();
+            var maintenance = scope.ServiceProvider.GetRequiredService<ISubscriptionMaintenanceService>();
+            var result = await maintenance.ProcessAsync(ct);
+            _logger.LogInformation(
+                "Subscription maintenance result: tenantsProcessed={TenantsProcessed}, trialsSuspended={TrialsSuspended}, activeMovedToPastDue={ActiveMovedToPastDue}, pastDueSuspended={PastDueSuspended}, failedTenants={FailedTenants}.",
+                result.TenantsProcessed,
+                result.TrialsSuspended,
+                result.ActiveMovedToPastDue,
+                result.PastDueSuspended,
+                result.FailedTenants);
+        }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Unexpected error running subscription maintenance. Tenant maintenance will continue.");
         }
     }
 
