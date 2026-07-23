@@ -5,6 +5,7 @@ using LoyaltyCloud.Application.Common.Interfaces;
 using LoyaltyCloud.Infrastructure;
 using LoyaltyCloud.Infrastructure.KeyVault;
 using LoyaltyCloud.Infrastructure.Persistence;
+using MediatR;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Authorization;
 
@@ -20,6 +21,7 @@ builder.Configuration.AddLoyaltyCloudKeyVault(builder.Configuration["Azure:KeyVa
 // Capas de negocio — Admin habla con Application/MediatR in-process, no HTTP.
 builder.Services.AddApplication();
 builder.Services.AddInfrastructure(builder.Configuration, builder.Environment);
+builder.Services.AddScoped(typeof(IPipelineBehavior<,>), typeof(AdminTenantContextBehavior<,>));
 
 var apiBaseUrl = builder.Configuration["Admin:ApiBaseUrl"];
 if (string.IsNullOrWhiteSpace(apiBaseUrl))
