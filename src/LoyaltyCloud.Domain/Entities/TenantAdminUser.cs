@@ -39,6 +39,11 @@ public sealed class TenantAdminUser : Entity, ITenantOwned
         LastLoginAt = loggedInAtUtc;
     }
 
+    public void ChangePasswordHash(string passwordHash)
+    {
+        PasswordHash = Tenant.Require(passwordHash, nameof(passwordHash), 1000);
+    }
+
     public static string NormalizeUsername(string username) =>
         Tenant.Require(username, nameof(username), 150).ToUpperInvariant();
 }

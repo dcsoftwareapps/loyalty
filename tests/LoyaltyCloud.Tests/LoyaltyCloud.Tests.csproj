@@ -16,6 +16,7 @@
     <ProjectReference Include="..\..\src\LoyaltyCloud.Infrastructure\LoyaltyCloud.Infrastructure.csproj" />
     <ProjectReference Include="..\..\src\LoyaltyCloud.API\LoyaltyCloud.API.csproj" />
     <ProjectReference Include="..\..\src\LoyaltyCloud.Admin\LoyaltyCloud.Admin.csproj" Aliases="AdminApp" />
+    <ProjectReference Include="..\..\src\LoyaltyCloud.Tools\LoyaltyCloud.Tools.csproj" />
   </ItemGroup>
 
   <ItemGroup>
