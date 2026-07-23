@@ -180,13 +180,50 @@ public sealed class AddPointsHandler : IRequestHandler<AddPointsCommand, Result<
         try
         {
             var devices = await _devices.GetBySerialNumberAsync(serial, ct);
+            _logger.LogInformation(
+                "Wallet update after points: serial={Serial}, devicesFound={DeviceCount}, apnService={ApnService}.",
+                serial,
+                devices.Count,
+                _apn.GetType().Name);
+
+            if (devices.Count == 0)
+            {
+                _logger.LogInformation(
+                    "Wallet update after points skipped because no device registrations exist for serial {Serial}.",
+                    serial);
+                return;
+            }
+
             foreach (var device in devices)
+            {
+                _logger.LogInformation(
+                    "Wallet update after points sending APNs. serial={Serial}, device={Device}, pushToken={PushToken}, reason={Reason}.",
+                    serial,
+                    SafeIdentifier(device.DeviceLibraryIdentifier),
+                    SafeIdentifier(device.PushToken),
+                    reason);
                 await _apn.SendPassUpdateAsync(device.PushToken, reason, ct);
+            }
+
+            _logger.LogInformation(
+                "Wallet update after points completed APNs attempts. serial={Serial}, attempted={DeviceCount}.",
+                serial,
+                devices.Count);
         }
         catch (Exception ex)
         {
             _logger.LogWarning(ex, "Fallo enviando push de Wallet para serial {Serial}", serial);
         }
+    }
+
+    private static string SafeIdentifier(string value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+            return "<empty>";
+
+        return value.Length <= 8
+            ? $"{value[..Math.Min(4, value.Length)]}..."
+            : $"{value[..4]}...{value[^4..]}";
     }
 
     private sealed class NullPointCampaignSelector : IPointCampaignSelector

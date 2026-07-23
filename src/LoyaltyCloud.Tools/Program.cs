@@ -45,6 +45,7 @@ services.AddSingleton<IHostEnvironment>(new ToolHostEnvironment(environmentName,
 services.AddApplication();
 services.AddInfrastructure(configuration, new ToolHostEnvironment(environmentName, Directory.GetCurrentDirectory()));
 services.AddScoped<TenantAdminPasswordTool>();
+services.AddScoped<WalletDiagnosticsTool>();
 
 await using var provider = services.BuildServiceProvider(validateScopes: true);
 using var scope = provider.CreateScope();
@@ -76,6 +77,15 @@ if (string.Equals(command, "list-tenant-admins", StringComparison.OrdinalIgnoreC
     var tool = scope.ServiceProvider.GetRequiredService<TenantAdminPasswordTool>();
     return await tool.ListAdminsAsync(
         values.GetValueOrDefault("tenant-slug"),
+        Console.Out,
+        Console.Error);
+}
+
+if (string.Equals(command, "wallet-diagnostics", StringComparison.OrdinalIgnoreCase))
+{
+    var tool = scope.ServiceProvider.GetRequiredService<WalletDiagnosticsTool>();
+    return await tool.RunAsync(
+        values.GetValueOrDefault("serial"),
         Console.Out,
         Console.Error);
 }
@@ -136,7 +146,8 @@ static bool IsKnownServiceCommand(string? command) =>
     string.Equals(command, "provision-tenant", StringComparison.OrdinalIgnoreCase)
     || string.Equals(command, "create-tenant-admin", StringComparison.OrdinalIgnoreCase)
     || string.Equals(command, "reset-tenant-admin-password", StringComparison.OrdinalIgnoreCase)
-    || string.Equals(command, "list-tenant-admins", StringComparison.OrdinalIgnoreCase);
+    || string.Equals(command, "list-tenant-admins", StringComparison.OrdinalIgnoreCase)
+    || string.Equals(command, "wallet-diagnostics", StringComparison.OrdinalIgnoreCase);
 
 static async Task<int> ProvisionTenantAsync(IServiceProvider services, Dictionary<string, string?> values)
 {
@@ -194,6 +205,8 @@ static void PrintUsage()
       dotnet run --project src/LoyaltyCloud.Tools -- create-tenant-admin --tenant-slug kbeauty --admin-username owner
 
       dotnet run --project src/LoyaltyCloud.Tools -- list-tenant-admins --tenant-slug kbeauty
+
+      dotnet run --project src/LoyaltyCloud.Tools -- wallet-diagnostics --serial KB-LNB7ACG
 
       set LOYALTYCLOUD_PASSWORD=<password>
       dotnet run --project src/LoyaltyCloud.Tools -- hash-password
