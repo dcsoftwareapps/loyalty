@@ -1,7 +1,7 @@
 @*
   Router con autorización en cascada. Páginas no [Authorize] (Login) se
-  renderizan libremente; las demás cascada AuthState y redirigen a /login si
-  no hay cookie válida.
+  renderizan libremente; las demás cascada AuthState y redirigen al login
+  correspondiente si no hay cookie válida.
 *@
 <Router AppAssembly="@typeof(Program).Assembly">
     <Found Context="routeData">

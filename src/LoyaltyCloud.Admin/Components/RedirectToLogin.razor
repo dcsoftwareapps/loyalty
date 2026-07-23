@@ -1,4 +1,5 @@
 @inject NavigationManager Nav
+@using LoyaltyCloud.Admin.Auth
 
 @*
   Helper invocado desde Routes.razor cuando AuthorizeRouteView determina que
@@ -11,9 +12,7 @@
     {
         var returnUrl = Uri.EscapeDataString(new Uri(Nav.Uri).PathAndQuery);
         var path = new Uri(Nav.Uri).AbsolutePath;
-        var loginPath = path.StartsWith("/platform", StringComparison.OrdinalIgnoreCase)
-            ? "/platform/login"
-            : "/login";
+        var loginPath = AdminLoginRedirects.ResolveLoginPath(path);
         Nav.NavigateTo($"{loginPath}?returnUrl={returnUrl}", forceLoad: true);
     }
 }

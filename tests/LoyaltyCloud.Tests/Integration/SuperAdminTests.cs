@@ -77,9 +77,7 @@ public sealed class SuperAdminTests
         var tenantsSource = SuperAdminTestEnvironment.ReadAdminPage("PlatformTenants.razor");
         var detailSource = SuperAdminTestEnvironment.ReadAdminPage("PlatformTenantDetail.razor");
 
-        Assert.Contains("SuperAdminAuthDefaults.AuthenticationScheme", tenantsSource);
         Assert.Contains("SuperAdminAuthDefaults.Role", tenantsSource);
-        Assert.Contains("SuperAdminAuthDefaults.AuthenticationScheme", detailSource);
         Assert.Contains("SuperAdminAuthDefaults.Role", detailSource);
     }
 

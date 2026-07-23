@@ -1,6 +1,6 @@
 @page "/platform/tenants/{TenantId:guid}"
 @layout PlatformLayout
-@attribute [Authorize(AuthenticationSchemes = SuperAdminAuthDefaults.AuthenticationScheme, Roles = SuperAdminAuthDefaults.Role)]
+@attribute [Authorize(Roles = SuperAdminAuthDefaults.Role)]
 @rendermode InteractiveServer
 
 @using LoyaltyCloud.Admin.Auth

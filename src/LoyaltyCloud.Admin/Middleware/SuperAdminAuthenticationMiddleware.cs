@@ -14,11 +14,22 @@ public sealed class SuperAdminAuthenticationMiddleware
 
     public async Task InvokeAsync(HttpContext context)
     {
+        if (context.Request.Path.StartsWithSegments("/platform/login", StringComparison.OrdinalIgnoreCase))
+        {
+            await _next(context);
+            return;
+        }
+
         if (context.Request.Path.StartsWithSegments("/platform", StringComparison.OrdinalIgnoreCase))
         {
             var result = await context.AuthenticateAsync(SuperAdminAuthDefaults.AuthenticationScheme);
-            if (result.Succeeded && result.Principal is not null)
-                context.User = result.Principal;
+            if (!result.Succeeded || result.Principal is null || !result.Principal.IsInRole(SuperAdminAuthDefaults.Role))
+            {
+                await context.ChallengeAsync(SuperAdminAuthDefaults.AuthenticationScheme);
+                return;
+            }
+
+            context.User = result.Principal;
         }
 
         await _next(context);

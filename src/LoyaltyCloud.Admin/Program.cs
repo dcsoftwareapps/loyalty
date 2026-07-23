@@ -44,8 +44,8 @@ builder.Services
     .AddAuthentication(CookieAuthenticationDefaults.AuthenticationScheme)
     .AddCookie(options =>
     {
-        options.LoginPath = "/login";
-        options.AccessDeniedPath = "/login";
+        options.LoginPath = "/platform/login";
+        options.AccessDeniedPath = "/platform/login";
         options.ExpireTimeSpan = TimeSpan.FromHours(8);
         options.SlidingExpiration = true;
         options.Cookie.HttpOnly = true;
@@ -54,6 +54,16 @@ builder.Services
         options.Cookie.Name = "loyaltycloud.admin.auth";
         options.Events = new CookieAuthenticationEvents
         {
+            OnRedirectToLogin = context =>
+            {
+                context.Response.Redirect(AdminLoginRedirects.BuildTenantAwareLoginRedirect(context.Request, context.RedirectUri));
+                return Task.CompletedTask;
+            },
+            OnRedirectToAccessDenied = context =>
+            {
+                context.Response.Redirect(AdminLoginRedirects.BuildTenantAwareLoginRedirect(context.Request, context.RedirectUri));
+                return Task.CompletedTask;
+            },
             OnValidatePrincipal = async context =>
             {
                 var auth = context.HttpContext.RequestServices.GetRequiredService<AdminAuthService>();
@@ -74,6 +84,16 @@ builder.Services
         options.Cookie.Name = "loyaltycloud.platform.auth";
         options.Events = new CookieAuthenticationEvents
         {
+            OnRedirectToLogin = context =>
+            {
+                context.Response.Redirect(AdminLoginRedirects.BuildPlatformLoginRedirect(context.Request));
+                return Task.CompletedTask;
+            },
+            OnRedirectToAccessDenied = context =>
+            {
+                context.Response.Redirect(AdminLoginRedirects.BuildPlatformLoginRedirect(context.Request));
+                return Task.CompletedTask;
+            },
             OnValidatePrincipal = async context =>
             {
                 var auth = context.HttpContext.RequestServices.GetRequiredService<SuperAdminAuthService>();
@@ -130,6 +150,9 @@ app.UseAuthorization();
 
 app.UseAntiforgery();
 
+app.MapGet("/", () => Results.Redirect("/platform/login"))
+    .AllowAnonymous();
+
 app.MapRazorComponents<LoyaltyCloud.Admin.App>()
     .AddInteractiveServerRenderMode()
     .AllowAnonymous();
@@ -171,3 +194,5 @@ static void LogConfigurationValueSource(ILogger logger, IConfiguration configura
         value,
         providers.Length == 0 ? "<none>" : string.Join("; ", providers));
 }
+
+public partial class Program { }
