@@ -1,5 +1,6 @@
 using LoyaltyCloud.Admin.Auth;
 using LoyaltyCloud.Admin.Middleware;
+using LoyaltyCloud.Admin.Services;
 using LoyaltyCloud.Application;
 using LoyaltyCloud.Application.Common.Interfaces;
 using LoyaltyCloud.Infrastructure;
@@ -31,6 +32,7 @@ builder.Services.AddHttpClient("LoyaltyCloudApi", client =>
 {
     client.BaseAddress = new Uri(apiBaseUrl);
 });
+builder.Services.AddScoped<AdminApiPointsClient>();
 
 // Blazor Web App con Interactive Server.
 builder.Services.AddRazorComponents()

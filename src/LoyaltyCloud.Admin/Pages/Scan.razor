@@ -5,10 +5,12 @@
 
 @using System.Globalization
 @using System.Text.RegularExpressions
+@using LoyaltyCloud.Admin.Services
 @using LoyaltyCloud.Application.Customers.Queries.GetCustomerBySerial
 @using LoyaltyCloud.Application.Points.Commands.AddPoints
 @using LoyaltyCloud.Common.Services
 @inject ISender Sender
+@inject AdminApiPointsClient PointsApi
 @inject IDateTimeProvider Dt
 @inject IJSRuntime JS
 @inject LoyaltyCloud.Application.Common.Interfaces.IDashboardReadService _
@@ -224,8 +226,7 @@
 
         errorMessage = null;
         busy = true;
-        var cmd = new AddPointsCommand(customer.SerialNumber, PurchaseAmount, "admin-panel");
-        var result = await Sender.Send(cmd);
+        var result = await PointsApi.AddPointsAsync(customer.SerialNumber, PurchaseAmount);
         busy = false;
 
         if (result.IsFailure)

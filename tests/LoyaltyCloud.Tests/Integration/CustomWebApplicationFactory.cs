@@ -37,7 +37,8 @@ public sealed class CustomWebApplicationFactory : WebApplicationFactory<Program>
                 ["Azure:BlobStorage:ConnectionString"] = "",
                 ["Apple:PassTypeIdentifier"] = "pass.com.kbeautymx.loyalty",
                 ["Apple:TeamIdentifier"] = "TESTTEAM01",
-                ["Apple:WebServiceURL"] = "https://test.local"
+                ["Apple:WebServiceURL"] = "https://test.local",
+                ["AdminApi:SharedSecret"] = "test-admin-api-shared-secret-with-enough-length"
             });
         });
 

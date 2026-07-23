@@ -275,6 +275,7 @@ public sealed class AdminRoutingTests : IClassFixture<AdminRoutingTests.AdminWeb
                 {
                     ["ConnectionStrings:DefaultConnection"] = "Server=(test);Database=Test;",
                     ["Admin:ApiBaseUrl"] = "https://api.test/",
+                    ["AdminApi:SharedSecret"] = "test-admin-api-shared-secret-with-enough-length",
                     ["Azure:KeyVaultUri"] = "",
                     ["Azure:BlobStorage:ConnectionString"] = "",
                     ["Apple:PassTypeIdentifier"] = "pass.com.kbeautymx.loyalty",

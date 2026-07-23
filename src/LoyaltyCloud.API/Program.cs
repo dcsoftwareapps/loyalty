@@ -80,6 +80,8 @@ else
 
 app.UseCors();
 
+app.UseMiddleware<AdminApiAuthenticationMiddleware>();
+
 // Middleware Apple Pass — corre ANTES que MapControllers para bloquear /v1/*
 // con auth inválida sin llegar al controller.
 app.UseMiddleware<ApplePassAuthMiddleware>();
