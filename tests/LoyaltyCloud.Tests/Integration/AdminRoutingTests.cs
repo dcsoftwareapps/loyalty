@@ -186,6 +186,34 @@ public sealed class AdminRoutingTests : IClassFixture<AdminRoutingTests.AdminWeb
 
     [Fact]
     [Trait("Category", "AdminRouting")]
+    [Trait("Category", "AdminCustomerPoints")]
+    public void Customer_detail_points_button_links_to_existing_scan_flow_with_serial_prefill()
+    {
+        var customerDetailSource = File.ReadAllText(Path.Combine(GetRepositoryRoot(), "src", "LoyaltyCloud.Admin", "Pages", "CustomerDetail.razor"));
+        var scanSource = File.ReadAllText(Path.Combine(GetRepositoryRoot(), "src", "LoyaltyCloud.Admin", "Pages", "Scan.razor"));
+
+        Assert.Contains("href=\"@ScanHref()\"", customerDetailSource);
+        Assert.Contains("/scan?serial=", customerDetailSource);
+        Assert.Contains("Uri.EscapeDataString(detail.Wallet.SerialNumber)", customerDetailSource);
+        Assert.DoesNotContain("Nav.NavigateTo($\"/scan?serial=", customerDetailSource, StringComparison.Ordinal);
+        Assert.Contains("[SupplyParameterFromQuery] public string? Serial", scanSource);
+        Assert.Contains("await SearchAsync();", scanSource);
+    }
+
+    [Fact]
+    [Trait("Category", "AdminRouting")]
+    [Trait("Category", "AdminCustomerPoints")]
+    public void Direct_scan_route_remains_available_for_general_add_points_flow()
+    {
+        var scanSource = File.ReadAllText(Path.Combine(GetRepositoryRoot(), "src", "LoyaltyCloud.Admin", "Pages", "Scan.razor"));
+
+        Assert.Contains("@page \"/scan\"", scanSource);
+        Assert.Contains("Escanear QR", scanSource);
+        Assert.Contains("Serial de la clienta", scanSource);
+    }
+
+    [Fact]
+    [Trait("Category", "AdminRouting")]
     public void Admin_cookie_options_do_not_use_legacy_root_login_path()
     {
         var source = File.ReadAllText(Path.Combine(GetRepositoryRoot(), "src", "LoyaltyCloud.Admin", "Program.cs"));

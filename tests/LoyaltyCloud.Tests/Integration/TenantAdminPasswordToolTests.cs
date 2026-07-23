@@ -18,10 +18,152 @@ namespace LoyaltyCloud.Tests.Integration;
 public sealed class TenantAdminPasswordToolTests
 {
     private static readonly Guid TenantId = TenantSeed.KBeautyTenantId;
+    private static readonly Guid BellaTenantId = Guid.Parse("d1000000-0000-0000-0000-000000000002");
     private const string TenantSlug = TenantSeed.KBeautySlug;
+    private const string BellaTenantSlug = "bella";
     private const string AdminUsername = "Owner";
     private const string OldPassword = "OldPassword123!";
     private const string NewPassword = "NewPassword123!";
+    private const string CreatedAdminUsername = "Cashier";
+    private const string CreatedPassword = "CreatedPassword123!";
+
+    [Fact]
+    [Trait("Category", "Tools")]
+    public async Task Create_tenant_admin_creates_active_user_with_normalized_username_and_hashed_password()
+    {
+        await using var env = await ToolTestEnvironment.CreateAsync();
+        var output = new StringWriter();
+        var error = new StringWriter();
+
+        var code = await env.WithScopeAsync(sp => sp.GetRequiredService<TenantAdminPasswordTool>()
+            .CreateAdminAsync(TenantSlug, "cashier", CreatedPassword, output, error));
+
+        Assert.Equal(0, code);
+        Assert.Equal("Tenant admin created successfully for tenant 'kbeauty'." + Environment.NewLine, output.ToString());
+        Assert.DoesNotContain(CreatedPassword, output.ToString(), StringComparison.Ordinal);
+        Assert.DoesNotContain(CreatedPassword, error.ToString(), StringComparison.Ordinal);
+
+        await env.WithScopeAsync(async sp =>
+        {
+            sp.GetRequiredService<IMutableTenantContext>().SetTenant(TenantId, TenantSlug);
+            var db = sp.GetRequiredService<AppDbContext>();
+            var admin = await db.TenantAdminUsers.SingleAsync(u => u.TenantId == TenantId && u.NormalizedUsername == TenantAdminUser.NormalizeUsername(CreatedAdminUsername));
+            var passwords = sp.GetRequiredService<IPasswordHashingService>();
+
+            Assert.Equal("cashier", admin.Username);
+            Assert.Equal("CASHIER", admin.NormalizedUsername);
+            Assert.True(admin.IsActive);
+            Assert.True(passwords.VerifyPassword(admin.PasswordHash, CreatedPassword));
+        });
+    }
+
+    [Fact]
+    [Trait("Category", "Tools")]
+    public async Task Create_tenant_admin_fails_when_tenant_does_not_exist()
+    {
+        await using var env = await ToolTestEnvironment.CreateAsync();
+        var output = new StringWriter();
+        var error = new StringWriter();
+
+        var code = await env.WithScopeAsync(sp => sp.GetRequiredService<TenantAdminPasswordTool>()
+            .CreateAdminAsync("missing-tenant", CreatedAdminUsername, CreatedPassword, output, error));
+
+        Assert.Equal(1, code);
+        Assert.Contains("Tenant no encontrado. TenantSlug=missing-tenant", error.ToString());
+    }
+
+    [Fact]
+    [Trait("Category", "Tools")]
+    public async Task Create_tenant_admin_fails_for_duplicate_username_in_same_tenant()
+    {
+        await using var env = await ToolTestEnvironment.CreateAsync();
+        var output = new StringWriter();
+        var error = new StringWriter();
+
+        var code = await env.WithScopeAsync(sp => sp.GetRequiredService<TenantAdminPasswordTool>()
+            .CreateAdminAsync(TenantSlug, "owner", CreatedPassword, output, error));
+
+        Assert.Equal(1, code);
+        Assert.Contains("Admin ya existe.", error.ToString());
+
+        var count = await env.WithScopeAsync(async sp =>
+        {
+            sp.GetRequiredService<IMutableTenantContext>().SetTenant(TenantId, TenantSlug);
+            return await sp.GetRequiredService<AppDbContext>().TenantAdminUsers.CountAsync(u => u.TenantId == TenantId);
+        });
+        Assert.Equal(1, count);
+    }
+
+    [Fact]
+    [Trait("Category", "Tools")]
+    public async Task Create_tenant_admin_allows_same_username_in_another_tenant()
+    {
+        await using var env = await ToolTestEnvironment.CreateAsync();
+        var output = new StringWriter();
+        var error = new StringWriter();
+
+        var code = await env.WithScopeAsync(sp => sp.GetRequiredService<TenantAdminPasswordTool>()
+            .CreateAdminAsync(BellaTenantSlug, "owner", CreatedPassword, output, error));
+
+        Assert.Equal(0, code);
+        await env.WithScopeAsync(async sp =>
+        {
+            sp.GetRequiredService<IMutableTenantContext>().SetTenant(BellaTenantId, BellaTenantSlug);
+            var exists = await sp.GetRequiredService<AppDbContext>().TenantAdminUsers
+                .AnyAsync(u => u.TenantId == BellaTenantId && u.NormalizedUsername == TenantAdminUser.NormalizeUsername(AdminUsername));
+            Assert.True(exists);
+        });
+    }
+
+    [Fact]
+    [Trait("Category", "Tools")]
+    public async Task Create_tenant_admin_requires_password_from_environment()
+    {
+        await using var env = await ToolTestEnvironment.CreateAsync();
+        var output = new StringWriter();
+        var error = new StringWriter();
+
+        var code = await env.WithScopeAsync(sp => sp.GetRequiredService<TenantAdminPasswordTool>()
+            .CreateAdminAsync(TenantSlug, CreatedAdminUsername, null, output, error));
+
+        Assert.Equal(2, code);
+        Assert.Contains("Falta LOYALTYCLOUD_ADMIN_PASSWORD.", error.ToString());
+    }
+
+    [Fact]
+    [Trait("Category", "Tools")]
+    public async Task Create_tenant_admin_rejects_short_password()
+    {
+        await using var env = await ToolTestEnvironment.CreateAsync();
+        var output = new StringWriter();
+        var error = new StringWriter();
+
+        var code = await env.WithScopeAsync(sp => sp.GetRequiredService<TenantAdminPasswordTool>()
+            .CreateAdminAsync(TenantSlug, CreatedAdminUsername, "short", output, error));
+
+        Assert.Equal(2, code);
+        Assert.Contains("LOYALTYCLOUD_ADMIN_PASSWORD debe tener al menos 8 caracteres.", error.ToString());
+    }
+
+    [Fact]
+    [Trait("Category", "Tools")]
+    public async Task Create_tenant_admin_does_not_modify_tenant_data()
+    {
+        await using var env = await ToolTestEnvironment.CreateAsync();
+        var before = await env.PlatformReadAsync(db => db.Tenants.AsNoTracking().SingleAsync(t => t.Id == TenantId));
+
+        var code = await env.WithScopeAsync(sp => sp.GetRequiredService<TenantAdminPasswordTool>()
+            .CreateAdminAsync(TenantSlug, CreatedAdminUsername, CreatedPassword, new StringWriter(), new StringWriter()));
+
+        var after = await env.PlatformReadAsync(db => db.Tenants.AsNoTracking().SingleAsync(t => t.Id == TenantId));
+        Assert.Equal(0, code);
+        Assert.Equal(before.Slug, after.Slug);
+        Assert.Equal(before.DisplayName, after.DisplayName);
+        Assert.Equal(before.IsActive, after.IsActive);
+        Assert.Equal(before.TimeZoneId, after.TimeZoneId);
+        Assert.Equal(before.CreatedAt, after.CreatedAt);
+        Assert.Equal(before.UpdatedAt, after.UpdatedAt);
+    }
 
     [Fact]
     [Trait("Category", "Tools")]
@@ -182,11 +324,20 @@ public sealed class TenantAdminPasswordToolTests
             await action(scope.ServiceProvider);
         }
 
+        public async Task<T> PlatformReadAsync<T>(Func<AppDbContext, Task<T>> query)
+        {
+            using var scope = _services.CreateScope();
+            return await query(scope.ServiceProvider.GetRequiredService<AppDbContext>());
+        }
+
         private async Task SeedAsync()
         {
             using var scope = _services.CreateScope();
             var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
             await db.Database.EnsureCreatedAsync();
+
+            db.Tenants.Add(new Tenant(BellaTenantId, BellaTenantSlug, "Bella", "America/Tijuana", DateTime.UtcNow));
+            await db.SaveChangesAsync();
 
             scope.ServiceProvider.GetRequiredService<IMutableTenantContext>().SetTenant(TenantId, TenantSlug);
             var passwords = scope.ServiceProvider.GetRequiredService<IPasswordHashingService>();

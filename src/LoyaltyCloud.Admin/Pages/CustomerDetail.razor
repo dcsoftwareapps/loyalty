@@ -42,9 +42,9 @@ else
 
         @if (!string.IsNullOrWhiteSpace(detail.Wallet.SerialNumber))
         {
-            <button class="kb-btn kb-btn--primary" @onclick="@(() => Nav.NavigateTo($"/scan?serial={detail.Wallet.SerialNumber}"))">
+            <a class="kb-btn kb-btn--primary" href="@ScanHref()">
                 Sumar puntos
-            </button>
+            </a>
         }
     </div>
 
@@ -417,6 +417,11 @@ else
         detail?.Summary.BirthdayCaptured == true
             ? $"{detail.Summary.DateOfBirth.Day} de {MonthName(detail.Summary.DateOfBirth.Month)}"
             : "No capturado";
+
+    private string ScanHref() =>
+        detail is null || string.IsNullOrWhiteSpace(detail.Wallet.SerialNumber)
+            ? "/scan"
+            : $"/scan?serial={Uri.EscapeDataString(detail.Wallet.SerialNumber)}";
 
     private async Task SaveBirthdayAsync()
     {

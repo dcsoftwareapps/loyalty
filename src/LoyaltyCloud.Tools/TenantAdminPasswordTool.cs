@@ -7,6 +7,7 @@ namespace LoyaltyCloud.Tools;
 
 public sealed class TenantAdminPasswordTool
 {
+    private const int MinimumPasswordLength = 8;
     private readonly AppDbContext _db;
     private readonly IMutableTenantContext _tenantContext;
     private readonly IPasswordHashingService _passwords;
@@ -65,6 +66,68 @@ public sealed class TenantAdminPasswordTool
         await _db.SaveChangesAsync(ct);
 
         output.WriteLine($"Password reset completed. TenantSlug={tenant.Slug}; Username={adminUser.Username}");
+        return 0;
+    }
+
+    public async Task<int> CreateAdminAsync(
+        string? tenantSlug,
+        string? adminUsername,
+        string? passwordFromEnvironment,
+        TextWriter output,
+        TextWriter error,
+        CancellationToken ct = default)
+    {
+        if (string.IsNullOrWhiteSpace(passwordFromEnvironment))
+        {
+            error.WriteLine("Falta LOYALTYCLOUD_ADMIN_PASSWORD.");
+            return 2;
+        }
+
+        if (passwordFromEnvironment.Length < MinimumPasswordLength)
+        {
+            error.WriteLine($"LOYALTYCLOUD_ADMIN_PASSWORD debe tener al menos {MinimumPasswordLength} caracteres.");
+            return 2;
+        }
+
+        var tenant = await ResolveTenantAsync(tenantSlug, error, ct);
+        if (tenant is null)
+            return 1;
+
+        _tenantContext.SetTenant(tenant.Id, tenant.Slug);
+
+        string normalizedUsername;
+        try
+        {
+            normalizedUsername = TenantAdminUser.NormalizeUsername(adminUsername ?? string.Empty);
+        }
+        catch (ArgumentException)
+        {
+            error.WriteLine("Falta --admin-username.");
+            return 2;
+        }
+
+        var exists = await _db.TenantAdminUsers
+            .IgnoreQueryFilters()
+            .AnyAsync(u => u.TenantId == tenant.Id && u.NormalizedUsername == normalizedUsername, ct);
+
+        if (exists)
+        {
+            error.WriteLine($"Admin ya existe. TenantSlug={tenant.Slug}; Username={adminUsername}");
+            return 1;
+        }
+
+        var adminUser = new TenantAdminUser(
+            Guid.NewGuid(),
+            tenant.Id,
+            adminUsername!,
+            _passwords.HashPassword(passwordFromEnvironment),
+            DateTime.UtcNow,
+            isActive: true);
+
+        _db.TenantAdminUsers.Add(adminUser);
+        await _db.SaveChangesAsync(ct);
+
+        output.WriteLine($"Tenant admin created successfully for tenant '{tenant.Slug}'.");
         return 0;
     }
 

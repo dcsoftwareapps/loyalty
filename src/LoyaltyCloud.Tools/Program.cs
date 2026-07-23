@@ -60,6 +60,17 @@ if (string.Equals(command, "reset-tenant-admin-password", StringComparison.Ordin
         Console.Error);
 }
 
+if (string.Equals(command, "create-tenant-admin", StringComparison.OrdinalIgnoreCase))
+{
+    var tool = scope.ServiceProvider.GetRequiredService<TenantAdminPasswordTool>();
+    return await tool.CreateAdminAsync(
+        values.GetValueOrDefault("tenant-slug"),
+        values.GetValueOrDefault("admin-username"),
+        Environment.GetEnvironmentVariable("LOYALTYCLOUD_ADMIN_PASSWORD"),
+        Console.Out,
+        Console.Error);
+}
+
 if (string.Equals(command, "list-tenant-admins", StringComparison.OrdinalIgnoreCase))
 {
     var tool = scope.ServiceProvider.GetRequiredService<TenantAdminPasswordTool>();
@@ -123,6 +134,7 @@ static string Require(IReadOnlyDictionary<string, string?> values, string key)
 
 static bool IsKnownServiceCommand(string? command) =>
     string.Equals(command, "provision-tenant", StringComparison.OrdinalIgnoreCase)
+    || string.Equals(command, "create-tenant-admin", StringComparison.OrdinalIgnoreCase)
     || string.Equals(command, "reset-tenant-admin-password", StringComparison.OrdinalIgnoreCase)
     || string.Equals(command, "list-tenant-admins", StringComparison.OrdinalIgnoreCase);
 
@@ -177,6 +189,9 @@ static void PrintUsage()
 
       set LOYALTYCLOUD_ADMIN_PASSWORD=<new-password>
       dotnet run --project src/LoyaltyCloud.Tools -- reset-tenant-admin-password --tenant-slug kbeauty --admin-username owner
+
+      set LOYALTYCLOUD_ADMIN_PASSWORD=<new-password>
+      dotnet run --project src/LoyaltyCloud.Tools -- create-tenant-admin --tenant-slug kbeauty --admin-username owner
 
       dotnet run --project src/LoyaltyCloud.Tools -- list-tenant-admins --tenant-slug kbeauty
 

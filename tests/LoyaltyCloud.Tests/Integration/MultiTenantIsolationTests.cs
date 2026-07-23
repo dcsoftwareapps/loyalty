@@ -1,5 +1,7 @@
 using LoyaltyCloud.Application;
 using LoyaltyCloud.Application.Common.Interfaces;
+using LoyaltyCloud.Application.Customers.Queries.GetCustomerBySerial;
+using LoyaltyCloud.Application.Points.Commands.AddPoints;
 using LoyaltyCloud.Common.Constants;
 using LoyaltyCloud.Domain.Entities;
 using LoyaltyCloud.Domain.Enums;
@@ -8,6 +10,7 @@ using LoyaltyCloud.Domain.ValueObjects;
 using LoyaltyCloud.Infrastructure;
 using LoyaltyCloud.Infrastructure.Persistence;
 using LoyaltyCloud.Infrastructure.Persistence.Seed;
+using MediatR;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -287,6 +290,36 @@ public sealed class MultiTenantIsolationTests
         Assert.Equal(BellaSlug, resolvedCard.resolvedTenant?.TenantSlug);
         Assert.Equal(BellaTenantId, resolvedCard.card?.TenantId);
         Assert.Equal(BellaSerial, resolvedCard.card?.SerialNumber);
+    }
+
+    [Fact]
+    [Trait("Category", "MultiTenant")]
+    [Trait("Category", "AdminCustomerPoints")]
+    public async Task Scan_prefill_serial_lookup_does_not_cross_tenants()
+    {
+        await using var env = await MultiTenantTestEnvironment.CreateAsync();
+
+        var result = await env.WithScopeAsync(TenantSeed.KBeautyTenantId, TenantSeed.KBeautySlug, async sp =>
+            await sp.GetRequiredService<ISender>().Send(new GetCustomerBySerialQuery(BellaSerial)));
+
+        Assert.True(result.IsFailure);
+    }
+
+    [Fact]
+    [Trait("Category", "MultiTenant")]
+    [Trait("Category", "AdminCustomerPoints")]
+    public async Task Add_points_flow_rejects_serial_from_another_tenant()
+    {
+        await using var env = await MultiTenantTestEnvironment.CreateAsync();
+
+        var result = await env.WithScopeAsync(TenantSeed.KBeautyTenantId, TenantSeed.KBeautySlug, async sp =>
+            await sp.GetRequiredService<ISender>().Send(new AddPointsCommand(BellaSerial, 100m, "admin-panel")));
+
+        Assert.True(result.IsFailure);
+
+        var bellaPoints = await env.ReadAsync(BellaTenantId, BellaSlug, db =>
+            db.LoyaltyCards.Where(c => c.SerialNumber == BellaSerial).Select(c => c.CurrentPoints).SingleAsync());
+        Assert.Equal(0, bellaPoints);
     }
 
     [Fact]
