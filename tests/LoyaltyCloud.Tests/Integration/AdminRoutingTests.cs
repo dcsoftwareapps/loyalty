@@ -214,6 +214,34 @@ public sealed class AdminRoutingTests : IClassFixture<AdminRoutingTests.AdminWeb
 
     [Fact]
     [Trait("Category", "AdminRouting")]
+    [Trait("Category", "AdminCustomerPoints")]
+    public void Scan_amount_input_updates_component_state_and_button_text()
+    {
+        var scanSource = File.ReadAllText(Path.Combine(GetRepositoryRoot(), "src", "LoyaltyCloud.Admin", "Pages", "Scan.razor"));
+
+        Assert.Contains("value=\"@amountInput\"", scanSource);
+        Assert.Contains("@oninput=\"HandleAmountInput\"", scanSource);
+        Assert.Contains("private void HandleAmountInput(ChangeEventArgs e)", scanSource);
+        Assert.Contains("private decimal PurchaseAmount", scanSource);
+        Assert.Contains("private bool IsPurchaseAmountValid", scanSource);
+        Assert.Contains("Confirmar compra de ${PurchaseAmount:0.00}", scanSource);
+        Assert.Contains("disabled=\"@(!IsPurchaseAmountValid || busy)\"", scanSource);
+        Assert.DoesNotContain("@bind=\"amount\"", scanSource, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    [Trait("Category", "AdminRouting")]
+    [Trait("Category", "AdminCustomerPoints")]
+    public void Scan_confirm_guard_prevents_invalid_or_double_submit()
+    {
+        var scanSource = File.ReadAllText(Path.Combine(GetRepositoryRoot(), "src", "LoyaltyCloud.Admin", "Pages", "Scan.razor"));
+
+        Assert.Contains("if (customer is null || !IsPurchaseAmountValid || busy) return;", scanSource);
+        Assert.Contains("new AddPointsCommand(customer.SerialNumber, PurchaseAmount, \"admin-panel\")", scanSource);
+    }
+
+    [Fact]
+    [Trait("Category", "AdminRouting")]
     public void Admin_cookie_options_do_not_use_legacy_root_login_path()
     {
         var source = File.ReadAllText(Path.Combine(GetRepositoryRoot(), "src", "LoyaltyCloud.Admin", "Program.cs"));

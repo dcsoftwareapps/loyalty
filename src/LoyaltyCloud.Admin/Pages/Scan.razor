@@ -3,6 +3,7 @@
 @rendermode InteractiveServer
 @implements IAsyncDisposable
 
+@using System.Globalization
 @using System.Text.RegularExpressions
 @using LoyaltyCloud.Application.Customers.Queries.GetCustomerBySerial
 @using LoyaltyCloud.Application.Points.Commands.AddPoints
@@ -72,10 +73,10 @@
             <div>
                 <label for="amount">Monto de la compra (MXN)</label>
                 <input id="amount" type="number" inputmode="decimal" step="0.01" min="0"
-                       @bind="amount" @bind:event="oninput" placeholder="0.00" />
+                       value="@amountInput" @oninput="HandleAmountInput" placeholder="0.00" />
             </div>
 
-            @if (amount > 0)
+            @if (PurchaseAmount > 0)
             {
                 <p style="text-align:center;color:var(--kb-ink-muted);margin:0;">
                     Sumará aprox. <strong style="color:var(--kb-ink);">@PreviewPoints pts</strong>
@@ -83,8 +84,8 @@
             }
 
             <button class="kb-btn kb-btn--primary kb-btn--large kb-btn--block"
-                    @onclick="ConfirmAsync" disabled="@(amount <= 0 || busy)">
-                @(busy ? "Procesando..." : $"Confirmar compra de ${amount:0.00}")
+                    @onclick="ConfirmAsync" disabled="@(!IsPurchaseAmountValid || busy)">
+                @(busy ? "Procesando..." : $"Confirmar compra de ${PurchaseAmount:0.00}")
             </button>
 
             <button class="kb-btn kb-btn--ghost kb-btn--block" @onclick="Reset">
@@ -103,7 +104,7 @@
 
     private string serialInput = string.Empty;
     private CustomerDetailDto? customer;
-    private decimal amount;
+    private string amountInput = string.Empty;
     private AddPointsResponse? lastSuccess;
     private string? errorMessage;
     private string? scannerMessage;
@@ -125,11 +126,15 @@
     {
         get
         {
-            if (customer is null || amount <= 0) return 0;
-            var basePts = (int)(amount / 10);
+            var purchaseAmount = PurchaseAmount;
+            if (customer is null || purchaseAmount <= 0) return 0;
+            var basePts = (int)(purchaseAmount / 10);
             return customer.IsBirthMonth ? basePts * 2 : basePts;
         }
     }
+
+    private decimal PurchaseAmount => TryParseAmount(amountInput, out var parsed) ? parsed : 0m;
+    private bool IsPurchaseAmountValid => PurchaseAmount > 0m;
 
     private async Task StartScannerAsync()
     {
@@ -215,11 +220,11 @@
 
     private async Task ConfirmAsync()
     {
-        if (customer is null) return;
+        if (customer is null || !IsPurchaseAmountValid || busy) return;
 
         errorMessage = null;
         busy = true;
-        var cmd = new AddPointsCommand(customer.SerialNumber, amount, "admin-panel");
+        var cmd = new AddPointsCommand(customer.SerialNumber, PurchaseAmount, "admin-panel");
         var result = await Sender.Send(cmd);
         busy = false;
 
@@ -232,17 +237,23 @@
         lastSuccess = result.Value;
         var refreshed = await Sender.Send(new GetCustomerBySerialQuery(customer.SerialNumber));
         if (refreshed.IsSuccess) customer = refreshed.Value;
-        amount = 0;
+        amountInput = string.Empty;
     }
 
     private void Reset()
     {
         customer = null;
-        amount = 0;
+        amountInput = string.Empty;
         serialInput = string.Empty;
         lastSuccess = null;
         errorMessage = null;
         scannerMessage = null;
+    }
+
+    private void HandleAmountInput(ChangeEventArgs e)
+    {
+        amountInput = e.Value?.ToString() ?? string.Empty;
+        errorMessage = null;
     }
 
     private async Task StopScannerAsync()
@@ -266,6 +277,16 @@
         var decoded = Uri.UnescapeDataString(value.Trim()).ToUpperInvariant();
         var match = SerialRegex.Match(decoded);
         return match.Success ? match.Value.ToUpperInvariant() : null;
+    }
+
+    private static bool TryParseAmount(string? value, out decimal amount)
+    {
+        amount = 0m;
+        if (string.IsNullOrWhiteSpace(value))
+            return false;
+
+        var normalized = value.Trim().Replace(',', '.');
+        return decimal.TryParse(normalized, NumberStyles.Number, CultureInfo.InvariantCulture, out amount);
     }
 
     public async ValueTask DisposeAsync()

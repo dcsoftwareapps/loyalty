@@ -324,6 +324,24 @@ public sealed class MultiTenantIsolationTests
 
     [Fact]
     [Trait("Category", "MultiTenant")]
+    [Trait("Category", "AdminCustomerPoints")]
+    public async Task Add_points_flow_uses_purchase_amount_received_from_scan_form()
+    {
+        await using var env = await MultiTenantTestEnvironment.CreateAsync();
+
+        var result = await env.WithScopeAsync(TenantSeed.KBeautyTenantId, TenantSeed.KBeautySlug, async sp =>
+            await sp.GetRequiredService<ISender>().Send(new AddPointsCommand(KBeautySerial, 500m, "admin-panel")));
+
+        Assert.True(result.IsSuccess, result.Error);
+        Assert.Equal(50, result.Value.PointsAdded);
+
+        var kbeautyPoints = await env.ReadAsync(TenantSeed.KBeautyTenantId, TenantSeed.KBeautySlug, db =>
+            db.LoyaltyCards.Where(c => c.SerialNumber == KBeautySerial).Select(c => c.CurrentPoints).SingleAsync());
+        Assert.Equal(50, kbeautyPoints);
+    }
+
+    [Fact]
+    [Trait("Category", "MultiTenant")]
     public async Task Device_registration_platform_lookup_returns_only_passkit_serials()
     {
         await using var env = await MultiTenantTestEnvironment.CreateAsync();
