@@ -1,4 +1,6 @@
+using System.Text.Json;
 using LoyaltyCloud.Application.Common.Interfaces;
+using LoyaltyCloud.Application.Notifications;
 using LoyaltyCloud.Common.Extensions;
 using LoyaltyCloud.Common.Results;
 using LoyaltyCloud.Common.Services;
@@ -19,10 +21,9 @@ public sealed class AddPointsHandler : IRequestHandler<AddPointsCommand, Result<
     private readonly IPointTransactionRepository _transactions;
     private readonly IPointLotRepository _pointLots;
     private readonly IProgramConfigRepository _config;
-    private readonly IDeviceRegistrationRepository _devices;
-    private readonly IApnService _apn;
     private readonly ILevelCalculationService _levels;
     private readonly IPointCampaignSelector _campaignSelector;
+    private readonly ILoyaltyNotificationService _notifications;
     private readonly ITenantContext _tenantContext;
     private readonly IDateTimeProvider _dt;
     private readonly IUnitOfWork _uow;
@@ -34,10 +35,9 @@ public sealed class AddPointsHandler : IRequestHandler<AddPointsCommand, Result<
         IPointTransactionRepository transactions,
         IPointLotRepository pointLots,
         IProgramConfigRepository config,
-        IDeviceRegistrationRepository devices,
-        IApnService apn,
         ILevelCalculationService levels,
         IPointCampaignSelector campaignSelector,
+        ILoyaltyNotificationService notifications,
         ITenantContext tenantContext,
         IDateTimeProvider dt,
         IUnitOfWork uow,
@@ -48,10 +48,9 @@ public sealed class AddPointsHandler : IRequestHandler<AddPointsCommand, Result<
         _transactions = transactions;
         _pointLots = pointLots;
         _config = config;
-        _devices = devices;
-        _apn = apn;
         _levels = levels;
         _campaignSelector = campaignSelector;
+        _notifications = notifications;
         _tenantContext = tenantContext;
         _dt = dt;
         _uow = uow;
@@ -64,14 +63,13 @@ public sealed class AddPointsHandler : IRequestHandler<AddPointsCommand, Result<
         IPointTransactionRepository transactions,
         IPointLotRepository pointLots,
         IProgramConfigRepository config,
-        IDeviceRegistrationRepository devices,
-        IApnService apn,
         ILevelCalculationService levels,
+        ILoyaltyNotificationService notifications,
         ITenantContext tenantContext,
         IDateTimeProvider dt,
         IUnitOfWork uow,
         ILogger<AddPointsHandler> logger)
-        : this(cards, customers, transactions, pointLots, config, devices, apn, levels, NullPointCampaignSelector.Instance, tenantContext, dt, uow, logger)
+        : this(cards, customers, transactions, pointLots, config, levels, NullPointCampaignSelector.Instance, notifications, tenantContext, dt, uow, logger)
     {
     }
 
@@ -110,6 +108,7 @@ public sealed class AddPointsHandler : IRequestHandler<AddPointsCommand, Result<
         var campaignId = campaignWins ? campaign!.Id : (Guid?)null;
         var campaignName = campaignWins ? campaign!.Name : null;
 
+        var previousPoints = card.CurrentPoints;
         card.EarnPoints(finalPoints, TransactionType.Purchase, snapshot, _dt);
 
         var description = campaignWins
@@ -160,7 +159,16 @@ public sealed class AddPointsHandler : IRequestHandler<AddPointsCommand, Result<
         await _uow.SaveChangesAsync(ct);
 
         if (!levelChanged)
-            await TryPushWalletUpdateAsync(card.SerialNumber, PassUpdateReason.PointsAdded, ct);
+        {
+            await CreatePointsAddedNotificationAsync(
+                card.SerialNumber,
+                finalPoints,
+                previousPoints,
+                card.CurrentPoints,
+                transactionId,
+                command.PurchaseAmount,
+                ct);
+        }
 
         return Result.Ok(new AddPointsResponse(
             PointsAdded: finalPoints,
@@ -175,55 +183,51 @@ public sealed class AddPointsHandler : IRequestHandler<AddPointsCommand, Result<
             CampaignName: campaignName));
     }
 
-    private async Task TryPushWalletUpdateAsync(string serial, PassUpdateReason reason, CancellationToken ct)
+    private async Task CreatePointsAddedNotificationAsync(
+        string serial,
+        int pointsAdded,
+        int previousPoints,
+        int newTotal,
+        Guid transactionId,
+        decimal purchaseAmount,
+        CancellationToken ct)
     {
         try
         {
-            var devices = await _devices.GetBySerialNumberAsync(serial, ct);
-            _logger.LogInformation(
-                "Wallet update after points: serial={Serial}, devicesFound={DeviceCount}, apnService={ApnService}.",
-                serial,
-                devices.Count,
-                _apn.GetType().Name);
-
-            if (devices.Count == 0)
+            var metadata = JsonSerializer.Serialize(new
             {
-                _logger.LogInformation(
-                    "Wallet update after points skipped because no device registrations exist for serial {Serial}.",
-                    serial);
-                return;
-            }
-
-            foreach (var device in devices)
-            {
-                _logger.LogInformation(
-                    "Wallet update after points sending APNs. serial={Serial}, device={Device}, pushToken={PushToken}, reason={Reason}.",
-                    serial,
-                    SafeIdentifier(device.DeviceLibraryIdentifier),
-                    SafeIdentifier(device.PushToken),
-                    reason);
-                await _apn.SendPassUpdateAsync(device.PushToken, reason, ct);
-            }
+                pointsAdded,
+                previousPoints,
+                newTotal,
+                transactionId,
+                purchaseAmount
+            });
 
             _logger.LogInformation(
-                "Wallet update after points completed APNs attempts. serial={Serial}, attempted={DeviceCount}.",
+                "Creating PointsAdded notification for serial {Serial}: pointsAdded={PointsAdded}, previousPoints={PreviousPoints}, newTotal={NewTotal}, transactionId={TransactionId}.",
                 serial,
-                devices.Count);
+                pointsAdded,
+                previousPoints,
+                newTotal,
+                transactionId);
+
+            await _notifications.CreateAsync(new CreateLoyaltyNotificationRequest(
+                serial,
+                NotificationType.PointsAdded,
+                "Puntos sumados",
+                $"Sumaste {pointsAdded:N0} {(pointsAdded == 1 ? "punto" : "puntos")}.",
+                ScheduledAtUtc: null,
+                DisplayUntilUtc: _dt.UtcNow.AddHours(24),
+                Channels: [NotificationChannel.AppleWallet],
+                CorrelationId: $"points-added:{transactionId}",
+                Source: "add-points",
+                MetadataJson: metadata,
+                ProcessImmediately: true), ct);
         }
         catch (Exception ex)
         {
-            _logger.LogWarning(ex, "Fallo enviando push de Wallet para serial {Serial}", serial);
+            _logger.LogWarning(ex, "No se pudo crear notificacion PointsAdded para serial {Serial}.", serial);
         }
-    }
-
-    private static string SafeIdentifier(string value)
-    {
-        if (string.IsNullOrWhiteSpace(value))
-            return "<empty>";
-
-        return value.Length <= 8
-            ? $"{value[..Math.Min(4, value.Length)]}..."
-            : $"{value[..4]}...{value[^4..]}";
     }
 
     private sealed class NullPointCampaignSelector : IPointCampaignSelector

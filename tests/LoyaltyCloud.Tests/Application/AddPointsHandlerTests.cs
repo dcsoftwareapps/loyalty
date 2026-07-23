@@ -1,4 +1,5 @@
 using LoyaltyCloud.Application.Common.Interfaces;
+using LoyaltyCloud.Application.Notifications;
 using LoyaltyCloud.Application.Points.Commands.AddPoints;
 using LoyaltyCloud.Common.Constants;
 using LoyaltyCloud.Domain.Entities;
@@ -18,7 +19,7 @@ public class AddPointsHandlerTests
         Mock<ILoyaltyCardRepository> Cards,
         Mock<ICustomerRepository> Customers,
         Mock<IPointTransactionRepository> Transactions,
-        Mock<IApnService> Apn,
+        Mock<ILoyaltyNotificationService> Notifications,
         Mock<IUnitOfWork> Uow);
 
     private static HandlerSetup BuildHandler(LoyaltyCard? card, Customer? customer, DateTime? now = null)
@@ -38,11 +39,7 @@ public class AddPointsHandlerTests
         var pointLots = new Mock<IPointLotRepository>();
         var config = ConfigRepoWithDefaults();
 
-        var devices = new Mock<IDeviceRegistrationRepository>();
-        devices.Setup(r => r.GetBySerialNumberAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
-               .ReturnsAsync(Array.Empty<DeviceRegistration>());
-
-        var apn = new Mock<IApnService>();
+        var notifications = NotificationService(card, customer, now);
         var clock = Clock(now);
         var uow = NoOpUnitOfWork();
 
@@ -52,15 +49,14 @@ public class AddPointsHandlerTests
             transactions.Object,
             pointLots.Object,
             config.Object,
-            devices.Object,
-            apn.Object,
             LevelCalculator().Object,
+            notifications.Object,
             TenantContext().Object,
             clock.Object,
             uow.Object,
             NullLogger<AddPointsHandler>.Instance);
 
-        return new HandlerSetup(handler, cards, customers, transactions, apn, uow);
+        return new HandlerSetup(handler, cards, customers, transactions, notifications, uow);
     }
 
     // =========================================================================
@@ -103,7 +99,7 @@ public class AddPointsHandlerTests
     }
 
     [Fact]
-    public async Task Handle_ShouldCallApnService_WhenPointsAdded()
+    public async Task Handle_ShouldCreatePointsAddedNotification_WhenPointsAdded()
     {
         var customer = NewCustomer();
         var card = NewCard(customer.Id);
@@ -123,31 +119,31 @@ public class AddPointsHandlerTests
         var pointLots = new Mock<IPointLotRepository>();
         var config = ConfigRepoWithDefaults();
 
-        // Un dispositivo registrado para esta tarjeta.
-        var devices = new Mock<IDeviceRegistrationRepository>();
-        devices.Setup(r => r.GetBySerialNumberAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
-               .ReturnsAsync(new[]
-               {
-                   new DeviceRegistration(Guid.NewGuid(), KBeautyTenantId, "device-1",
-                       "pass.com.kbeautymx.loyalty", "KB-TEST001", "push-token-abc", Now)
-               });
-
-        var apn = new Mock<IApnService>();
+        var notifications = NotificationService(card, customer);
         var clock = Clock();
         var uow = NoOpUnitOfWork();
 
         var handler = new AddPointsHandler(
             cards.Object, customers.Object, transactions.Object, pointLots.Object, config.Object,
-            devices.Object, apn.Object, LevelCalculator().Object, TenantContext().Object, clock.Object, uow.Object,
+            LevelCalculator().Object, notifications.Object, TenantContext().Object, clock.Object, uow.Object,
             NullLogger<AddPointsHandler>.Instance);
 
         await handler.Handle(
             new AddPointsCommand("KB-TEST001", 200m, "test"),
             CancellationToken.None);
 
-        apn.Verify(s => s.SendPassUpdateAsync(
-            "push-token-abc",
-            It.IsAny<PassUpdateReason>(),
+        notifications.Verify(s => s.CreateAsync(
+            It.Is<CreateLoyaltyNotificationRequest>(request =>
+                request.SerialNumber == "KB-TEST001" &&
+                request.Type == NotificationType.PointsAdded &&
+                request.Channels.Contains(NotificationChannel.AppleWallet) &&
+                request.CorrelationId != null &&
+                request.CorrelationId.StartsWith("points-added:", StringComparison.Ordinal) &&
+                request.MetadataJson != null &&
+                request.MetadataJson.Contains("\"pointsAdded\":20", StringComparison.Ordinal) &&
+                request.MetadataJson.Contains("\"previousPoints\":0", StringComparison.Ordinal) &&
+                request.MetadataJson.Contains("\"newTotal\":20", StringComparison.Ordinal) &&
+                request.ProcessImmediately),
             It.IsAny<CancellationToken>()), Times.Once);
     }
 
@@ -162,8 +158,8 @@ public class AddPointsHandlerTests
 
         Assert.True(result.IsFailure);
         Assert.Contains("No se encontró", result.Error);
-        setup.Apn.Verify(s => s.SendPassUpdateAsync(
-            It.IsAny<string>(), It.IsAny<PassUpdateReason>(), It.IsAny<CancellationToken>()),
+        setup.Notifications.Verify(s => s.CreateAsync(
+            It.IsAny<CreateLoyaltyNotificationRequest>(), It.IsAny<CancellationToken>()),
             Times.Never);
     }
 
@@ -181,5 +177,39 @@ public class AddPointsHandlerTests
 
         Assert.True(result.IsFailure);
         Assert.Contains("muy bajo", result.Error);
+    }
+
+    private static Mock<ILoyaltyNotificationService> NotificationService(
+        LoyaltyCard? card,
+        Customer? customer,
+        DateTime? now = null)
+    {
+        var mock = new Mock<ILoyaltyNotificationService>();
+        mock.Setup(s => s.CreateAsync(
+                It.IsAny<CreateLoyaltyNotificationRequest>(),
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync((CreateLoyaltyNotificationRequest request, CancellationToken _) =>
+                new NotificationDto(
+                    Guid.NewGuid(),
+                    customer?.Id ?? Guid.NewGuid(),
+                    card?.Id ?? Guid.NewGuid(),
+                    customer?.FullName,
+                    request.SerialNumber,
+                    request.Type,
+                    request.Title,
+                    request.Message,
+                    NotificationStatus.Delivered,
+                    now ?? Now,
+                    request.ScheduledAtUtc,
+                    request.DisplayUntilUtc,
+                    now ?? Now,
+                    request.CorrelationId,
+                    request.Source,
+                    request.CustomNotificationCampaignId,
+                    request.ShortMessage,
+                    request.LongMessage,
+                    null,
+                    []));
+        return mock;
     }
 }

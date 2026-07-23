@@ -14,6 +14,7 @@ public sealed record WalletNotificationContext(
     WalletBirthdayBenefitMessage? BirthdayBenefit,
     WalletPointCampaignMessage? PointCampaign,
     WalletCustomMessage? CustomMessage,
+    WalletPointsAddedMessage? PointsAdded,
     WalletRecentVisibleEvent? RecentVisibleEvent);
 
 public sealed record WalletNotificationMessage(
@@ -67,6 +68,12 @@ public sealed record WalletCustomMessage(
     string ShortMessage,
     string LongMessage,
     DateTime DisplayUntilUtc,
+    string ChangeMessage);
+
+public sealed record WalletPointsAddedMessage(
+    Guid NotificationId,
+    int PointsAdded,
+    int NewTotal,
     string ChangeMessage);
 
 public sealed record WalletRecentVisibleEvent(

@@ -5,6 +5,7 @@ using LoyaltyCloud.Application.Common.Interfaces;
 using LoyaltyCloud.Application.Points.Commands.AddPoints;
 using LoyaltyCloud.Common.Security;
 using LoyaltyCloud.Domain.Entities;
+using LoyaltyCloud.Domain.Enums;
 using LoyaltyCloud.Infrastructure.Persistence;
 using LoyaltyCloud.Infrastructure.Persistence.Seed;
 using Microsoft.EntityFrameworkCore;
@@ -58,6 +59,22 @@ public sealed class AdminApiPointsFlowTests : IClassFixture<CustomWebApplication
         Assert.Equal(10, result!.PointsAdded);
         Assert.True(_factory.Apn.Calls.Count > initialApnCount);
         Assert.Contains(_factory.Apn.Calls, call => call.Token == "push-token-api-flow");
+
+        using var scope = _factory.Services.CreateScope();
+        var tenantContext = scope.ServiceProvider.GetRequiredService<IMutableTenantContext>();
+        tenantContext.SetTenant(TenantSeed.KBeautyTenantId, TenantSeed.KBeautySlug);
+        var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        var notification = await db.LoyaltyNotifications
+            .AsNoTracking()
+            .Where(n => n.TenantId == TenantSeed.KBeautyTenantId
+                     && n.Type == NotificationType.PointsAdded)
+            .OrderByDescending(n => n.CreatedAt)
+            .FirstOrDefaultAsync();
+
+        Assert.NotNull(notification);
+        Assert.Equal(NotificationStatus.Delivered, notification!.Status);
+        Assert.Contains("\"pointsAdded\":10", notification.MetadataJson, StringComparison.Ordinal);
+        Assert.Contains("\"newTotal\":10", notification.MetadataJson, StringComparison.Ordinal);
     }
 
     private async Task SeedCardWithDeviceAsync(string serial)

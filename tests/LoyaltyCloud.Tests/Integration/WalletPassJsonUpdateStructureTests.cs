@@ -71,7 +71,88 @@ public sealed class WalletPassJsonUpdateStructureTests
         Assert.DoesNotContain("205 pts", passA.ToJsonString(), StringComparison.Ordinal);
     }
 
-    private static JsonObject BuildPassJson(LoyaltyCard card, Customer customer)
+    [Fact]
+    [Trait("Category", "WalletProductionUpdate")]
+    public void Points_added_recent_event_adds_change_message_to_points_field_only()
+    {
+        var now = new DateTime(2026, 7, 23, 23, 2, 0, DateTimeKind.Utc);
+        var customer = NewCustomer(now);
+        var card = NewCard(customer.Id, now);
+        var snapshot = ProgramConfigSnapshot.FromEntries([]);
+        card.EarnPoints(225, TransactionType.Purchase, snapshot, new FixedClock(now));
+
+        var notificationId = Guid.NewGuid();
+        var context = new WalletNotificationContext(
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            new WalletPointsAddedMessage(notificationId, 10, 225, "\ud83c\udf89 Sumaste 10 puntos"),
+            new WalletRecentVisibleEvent(notificationId, NotificationType.PointsAdded, now, now, now.AddHours(24)));
+
+        var pass = BuildPassJson(card, customer, context);
+        var points = SingleField(pass, "points");
+
+        Assert.Equal("225 pts", points["value"]!.GetValue<string>());
+        Assert.Equal("\ud83c\udf89 Sumaste 10 puntos", points["changeMessage"]!.GetValue<string>());
+        Assert.Equal(1, CountFields(pass, "points"));
+    }
+
+    [Fact]
+    [Trait("Category", "WalletProductionUpdate")]
+    public void Level_changed_recent_event_keeps_priority_over_points_added()
+    {
+        var now = new DateTime(2026, 7, 23, 23, 2, 0, DateTimeKind.Utc);
+        var customer = NewCustomer(now);
+        var card = NewCard(customer.Id, now);
+        var snapshot = ProgramConfigSnapshot.FromEntries([]);
+        card.EarnPoints(600, TransactionType.Purchase, snapshot, new FixedClock(now));
+
+        var levelNotificationId = Guid.NewGuid();
+        var pointsNotificationId = Guid.NewGuid();
+        var context = new WalletNotificationContext(
+            null,
+            new WalletNotificationMessage(levelNotificationId, NotificationType.LevelChanged, "Subiste de nivel!", "Ahora eres cliente Glow", null),
+            null,
+            null,
+            null,
+            null,
+            null,
+            new WalletPointsAddedMessage(pointsNotificationId, 100, 600, "\ud83c\udf89 Sumaste 100 puntos"),
+            new WalletRecentVisibleEvent(levelNotificationId, NotificationType.LevelChanged, now, now, now.AddDays(7)));
+
+        var pass = BuildPassJson(card, customer, context);
+        var points = SingleField(pass, "points");
+
+        Assert.Equal("600 pts", points["value"]!.GetValue<string>());
+        Assert.Null(points["changeMessage"]);
+    }
+
+    private static Customer NewCustomer(DateTime now) =>
+        new(
+            Guid.NewGuid(),
+            Guid.Parse("b1000000-0000-0000-0000-000000000001"),
+            "Daniel Chavez",
+            "daniel@example.local",
+            new DateTime(1990, 1, 1),
+            now,
+            "6461234567");
+
+    private static LoyaltyCard NewCard(Guid customerId, DateTime now) =>
+        new(
+            Guid.NewGuid(),
+            Guid.Parse("b1000000-0000-0000-0000-000000000001"),
+            customerId,
+            "KB-LNB7ACG",
+            now);
+
+    private static JsonObject BuildPassJson(
+        LoyaltyCard card,
+        Customer customer,
+        WalletNotificationContext? walletContext = null)
     {
         var passGeneratorType = typeof(AppDbContext).Assembly
             .GetType("LoyaltyCloud.Infrastructure.Services.PassGeneratorService", throwOnError: true)!;
@@ -106,7 +187,7 @@ public sealed class WalletPassJsonUpdateStructureTests
             [
                 card,
                 customer,
-                new WalletNotificationContext(null, null, null, null, null, null, null, null),
+                walletContext ?? new WalletNotificationContext(null, null, null, null, null, null, null, null, null),
                 new TenantWalletBrandingDto(
                     card.TenantId,
                     "kbeauty",

@@ -7,5 +7,6 @@ public enum NotificationType
     MonthlyProductStarted = 2,
     PointCampaignStarted = 3,
     BirthdayBenefitStarted = 4,
-    Custom = 5
+    Custom = 5,
+    PointsAdded = 6
 }
