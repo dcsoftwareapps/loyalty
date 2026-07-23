@@ -74,6 +74,7 @@ public sealed record WalletPointsAddedMessage(
     Guid NotificationId,
     int PointsAdded,
     int NewTotal,
+    string Value,
     string ChangeMessage);
 
 public sealed record WalletRecentVisibleEvent(

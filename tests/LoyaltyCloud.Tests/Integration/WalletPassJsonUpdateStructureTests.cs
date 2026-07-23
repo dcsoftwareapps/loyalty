@@ -67,6 +67,8 @@ public sealed class WalletPassJsonUpdateStructureTests
 
         Assert.Equal(1, CountFields(passA, "points"));
         Assert.Equal(1, CountFields(passB, "points"));
+        Assert.Equal(0, CountFields(passA, "points_added"));
+        Assert.Equal(0, CountFields(passB, "points_added"));
         Assert.DoesNotContain("195 pts", passB.ToJsonString(), StringComparison.Ordinal);
         Assert.DoesNotContain("205 pts", passA.ToJsonString(), StringComparison.Ordinal);
     }
@@ -90,15 +92,20 @@ public sealed class WalletPassJsonUpdateStructureTests
             null,
             null,
             null,
-            new WalletPointsAddedMessage(notificationId, 10, 225, "\ud83c\udf89 Sumaste 10 puntos"),
+            new WalletPointsAddedMessage(notificationId, 10, 225, "10 puntos", "\ud83c\udf89 Sumaste %@"),
             new WalletRecentVisibleEvent(notificationId, NotificationType.PointsAdded, now, now, now.AddHours(24)));
 
         var pass = BuildPassJson(card, customer, context);
         var points = SingleField(pass, "points");
+        var pointsAdded = SingleField(pass, "points_added");
 
         Assert.Equal("225 pts", points["value"]!.GetValue<string>());
-        Assert.Equal("\ud83c\udf89 Sumaste 10 puntos", points["changeMessage"]!.GetValue<string>());
+        Assert.Null(points["changeMessage"]);
+        Assert.Equal("SUMASTE", pointsAdded["label"]!.GetValue<string>());
+        Assert.Equal("10 puntos", pointsAdded["value"]!.GetValue<string>());
+        Assert.Equal("\ud83c\udf89 Sumaste %@", pointsAdded["changeMessage"]!.GetValue<string>());
         Assert.Equal(1, CountFields(pass, "points"));
+        Assert.Equal(1, CountFields(pass, "points_added"));
     }
 
     [Fact]
@@ -121,7 +128,7 @@ public sealed class WalletPassJsonUpdateStructureTests
             null,
             null,
             null,
-            new WalletPointsAddedMessage(pointsNotificationId, 100, 600, "\ud83c\udf89 Sumaste 100 puntos"),
+            new WalletPointsAddedMessage(pointsNotificationId, 100, 600, "100 puntos", "\ud83c\udf89 Sumaste %@"),
             new WalletRecentVisibleEvent(levelNotificationId, NotificationType.LevelChanged, now, now, now.AddDays(7)));
 
         var pass = BuildPassJson(card, customer, context);
@@ -129,6 +136,7 @@ public sealed class WalletPassJsonUpdateStructureTests
 
         Assert.Equal("600 pts", points["value"]!.GetValue<string>());
         Assert.Null(points["changeMessage"]);
+        Assert.Equal(0, CountFields(pass, "points_added"));
     }
 
     private static Customer NewCustomer(DateTime now) =>

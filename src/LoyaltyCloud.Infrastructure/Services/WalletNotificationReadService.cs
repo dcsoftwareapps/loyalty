@@ -273,7 +273,8 @@ internal sealed class WalletNotificationReadService : IWalletNotificationReadSer
             notificationId,
             pointsAdded,
             newTotal,
-            $"\ud83c\udf89 Sumaste {pointsAdded:N0} {pointLabel}");
+            $"{pointsAdded:N0} {pointLabel}",
+            "\ud83c\udf89 Sumaste %@");
     }
 
     private static bool TryReadPointsAddedMetadata(string? metadataJson, out int pointsAdded, out int newTotal)

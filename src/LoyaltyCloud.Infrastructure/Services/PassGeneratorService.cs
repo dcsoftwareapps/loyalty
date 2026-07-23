@@ -36,6 +36,7 @@ internal sealed class PassGeneratorService : IPassGeneratorService
     private const string PointCampaignFieldKey = "point_campaign";
     private const string BirthdayBenefitFieldKey = "birthday_benefit";
     private const string CustomMessageFieldKey = "custom_message";
+    private const string PointsAddedFieldKey = "points_added";
 
     public PassGeneratorService(
         IAppleWalletSecretsProvider secrets,
@@ -195,32 +196,17 @@ internal sealed class PassGeneratorService : IPassGeneratorService
         string? levelChangeMessage,
         WalletNotificationContext walletContext)
     {
-        var pointsChangeMessage = walletContext.RecentVisibleEvent?.Type == NotificationType.PointsAdded
-            ? walletContext.PointsAdded?.ChangeMessage
-            : null;
-        var fields = new List<object>();
-
-        if (string.IsNullOrWhiteSpace(pointsChangeMessage))
+        var fields = new List<object>
         {
-            fields.Add(new { key = "points", label = "PUNTOS", value = progress.PointsText });
-        }
-        else
-        {
-            fields.Add(new
-            {
-                key = "points",
-                label = "PUNTOS",
-                value = progress.PointsText,
-                changeMessage = pointsChangeMessage
-            });
-        }
+            new { key = "points", label = "PUNTOS", value = progress.PointsText }
+        };
 
         _logger.LogInformation(
             "Apple Wallet points field generated: key={Key}, label={Label}, value={Value}, changeMessageIncluded={ChangeMessageIncluded}.",
             "points",
             "PUNTOS",
             progress.PointsText,
-            !string.IsNullOrWhiteSpace(pointsChangeMessage));
+            false);
 
         if (string.IsNullOrWhiteSpace(levelChangeMessage))
         {
@@ -284,7 +270,8 @@ internal sealed class PassGeneratorService : IPassGeneratorService
         return walletContext.RecentVisibleEvent.Type switch
         {
             NotificationType.LevelChanged => null,
-            NotificationType.PointsAdded => null,
+            NotificationType.PointsAdded when walletContext.PointsAdded is not null =>
+                BuildPointsAddedField(walletContext.PointsAdded, out selection),
             NotificationType.BirthdayBenefitStarted when walletContext.BirthdayBenefit is not null =>
                 BuildBirthdayBenefitField(walletContext.BirthdayBenefit, includeChangeMessage: true, out selection),
             NotificationType.PointsExpiring when walletContext.PointsExpiring is not null =>
@@ -339,6 +326,20 @@ internal sealed class PassGeneratorService : IPassGeneratorService
                 label = "POR EXPIRAR",
                 value = pointsExpiring.Value
             };
+    }
+
+    private static object BuildPointsAddedField(
+        WalletPointsAddedMessage pointsAdded,
+        out TemporalFieldSelection selection)
+    {
+        selection = new TemporalFieldSelection(PointsAddedFieldKey, pointsAdded.Value, true);
+        return new
+        {
+            key = PointsAddedFieldKey,
+            label = "SUMASTE",
+            value = pointsAdded.Value,
+            changeMessage = pointsAdded.ChangeMessage
+        };
     }
 
     private static object BuildCustomMessageField(
