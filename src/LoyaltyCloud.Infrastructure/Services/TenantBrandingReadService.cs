@@ -1,22 +1,23 @@
 using LoyaltyCloud.Application.Common.Interfaces;
 using LoyaltyCloud.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 
 namespace LoyaltyCloud.Infrastructure.Services;
 
 internal sealed class TenantBrandingReadService : ITenantBrandingReadService
 {
-    private readonly AppDbContext _db;
+    private readonly IServiceScopeFactory _scopeFactory;
     private readonly ITenantContext _tenantContext;
     private readonly ILogger<TenantBrandingReadService> _logger;
 
     public TenantBrandingReadService(
-        AppDbContext db,
+        IServiceScopeFactory scopeFactory,
         ITenantContext tenantContext,
         ILogger<TenantBrandingReadService> logger)
     {
-        _db = db;
+        _scopeFactory = scopeFactory;
         _tenantContext = tenantContext;
         _logger = logger;
     }
@@ -27,7 +28,9 @@ internal sealed class TenantBrandingReadService : ITenantBrandingReadService
             return Generic();
 
         var tenantId = _tenantContext.RequireTenantId();
-        var row = await _db.Tenants
+        using var scope = _scopeFactory.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        var row = await db.Tenants
             .AsNoTracking()
             .Where(tenant => tenant.Id == tenantId)
             .Select(tenant => new

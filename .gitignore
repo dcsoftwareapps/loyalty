@@ -12,6 +12,7 @@ out/
 .vs/
 .vscode/
 *.swp
+.azurite/
 
 # Build results
 [Dd]ebug/
