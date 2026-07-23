@@ -92,6 +92,15 @@ internal sealed class PassGeneratorService : IPassGeneratorService
             output.Length,
             string.Join(", ", new[] { "pass.json", "manifest.json", "signature" }.Concat(assets.Select(a => a.Name))));
 
+        _logger.LogInformation(
+            "Apple Wallet generated pass diagnostic: serial={Serial}, currentPoints={CurrentPoints}, pointsFieldValue={PointsFieldValue}, lastActivityAt={LastActivityAt:O}, pkpassBytes={Bytes}, pkpassSha256={PkpassSha256}.",
+            card.SerialNumber,
+            card.CurrentPoints,
+            BuildLevelProgress(card).PointsText,
+            card.LastActivityAt,
+            output.Length,
+            Sha256Short(output.ToArray()));
+
         return output.ToArray();
     }
 
@@ -190,6 +199,13 @@ internal sealed class PassGeneratorService : IPassGeneratorService
         {
             new { key = "points", label = "PUNTOS", value = progress.PointsText }
         };
+
+        _logger.LogInformation(
+            "Apple Wallet points field generated: key={Key}, label={Label}, value={Value}, changeMessageIncluded={ChangeMessageIncluded}.",
+            "points",
+            "PUNTOS",
+            progress.PointsText,
+            false);
 
         if (string.IsNullOrWhiteSpace(levelChangeMessage))
         {
@@ -728,6 +744,10 @@ internal sealed class PassGeneratorService : IPassGeneratorService
         foreach (var b in hash) sb.AppendFormat("{0:x2}", b);
         return sb.ToString();
     }
+
+    private static string Sha256Short(byte[] data) =>
+        Convert.ToHexString(SHA256.HashData(data))
+            .ToLowerInvariant()[..12];
 
     private static void AddZipEntry(ZipArchive zip, string name, byte[] content)
     {
