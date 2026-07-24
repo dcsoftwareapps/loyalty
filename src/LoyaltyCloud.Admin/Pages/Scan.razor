@@ -9,8 +9,8 @@
 @using LoyaltyCloud.Application.Customers.Queries.GetCustomerBySerial
 @using LoyaltyCloud.Application.Points.Commands.AddPoints
 @using LoyaltyCloud.Common.Services
-@inject ISender Sender
 @inject AdminApiPointsClient PointsApi
+@inject AdminApiClient AdminApi
 @inject IDateTimeProvider Dt
 @inject IJSRuntime JS
 @inject LoyaltyCloud.Application.Common.Interfaces.IDashboardReadService _
@@ -201,7 +201,7 @@
         serialInput = serial;
         errorMessage = null;
         busy = true;
-        var result = await Sender.Send(new GetCustomerBySerialQuery(serialInput));
+        var result = await FetchCustomerAsync(serialInput);
         busy = false;
 
         if (result.IsFailure)
@@ -226,20 +226,33 @@
 
         errorMessage = null;
         busy = true;
-        var result = await PointsApi.AddPointsAsync(customer.SerialNumber, PurchaseAmount);
-        busy = false;
+        var serial = customer.SerialNumber;
+        var result = await PointsApi.AddPointsAsync(serial, PurchaseAmount);
 
         if (result.IsFailure)
         {
+            busy = false;
             errorMessage = result.Error;
             return;
         }
 
         lastSuccess = result.Value;
-        var refreshed = await Sender.Send(new GetCustomerBySerialQuery(customer.SerialNumber));
-        if (refreshed.IsSuccess) customer = refreshed.Value;
+        var refreshed = await FetchCustomerAsync(serial);
+        if (refreshed.IsSuccess)
+        {
+            customer = refreshed.Value;
+        }
+        else
+        {
+            errorMessage = $"La compra se registr\u00f3, pero no se pudo refrescar el saldo: {refreshed.Error}";
+        }
+
         amountInput = string.Empty;
+        busy = false;
     }
+
+    private async Task<LoyaltyCloud.Common.Results.Result<CustomerDetailDto>> FetchCustomerAsync(string serial) =>
+        await AdminApi.GetAsync<CustomerDetailDto>($"api/customers/{Uri.EscapeDataString(serial)}");
 
     private void Reset()
     {

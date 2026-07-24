@@ -108,7 +108,10 @@ public sealed class AdminApiAuthenticationMiddleware
     }
 
     private static bool RequiresAdminApiAuthentication(HttpRequest request) =>
-        request.Path.Equals("/api/points", StringComparison.OrdinalIgnoreCase);
+        request.Path.Equals("/api/points", StringComparison.OrdinalIgnoreCase)
+        || request.Path.StartsWithSegments("/api/custom-notification-campaigns", StringComparison.OrdinalIgnoreCase)
+        || (HttpMethods.IsGet(request.Method)
+            && request.Path.StartsWithSegments("/api/customers", StringComparison.OrdinalIgnoreCase));
 
     private void Reject(HttpContext context, string reason, string? tenantSlug, int status = StatusCodes.Status401Unauthorized)
     {

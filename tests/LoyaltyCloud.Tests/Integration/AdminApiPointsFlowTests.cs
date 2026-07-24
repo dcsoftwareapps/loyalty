@@ -77,6 +77,35 @@ public sealed class AdminApiPointsFlowTests : IClassFixture<CustomWebApplication
         Assert.Contains("\"newTotal\":10", notification.MetadataJson, StringComparison.Ordinal);
     }
 
+    [Fact]
+    [Trait("Category", "AdminInteractiveTenantContext")]
+    public async Task Signed_admin_custom_notification_campaigns_request_sets_tenant_context()
+    {
+        await EnsureTenantOperationalAsync();
+
+        using var request = CreateSignedRequest(
+            HttpMethod.Get,
+            "/api/custom-notification-campaigns?take=100",
+            body: null);
+
+        using var response = await _client.SendAsync(request);
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var campaigns = await response.Content.ReadFromJsonAsync<List<object>>();
+        Assert.NotNull(campaigns);
+    }
+
+    private async Task EnsureTenantOperationalAsync()
+    {
+        using var scope = _factory.Services.CreateScope();
+        var tenantContext = scope.ServiceProvider.GetRequiredService<IMutableTenantContext>();
+        tenantContext.SetTenant(TenantSeed.KBeautyTenantId, TenantSeed.KBeautySlug);
+        var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        var subscription = await db.TenantSubscriptions.SingleAsync(s => s.TenantId == TenantSeed.KBeautyTenantId);
+        db.Entry(subscription).Property(nameof(TenantSubscription.PaidThroughUtc)).CurrentValue = DateTime.UtcNow.AddDays(30);
+        await db.SaveChangesAsync();
+    }
+
     private async Task SeedCardWithDeviceAsync(string serial)
     {
         using var scope = _factory.Services.CreateScope();
@@ -121,29 +150,38 @@ public sealed class AdminApiPointsFlowTests : IClassFixture<CustomWebApplication
         await db.SaveChangesAsync();
     }
 
-    private static HttpRequestMessage CreateSignedAddPointsRequest(string serial, decimal purchaseAmount)
+    private static HttpRequestMessage CreateSignedAddPointsRequest(string serial, decimal purchaseAmount) =>
+        CreateSignedRequest(
+            HttpMethod.Post,
+            "/api/points",
+            new { serialNumber = serial, purchaseAmount });
+
+    private static HttpRequestMessage CreateSignedRequest(HttpMethod method, string path, object? body)
     {
-        const string path = "/api/points";
         const string tenantSlug = "kbeauty";
         const string operatorId = "admin-api-test";
         var timestamp = DateTimeOffset.UtcNow.ToString("O");
-        var body = JsonSerializer.SerializeToUtf8Bytes(
-            new { serialNumber = serial, purchaseAmount },
-            new JsonSerializerOptions(JsonSerializerDefaults.Web));
+        var bodyBytes = body is null
+            ? []
+            : JsonSerializer.SerializeToUtf8Bytes(
+                body,
+                new JsonSerializerOptions(JsonSerializerDefaults.Web));
         var signature = AdminApiSignature.CreateSignature(
             SharedSecret,
-            HttpMethod.Post.Method,
+            method.Method,
             path,
             timestamp,
             tenantSlug,
             operatorId,
-            body);
+            bodyBytes);
 
-        var request = new HttpRequestMessage(HttpMethod.Post, path)
+        var request = new HttpRequestMessage(method, path);
+        if (body is not null)
         {
-            Content = new ByteArrayContent(body)
-        };
-        request.Content.Headers.ContentType = new("application/json");
+            request.Content = new ByteArrayContent(bodyBytes);
+            request.Content.Headers.ContentType = new("application/json");
+        }
+
         request.Headers.Add(AdminApiSignature.TenantSlugHeader, tenantSlug);
         request.Headers.Add(AdminApiSignature.OperatorHeader, operatorId);
         request.Headers.Add(AdminApiSignature.TimestampHeader, timestamp);

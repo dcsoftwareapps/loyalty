@@ -9,6 +9,7 @@ using LoyaltyCloud.Infrastructure.Persistence;
 using MediatR;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Components.Server.Circuits;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -22,6 +23,8 @@ builder.Configuration.AddLoyaltyCloudKeyVault(builder.Configuration["Azure:KeyVa
 // Capas de negocio — Admin habla con Application/MediatR in-process, no HTTP.
 builder.Services.AddApplication();
 builder.Services.AddInfrastructure(builder.Configuration, builder.Environment);
+builder.Services.AddScoped<AdminTenantContextInitializer>();
+builder.Services.AddScoped<CircuitHandler, AdminTenantCircuitHandler>();
 builder.Services.AddScoped(typeof(IPipelineBehavior<,>), typeof(AdminTenantContextBehavior<,>));
 
 var apiBaseUrl = builder.Configuration["Admin:ApiBaseUrl"];
@@ -33,6 +36,7 @@ builder.Services.AddHttpClient("LoyaltyCloudApi", client =>
     client.BaseAddress = new Uri(apiBaseUrl);
 });
 builder.Services.AddScoped<AdminApiPointsClient>();
+builder.Services.AddScoped<AdminApiClient>();
 
 // Blazor Web App con Interactive Server.
 builder.Services.AddRazorComponents()

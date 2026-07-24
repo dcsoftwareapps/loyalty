@@ -237,7 +237,24 @@ public sealed class AdminRoutingTests : IClassFixture<AdminRoutingTests.AdminWeb
         var scanSource = File.ReadAllText(Path.Combine(GetRepositoryRoot(), "src", "LoyaltyCloud.Admin", "Pages", "Scan.razor"));
 
         Assert.Contains("if (customer is null || !IsPurchaseAmountValid || busy) return;", scanSource);
-        Assert.Contains("new AddPointsCommand(customer.SerialNumber, PurchaseAmount, \"admin-panel\")", scanSource);
+        Assert.Contains("await PointsApi.AddPointsAsync(serial, PurchaseAmount)", scanSource);
+        Assert.Contains("var refreshed = await FetchCustomerAsync(serial);", scanSource);
+        Assert.Contains("customer = refreshed.Value;", scanSource);
+        Assert.DoesNotContain("new AddPointsCommand(customer.SerialNumber, PurchaseAmount, \"admin-panel\")", scanSource);
+    }
+
+    [Fact]
+    [Trait("Category", "AdminInteractiveTenantContext")]
+    public void Marketing_notifications_uses_signed_admin_api_client()
+    {
+        var source = File.ReadAllText(Path.Combine(GetRepositoryRoot(), "src", "LoyaltyCloud.Admin", "Pages", "MarketingNotifications.razor"));
+
+        Assert.Contains("@inject AdminApiClient Api", source);
+        Assert.Contains("Api.GetAsync<List<CustomNotificationCampaignDto>>", source);
+        Assert.Contains("Api.PostAsJsonAsync<PreviewCustomNotificationAudienceRequest, CustomNotificationAudiencePreviewDto>", source);
+        Assert.Contains("Api.PostAsJsonAsync<CustomNotificationCampaignRequest, CustomNotificationCampaignDto>", source);
+        Assert.DoesNotContain("@inject IHttpClientFactory", source);
+        Assert.DoesNotContain("HttpClientFactory.CreateClient", source);
     }
 
     [Fact]

@@ -1,7 +1,4 @@
-using System.Security.Claims;
-using LoyaltyCloud.Application.Common.Interfaces;
 using MediatR;
-using Microsoft.AspNetCore.Components.Authorization;
 
 namespace LoyaltyCloud.Admin.Auth;
 
@@ -13,18 +10,12 @@ public sealed class AdminTenantContextBehavior<TRequest, TResponse>
     : IPipelineBehavior<TRequest, TResponse>
     where TRequest : notnull
 {
-    private readonly AuthenticationStateProvider _authenticationStateProvider;
-    private readonly IMutableTenantContext _tenantContext;
-    private readonly ILogger<AdminTenantContextBehavior<TRequest, TResponse>> _logger;
+    private readonly AdminTenantContextInitializer _initializer;
 
     public AdminTenantContextBehavior(
-        AuthenticationStateProvider authenticationStateProvider,
-        IMutableTenantContext tenantContext,
-        ILogger<AdminTenantContextBehavior<TRequest, TResponse>> logger)
+        AdminTenantContextInitializer initializer)
     {
-        _authenticationStateProvider = authenticationStateProvider;
-        _tenantContext = tenantContext;
-        _logger = logger;
+        _initializer = initializer;
     }
 
     public async Task<TResponse> Handle(
@@ -32,28 +23,7 @@ public sealed class AdminTenantContextBehavior<TRequest, TResponse>
         RequestHandlerDelegate<TResponse> next,
         CancellationToken cancellationToken)
     {
-        if (!_tenantContext.HasTenant)
-            await TrySetTenantContextFromAuthenticatedPrincipalAsync();
-
+        await _initializer.EnsureTenantContextAsync(cancellationToken);
         return await next();
-    }
-
-    private async Task TrySetTenantContextFromAuthenticatedPrincipalAsync()
-    {
-        var principal = (await _authenticationStateProvider.GetAuthenticationStateAsync()).User;
-        if (principal.Identity?.IsAuthenticated != true)
-            return;
-
-        var tenantIdRaw = principal.FindFirstValue(AdminClaimTypes.TenantId);
-        var tenantSlug = principal.FindFirstValue(AdminClaimTypes.TenantSlug);
-
-        if (!Guid.TryParse(tenantIdRaw, out var tenantId) || string.IsNullOrWhiteSpace(tenantSlug))
-            return;
-
-        _tenantContext.SetTenant(tenantId, tenantSlug);
-        _logger.LogDebug(
-            "Admin tenant context restored for circuit. TenantId={TenantId}, TenantSlug={TenantSlug}",
-            tenantId,
-            tenantSlug);
     }
 }
