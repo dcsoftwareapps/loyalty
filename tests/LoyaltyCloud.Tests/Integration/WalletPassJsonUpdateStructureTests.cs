@@ -162,6 +162,42 @@ public sealed class WalletPassJsonUpdateStructureTests
 
     [Fact]
     [Trait("Category", "MTLevel4")]
+    [Trait("Category", "MTLevel6")]
+    [Trait("Category", "WalletProductionUpdate")]
+    public void Pass_json_uses_renamed_dynamic_next_level_after_glow_to_plata()
+    {
+        var now = new DateTime(2026, 7, 24, 12, 0, 0, DateTimeKind.Utc);
+        var customer = NewCustomer(now);
+        var card = NewCard(customer.Id, now);
+        var snapshot = ProgramConfigSnapshot.FromEntries([]);
+        card.EarnPoints(245, TransactionType.Purchase, snapshot, new FixedClock(now));
+
+        var levels = new[]
+        {
+            new TenantLoyaltyLevelDto(Guid.NewGuid(), "Mist", 0, 1),
+            new TenantLoyaltyLevelDto(Guid.NewGuid(), "Plata", 1000, 2),
+            new TenantLoyaltyLevelDto(Guid.NewGuid(), "Radiance", 3000, 3)
+        };
+        var progress = CalculateProgress(245, levels);
+        var pass = BuildPassJson(
+            card,
+            customer,
+            progress: new PassProgressValues(
+                $"{progress.CurrentLevel.Name} Member \u2728",
+                $"{progress.CurrentLevel.Name} \u2728",
+                $"{card.CurrentPoints} pts",
+                progress.NextLevel!.Name,
+                $"{progress.PointsToNextLevel} pts"));
+
+        Assert.Equal("245 pts", SingleField(pass, "points")["value"]!.GetValue<string>());
+        Assert.Equal("Mist \u2728", SingleField(pass, "level")["value"]!.GetValue<string>());
+        Assert.Equal("Plata", SingleField(pass, "next")["value"]!.GetValue<string>());
+        Assert.Equal("755 pts", SingleField(pass, "remaining")["value"]!.GetValue<string>());
+        Assert.DoesNotContain("Glow", pass.ToJsonString(), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    [Trait("Category", "MTLevel4")]
     public void Pass_json_renders_dynamic_max_level_without_legacy_radiance_assumption()
     {
         var now = new DateTime(2026, 7, 24, 12, 0, 0, DateTimeKind.Utc);
@@ -215,6 +251,7 @@ public sealed class WalletPassJsonUpdateStructureTests
             binder: null,
             args:
             [
+                null,
                 null,
                 null,
                 null,
@@ -305,6 +342,23 @@ public sealed class WalletPassJsonUpdateStructureTests
                 progress.RemainingPointsText
             ],
             culture: null)!;
+    }
+
+    private static LevelProgressResult CalculateProgress(int rollingPoints, IReadOnlyList<TenantLoyaltyLevelDto> levels)
+    {
+        var applicationAssembly = typeof(ILevelProgressService).Assembly;
+        var calculationType = applicationAssembly.GetType("LoyaltyCloud.Application.Services.LevelCalculationService", throwOnError: true)!;
+        var progressType = applicationAssembly.GetType("LoyaltyCloud.Application.Services.LevelProgressService", throwOnError: true)!;
+        var calculation = Activator.CreateInstance(calculationType, nonPublic: true)!;
+        var progressService = Activator.CreateInstance(
+            progressType,
+            BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic,
+            binder: null,
+            args: [calculation],
+            culture: null)!;
+
+        var method = progressType.GetMethod("Calculate", BindingFlags.Instance | BindingFlags.Public)!;
+        return (LevelProgressResult)method.Invoke(progressService, [rollingPoints, levels])!;
     }
 
     private sealed class FixedClock : IDateTimeProvider

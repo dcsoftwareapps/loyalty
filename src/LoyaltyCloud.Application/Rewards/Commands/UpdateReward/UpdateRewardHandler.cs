@@ -1,8 +1,11 @@
 using LoyaltyCloud.Common.Results;
 using LoyaltyCloud.Common.Services;
 using LoyaltyCloud.Application.Common.Interfaces;
+using LoyaltyCloud.Application.Notifications.Commands.CreateMonthlyProductStartedNotifications;
+using LoyaltyCloud.Domain.Entities;
 using LoyaltyCloud.Domain.Repositories;
 using MediatR;
+using Microsoft.Extensions.Logging;
 
 namespace LoyaltyCloud.Application.Rewards.Commands.UpdateReward;
 
@@ -12,17 +15,23 @@ public sealed class UpdateRewardHandler : IRequestHandler<UpdateRewardCommand, R
     private readonly ITenantLoyaltyLevelReadService _tenantLevels;
     private readonly IDateTimeProvider _dt;
     private readonly IUnitOfWork _uow;
+    private readonly ISender _sender;
+    private readonly ILogger<UpdateRewardHandler> _logger;
 
     public UpdateRewardHandler(
         IRewardCatalogRepository rewards,
         ITenantLoyaltyLevelReadService tenantLevels,
         IDateTimeProvider dt,
-        IUnitOfWork uow)
+        IUnitOfWork uow,
+        ISender sender,
+        ILogger<UpdateRewardHandler> logger)
     {
         _rewards = rewards;
         _tenantLevels = tenantLevels;
         _dt = dt;
         _uow = uow;
+        _sender = sender;
+        _logger = logger;
     }
 
     public async Task<Result<RewardAdminDto>> Handle(UpdateRewardCommand command, CancellationToken ct)
@@ -71,6 +80,40 @@ public sealed class UpdateRewardHandler : IRequestHandler<UpdateRewardCommand, R
         _rewards.Update(reward);
         await _uow.SaveChangesAsync(ct);
 
+        await TriggerMonthlyProductNotificationsIfActiveAsync(reward, ct);
+
         return Result.Ok(reward.ToAdminDto(_dt.UtcNow));
+    }
+
+    private async Task TriggerMonthlyProductNotificationsIfActiveAsync(RewardCatalogItem reward, CancellationToken ct)
+    {
+        if (!reward.IsMonthlyProduct || !reward.IsAvailableOn(_dt.UtcNow))
+            return;
+
+        try
+        {
+            var result = await _sender.Send(new CreateMonthlyProductStartedNotificationsCommand("reward-admin"), ct);
+            if (result.IsFailure)
+            {
+                _logger.LogWarning(
+                    "Immediate monthly product notification scan failed after reward update. reward={RewardId}, error={Error}.",
+                    reward.Id,
+                    result.Error);
+                return;
+            }
+
+            _logger.LogInformation(
+                "Immediate monthly product notification scan completed after reward update. reward={RewardId}, created={Created}, alreadyNotified={AlreadyNotified}.",
+                reward.Id,
+                result.Value.NotificationsCreated,
+                result.Value.AlreadyNotified);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(
+                ex,
+                "Immediate monthly product notification scan failed after reward update. reward={RewardId}.",
+                reward.Id);
+        }
     }
 }

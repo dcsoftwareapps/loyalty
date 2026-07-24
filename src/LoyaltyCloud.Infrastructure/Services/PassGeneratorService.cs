@@ -23,6 +23,7 @@ internal sealed class PassGeneratorService : IPassGeneratorService
     private readonly ITenantWalletBrandingReadService _tenantBranding;
     private readonly ITenantWalletAssetProvider _walletAssets;
     private readonly ITenantLoyaltyLevelReadService _tenantLevels;
+    private readonly ITenantContext _tenantContext;
     private readonly IPointTransactionRepository _transactions;
     private readonly ILevelProgressService _levelProgress;
     private readonly IDateTimeProvider _dt;
@@ -49,6 +50,7 @@ internal sealed class PassGeneratorService : IPassGeneratorService
         ITenantWalletBrandingReadService tenantBranding,
         ITenantWalletAssetProvider walletAssets,
         ITenantLoyaltyLevelReadService tenantLevels,
+        ITenantContext tenantContext,
         IPointTransactionRepository transactions,
         ILevelProgressService levelProgress,
         IDateTimeProvider dt,
@@ -60,6 +62,7 @@ internal sealed class PassGeneratorService : IPassGeneratorService
         _tenantBranding = tenantBranding;
         _walletAssets = walletAssets;
         _tenantLevels = tenantLevels;
+        _tenantContext = tenantContext;
         _transactions = transactions;
         _levelProgress = levelProgress;
         _dt = dt;
@@ -76,7 +79,21 @@ internal sealed class PassGeneratorService : IPassGeneratorService
         var branding = await _tenantBranding.GetCurrentAsync(ct);
         var tenantLevels = await _tenantLevels.GetActiveLevelsAsync(ct);
         var rollingPoints = await _transactions.GetEligibleLevelPointsAsync(card.Id, _dt.UtcNow.AddMonths(-12), ct);
-        var progress = BuildLevelProgress(card, _levelProgress.Calculate(rollingPoints, tenantLevels));
+        var levelProgress = _levelProgress.Calculate(rollingPoints, tenantLevels);
+        var progress = BuildLevelProgress(card, levelProgress);
+
+        _logger.LogInformation(
+            "Wallet dynamic levels: tenant={TenantSlug} ({TenantId}), serial={Serial}, levels=[{Levels}], rollingPoints={RollingPoints}, cardCurrentPoints={CurrentPoints}, currentLevel={CurrentLevel}, nextLevel={NextLevel}, pointsToNextLevel={PointsToNextLevel}.",
+            _tenantContext.TenantSlug ?? "none",
+            _tenantContext.TenantId,
+            card.SerialNumber,
+            string.Join(", ", tenantLevels.Select(level => $"{level.Name}:{level.Threshold}")),
+            rollingPoints,
+            card.CurrentPoints,
+            levelProgress.CurrentLevel.Name,
+            levelProgress.NextLevel?.Name ?? "none",
+            levelProgress.PointsToNextLevel);
+
         var passJson = BuildPassJson(card, customer, walletContext, branding, progress);
         var passJsonBytes = JsonSerializer.SerializeToUtf8Bytes(passJson, PassJsonOpts);
         var assets = await _walletAssets.LoadAssetsAsync(branding.TenantSlug, ct);
