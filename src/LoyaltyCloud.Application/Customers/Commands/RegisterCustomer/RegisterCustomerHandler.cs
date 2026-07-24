@@ -35,6 +35,7 @@ public sealed class RegisterCustomerHandler
     private readonly IPassGeneratorService _passes;
     private readonly IStorageService _storage;
     private readonly ILevelCalculationService _levels;
+    private readonly ITenantLoyaltyLevelReadService _tenantLevels;
     private readonly ITenantContext _tenantContext;
     private readonly IDateTimeProvider _dt;
     private readonly ICurrentUserService _currentUser;
@@ -50,6 +51,7 @@ public sealed class RegisterCustomerHandler
         IPassGeneratorService passes,
         IStorageService storage,
         ILevelCalculationService levels,
+        ITenantLoyaltyLevelReadService tenantLevels,
         ITenantContext tenantContext,
         IDateTimeProvider dt,
         ICurrentUserService currentUser,
@@ -64,6 +66,7 @@ public sealed class RegisterCustomerHandler
         _passes = passes;
         _storage = storage;
         _levels = levels;
+        _tenantLevels = tenantLevels;
         _tenantContext = tenantContext;
         _dt = dt;
         _currentUser = currentUser;
@@ -128,6 +131,7 @@ public sealed class RegisterCustomerHandler
 
         // 4. Snapshot de config y bono de bienvenida
         var snapshot = ProgramConfigSnapshot.FromEntries(await _config.GetAllAsync(ct));
+        var tenantLevels = await _tenantLevels.GetActiveLevelsAsync(ct);
 
         if (snapshot.WelcomeBonusPoints > 0)
         {
@@ -153,7 +157,7 @@ public sealed class RegisterCustomerHandler
                 expiresAtUtc: now.AddMonths(snapshot.PointsExpireAfterMonths),
                 createdAtUtc: now), ct);
 
-            var calculatedLevel = _levels.CalculateLevel(snapshot.WelcomeBonusPoints, snapshot);
+            var calculatedLevel = _levels.CalculateLevel(snapshot.WelcomeBonusPoints, tenantLevels);
             card.ApplyCalculatedLevel(calculatedLevel, _dt);
         }
 
@@ -188,7 +192,7 @@ public sealed class RegisterCustomerHandler
             if (_levels.IsEligibleForLevelProgress(TransactionType.BonusReferral))
                 rollingPoints += snapshot.ReferralBonusPoints;
 
-            var calculatedLevel = _levels.CalculateLevel(rollingPoints, snapshot);
+            var calculatedLevel = _levels.CalculateLevel(rollingPoints, tenantLevels);
             referrerCard.ApplyCalculatedLevel(calculatedLevel, _dt);
         }
 

@@ -75,7 +75,7 @@ public sealed class WalletPassJsonUpdateStructureTests
 
     [Fact]
     [Trait("Category", "WalletProductionUpdate")]
-    public void Points_added_recent_event_adds_change_message_to_points_field_only()
+    public void Points_added_recent_event_adds_change_message_to_temporary_field_only()
     {
         var now = new DateTime(2026, 7, 23, 23, 2, 0, DateTimeKind.Utc);
         var customer = NewCustomer(now);
@@ -139,6 +139,47 @@ public sealed class WalletPassJsonUpdateStructureTests
         Assert.Equal(0, CountFields(pass, "points_added"));
     }
 
+    [Fact]
+    [Trait("Category", "MTLevel4")]
+    public void Pass_json_uses_dynamic_next_and_remaining_level_fields()
+    {
+        var now = new DateTime(2026, 7, 24, 12, 0, 0, DateTimeKind.Utc);
+        var customer = NewCustomer(now);
+        var card = NewCard(customer.Id, now);
+        var snapshot = ProgramConfigSnapshot.FromEntries([]);
+        card.EarnPoints(205, TransactionType.Purchase, snapshot, new FixedClock(now));
+
+        var pass = BuildPassJson(
+            card,
+            customer,
+            progress: new PassProgressValues("Oro Member ✨", "Oro ✨", "205 pts", "Platino", "1,300 pts"));
+
+        Assert.Equal("205 pts", SingleField(pass, "points")["value"]!.GetValue<string>());
+        Assert.Equal("Oro ✨", SingleField(pass, "level")["value"]!.GetValue<string>());
+        Assert.Equal("Platino", SingleField(pass, "next")["value"]!.GetValue<string>());
+        Assert.Equal("1,300 pts", SingleField(pass, "remaining")["value"]!.GetValue<string>());
+    }
+
+    [Fact]
+    [Trait("Category", "MTLevel4")]
+    public void Pass_json_renders_dynamic_max_level_without_legacy_radiance_assumption()
+    {
+        var now = new DateTime(2026, 7, 24, 12, 0, 0, DateTimeKind.Utc);
+        var customer = NewCustomer(now);
+        var card = NewCard(customer.Id, now);
+        var snapshot = ProgramConfigSnapshot.FromEntries([]);
+        card.EarnPoints(5200, TransactionType.Purchase, snapshot, new FixedClock(now));
+
+        var pass = BuildPassJson(
+            card,
+            customer,
+            progress: new PassProgressValues("Diamante Member ✨", "Diamante ✨", "5,200 pts", "Máximo ✨", "—"));
+
+        Assert.Equal("Diamante ✨", SingleField(pass, "level")["value"]!.GetValue<string>());
+        Assert.Equal("Máximo ✨", SingleField(pass, "next")["value"]!.GetValue<string>());
+        Assert.Equal("—", SingleField(pass, "remaining")["value"]!.GetValue<string>());
+    }
+
     private static Customer NewCustomer(DateTime now) =>
         new(
             Guid.NewGuid(),
@@ -160,7 +201,8 @@ public sealed class WalletPassJsonUpdateStructureTests
     private static JsonObject BuildPassJson(
         LoyaltyCard card,
         Customer customer,
-        WalletNotificationContext? walletContext = null)
+        WalletNotificationContext? walletContext = null,
+        PassProgressValues? progress = null)
     {
         var passGeneratorType = typeof(AppDbContext).Assembly
             .GetType("LoyaltyCloud.Infrastructure.Services.PassGeneratorService", throwOnError: true)!;
@@ -173,6 +215,10 @@ public sealed class WalletPassJsonUpdateStructureTests
             binder: null,
             args:
             [
+                null,
+                null,
+                null,
+                null,
                 null,
                 null,
                 null,
@@ -190,6 +236,12 @@ public sealed class WalletPassJsonUpdateStructureTests
             culture: null)!;
 
         var method = passGeneratorType.GetMethod("BuildPassJson", BindingFlags.Instance | BindingFlags.NonPublic)!;
+        var progressValue = progress ?? new PassProgressValues(
+            $"{card.Level} Member ✨",
+            $"{card.Level} ✨",
+            $"{card.CurrentPoints} pts",
+            "Glow",
+            "0 pts");
         var passJson = method.Invoke(
             service,
             [
@@ -208,7 +260,8 @@ public sealed class WalletPassJsonUpdateStructureTests
                     "@kbeauty_mx\n\nkbeautymx.com\n\n+52 646 238 6962",
                     "Cliente K-Beauty",
                     UsesBundledAssetsFallback: true,
-                    UsesLegacyContactFallback: false)
+                    UsesLegacyContactFallback: false),
+                CreatePassProgress(passGeneratorType, progressValue)
             ])!;
 
         var json = JsonSerializer.Serialize(passJson, new JsonSerializerOptions { PropertyNamingPolicy = null });
@@ -236,10 +289,35 @@ public sealed class WalletPassJsonUpdateStructureTests
         }
     }
 
+    private static object CreatePassProgress(Type passGeneratorType, PassProgressValues progress)
+    {
+        var progressType = passGeneratorType.GetNestedType("PassProgress", BindingFlags.NonPublic)!;
+        return Activator.CreateInstance(
+            progressType,
+            BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic,
+            binder: null,
+            args:
+            [
+                progress.LevelDisplay,
+                progress.LevelShortText,
+                progress.PointsText,
+                progress.NextLevelText,
+                progress.RemainingPointsText
+            ],
+            culture: null)!;
+    }
+
     private sealed class FixedClock : IDateTimeProvider
     {
         public FixedClock(DateTime utcNow) => UtcNow = utcNow;
         public DateTime UtcNow { get; }
         public DateTime Today => UtcNow.Date;
     }
+
+    private sealed record PassProgressValues(
+        string LevelDisplay,
+        string LevelShortText,
+        string PointsText,
+        string NextLevelText,
+        string RemainingPointsText);
 }

@@ -5,7 +5,14 @@ namespace LoyaltyCloud.Application.Common.Interfaces;
 
 public interface ILevelCalculationService
 {
-    MemberLevel CalculateLevel(int rollingEligiblePoints, ProgramConfigSnapshot config);
+    MemberLevel CalculateLevel(
+        int rollingEligiblePoints,
+        IReadOnlyList<TenantLoyaltyLevelDto> levels);
+
     bool IsEligibleForLevelProgress(TransactionType type);
-    int CompareLevels(string currentLevel, string newLevel, ProgramConfigSnapshot config);
+
+    int CompareLevels(
+        string currentLevel,
+        string newLevel,
+        IReadOnlyList<TenantLoyaltyLevelDto> levels);
 }

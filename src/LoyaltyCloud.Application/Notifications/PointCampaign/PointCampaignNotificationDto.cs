@@ -1,5 +1,3 @@
-using LoyaltyCloud.Domain.Enums;
-
 namespace LoyaltyCloud.Application.Notifications.PointCampaign;
 
 public sealed record PointCampaignNotificationPreviewDto(
@@ -19,7 +17,7 @@ public sealed record PointCampaignNotificationCandidateDto(
     string CampaignName,
     int Multiplier,
     decimal? MinimumPurchaseAmount,
-    CampaignLevelEligibility LevelEligibility,
+    string LevelEligibility,
     DateTime StartsAtUtc,
     DateTime EndsAtUtc,
     DateTime EndsAtLocal,

@@ -121,6 +121,22 @@ public class LoyaltyCard : Entity, ITenantOwned
         return true;
     }
 
+    public bool ApplyConfiguredLevelSilently(MemberLevel calculatedLevel, IDateTimeProvider dt, bool updateLevelAchievedAt)
+    {
+        ArgumentNullException.ThrowIfNull(calculatedLevel);
+        ArgumentNullException.ThrowIfNull(dt);
+
+        if (string.Equals(Level, calculatedLevel.Name, StringComparison.Ordinal))
+            return false;
+
+        var now = dt.UtcNow;
+        Level = calculatedLevel.Name;
+        if (updateLevelAchievedAt)
+            LevelAchievedAt = now;
+        LastActivityAt = now;
+        return true;
+    }
+
     /// <summary>
     /// Descuenta puntos por un canje. Lanza <see cref="InsufficientPointsException"/>
     /// si el saldo no alcanza — el validator de Application debe prevenirlo antes.

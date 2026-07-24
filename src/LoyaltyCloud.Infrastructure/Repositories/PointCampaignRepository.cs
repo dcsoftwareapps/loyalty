@@ -10,11 +10,16 @@ internal sealed class PointCampaignRepository : IPointCampaignRepository
 {
     private readonly AppDbContext _db;
     private readonly ITenantContext _tenantContext;
+    private readonly ITenantLoyaltyLevelReadService _tenantLevels;
 
-    public PointCampaignRepository(AppDbContext db, ITenantContext tenantContext)
+    public PointCampaignRepository(
+        AppDbContext db,
+        ITenantContext tenantContext,
+        ITenantLoyaltyLevelReadService tenantLevels)
     {
         _db = db;
         _tenantContext = tenantContext;
+        _tenantLevels = tenantLevels;
     }
 
     public async Task<IReadOnlyList<PointCampaign>> GetAllAsync(CancellationToken ct = default)
@@ -47,8 +52,10 @@ internal sealed class PointCampaignRepository : IPointCampaignRepository
                      && (!c.MinimumPurchaseAmount.HasValue || purchaseAmount >= c.MinimumPurchaseAmount.Value))
             .ToListAsync(ct);
 
+        var levelRanks = await BuildLevelRanksAsync(ct);
+
         return candidates
-            .Where(c => c.AppliesToLevel(loyaltyLevel))
+            .Where(c => c.AppliesToLevel(loyaltyLevel, levelRanks))
             .OrderByDescending(c => c.Multiplier)
             .ThenBy(c => c.MinimumPurchaseAmount ?? 0)
             .ThenByDescending(c => c.StartsAtUtc)
@@ -65,5 +72,14 @@ internal sealed class PointCampaignRepository : IPointCampaignRepository
     {
         if (_db.Entry(campaign).State == EntityState.Detached)
             _db.PointCampaigns.Update(campaign);
+    }
+
+    private async Task<IReadOnlyDictionary<string, int>> BuildLevelRanksAsync(CancellationToken ct)
+    {
+        var levels = await _tenantLevels.GetActiveLevelsAsync(ct);
+        return levels.ToDictionary(
+            level => level.Name,
+            level => level.SortOrder,
+            StringComparer.OrdinalIgnoreCase);
     }
 }

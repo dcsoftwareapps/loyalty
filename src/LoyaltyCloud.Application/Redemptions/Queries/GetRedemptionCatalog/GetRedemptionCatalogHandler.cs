@@ -2,7 +2,7 @@ using LoyaltyCloud.Application.Common.Interfaces;
 using LoyaltyCloud.Common.Results;
 using LoyaltyCloud.Common.Services;
 using LoyaltyCloud.Domain.Repositories;
-using LoyaltyCloud.Domain.ValueObjects;
+using LoyaltyCloud.Application.Rewards;
 using MediatR;
 
 namespace LoyaltyCloud.Application.Redemptions.Queries.GetRedemptionCatalog;
@@ -14,23 +14,23 @@ public sealed class GetRedemptionCatalogHandler
     private readonly ILoyaltyCardRepository _cards;
     private readonly IRewardCatalogRepository _rewards;
     private readonly IPointTransactionRepository _transactions;
-    private readonly IProgramConfigRepository _config;
     private readonly ILevelCalculationService _levels;
+    private readonly ITenantLoyaltyLevelReadService _tenantLevels;
     private readonly IDateTimeProvider _dt;
 
     public GetRedemptionCatalogHandler(
         ILoyaltyCardRepository cards,
         IRewardCatalogRepository rewards,
         IPointTransactionRepository transactions,
-        IProgramConfigRepository config,
         ILevelCalculationService levels,
+        ITenantLoyaltyLevelReadService tenantLevels,
         IDateTimeProvider dt)
     {
         _cards = cards;
         _rewards = rewards;
         _transactions = transactions;
-        _config = config;
         _levels = levels;
+        _tenantLevels = tenantLevels;
         _dt = dt;
     }
 
@@ -44,13 +44,14 @@ public sealed class GetRedemptionCatalogHandler
             return Result.Fail<IReadOnlyList<RewardCatalogItemDto>>(
                 $"No se encontró tarjeta con serial '{query.SerialNumber}'.");
 
-        var snapshot = ProgramConfigSnapshot.FromEntries(await _config.GetAllAsync(ct));
+        var tenantLevels = await _tenantLevels.GetActiveLevelsAsync(ct);
         var now = _dt.UtcNow;
         var rollingPoints = await _transactions.GetEligibleLevelPointsAsync(card.Id, now.AddMonths(-12), ct);
-        var level = _levels.CalculateLevel(rollingPoints, snapshot);
-        var items = await _rewards.GetByLevelAsync(level, snapshot, ct);
+        var level = _levels.CalculateLevel(rollingPoints, tenantLevels);
+        var items = await _rewards.GetAllActiveAsync(ct);
 
         IReadOnlyList<RewardCatalogItemDto> dtos = items
+            .Where(i => RewardLevelRules.IsEligible(level, i.MinLevel, tenantLevels, _levels))
             .Where(i => i.IsAvailableOn(now))
             .Select(i => new RewardCatalogItemDto(
                 Id: i.Id,

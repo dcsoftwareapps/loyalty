@@ -11,23 +11,34 @@ public sealed class CreateRewardHandler : IRequestHandler<CreateRewardCommand, R
 {
     private readonly IRewardCatalogRepository _rewards;
     private readonly ITenantContext _tenantContext;
+    private readonly ITenantLoyaltyLevelReadService _tenantLevels;
     private readonly IDateTimeProvider _dt;
     private readonly IUnitOfWork _uow;
 
     public CreateRewardHandler(
         IRewardCatalogRepository rewards,
         ITenantContext tenantContext,
+        ITenantLoyaltyLevelReadService tenantLevels,
         IDateTimeProvider dt,
         IUnitOfWork uow)
     {
         _rewards = rewards;
         _tenantContext = tenantContext;
+        _tenantLevels = tenantLevels;
         _dt = dt;
         _uow = uow;
     }
 
     public async Task<Result<RewardAdminDto>> Handle(CreateRewardCommand command, CancellationToken ct)
     {
+        var tenantLevels = await _tenantLevels.GetActiveLevelsAsync(ct);
+        var levelError = RewardLevelRules.TryCanonicalizeMinimumLevel(
+            command.MinLevel,
+            tenantLevels,
+            out var canonicalMinLevel);
+        if (levelError is not null)
+            return Result.Fail<RewardAdminDto>(levelError);
+
         if (command.IsMonthlyProduct && command.IsActive)
         {
             if (!command.ValidFrom.HasValue || !command.ValidTo.HasValue)
@@ -49,7 +60,7 @@ public sealed class CreateRewardHandler : IRequestHandler<CreateRewardCommand, R
             name: command.Name,
             description: command.Description,
             pointsCost: command.PointsCost,
-            minLevel: command.MinLevel,
+            minLevel: canonicalMinLevel,
             isMonthlyProduct: command.IsMonthlyProduct,
             validFrom: command.ValidFrom,
             validTo: command.ValidTo);

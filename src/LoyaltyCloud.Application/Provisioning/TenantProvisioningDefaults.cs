@@ -25,4 +25,11 @@ public static class TenantProvisioningDefaults
         (LoyaltyConstants.ConfigKeys.RewardHundredOffCabinaPoints, "800", "Costo legacy MVP de cabina."),
         (LoyaltyConstants.ConfigKeys.RewardFacialOffPoints, "1200", "Costo legacy MVP de facial.")
     ];
+
+    public static IReadOnlyList<(string Name, int Threshold, int SortOrder)> LoyaltyLevels { get; } =
+    [
+        (LoyaltyConstants.Levels.Mist, LoyaltyConstants.Defaults.LevelMistMin, 1),
+        (LoyaltyConstants.Levels.Glow, LoyaltyConstants.Defaults.LevelGlowMin, 2),
+        (LoyaltyConstants.Levels.Radiance, LoyaltyConstants.Defaults.LevelRadianceMin, 3)
+    ];
 }

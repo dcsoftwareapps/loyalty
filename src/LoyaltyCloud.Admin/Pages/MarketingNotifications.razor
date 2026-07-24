@@ -7,7 +7,9 @@
 @using System.Security.Claims
 @using LoyaltyCloud.Admin.Auth
 @using LoyaltyCloud.Admin.Services
+@using LoyaltyCloud.Application.Common.Interfaces
 @using LoyaltyCloud.Application.Notifications.Custom
+@using LoyaltyCloud.Domain.Entities
 @using LoyaltyCloud.Domain.Enums
 @using LoyaltyCloud.Domain.Repositories
 @using Microsoft.AspNetCore.Components.Authorization
@@ -15,6 +17,7 @@
 @inject AdminApiClient Api
 @inject AuthenticationStateProvider AuthenticationStateProvider
 @inject ITenantRepository Tenants
+@inject ITenantLoyaltyLevelReadService TenantLevels
 
 <PageTitle>Mensajes - LoyaltyCloud</PageTitle>
 
@@ -59,22 +62,23 @@
                     <div style="flex:1;min-width:220px;">
                         <label for="audience-type">Audiencia</label>
                         <select id="audience-type" @bind="form.AudienceType">
-                            <option value="@CustomNotificationAudienceType.AllWalletUsers">Todas con Wallet</option>
-                            <option value="@CustomNotificationAudienceType.MistAndAbove">Mist y superiores</option>
-                            <option value="@CustomNotificationAudienceType.GlowAndAbove">Glow y superiores</option>
-                            <option value="@CustomNotificationAudienceType.RadianceOnly">Solo Radiance</option>
-                            <option value="@CustomNotificationAudienceType.MinimumPoints">Puntos mínimos</option>
-                            <option value="@CustomNotificationAudienceType.PointsExpiring">Puntos por expirar</option>
+                            <option value="@CustomNotificationCampaign.AudienceAllWalletUsers">Todos los clientes</option>
+                            @foreach (var level in levelOptions)
+                            {
+                                <option value="@level.Name">Nivel minimo: @level.Name</option>
+                            }
+                            <option value="@CustomNotificationCampaign.AudienceMinimumPoints">Puntos minimos</option>
+                            <option value="@CustomNotificationCampaign.AudiencePointsExpiring">Puntos por expirar</option>
                         </select>
                     </div>
-                    @if (form.AudienceType == CustomNotificationAudienceType.MinimumPoints)
+                    @if (CustomNotificationCampaign.IsMinimumPointsAudience(form.AudienceType))
                     {
                         <div style="flex:1;min-width:180px;">
                             <label for="minimum-points">Puntos mínimos</label>
                             <input id="minimum-points" type="number" min="0" @bind="form.MinimumPoints" />
                         </div>
                     }
-                    @if (form.AudienceType == CustomNotificationAudienceType.PointsExpiring)
+                    @if (CustomNotificationCampaign.IsPointsExpiringAudience(form.AudienceType))
                     {
                         <div style="flex:1;min-width:180px;">
                             <label for="days-ahead">Días adelante</label>
@@ -194,7 +198,7 @@
                     <td>
                         <strong>@campaign.Name</strong>
                     </td>
-                    <td>@campaign.AudienceType</td>
+                    <td>@AudienceText(campaign.AudienceType)</td>
                     <td>
                         <strong>@campaign.ShortMessage</strong>
                         <div class="kb-muted kb-text-truncate" title="@campaign.LongMessage">@campaign.LongMessage</div>
@@ -227,6 +231,7 @@
     private List<CustomNotificationCampaignDto>? campaigns;
     private CustomNotificationAudiencePreviewDto? preview;
     private CustomMessageForm form = CustomMessageForm.CreateDefault();
+    private IReadOnlyList<TenantLoyaltyLevelDto> levelOptions = [];
     private readonly List<string> validationErrors = new();
     private string? successMsg;
     private string? errorMsg;
@@ -234,7 +239,11 @@
     private bool busy;
     private bool confirmSend;
 
-    protected override async Task OnInitializedAsync() => await LoadAsync();
+    protected override async Task OnInitializedAsync()
+    {
+        levelOptions = await TenantLevels.GetActiveLevelsAsync();
+        await LoadAsync();
+    }
 
     private async Task LoadAsync()
     {
@@ -281,8 +290,8 @@
                 "api/custom-notification-campaigns/preview",
                 new PreviewCustomNotificationAudienceRequest(
                     form.AudienceType,
-                    form.AudienceType == CustomNotificationAudienceType.MinimumPoints ? form.MinimumPoints : null,
-                    form.AudienceType == CustomNotificationAudienceType.PointsExpiring ? form.PointsExpiringDaysAhead : null,
+                    CustomNotificationCampaign.IsMinimumPointsAudience(form.AudienceType) ? form.MinimumPoints : null,
+                    CustomNotificationCampaign.IsPointsExpiringAudience(form.AudienceType) ? form.PointsExpiringDaysAhead : null,
                     25));
 
             if (result.IsFailure)
@@ -320,8 +329,8 @@
                     BuildShortMessage(message),
                     message,
                     form.AudienceType,
-                    form.AudienceType == CustomNotificationAudienceType.MinimumPoints ? form.MinimumPoints : null,
-                    form.AudienceType == CustomNotificationAudienceType.PointsExpiring ? form.PointsExpiringDaysAhead : null,
+                    CustomNotificationCampaign.IsMinimumPointsAudience(form.AudienceType) ? form.MinimumPoints : null,
+                    CustomNotificationCampaign.IsPointsExpiringAudience(form.AudienceType) ? form.PointsExpiringDaysAhead : null,
                     form.SendImmediately ? null : form.ScheduledAtUtc,
                     form.DisplayUntilUtc,
                     form.SendImmediately));
@@ -408,9 +417,14 @@
             validationErrors.Add("La fecha de envío debe ser futura.");
         if (effectiveSendAtUtc.HasValue && form.DisplayUntilUtc <= effectiveSendAtUtc.Value)
             validationErrors.Add("La fecha límite de visualización debe ser posterior a la fecha de envío.");
-        if (form.AudienceType == CustomNotificationAudienceType.MinimumPoints && form.MinimumPoints.GetValueOrDefault() < 0)
+        if (!IsKnownAudience(form.AudienceType) &&
+            !levelOptions.Any(level => string.Equals(level.Name, form.AudienceType, StringComparison.OrdinalIgnoreCase)))
+        {
+            validationErrors.Add("Selecciona una audiencia valida del tenant.");
+        }
+        if (CustomNotificationCampaign.IsMinimumPointsAudience(form.AudienceType) && form.MinimumPoints.GetValueOrDefault() < 0)
             validationErrors.Add("Los puntos mínimos deben ser cero o mayores.");
-        if (form.AudienceType == CustomNotificationAudienceType.PointsExpiring && form.PointsExpiringDaysAhead.GetValueOrDefault() <= 0)
+        if (CustomNotificationCampaign.IsPointsExpiringAudience(form.AudienceType) && form.PointsExpiringDaysAhead.GetValueOrDefault() <= 0)
             validationErrors.Add("Los días de expiración deben ser mayores a cero.");
 
         return validationErrors.Count == 0;
@@ -455,6 +469,23 @@
 
     private static string FormatDateTime(DateTime value) => value.ToLocalTime().ToString("dd MMM yyyy HH:mm");
     private static string DisplayText(string? value) => string.IsNullOrWhiteSpace(value) ? "No disponible" : value;
+
+    private static bool IsKnownAudience(string audienceType) =>
+        CustomNotificationCampaign.IsAllWalletUsersAudience(audienceType) ||
+        CustomNotificationCampaign.IsMinimumPointsAudience(audienceType) ||
+        CustomNotificationCampaign.IsPointsExpiringAudience(audienceType);
+
+    private static string AudienceText(string audienceType)
+    {
+        if (CustomNotificationCampaign.IsAllWalletUsersAudience(audienceType))
+            return "Todos los clientes";
+        if (CustomNotificationCampaign.IsMinimumPointsAudience(audienceType))
+            return "Puntos minimos";
+        if (CustomNotificationCampaign.IsPointsExpiringAudience(audienceType))
+            return "Puntos por expirar";
+
+        return $"Desde {audienceType}";
+    }
 
     private async Task<string> GenerateInternalNameAsync()
     {
@@ -541,7 +572,7 @@
     }
 
     private sealed record PreviewCustomNotificationAudienceRequest(
-        CustomNotificationAudienceType AudienceType,
+        string AudienceType,
         int? MinimumPoints,
         int? PointsExpiringDaysAhead,
         int? SampleSize);
@@ -551,7 +582,7 @@
         string Title,
         string ShortMessage,
         string LongMessage,
-        CustomNotificationAudienceType AudienceType,
+        string AudienceType,
         int? MinimumPoints,
         int? PointsExpiringDaysAhead,
         DateTime? ScheduledAtUtc,
@@ -567,7 +598,7 @@
     private sealed class CustomMessageForm
     {
         public string Message { get; set; } = string.Empty;
-        public CustomNotificationAudienceType AudienceType { get; set; } = CustomNotificationAudienceType.AllWalletUsers;
+        public string AudienceType { get; set; } = CustomNotificationCampaign.AudienceAllWalletUsers;
         public int? MinimumPoints { get; set; } = 0;
         public int? PointsExpiringDaysAhead { get; set; } = 15;
         public CustomMessageSendMode SendMode { get; set; } = CustomMessageSendMode.SendNow;

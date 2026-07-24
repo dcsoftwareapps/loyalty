@@ -50,6 +50,7 @@ public class AddPointsHandlerTests
             pointLots.Object,
             config.Object,
             LevelCalculator().Object,
+            TenantLevels().Object,
             notifications.Object,
             TenantContext().Object,
             clock.Object,
@@ -125,7 +126,7 @@ public class AddPointsHandlerTests
 
         var handler = new AddPointsHandler(
             cards.Object, customers.Object, transactions.Object, pointLots.Object, config.Object,
-            LevelCalculator().Object, notifications.Object, TenantContext().Object, clock.Object, uow.Object,
+            LevelCalculator().Object, TenantLevels().Object, notifications.Object, TenantContext().Object, clock.Object, uow.Object,
             NullLogger<AddPointsHandler>.Instance);
 
         await handler.Handle(

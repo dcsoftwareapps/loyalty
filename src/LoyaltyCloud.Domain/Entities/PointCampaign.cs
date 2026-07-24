@@ -1,6 +1,4 @@
-using LoyaltyCloud.Common.Constants;
 using LoyaltyCloud.Domain.Common;
-using LoyaltyCloud.Domain.Enums;
 
 namespace LoyaltyCloud.Domain.Entities;
 
@@ -12,7 +10,7 @@ public class PointCampaign : Entity, ITenantOwned
     public string Description { get; private set; } = string.Empty;
     public int Multiplier { get; private set; }
     public decimal? MinimumPurchaseAmount { get; private set; }
-    public CampaignLevelEligibility LevelEligibility { get; private set; }
+    public string LevelEligibility { get; private set; } = CampaignLevelEligibilityAll;
     public DateTime StartsAtUtc { get; private set; }
     public DateTime EndsAtUtc { get; private set; }
     public bool IsActive { get; private set; }
@@ -28,7 +26,7 @@ public class PointCampaign : Entity, ITenantOwned
         string description,
         int multiplier,
         decimal? minimumPurchaseAmount,
-        CampaignLevelEligibility levelEligibility,
+        string levelEligibility,
         DateTime startsAtUtc,
         DateTime endsAtUtc,
         DateTime createdAtUtc) : base(id)
@@ -42,7 +40,7 @@ public class PointCampaign : Entity, ITenantOwned
         Description = description.Trim();
         Multiplier = multiplier;
         MinimumPurchaseAmount = minimumPurchaseAmount;
-        LevelEligibility = levelEligibility;
+        LevelEligibility = NormalizeLevelEligibility(levelEligibility);
         StartsAtUtc = startsAtUtc;
         EndsAtUtc = endsAtUtc;
         IsActive = true;
@@ -54,7 +52,7 @@ public class PointCampaign : Entity, ITenantOwned
         string description,
         int multiplier,
         decimal? minimumPurchaseAmount,
-        CampaignLevelEligibility levelEligibility,
+        string levelEligibility,
         DateTime startsAtUtc,
         DateTime endsAtUtc,
         DateTime updatedAtUtc)
@@ -65,7 +63,7 @@ public class PointCampaign : Entity, ITenantOwned
         Description = description.Trim();
         Multiplier = multiplier;
         MinimumPurchaseAmount = minimumPurchaseAmount;
-        LevelEligibility = levelEligibility;
+        LevelEligibility = NormalizeLevelEligibility(levelEligibility);
         StartsAtUtc = startsAtUtc;
         EndsAtUtc = endsAtUtc;
         UpdatedAt = updatedAtUtc;
@@ -86,25 +84,20 @@ public class PointCampaign : Entity, ITenantOwned
     public bool IsCurrentlyActive(DateTime nowUtc) =>
         IsActive && StartsAtUtc <= nowUtc && EndsAtUtc >= nowUtc;
 
-    public bool AppliesToLevel(string level) =>
-        LevelEligibility == CampaignLevelEligibility.All ||
-        LevelRank(level) >= EligibilityRank(LevelEligibility);
-
-    private static int LevelRank(string level) => level switch
+    public bool AppliesToLevel(string level, IReadOnlyDictionary<string, int> levelRanks)
     {
-        LoyaltyConstants.Levels.Mist => 1,
-        LoyaltyConstants.Levels.Glow => 2,
-        LoyaltyConstants.Levels.Radiance => 3,
-        _ => 0
-    };
+        if (IsAllLevels(LevelEligibility))
+            return true;
 
-    private static int EligibilityRank(CampaignLevelEligibility eligibility) => eligibility switch
-    {
-        CampaignLevelEligibility.Mist => 1,
-        CampaignLevelEligibility.Glow => 2,
-        CampaignLevelEligibility.Radiance => 3,
-        _ => 0
-    };
+        return levelRanks.TryGetValue(level, out var customerRank)
+            && levelRanks.TryGetValue(LevelEligibility, out var requiredRank)
+            && customerRank >= requiredRank;
+    }
+
+    public static string CampaignLevelEligibilityAll => "All";
+
+    public static bool IsAllLevels(string? value) =>
+        string.Equals(value, CampaignLevelEligibilityAll, StringComparison.OrdinalIgnoreCase);
 
     private static void Validate(
         string name,
@@ -124,5 +117,13 @@ public class PointCampaign : Entity, ITenantOwned
             throw new ArgumentOutOfRangeException(nameof(minimumPurchaseAmount), "El monto minimo no puede ser negativo.");
         if (endsAtUtc < startsAtUtc)
             throw new ArgumentException("La fecha fin no puede ser menor que la fecha inicio.", nameof(endsAtUtc));
+    }
+
+    private static string NormalizeLevelEligibility(string value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+            return CampaignLevelEligibilityAll;
+
+        return value.Trim();
     }
 }

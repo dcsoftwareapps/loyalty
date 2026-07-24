@@ -16,6 +16,7 @@ internal sealed class WalletNotificationReadService : IWalletNotificationReadSer
     private readonly AppDbContext _db;
     private readonly IConfiguration _configuration;
     private readonly ITenantContext _tenantContext;
+    private readonly ITenantLoyaltyLevelReadService _tenantLevels;
     private readonly ILogger<WalletNotificationReadService> _logger;
     private static readonly CultureInfo SpanishMexico = CultureInfo.GetCultureInfo("es-MX");
 
@@ -23,11 +24,13 @@ internal sealed class WalletNotificationReadService : IWalletNotificationReadSer
         AppDbContext db,
         IConfiguration configuration,
         ITenantContext tenantContext,
+        ITenantLoyaltyLevelReadService tenantLevels,
         ILogger<WalletNotificationReadService> logger)
     {
         _db = db;
         _configuration = configuration;
         _tenantContext = tenantContext;
+        _tenantLevels = tenantLevels;
         _logger = logger;
     }
 
@@ -428,7 +431,8 @@ internal sealed class WalletNotificationReadService : IWalletNotificationReadSer
                      && c.StartsAtUtc <= now
                      && c.EndsAtUtc >= now)
             .ToListAsync(ct);
-        var bestCampaign = PointCampaignNotificationReadService.SelectBestCampaign(activeCampaigns, card.Level);
+        var levelRanks = await BuildLevelRanksAsync(ct);
+        var bestCampaign = PointCampaignNotificationReadService.SelectBestCampaign(activeCampaigns, card.Level, levelRanks);
 
         if (bestCampaign is null)
         {
@@ -488,6 +492,15 @@ internal sealed class WalletNotificationReadService : IWalletNotificationReadSer
 
     private static string FormatMultiplier(int multiplier) =>
         $"Puntos x{Math.Max(1, multiplier).ToString(CultureInfo.InvariantCulture)}";
+
+    private async Task<IReadOnlyDictionary<string, int>> BuildLevelRanksAsync(CancellationToken ct)
+    {
+        var levels = await _tenantLevels.GetActiveLevelsAsync(ct);
+        return levels.ToDictionary(
+            level => level.Name,
+            level => level.SortOrder,
+            StringComparer.OrdinalIgnoreCase);
+    }
 
     private async Task<WalletPointsExpiringMessage?> BuildPointsExpiringMessageAsync(
         Guid loyaltyCardId,

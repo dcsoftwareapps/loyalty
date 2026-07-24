@@ -48,6 +48,12 @@ public sealed class AdminApiClient
         CancellationToken ct = default) =>
         await SendAsync<TResponse>(HttpMethod.Post, pathAndQuery, body, ct);
 
+    public async Task<Result<TResponse>> PutAsJsonAsync<TRequest, TResponse>(
+        string pathAndQuery,
+        TRequest body,
+        CancellationToken ct = default) =>
+        await SendAsync<TResponse>(HttpMethod.Put, pathAndQuery, body, ct);
+
     private async Task<Result<TResponse>> SendAsync<TResponse>(
         HttpMethod method,
         string pathAndQuery,

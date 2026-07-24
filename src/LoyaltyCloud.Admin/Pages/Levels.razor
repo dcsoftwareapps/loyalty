@@ -1,0 +1,199 @@
+@page "/levels"
+@attribute [Authorize]
+@rendermode InteractiveServer
+
+@using LoyaltyCloud.Admin.Services
+@using LoyaltyCloud.Application.Levels
+@inject AdminApiClient Api
+
+<PageTitle>Niveles - LoyaltyCloud</PageTitle>
+
+<div style="display:flex;align-items:flex-start;justify-content:space-between;gap:16px;margin-bottom:24px;">
+    <div>
+        <h1>Niveles</h1>
+        <p class="kb-muted" style="margin-top:-8px;max-width:680px;">
+            Define los niveles de tu programa y los puntos necesarios para alcanzarlos.
+        </p>
+    </div>
+    <button class="kb-btn kb-btn--primary" @onclick="AddLevel" disabled="@(busy || formLevels.Count >= 5)">Agregar nivel</button>
+</div>
+
+@if (successMsg is not null) { <div class="kb-form-success">@successMsg</div> }
+@if (errorMsg is not null) { <div class="kb-form-error">@errorMsg</div> }
+
+@if (validationErrors.Count > 0)
+{
+    <div class="kb-form-error">
+        @foreach (var error in validationErrors)
+        {
+            <div>@error</div>
+        }
+    </div>
+}
+
+@if (loading)
+{
+    <p>Cargando...</p>
+}
+else
+{
+    <section class="kb-card" style="max-width:900px;">
+        @for (var i = 0; i < formLevels.Count; i++)
+        {
+            var index = i;
+            var level = formLevels[index];
+            <div class="kb-form-row kb-form-row--horizontal" style="align-items:flex-end;border-bottom:1px solid var(--kb-border);padding-bottom:16px;margin-bottom:16px;">
+                <div style="width:96px;">
+                    <strong>Nivel @(index + 1)</strong>
+                </div>
+                <div style="flex:1;min-width:180px;">
+                    <label for="@($"level-name-{index}")">Nombre</label>
+                    <input id="@($"level-name-{index}")" type="text" maxlength="20" @bind="level.Name" @bind:event="oninput" />
+                </div>
+                <div style="flex:1;min-width:180px;">
+                    <label for="@($"level-points-{index}")">Puntos necesarios</label>
+                    <input id="@($"level-points-{index}")" type="number" min="0" step="1" @bind="level.PointsRequired" disabled="@(index == 0)" />
+                </div>
+                <div style="min-width:110px;">
+                    <button class="kb-btn kb-btn--ghost kb-btn--small"
+                            @onclick="@(() => RemoveLevel(index))"
+                            disabled="@(busy || formLevels.Count <= 3)">
+                        Eliminar
+                    </button>
+                </div>
+            </div>
+        }
+
+        <div class="kb-actions-inline">
+            <button class="kb-btn kb-btn--primary kb-btn--large" @onclick="SaveAsync" disabled="@busy">
+                @(busy ? "Guardando..." : "Guardar cambios")
+            </button>
+            <button class="kb-btn kb-btn--ghost" @onclick="LoadAsync" disabled="@busy">Descartar cambios</button>
+        </div>
+    </section>
+}
+
+@code {
+    private readonly List<LevelFormModel> formLevels = [];
+    private readonly List<string> validationErrors = [];
+    private bool loading = true;
+    private bool busy;
+    private string? successMsg;
+    private string? errorMsg;
+
+    protected override async Task OnInitializedAsync() => await LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        loading = true;
+        successMsg = null;
+        errorMsg = null;
+        validationErrors.Clear();
+
+        var result = await Api.GetAsync<List<TenantLoyaltyLevelAdminDto>>("api/levels");
+        loading = false;
+
+        if (result.IsFailure)
+        {
+            errorMsg = result.Error;
+            return;
+        }
+
+        formLevels.Clear();
+        formLevels.AddRange(result.Value
+            .OrderBy(level => level.SortOrder)
+            .Select(level => new LevelFormModel(level.Id, level.Name, level.PointsRequired)));
+    }
+
+    private void AddLevel()
+    {
+        if (formLevels.Count >= 5)
+            return;
+
+        var lastPoints = formLevels.Count == 0 ? 0 : formLevels[^1].PointsRequired;
+        formLevels.Add(new LevelFormModel(null, string.Empty, lastPoints + 1000));
+    }
+
+    private void RemoveLevel(int index)
+    {
+        if (formLevels.Count <= 3 || index < 0 || index >= formLevels.Count)
+            return;
+
+        formLevels.RemoveAt(index);
+    }
+
+    private async Task SaveAsync()
+    {
+        successMsg = null;
+        errorMsg = null;
+        if (!Validate())
+            return;
+
+        busy = true;
+        var request = new UpdateTenantLoyaltyLevelsRequest(
+            formLevels.Select(level => new TenantLoyaltyLevelUpdateItemDto(
+                level.Id,
+                level.Name.Trim(),
+                level.PointsRequired)).ToList());
+        var result = await Api.PutAsJsonAsync<UpdateTenantLoyaltyLevelsRequest, UpdateTenantLoyaltyLevelsResultDto>(
+            "api/levels",
+            request);
+        busy = false;
+
+        if (result.IsFailure)
+        {
+            errorMsg = result.Error;
+            return;
+        }
+
+        var value = result.Value;
+        successMsg = $"Niveles actualizados. {value.CardsReviewed:N0} clientas revisadas, {value.CardsChanged:N0} cambiaron de nivel, {value.CardsUpgraded:N0} subieron, {value.CardsDowngraded:N0} bajaron.";
+        if (value.Warnings.Count > 0)
+            errorMsg = string.Join(" ", value.Warnings);
+
+        formLevels.Clear();
+        formLevels.AddRange(value.Levels
+            .OrderBy(level => level.SortOrder)
+            .Select(level => new LevelFormModel(level.Id, level.Name, level.PointsRequired)));
+    }
+
+    private bool Validate()
+    {
+        validationErrors.Clear();
+        if (formLevels.Count is < 3 or > 5)
+            validationErrors.Add("Debes configurar entre 3 y 5 niveles.");
+
+        var duplicate = formLevels
+            .GroupBy(level => level.Name.Trim(), StringComparer.OrdinalIgnoreCase)
+            .FirstOrDefault(group => group.Count() > 1);
+        if (duplicate is not null)
+            validationErrors.Add($"El nombre '{duplicate.Key}' está duplicado.");
+
+        for (var i = 0; i < formLevels.Count; i++)
+        {
+            var level = formLevels[i];
+            if (string.IsNullOrWhiteSpace(level.Name))
+                validationErrors.Add($"Nivel {i + 1}: el nombre es obligatorio.");
+            if (level.Name.Trim().Length > 20)
+                validationErrors.Add($"Nivel {i + 1}: el nombre no puede exceder 20 caracteres.");
+            if (level.PointsRequired < 0)
+                validationErrors.Add($"Nivel {i + 1}: los puntos no pueden ser negativos.");
+            if (i == 0 && level.PointsRequired != 0)
+                validationErrors.Add("Nivel 1 siempre requiere 0 puntos.");
+            if (i > 0 && level.PointsRequired <= formLevels[i - 1].PointsRequired)
+                validationErrors.Add("Los puntos necesarios deben ser estrictamente ascendentes.");
+        }
+
+        return validationErrors.Count == 0;
+    }
+
+    private sealed class LevelFormModel(Guid? id, string name, int pointsRequired)
+    {
+        public Guid? Id { get; set; } = id;
+        public string Name { get; set; } = name;
+        public int PointsRequired { get; set; } = pointsRequired;
+    }
+
+    private sealed record UpdateTenantLoyaltyLevelsRequest(
+        IReadOnlyList<TenantLoyaltyLevelUpdateItemDto> Levels);
+}

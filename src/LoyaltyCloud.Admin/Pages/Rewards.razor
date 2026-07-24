@@ -8,8 +8,10 @@
 @using LoyaltyCloud.Application.Rewards.Commands.DeactivateReward
 @using LoyaltyCloud.Application.Rewards.Commands.UpdateReward
 @using LoyaltyCloud.Application.Rewards.Queries.ListRewards
+@using LoyaltyCloud.Application.Common.Interfaces
 @using System.Globalization
 @inject ISender Sender
+@inject ITenantLoyaltyLevelReadService TenantLevels
 
 <PageTitle>Recompensas - LoyaltyCloud</PageTitle>
 
@@ -55,9 +57,11 @@
             <div style="flex:1;min-width:180px;">
                 <label for="reward-level">Nivel mínimo</label>
                 <select id="reward-level" @bind="form.MinLevel">
-                    <option value="@LoyaltyConstants.Levels.Mist">Mist</option>
-                    <option value="@LoyaltyConstants.Levels.Glow">Glow</option>
-                    <option value="@LoyaltyConstants.Levels.Radiance">Radiance</option>
+                    <option value="">Todos los niveles</option>
+                    @foreach (var level in levelOptions)
+                    {
+                        <option value="@level.Name">@level.Name</option>
+                    }
                 </select>
             </div>
         </div>
@@ -112,7 +116,7 @@
             <div class="kb-detail-grid">
                 <DetailItem Label="Nombre" Value="@CurrentMonthlyProduct.Name" />
                 <DetailItem Label="Costo" Value="@($"{CurrentMonthlyProduct.PointsCost:N0} pts")" />
-                <DetailItem Label="Nivel mínimo" Value="@CurrentMonthlyProduct.MinLevel" />
+                <DetailItem Label="Nivel mínimo" Value="@FormatLevel(CurrentMonthlyProduct.MinLevel)" />
                 <DetailItem Label="Vigencia" Value="@FormatValidity(CurrentMonthlyProduct)" />
                 <DetailItem Label="Estado" Value="@MonthlyProductStatus(CurrentMonthlyProduct)" />
             </div>
@@ -164,7 +168,7 @@ else
                     <div class="kb-muted kb-text-truncate" title="@reward.Description">@reward.Description</div>
                 </td>
                 <td class="kb-cell-number" style="font-weight:600;">@reward.PointsCost.ToString("N0") pts</td>
-                <td><LevelBadge Level="@reward.MinLevel" /></td>
+                <td><LevelBadge Level="@FormatLevel(reward.MinLevel)" /></td>
                 <td class="kb-cell-center">
                     @if (reward.IsMonthlyProduct)
                     {
@@ -205,6 +209,7 @@ else
 @code {
     private List<RewardAdminDto>? rewards;
     private RewardFormModel form = RewardFormModel.CreateDefault();
+    private IReadOnlyList<TenantLoyaltyLevelDto> levelOptions = [];
     private readonly List<string> validationErrors = new();
     private const string RewardFilterAll = "all";
     private const string RewardFilterActive = "active";
@@ -226,7 +231,11 @@ else
     private RewardAdminDto? CurrentMonthlyProduct => rewards?
         .FirstOrDefault(r => r.IsMonthlyProduct && r.IsActive && r.IsCurrentlyAvailable);
 
-    protected override async Task OnInitializedAsync() => await ReloadAsync();
+    protected override async Task OnInitializedAsync()
+    {
+        levelOptions = await TenantLevels.GetActiveLevelsAsync();
+        await ReloadAsync();
+    }
 
     private async Task ReloadAsync()
     {
@@ -393,6 +402,12 @@ else
         if (form.PointsCost <= 0)
             validationErrors.Add("Los puntos requeridos deben ser mayores a 0.");
 
+        if (!string.IsNullOrWhiteSpace(form.MinLevel) &&
+            !levelOptions.Any(level => string.Equals(level.Name, form.MinLevel.Trim(), StringComparison.OrdinalIgnoreCase)))
+        {
+            validationErrors.Add("Selecciona un nivel mínimo válido.");
+        }
+
         var hasValidFrom = TryParseDateInput(form.ValidFromDate, out var validFromDate);
         var hasValidTo = TryParseDateInput(form.ValidToDate, out var validToDate);
 
@@ -440,6 +455,9 @@ else
 
     private static string RewardStatusBadgeClass(bool isActive) =>
         isActive ? "kb-badge kb-badge--success" : "kb-badge kb-badge--muted";
+
+    private static string FormatLevel(string? level) =>
+        string.IsNullOrWhiteSpace(level) ? "Todos los niveles" : level.Trim();
 
     private static string MonthlyProductStatus(RewardAdminDto reward)
     {
@@ -512,7 +530,7 @@ else
         public string Name { get; set; } = string.Empty;
         public string Description { get; set; } = string.Empty;
         public int PointsCost { get; set; } = 1;
-        public string MinLevel { get; set; } = LoyaltyConstants.Levels.Mist;
+        public string MinLevel { get; set; } = string.Empty;
         public bool IsMonthlyProduct { get; set; }
         public bool IsActive { get; set; } = true;
         public DateTime? OriginalValidFrom { get; set; }

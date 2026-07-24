@@ -153,6 +153,17 @@ internal sealed class TenantProvisioningService : ITenantProvisioningService
                         TenantProvisioningDefaults.UpdatedBy));
                 }
 
+                foreach (var level in TenantProvisioningDefaults.LoyaltyLevels)
+                {
+                    _db.TenantLoyaltyLevels.Add(new TenantLoyaltyLevel(
+                        Guid.NewGuid(),
+                        tenantId,
+                        level.Name,
+                        level.Threshold,
+                        level.SortOrder,
+                        now));
+                }
+
                 await _db.SaveChangesAsync(cancellationToken);
                 await tx.CommitAsync(cancellationToken);
 

@@ -25,8 +25,8 @@ internal sealed class UpdateRewardValidator : AbstractValidator<UpdateRewardComm
             .WithMessage("PointsCost debe ser mayor a 0.");
 
         RuleFor(x => x.MinLevel)
-            .Must(RewardValidation.IsValidMemberLevel)
-            .WithMessage("MinLevel debe ser Mist, Glow o Radiance.");
+            .MaximumLength(20)
+            .WithMessage("MinLevel no puede exceder 20 caracteres.");
 
         RuleFor(x => x)
             .Must(x => RewardValidation.HasValidDateRange(x.ValidFrom, x.ValidTo))

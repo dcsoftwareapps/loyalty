@@ -167,6 +167,7 @@
     private string? scannerMessage;
     private bool busy;
     private bool scanning;
+    private bool qrDetected;
     private ElementReference qrVideo;
     private DotNetObjectReference<Redeem>? dotNetRef;
 
@@ -181,6 +182,7 @@
         errorMessage = null;
         scannerMessage = null;
         scanning = true;
+        qrDetected = false;
         await InvokeAsync(StateHasChanged);
         await Task.Yield();
 
@@ -202,6 +204,7 @@
     {
         await StopScannerAsync();
         scannerMessage = null;
+        qrDetected = false;
     }
 
     [JSInvokable]
@@ -209,6 +212,10 @@
     {
         await InvokeAsync(async () =>
         {
+            if (qrDetected)
+                return;
+
+            qrDetected = true;
             await StopScannerAsync();
 
             var serial = ExtractSerial(rawValue);
@@ -216,6 +223,7 @@
             {
                 errorMessage = "Codigo QR no valido para LoyaltyCloud.";
                 scannerMessage = null;
+                qrDetected = false;
                 StateHasChanged();
                 return;
             }
@@ -270,6 +278,7 @@
         finally
         {
             busy = false;
+            qrDetected = false;
         }
     }
 
@@ -335,6 +344,7 @@
         serialInput = string.Empty;
         errorMessage = null;
         scannerMessage = null;
+        qrDetected = false;
     }
 
     private async Task StopScannerAsync()

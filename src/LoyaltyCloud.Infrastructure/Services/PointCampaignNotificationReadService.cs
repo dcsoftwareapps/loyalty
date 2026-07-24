@@ -12,15 +12,18 @@ internal sealed class PointCampaignNotificationReadService : IPointCampaignNotif
 {
     private readonly AppDbContext _db;
     private readonly ITenantContext _tenantContext;
+    private readonly ITenantLoyaltyLevelReadService _tenantLevels;
     private readonly ILogger<PointCampaignNotificationReadService> _logger;
 
     public PointCampaignNotificationReadService(
         AppDbContext db,
         ITenantContext tenantContext,
+        ITenantLoyaltyLevelReadService tenantLevels,
         ILogger<PointCampaignNotificationReadService> logger)
     {
         _db = db;
         _tenantContext = tenantContext;
+        _tenantLevels = tenantLevels;
         _logger = logger;
     }
 
@@ -79,11 +82,12 @@ internal sealed class PointCampaignNotificationReadService : IPointCampaignNotif
             .ThenBy(x => x.SerialNumber)
             .ToListAsync(ct);
 
+        var levelRanks = await BuildLevelRanksAsync(ct);
         var bestByCard = cards
             .Select(card => new
             {
                 Card = card,
-                Campaign = SelectBestCampaign(activeCampaigns, card.Level)
+                Campaign = SelectBestCampaign(activeCampaigns, card.Level, levelRanks)
             })
             .Where(x => x.Campaign is not null)
             .ToList();
@@ -153,9 +157,12 @@ internal sealed class PointCampaignNotificationReadService : IPointCampaignNotif
             candidates.AsReadOnly());
     }
 
-    internal static PointCampaign? SelectBestCampaign(IEnumerable<PointCampaign> campaigns, string level) =>
+    internal static PointCampaign? SelectBestCampaign(
+        IEnumerable<PointCampaign> campaigns,
+        string level,
+        IReadOnlyDictionary<string, int> levelRanks) =>
         campaigns
-            .Where(c => c.AppliesToLevel(level))
+            .Where(c => c.AppliesToLevel(level, levelRanks))
             .OrderByDescending(c => c.Multiplier)
             .ThenBy(c => c.MinimumPurchaseAmount ?? 0)
             .ThenByDescending(c => c.StartsAtUtc)
@@ -164,4 +171,13 @@ internal sealed class PointCampaignNotificationReadService : IPointCampaignNotif
 
     internal static string BuildCorrelationId(Guid campaignId, string serialNumber) =>
         $"point-campaign-started:{campaignId:N}:{serialNumber}";
+
+    private async Task<IReadOnlyDictionary<string, int>> BuildLevelRanksAsync(CancellationToken ct)
+    {
+        var levels = await _tenantLevels.GetActiveLevelsAsync(ct);
+        return levels.ToDictionary(
+            level => level.Name,
+            level => level.SortOrder,
+            StringComparer.OrdinalIgnoreCase);
+    }
 }

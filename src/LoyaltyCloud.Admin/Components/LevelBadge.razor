@@ -6,13 +6,14 @@
 <span class="kb-level @CssClass">@Level</span>
 
 @code {
-    /// <summary>Nombre del nivel: Mist, Glow o Radiance.</summary>
-    [Parameter, EditorRequired] public string Level { get; set; } = LoyaltyConstants.Levels.Mist;
+    /// <summary>Nombre del nivel configurado para el tenant.</summary>
+    [Parameter, EditorRequired] public string Level { get; set; } = string.Empty;
 
     private string CssClass => Level switch
     {
-        LoyaltyConstants.Levels.Radiance => "kb-level--radiance",
-        LoyaltyConstants.Levels.Glow => "kb-level--glow",
-        _ => "kb-level--mist"
+        var level when string.Equals(level, LoyaltyConstants.Levels.Radiance, StringComparison.OrdinalIgnoreCase) => "kb-level--radiance",
+        var level when string.Equals(level, LoyaltyConstants.Levels.Glow, StringComparison.OrdinalIgnoreCase) => "kb-level--glow",
+        var level when string.Equals(level, LoyaltyConstants.Levels.Mist, StringComparison.OrdinalIgnoreCase) => "kb-level--mist",
+        _ => "kb-level--neutral"
     };
 }

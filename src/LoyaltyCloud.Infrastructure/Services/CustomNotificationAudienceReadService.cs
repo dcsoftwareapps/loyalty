@@ -1,6 +1,6 @@
 using LoyaltyCloud.Application.Common.Interfaces;
 using LoyaltyCloud.Application.Notifications.Custom;
-using LoyaltyCloud.Common.Constants;
+using LoyaltyCloud.Domain.Entities;
 using LoyaltyCloud.Domain.Enums;
 using LoyaltyCloud.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
@@ -12,20 +12,23 @@ internal sealed class CustomNotificationAudienceReadService : ICustomNotificatio
 {
     private readonly AppDbContext _db;
     private readonly ITenantContext _tenantContext;
+    private readonly ITenantLoyaltyLevelReadService _tenantLevels;
     private readonly ILogger<CustomNotificationAudienceReadService> _logger;
 
     public CustomNotificationAudienceReadService(
         AppDbContext db,
         ITenantContext tenantContext,
+        ITenantLoyaltyLevelReadService tenantLevels,
         ILogger<CustomNotificationAudienceReadService> logger)
     {
         _db = db;
         _tenantContext = tenantContext;
+        _tenantLevels = tenantLevels;
         _logger = logger;
     }
 
     public async Task<CustomNotificationAudiencePreviewDto> PreviewAsync(
-        CustomNotificationAudienceType audienceType,
+        string audienceType,
         int? minimumPoints,
         int? pointsExpiringDaysAhead,
         int sampleSize,
@@ -33,9 +36,10 @@ internal sealed class CustomNotificationAudienceReadService : ICustomNotificatio
     {
         var recipients = await ResolveRecipientsAsync(audienceType, minimumPoints, pointsExpiringDaysAhead, ct);
         var excluded = await CountExcludedWithoutDeviceRegistrationAsync(audienceType, minimumPoints, pointsExpiringDaysAhead, ct);
+        var levelRanks = await BuildLevelRanksAsync(ct);
         var distribution = recipients
             .GroupBy(r => r.Level)
-            .OrderBy(g => LevelRank(g.Key))
+            .OrderBy(g => levelRanks.TryGetValue(g.Key, out var rank) ? rank : int.MaxValue)
             .Select(g => new CustomNotificationLevelDistributionDto(g.Key, g.Count()))
             .ToList();
         var warnings = new List<string>();
@@ -60,12 +64,12 @@ internal sealed class CustomNotificationAudienceReadService : ICustomNotificatio
     }
 
     public async Task<IReadOnlyList<CustomNotificationAudienceRecipientDto>> ResolveRecipientsAsync(
-        CustomNotificationAudienceType audienceType,
+        string audienceType,
         int? minimumPoints,
         int? pointsExpiringDaysAhead,
         CancellationToken ct = default)
     {
-        var rows = audienceType == CustomNotificationAudienceType.PointsExpiring
+        var rows = CustomNotificationCampaign.IsPointsExpiringAudience(audienceType)
             ? await QueryPointsExpiringRecipientsAsync(pointsExpiringDaysAhead ?? 15, ct)
             : await QueryBaseRecipientsAsync(audienceType, minimumPoints, requireDeviceRegistration: true, ct);
 
@@ -77,12 +81,12 @@ internal sealed class CustomNotificationAudienceReadService : ICustomNotificatio
     }
 
     private async Task<int> CountExcludedWithoutDeviceRegistrationAsync(
-        CustomNotificationAudienceType audienceType,
+        string audienceType,
         int? minimumPoints,
         int? pointsExpiringDaysAhead,
         CancellationToken ct)
     {
-        if (audienceType == CustomNotificationAudienceType.PointsExpiring)
+        if (CustomNotificationCampaign.IsPointsExpiringAudience(audienceType))
         {
             var candidates = await QueryPointsExpiringCandidateSerialsAsync(pointsExpiringDaysAhead ?? 15, ct);
             return candidates.Count(c => c.DeviceRegistrationCount == 0);
@@ -93,12 +97,13 @@ internal sealed class CustomNotificationAudienceReadService : ICustomNotificatio
     }
 
     private async Task<List<CustomNotificationAudienceRecipientDto>> QueryBaseRecipientsAsync(
-        CustomNotificationAudienceType audienceType,
+        string audienceType,
         int? minimumPoints,
         bool requireDeviceRegistration,
         CancellationToken ct)
     {
         var tenantId = _tenantContext.RequireTenantId();
+        var eligibleLevels = await ResolveEligibleLevelNamesAsync(audienceType, ct);
         var query =
             from card in _db.LoyaltyCards.AsNoTracking()
             join customer in _db.Customers.AsNoTracking() on card.CustomerId equals customer.Id
@@ -119,16 +124,11 @@ internal sealed class CustomNotificationAudienceReadService : ICustomNotificatio
                     .Count(registration => registration.TenantId == tenantId && registration.SerialNumber == card.SerialNumber)
             };
 
-        query = audienceType switch
-        {
-            CustomNotificationAudienceType.GlowAndAbove =>
-                query.Where(x => x.Level == LoyaltyConstants.Levels.Glow || x.Level == LoyaltyConstants.Levels.Radiance),
-            CustomNotificationAudienceType.RadianceOnly =>
-                query.Where(x => x.Level == LoyaltyConstants.Levels.Radiance),
-            CustomNotificationAudienceType.MinimumPoints =>
-                query.Where(x => x.CurrentPoints >= (minimumPoints ?? 0)),
-            _ => query
-        };
+        if (eligibleLevels is not null)
+            query = query.Where(x => eligibleLevels.Contains(x.Level));
+
+        if (CustomNotificationCampaign.IsMinimumPointsAudience(audienceType))
+            query = query.Where(x => x.CurrentPoints >= (minimumPoints ?? 0));
 
         if (requireDeviceRegistration)
             query = query.Where(x => x.DeviceRegistrationCount > 0);
@@ -211,27 +211,79 @@ internal sealed class CustomNotificationAudienceReadService : ICustomNotificatio
     }
 
     private static string BuildCriteria(
-        CustomNotificationAudienceType audienceType,
+        string audienceType,
         int? minimumPoints,
-        int? pointsExpiringDaysAhead) =>
-        audienceType switch
-        {
-            CustomNotificationAudienceType.AllWalletUsers => "Clientas activas con Wallet registrado.",
-            CustomNotificationAudienceType.MistAndAbove => "Clientas Mist, Glow o Radiance con Wallet registrado.",
-            CustomNotificationAudienceType.GlowAndAbove => "Clientas Glow o Radiance con Wallet registrado.",
-            CustomNotificationAudienceType.RadianceOnly => "Clientas Radiance con Wallet registrado.",
-            CustomNotificationAudienceType.MinimumPoints => $"Clientas con al menos {minimumPoints ?? 0:N0} puntos y Wallet registrado.",
-            CustomNotificationAudienceType.PointsExpiring => $"Clientas con puntos que expiran en {pointsExpiringDaysAhead ?? 15:N0} dia(s) y Wallet registrado.",
-            _ => audienceType.ToString()
-        };
-
-    private static int LevelRank(string level) => level switch
+        int? pointsExpiringDaysAhead)
     {
-        LoyaltyConstants.Levels.Mist => 1,
-        LoyaltyConstants.Levels.Glow => 2,
-        LoyaltyConstants.Levels.Radiance => 3,
-        _ => 99
-    };
+        if (CustomNotificationCampaign.IsAllWalletUsersAudience(audienceType))
+            return "Clientas activas con Wallet registrado.";
+        if (CustomNotificationCampaign.IsMinimumPointsAudience(audienceType))
+            return $"Clientas con al menos {minimumPoints ?? 0:N0} puntos y Wallet registrado.";
+        if (CustomNotificationCampaign.IsPointsExpiringAudience(audienceType))
+            return $"Clientas con puntos que expiran en {pointsExpiringDaysAhead ?? 15:N0} dia(s) y Wallet registrado.";
+
+        return $"Clientas desde nivel {audienceType} con Wallet registrado.";
+    }
+
+    private async Task<string[]?> ResolveEligibleLevelNamesAsync(string audienceType, CancellationToken ct)
+    {
+        if (CustomNotificationCampaign.IsAllWalletUsersAudience(audienceType) ||
+            CustomNotificationCampaign.IsMinimumPointsAudience(audienceType))
+            return null;
+
+        var levels = await _tenantLevels.GetActiveLevelsAsync(ct);
+        var levelRanks = BuildLevelRanks(levels);
+        if (TryResolveLegacyAudience(audienceType, levels, out var legacyLevels))
+            return legacyLevels;
+
+        if (!levelRanks.TryGetValue(audienceType, out var requiredRank))
+            return [];
+
+        return levelRanks
+            .Where(level => level.Value >= requiredRank)
+            .Select(level => level.Key)
+            .ToArray();
+    }
+
+    private async Task<IReadOnlyDictionary<string, int>> BuildLevelRanksAsync(CancellationToken ct)
+    {
+        var levels = await _tenantLevels.GetActiveLevelsAsync(ct);
+        return BuildLevelRanks(levels);
+    }
+
+    private static IReadOnlyDictionary<string, int> BuildLevelRanks(IReadOnlyList<TenantLoyaltyLevelDto> levels) =>
+        levels.ToDictionary(
+            level => level.Name,
+            level => level.SortOrder,
+            StringComparer.OrdinalIgnoreCase);
+
+    private static bool TryResolveLegacyAudience(
+        string audienceType,
+        IReadOnlyList<TenantLoyaltyLevelDto> levels,
+        out string[] eligibleLevels)
+    {
+        var orderedLevels = levels.OrderBy(level => level.SortOrder).ToArray();
+        if (string.Equals(audienceType, nameof(CustomNotificationAudienceType.MistAndAbove), StringComparison.OrdinalIgnoreCase))
+        {
+            eligibleLevels = orderedLevels.Select(level => level.Name).ToArray();
+            return true;
+        }
+
+        if (string.Equals(audienceType, nameof(CustomNotificationAudienceType.GlowAndAbove), StringComparison.OrdinalIgnoreCase))
+        {
+            eligibleLevels = orderedLevels.Skip(1).Select(level => level.Name).ToArray();
+            return true;
+        }
+
+        if (string.Equals(audienceType, nameof(CustomNotificationAudienceType.RadianceOnly), StringComparison.OrdinalIgnoreCase))
+        {
+            eligibleLevels = orderedLevels.Skip(2).Take(1).Select(level => level.Name).ToArray();
+            return true;
+        }
+
+        eligibleLevels = [];
+        return false;
+    }
 
     private sealed record PointsExpiringCandidateRow(
         Guid CustomerId,

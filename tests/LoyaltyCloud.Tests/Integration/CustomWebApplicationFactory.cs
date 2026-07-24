@@ -1,5 +1,8 @@
 using LoyaltyCloud.Application.Common.Interfaces;
+using LoyaltyCloud.Common.Constants;
+using LoyaltyCloud.Domain.Entities;
 using LoyaltyCloud.Infrastructure.Persistence;
+using LoyaltyCloud.Infrastructure.Persistence.Seed;
 using LoyaltyCloud.Tests.Integration.Fakes;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
@@ -64,7 +67,42 @@ public sealed class CustomWebApplicationFactory : WebApplicationFactory<Program>
     public async Task EnsureDatabaseCreatedAsync()
     {
         using var scope = Services.CreateScope();
+        scope.ServiceProvider
+            .GetRequiredService<IMutableTenantContext>()
+            .SetTenant(TenantSeed.KBeautyTenantId, TenantSeed.KBeautySlug);
         var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
         await db.Database.EnsureCreatedAsync();
+        await SeedDefaultTenantLevelsAsync(db);
+    }
+
+    private static async Task SeedDefaultTenantLevelsAsync(AppDbContext db)
+    {
+        if (await db.TenantLoyaltyLevels.AnyAsync(level => level.TenantId == TenantSeed.KBeautyTenantId))
+            return;
+
+        var now = DateTime.UtcNow;
+        db.TenantLoyaltyLevels.AddRange(
+            new TenantLoyaltyLevel(
+                Guid.Parse("b1000000-0000-0000-0000-000000000101"),
+                TenantSeed.KBeautyTenantId,
+                LoyaltyConstants.Levels.Mist,
+                LoyaltyConstants.Defaults.LevelMistMin,
+                1,
+                now),
+            new TenantLoyaltyLevel(
+                Guid.Parse("b1000000-0000-0000-0000-000000000102"),
+                TenantSeed.KBeautyTenantId,
+                LoyaltyConstants.Levels.Glow,
+                LoyaltyConstants.Defaults.LevelGlowMin,
+                2,
+                now),
+            new TenantLoyaltyLevel(
+                Guid.Parse("b1000000-0000-0000-0000-000000000103"),
+                TenantSeed.KBeautyTenantId,
+                LoyaltyConstants.Levels.Radiance,
+                LoyaltyConstants.Defaults.LevelRadianceMin,
+                3,
+                now));
+        await db.SaveChangesAsync();
     }
 }

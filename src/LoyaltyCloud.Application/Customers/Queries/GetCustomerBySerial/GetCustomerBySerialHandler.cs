@@ -3,7 +3,6 @@ using LoyaltyCloud.Common.Extensions;
 using LoyaltyCloud.Common.Results;
 using LoyaltyCloud.Common.Services;
 using LoyaltyCloud.Domain.Repositories;
-using LoyaltyCloud.Domain.ValueObjects;
 using MediatR;
 
 namespace LoyaltyCloud.Application.Customers.Queries.GetCustomerBySerial;
@@ -15,8 +14,8 @@ public sealed class GetCustomerBySerialHandler
     private readonly ILoyaltyCardRepository _cards;
     private readonly ICustomerRepository _customers;
     private readonly IPointTransactionRepository _transactions;
-    private readonly IProgramConfigRepository _config;
-    private readonly ILevelCalculationService _levels;
+    private readonly ITenantLoyaltyLevelReadService _tenantLevels;
+    private readonly ILevelProgressService _levelProgress;
     private readonly ITenantContext _tenantContext;
     private readonly IDateTimeProvider _dt;
 
@@ -24,16 +23,16 @@ public sealed class GetCustomerBySerialHandler
         ILoyaltyCardRepository cards,
         ICustomerRepository customers,
         IPointTransactionRepository transactions,
-        IProgramConfigRepository config,
-        ILevelCalculationService levels,
+        ITenantLoyaltyLevelReadService tenantLevels,
+        ILevelProgressService levelProgress,
         ITenantContext tenantContext,
         IDateTimeProvider dt)
     {
         _cards = cards;
         _customers = customers;
         _transactions = transactions;
-        _config = config;
-        _levels = levels;
+        _tenantLevels = tenantLevels;
+        _levelProgress = levelProgress;
         _tenantContext = tenantContext;
         _dt = dt;
     }
@@ -52,9 +51,9 @@ public sealed class GetCustomerBySerialHandler
         if (customer is null)
             return Result.Fail<CustomerDetailDto>("La tarjeta existe pero su clienta no — datos inconsistentes.");
 
-        var snapshot = ProgramConfigSnapshot.FromEntries(await _config.GetAllAsync(ct));
+        var tenantLevels = await _tenantLevels.GetActiveLevelsAsync(ct);
         var rollingPoints = await _transactions.GetEligibleLevelPointsAsync(card.Id, _dt.UtcNow.AddMonths(-12), ct);
-        var memberLevel = _levels.CalculateLevel(rollingPoints, snapshot);
+        var progress = _levelProgress.Calculate(rollingPoints, tenantLevels);
 
         return Result.Ok(new CustomerDetailDto(
             CustomerId: customer.Id,
@@ -66,8 +65,8 @@ public sealed class GetCustomerBySerialHandler
             SerialNumber: card.SerialNumber,
             CurrentPoints: card.CurrentPoints,
             LifetimePoints: card.LifetimePoints,
-            Level: memberLevel.Name,
-            PointsToNextLevel: memberLevel.PointsToNextLevel(rollingPoints),
+            Level: progress.CurrentLevel.Name,
+            PointsToNextLevel: progress.PointsToNextLevel,
             PointsEarnedThisYear: rollingPoints,
             LevelAchievedAt: card.LevelAchievedAt,
             LastActivityAt: card.LastActivityAt,

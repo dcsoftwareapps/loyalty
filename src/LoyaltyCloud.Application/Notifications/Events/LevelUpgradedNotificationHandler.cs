@@ -1,7 +1,6 @@
 using System.Text.Json;
 using LoyaltyCloud.Application.Common.Events;
 using LoyaltyCloud.Application.Common.Interfaces;
-using LoyaltyCloud.Common.Constants;
 using LoyaltyCloud.Domain.Enums;
 using LoyaltyCloud.Domain.Events;
 using LoyaltyCloud.Domain.Repositories;
@@ -15,22 +14,29 @@ public sealed class LevelUpgradedNotificationHandler
 {
     private readonly ILoyaltyCardRepository _cards;
     private readonly ILoyaltyNotificationService _notifications;
+    private readonly ILevelCalculationService _levels;
+    private readonly ITenantLoyaltyLevelReadService _tenantLevels;
     private readonly ILogger<LevelUpgradedNotificationHandler> _logger;
 
     public LevelUpgradedNotificationHandler(
         ILoyaltyCardRepository cards,
         ILoyaltyNotificationService notifications,
+        ILevelCalculationService levels,
+        ITenantLoyaltyLevelReadService tenantLevels,
         ILogger<LevelUpgradedNotificationHandler> logger)
     {
         _cards = cards;
         _notifications = notifications;
+        _levels = levels;
+        _tenantLevels = tenantLevels;
         _logger = logger;
     }
 
     public async Task Handle(DomainEventNotification<LevelUpgradedEvent> notification, CancellationToken ct)
     {
         var e = notification.DomainEvent;
-        if (LevelRank(e.NewLevel) <= LevelRank(e.OldLevel))
+        var tenantLevels = await _tenantLevels.GetActiveLevelsAsync(ct);
+        if (_levels.CompareLevels(e.OldLevel, e.NewLevel, tenantLevels) <= 0)
             return;
 
         var card = await _cards.GetByIdAsync(e.CardId, ct);
@@ -74,10 +80,4 @@ public sealed class LevelUpgradedNotificationHandler
         }
     }
 
-    private static int LevelRank(string level) => level switch
-    {
-        LoyaltyConstants.Levels.Radiance => 3,
-        LoyaltyConstants.Levels.Glow => 2,
-        _ => 1
-    };
 }

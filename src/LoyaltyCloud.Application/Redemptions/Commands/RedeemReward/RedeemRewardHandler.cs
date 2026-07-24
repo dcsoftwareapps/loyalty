@@ -1,12 +1,12 @@
 using LoyaltyCloud.Application.Common.Events;
 using LoyaltyCloud.Application.Common.Interfaces;
+using LoyaltyCloud.Application.Rewards;
 using LoyaltyCloud.Common.Results;
 using LoyaltyCloud.Common.Services;
 using LoyaltyCloud.Domain.Entities;
 using LoyaltyCloud.Domain.Enums;
 using LoyaltyCloud.Domain.Events;
 using LoyaltyCloud.Domain.Repositories;
-using LoyaltyCloud.Domain.ValueObjects;
 using MediatR;
 using Microsoft.Extensions.Logging;
 
@@ -20,10 +20,10 @@ public sealed class RedeemRewardHandler : IRequestHandler<RedeemRewardCommand, R
     private readonly IRedemptionRepository _redemptions;
     private readonly IPointTransactionRepository _transactions;
     private readonly IPointLotRepository _pointLots;
-    private readonly IProgramConfigRepository _config;
     private readonly IDeviceRegistrationRepository _devices;
     private readonly IApnService _apn;
     private readonly ILevelCalculationService _levels;
+    private readonly ITenantLoyaltyLevelReadService _tenantLevels;
     private readonly ITenantContext _tenantContext;
     private readonly IPublisher _publisher;
     private readonly IDateTimeProvider _dt;
@@ -36,10 +36,10 @@ public sealed class RedeemRewardHandler : IRequestHandler<RedeemRewardCommand, R
         IRedemptionRepository redemptions,
         IPointTransactionRepository transactions,
         IPointLotRepository pointLots,
-        IProgramConfigRepository config,
         IDeviceRegistrationRepository devices,
         IApnService apn,
         ILevelCalculationService levels,
+        ITenantLoyaltyLevelReadService tenantLevels,
         ITenantContext tenantContext,
         IPublisher publisher,
         IDateTimeProvider dt,
@@ -51,10 +51,10 @@ public sealed class RedeemRewardHandler : IRequestHandler<RedeemRewardCommand, R
         _redemptions = redemptions;
         _transactions = transactions;
         _pointLots = pointLots;
-        _config = config;
         _devices = devices;
         _apn = apn;
         _levels = levels;
+        _tenantLevels = tenantLevels;
         _tenantContext = tenantContext;
         _publisher = publisher;
         _dt = dt;
@@ -85,12 +85,12 @@ public sealed class RedeemRewardHandler : IRequestHandler<RedeemRewardCommand, R
             return Result.Fail<RedemptionResponse>($"El beneficio '{reward.Name}' no está disponible actualmente.");
 
         // Elegibilidad por nivel
-        var snapshot = ProgramConfigSnapshot.FromEntries(await _config.GetAllAsync(ct));
+        var tenantLevels = await _tenantLevels.GetActiveLevelsAsync(ct);
         var rollingPoints = await _transactions.GetEligibleLevelPointsAsync(card.Id, now.AddMonths(-12), ct);
-        var customerLevel = _levels.CalculateLevel(rollingPoints, snapshot);
-        if (!reward.IsEligibleFor(customerLevel, snapshot))
+        var customerLevel = _levels.CalculateLevel(rollingPoints, tenantLevels);
+        if (!RewardLevelRules.IsEligible(customerLevel, reward.MinLevel, tenantLevels, _levels))
             return Result.Fail<RedemptionResponse>(
-                $"Tu nivel {customerLevel.Name} no alcanza para '{reward.Name}' (requiere {reward.MinLevel}).");
+                $"Tu nivel {customerLevel.Name} no alcanza para '{reward.Name}' (requiere {RewardLevelRules.DisplayMinimumLevel(reward.MinLevel)}).");
 
         // Validación de saldo (resultado esperado — no excepción)
         if (card.CurrentPoints < reward.PointsCost)

@@ -148,10 +148,10 @@ else
         <div class="kb-card">
             <div class="kb-detail-grid">
                 <DetailItem Label="Rolling Points" Value="@FormatNumber(detail.LoyaltyAudit.RollingProgress.RollingPoints)" />
-                <DetailItem Label="Glow" Value="@ThresholdText(detail.LoyaltyAudit.RollingProgress.GlowThreshold, detail.LoyaltyAudit.RollingProgress.RollingPoints)" />
-                <DetailItem Label="Radiance" Value="@ThresholdText(detail.LoyaltyAudit.RollingProgress.RadianceThreshold, detail.LoyaltyAudit.RollingProgress.RollingPoints)" />
-                <DetailItem Label="Siguiente nivel" Value="@detail.LoyaltyAudit.RollingProgress.NextLevel" />
-                <DetailItem Label="Faltan" Value="@($"{FormatNumber(detail.LoyaltyAudit.RollingProgress.PointsToNextLevel)} puntos")" />
+                <DetailItem Label="Nivel actual" Value="@CurrentLevelProgressText(detail.LoyaltyAudit.RollingProgress)" />
+                <DetailItem Label="Siguiente nivel" Value="@NextLevelText(detail.LoyaltyAudit.RollingProgress)" />
+                <DetailItem Label="Umbral siguiente" Value="@NextLevelThresholdText(detail.LoyaltyAudit.RollingProgress)" />
+                <DetailItem Label="Faltan" Value="@PointsToNextText(detail.LoyaltyAudit.RollingProgress)" />
             </div>
         </div>
     </section>
@@ -481,6 +481,16 @@ else
 
     private static string ThresholdText(int threshold, int rollingPoints) =>
         rollingPoints >= threshold ? $"{threshold:N0} ✓" : threshold.ToString("N0");
+    private static string CurrentLevelProgressText(RollingProgressDto progress) =>
+        $"{progress.CurrentLevel} ({ThresholdText(progress.CurrentLevelThreshold, progress.RollingPoints)})";
+    private static string NextLevelText(RollingProgressDto progress) =>
+        progress.IsMaxLevel ? "Máximo" : DisplayText(progress.NextLevelName);
+    private static string NextLevelThresholdText(RollingProgressDto progress) =>
+        progress.NextLevelThreshold.HasValue
+            ? ThresholdText(progress.NextLevelThreshold.Value, progress.RollingPoints)
+            : "—";
+    private static string PointsToNextText(RollingProgressDto progress) =>
+        progress.IsMaxLevel ? "—" : $"{FormatNumber(progress.PointsToNextLevel)} puntos";
 
     private static string StatusBadgeClass(bool isActive) =>
         isActive ? "kb-badge kb-badge--success" : "kb-badge kb-badge--muted";

@@ -1,12 +1,10 @@
-using LoyaltyCloud.Common.Constants;
 using LoyaltyCloud.Domain.Common;
 using LoyaltyCloud.Domain.ValueObjects;
 
 namespace LoyaltyCloud.Domain.Entities;
 
 /// <summary>
-/// Ítem del catálogo de canjes (mini producto, $50 off, FocusSkin, etc.).
-/// El costo y nivel mínimo se editan desde el panel admin sin desplegar código.
+/// Item del catalogo de canjes. El costo y nivel minimo se editan desde el panel admin.
 /// </summary>
 public class RewardCatalogItem : Entity, ITenantOwned
 {
@@ -18,16 +16,16 @@ public class RewardCatalogItem : Entity, ITenantOwned
     /// <summary>Costo en puntos al momento del canje.</summary>
     public int PointsCost { get; private set; }
 
-    /// <summary>Nivel mínimo para canjear (ver <see cref="LoyaltyConstants.Levels"/>).</summary>
-    public string MinLevel { get; private set; } = LoyaltyConstants.Levels.Mist;
+    /// <summary>Nombre del nivel minimo requerido para canjear. Vacio significa todos los niveles.</summary>
+    public string MinLevel { get; private set; } = string.Empty;
 
-    /// <summary>Si está activo en el catálogo público.</summary>
+    /// <summary>Si esta activo en el catalogo publico.</summary>
     public bool IsActive { get; private set; }
 
-    /// <summary>El "Producto del Mes" rotativo — solo uno activo a la vez.</summary>
+    /// <summary>El Producto del Mes rotativo.</summary>
     public bool IsMonthlyProduct { get; private set; }
 
-    /// <summary>Vigencia opcional inicio (útil para promociones temporales).</summary>
+    /// <summary>Vigencia opcional inicio.</summary>
     public DateTime? ValidFrom { get; private set; }
 
     /// <summary>Vigencia opcional fin.</summary>
@@ -52,21 +50,19 @@ public class RewardCatalogItem : Entity, ITenantOwned
             throw new ArgumentException("Nombre requerido.", nameof(name));
         if (pointsCost <= 0)
             throw new ArgumentOutOfRangeException(nameof(pointsCost), "Costo debe ser positivo.");
-        if (string.IsNullOrWhiteSpace(minLevel))
-            throw new ArgumentException("MinLevel requerido.", nameof(minLevel));
 
         TenantId = tenantId;
         Name = name.Trim();
         Description = description?.Trim() ?? string.Empty;
         PointsCost = pointsCost;
-        MinLevel = minLevel.Trim();
+        MinLevel = minLevel?.Trim() ?? string.Empty;
         IsActive = true;
         IsMonthlyProduct = isMonthlyProduct;
         ValidFrom = validFrom;
         ValidTo = validTo;
     }
 
-    /// <summary>Indica si el ítem es canjeable hoy considerando IsActive y vigencias.</summary>
+    /// <summary>Indica si el item es canjeable hoy considerando IsActive y vigencias.</summary>
     public bool IsAvailableOn(DateTime nowUtc)
     {
         if (!IsActive) return false;
@@ -76,11 +72,11 @@ public class RewardCatalogItem : Entity, ITenantOwned
         return true;
     }
 
-    /// <summary>Determina si la clienta con <paramref name="customerLevel"/> puede canjear este ítem.</summary>
-    public bool IsEligibleFor(MemberLevel customerLevel, ProgramConfigSnapshot config) =>
-        customerLevel.IsAtLeast(MinLevel, config);
+    /// <summary>Determina si la clienta con <paramref name="customerLevel"/> puede canjear este item.</summary>
+    public bool IsEligibleFor(MemberLevel customerLevel, MemberLevel? requiredLevel) =>
+        requiredLevel is null || customerLevel.IsAtLeast(requiredLevel);
 
-    /// <summary>Actualiza costo / nivel mínimo / vigencia desde el panel admin.</summary>
+    /// <summary>Actualiza costo, nivel minimo y vigencia desde el panel admin.</summary>
     public void Update(
         string name,
         string description,
@@ -92,12 +88,11 @@ public class RewardCatalogItem : Entity, ITenantOwned
     {
         if (string.IsNullOrWhiteSpace(name)) throw new ArgumentException("Nombre requerido.", nameof(name));
         if (pointsCost <= 0) throw new ArgumentOutOfRangeException(nameof(pointsCost));
-        if (string.IsNullOrWhiteSpace(minLevel)) throw new ArgumentException("MinLevel requerido.", nameof(minLevel));
 
         Name = name.Trim();
         Description = description?.Trim() ?? string.Empty;
         PointsCost = pointsCost;
-        MinLevel = minLevel.Trim();
+        MinLevel = minLevel?.Trim() ?? string.Empty;
         IsMonthlyProduct = isMonthlyProduct;
         ValidFrom = validFrom;
         ValidTo = validTo;

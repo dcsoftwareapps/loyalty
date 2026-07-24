@@ -1,8 +1,6 @@
 using LoyaltyCloud.Application.Common.Interfaces;
-using LoyaltyCloud.Common.Constants;
 using LoyaltyCloud.Domain.Entities;
 using LoyaltyCloud.Domain.Repositories;
-using LoyaltyCloud.Domain.ValueObjects;
 using LoyaltyCloud.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 
@@ -38,26 +36,6 @@ internal sealed class RewardCatalogRepository : IRewardCatalogRepository
             .ThenBy(r => r.PointsCost)
             .ToListAsync(ct);
         return list.AsReadOnly();
-    }
-
-    public async Task<IReadOnlyList<RewardCatalogItem>> GetByLevelAsync(
-        MemberLevel level,
-        ProgramConfigSnapshot config,
-        CancellationToken ct = default)
-    {
-        // Trae todos los activos y filtra elegibilidad en memoria
-        // (es un set chico — 10-20 ítems — no vale la pena complicar la query).
-        var all = await _db.RewardCatalogItems
-            .AsNoTracking()
-            .Where(r => r.TenantId == _tenantContext.RequireTenantId() && r.IsActive)
-            .ToListAsync(ct);
-
-        var eligible = all
-            .Where(r => r.IsEligibleFor(level, config))
-            .OrderBy(r => r.PointsCost)
-            .ToList();
-
-        return eligible.AsReadOnly();
     }
 
     public Task<RewardCatalogItem?> GetByIdAsync(Guid id, CancellationToken ct = default) =>

@@ -103,6 +103,8 @@ public static class DependencyInjection
         services.AddScoped<IDeviceRegistrationPlatformReadService, DeviceRegistrationPlatformReadService>();
         services.AddScoped<ITenantWalletBrandingReadService, TenantWalletBrandingReadService>();
         services.AddScoped<ITenantBrandingReadService, TenantBrandingReadService>();
+        services.AddScoped<ITenantLoyaltyLevelReadService, TenantLoyaltyLevelReadService>();
+        services.AddScoped<ITenantLoyaltyLevelManagementService, TenantLoyaltyLevelManagementService>();
         services.AddScoped<ITenantWalletAssetProvider, TenantWalletAssetProvider>();
         services.AddScoped<ITenantProvisioningService, TenantProvisioningService>();
         services.AddScoped<ISuperAdminTenantReadService, SuperAdminTenantReadService>();

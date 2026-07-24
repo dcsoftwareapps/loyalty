@@ -1,10 +1,11 @@
 using FluentValidation;
+using LoyaltyCloud.Application.Common.Interfaces;
 
 namespace LoyaltyCloud.Application.Campaigns.Commands.CreatePointCampaign;
 
 internal sealed class CreatePointCampaignValidator : AbstractValidator<CreatePointCampaignCommand>
 {
-    public CreatePointCampaignValidator()
+    public CreatePointCampaignValidator(ITenantLoyaltyLevelReadService levels)
     {
         RuleFor(x => x.Name)
             .NotEmpty()
@@ -26,8 +27,8 @@ internal sealed class CreatePointCampaignValidator : AbstractValidator<CreatePoi
             .WithMessage("MinimumPurchaseAmount no puede ser negativo.");
 
         RuleFor(x => x.LevelEligibility)
-            .Must(PointCampaignValidation.IsValidLevelEligibility)
-            .WithMessage("LevelEligibility debe ser All, Mist, Glow o Radiance.");
+            .MustAsync((eligibility, ct) => PointCampaignValidation.IsValidLevelEligibilityAsync(eligibility, levels, ct))
+            .WithMessage("LevelEligibility debe ser All o un nivel activo del tenant actual.");
 
         RuleFor(x => x)
             .Must(x => PointCampaignValidation.HasValidDateRange(x.StartsAtUtc, x.EndsAtUtc))

@@ -1,10 +1,8 @@
 using LoyaltyCloud.Application.Common.Interfaces;
 using LoyaltyCloud.Application.Customers.Queries.GetCustomerDetail;
-using LoyaltyCloud.Common.Constants;
 using LoyaltyCloud.Common.Services;
 using LoyaltyCloud.Domain.Entities;
 using LoyaltyCloud.Domain.Enums;
-using LoyaltyCloud.Domain.ValueObjects;
 using LoyaltyCloud.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 
@@ -14,18 +12,21 @@ internal sealed class CustomerDetailReadService : ICustomerDetailReadService
 {
     private readonly AppDbContext _db;
     private readonly IDateTimeProvider _dt;
-    private readonly ILevelCalculationService _levels;
+    private readonly ITenantLoyaltyLevelReadService _tenantLevels;
+    private readonly ILevelProgressService _levelProgress;
     private readonly ITenantContext _tenantContext;
 
     public CustomerDetailReadService(
         AppDbContext db,
         IDateTimeProvider dt,
-        ILevelCalculationService levels,
+        ITenantLoyaltyLevelReadService tenantLevels,
+        ILevelProgressService levelProgress,
         ITenantContext tenantContext)
     {
         _db = db;
         _dt = dt;
-        _levels = levels;
+        _tenantLevels = tenantLevels;
+        _levelProgress = levelProgress;
         _tenantContext = tenantContext;
     }
 
@@ -100,7 +101,14 @@ internal sealed class CustomerDetailReadService : ICustomerDetailReadService
         var now = _dt.UtcNow;
         var rollingLevel = baseInfo.Level;
         var rollingPoints = 0;
-        var rollingProgress = new RollingProgressDto(0, 0, 0, 0, baseInfo.Level, "No disponible");
+        var rollingProgress = new RollingProgressDto(
+            RollingPoints: 0,
+            CurrentLevel: baseInfo.Level,
+            CurrentLevelThreshold: 0,
+            NextLevelName: null,
+            NextLevelThreshold: null,
+            PointsToNextLevel: 0,
+            IsMaxLevel: true);
         if (hasCard)
         {
             var windowStart = now.AddMonths(-12);
@@ -113,22 +121,17 @@ internal sealed class CustomerDetailReadService : ICustomerDetailReadService
                          && LevelProgressTransactionTypes.All.Contains(t.Type))
                 .SumAsync(t => (int?)t.Points, ct) ?? 0;
 
-            var snapshot = ProgramConfigSnapshot.FromEntries(await _db.ProgramConfigs.AsNoTracking().Where(c => c.TenantId == tenantId).ToListAsync(ct));
-            var memberLevel = _levels.CalculateLevel(rollingPoints, snapshot);
-            rollingLevel = memberLevel.Name;
-            var nextLevel = memberLevel.Name switch
-            {
-                var n when string.Equals(n, LoyaltyConstants.Levels.Mist, StringComparison.OrdinalIgnoreCase) => LoyaltyConstants.Levels.Glow,
-                var n when string.Equals(n, LoyaltyConstants.Levels.Glow, StringComparison.OrdinalIgnoreCase) => LoyaltyConstants.Levels.Radiance,
-                _ => "Maximo"
-            };
+            var tenantLevels = await _tenantLevels.GetActiveLevelsAsync(ct);
+            var progress = _levelProgress.Calculate(rollingPoints, tenantLevels);
+            rollingLevel = progress.CurrentLevel.Name;
             rollingProgress = new RollingProgressDto(
-                RollingPoints: rollingPoints,
-                GlowThreshold: snapshot.LevelGlowMin,
-                RadianceThreshold: snapshot.LevelRadianceMin,
-                PointsToNextLevel: memberLevel.PointsToNextLevel(rollingPoints),
-                CurrentLevel: memberLevel.Name,
-                NextLevel: nextLevel);
+                RollingPoints: progress.RollingPoints,
+                CurrentLevel: progress.CurrentLevel.Name,
+                CurrentLevelThreshold: progress.CurrentLevelThreshold,
+                NextLevelName: progress.NextLevel?.Name,
+                NextLevelThreshold: progress.NextLevelThreshold,
+                PointsToNextLevel: progress.PointsToNextLevel,
+                IsMaxLevel: progress.IsMaxLevel);
         }
 
         var lotRows = hasCard

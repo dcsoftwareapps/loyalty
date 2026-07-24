@@ -22,6 +22,7 @@ public sealed class AddPointsHandler : IRequestHandler<AddPointsCommand, Result<
     private readonly IPointLotRepository _pointLots;
     private readonly IProgramConfigRepository _config;
     private readonly ILevelCalculationService _levels;
+    private readonly ITenantLoyaltyLevelReadService _tenantLevels;
     private readonly IPointCampaignSelector _campaignSelector;
     private readonly ILoyaltyNotificationService _notifications;
     private readonly ITenantContext _tenantContext;
@@ -36,6 +37,7 @@ public sealed class AddPointsHandler : IRequestHandler<AddPointsCommand, Result<
         IPointLotRepository pointLots,
         IProgramConfigRepository config,
         ILevelCalculationService levels,
+        ITenantLoyaltyLevelReadService tenantLevels,
         IPointCampaignSelector campaignSelector,
         ILoyaltyNotificationService notifications,
         ITenantContext tenantContext,
@@ -49,6 +51,7 @@ public sealed class AddPointsHandler : IRequestHandler<AddPointsCommand, Result<
         _pointLots = pointLots;
         _config = config;
         _levels = levels;
+        _tenantLevels = tenantLevels;
         _campaignSelector = campaignSelector;
         _notifications = notifications;
         _tenantContext = tenantContext;
@@ -64,12 +67,13 @@ public sealed class AddPointsHandler : IRequestHandler<AddPointsCommand, Result<
         IPointLotRepository pointLots,
         IProgramConfigRepository config,
         ILevelCalculationService levels,
+        ITenantLoyaltyLevelReadService tenantLevels,
         ILoyaltyNotificationService notifications,
         ITenantContext tenantContext,
         IDateTimeProvider dt,
         IUnitOfWork uow,
         ILogger<AddPointsHandler> logger)
-        : this(cards, customers, transactions, pointLots, config, levels, NullPointCampaignSelector.Instance, notifications, tenantContext, dt, uow, logger)
+        : this(cards, customers, transactions, pointLots, config, levels, tenantLevels, NullPointCampaignSelector.Instance, notifications, tenantContext, dt, uow, logger)
     {
     }
 
@@ -89,6 +93,7 @@ public sealed class AddPointsHandler : IRequestHandler<AddPointsCommand, Result<
             return Result.Fail<AddPointsResponse>("La clienta no esta activa.");
 
         var snapshot = ProgramConfigSnapshot.FromEntries(await _config.GetAllAsync(ct));
+        var tenantLevels = await _tenantLevels.GetActiveLevelsAsync(ct);
         var basePoints = snapshot.CalculatePointsForPurchase(command.PurchaseAmount);
         if (basePoints <= 0)
             return Result.Fail<AddPointsResponse>(
@@ -150,8 +155,8 @@ public sealed class AddPointsHandler : IRequestHandler<AddPointsCommand, Result<
             rollingPoints += finalPoints;
 
         var oldLevel = card.Level;
-        var calculatedLevel = _levels.CalculateLevel(rollingPoints, snapshot);
-        var levelComparison = _levels.CompareLevels(oldLevel, calculatedLevel.Name, snapshot);
+        var calculatedLevel = _levels.CalculateLevel(rollingPoints, tenantLevels);
+        var levelComparison = _levels.CompareLevels(oldLevel, calculatedLevel.Name, tenantLevels);
         var levelChanged = card.ApplyCalculatedLevel(calculatedLevel, _dt);
         var leveledUp = levelChanged && levelComparison > 0;
         _cards.Update(card);

@@ -1,3 +1,4 @@
+using LoyaltyCloud.Application.Common.Interfaces;
 using LoyaltyCloud.Common.Results;
 using LoyaltyCloud.Common.Services;
 using LoyaltyCloud.Domain.Repositories;
@@ -9,11 +10,16 @@ public sealed class ListRewardsHandler
     : IRequestHandler<ListRewardsQuery, Result<IReadOnlyList<RewardAdminDto>>>
 {
     private readonly IRewardCatalogRepository _rewards;
+    private readonly ITenantLoyaltyLevelReadService _tenantLevels;
     private readonly IDateTimeProvider _dt;
 
-    public ListRewardsHandler(IRewardCatalogRepository rewards, IDateTimeProvider dt)
+    public ListRewardsHandler(
+        IRewardCatalogRepository rewards,
+        ITenantLoyaltyLevelReadService tenantLevels,
+        IDateTimeProvider dt)
     {
         _rewards = rewards;
+        _tenantLevels = tenantLevels;
         _dt = dt;
     }
 
@@ -31,7 +37,17 @@ public sealed class ListRewardsHandler
             filtered = filtered.Where(r => !r.ValidTo.HasValue || r.ValidTo.Value >= now);
 
         if (!string.IsNullOrWhiteSpace(query.MinLevel))
-            filtered = filtered.Where(r => string.Equals(r.MinLevel, query.MinLevel.Trim(), StringComparison.Ordinal));
+        {
+            var tenantLevels = await _tenantLevels.GetActiveLevelsAsync(ct);
+            var levelError = RewardLevelRules.TryCanonicalizeMinimumLevel(
+                query.MinLevel,
+                tenantLevels,
+                out var canonicalMinLevel);
+            if (levelError is not null)
+                return Result.Fail<IReadOnlyList<RewardAdminDto>>(levelError);
+
+            filtered = filtered.Where(r => string.Equals(r.MinLevel, canonicalMinLevel, StringComparison.Ordinal));
+        }
 
         IReadOnlyList<RewardAdminDto> dtos = filtered
             .OrderBy(r => r.Name)

@@ -15,7 +15,7 @@ internal sealed class CustomNotificationCampaignConfiguration : IEntityTypeConfi
         builder.Property(c => c.Title).HasMaxLength(80).IsRequired();
         builder.Property(c => c.ShortMessage).HasMaxLength(40).IsRequired();
         builder.Property(c => c.LongMessage).HasMaxLength(500).IsRequired();
-        builder.Property(c => c.AudienceType).HasConversion<string>().HasMaxLength(50).IsRequired();
+        builder.Property(c => c.AudienceType).HasMaxLength(50).IsRequired();
         builder.Property(c => c.Status).HasConversion<string>().HasMaxLength(50).IsRequired();
         builder.Property(c => c.FailureReason).HasMaxLength(1000);
 

@@ -39,6 +39,7 @@ public class AppDbContext : DbContext, IUnitOfWork
     public DbSet<TenantBranding> TenantBrandings => Set<TenantBranding>();
     public DbSet<TenantSubscription> TenantSubscriptions => Set<TenantSubscription>();
     public DbSet<TenantAdminUser> TenantAdminUsers => Set<TenantAdminUser>();
+    public DbSet<TenantLoyaltyLevel> TenantLoyaltyLevels => Set<TenantLoyaltyLevel>();
 
     public AppDbContext(DbContextOptions<AppDbContext> options) : base(options) { }
 
@@ -221,6 +222,7 @@ public class AppDbContext : DbContext, IUnitOfWork
         ApplyTenantQueryFilter<PointLot>(modelBuilder);
         ApplyTenantQueryFilter<PointLotConsumption>(modelBuilder);
         ApplyTenantQueryFilter<NotificationDelivery>(modelBuilder);
+        ApplyTenantQueryFilter<TenantLoyaltyLevel>(modelBuilder);
     }
 
     private void ApplyTenantQueryFilter<TEntity>(ModelBuilder modelBuilder)

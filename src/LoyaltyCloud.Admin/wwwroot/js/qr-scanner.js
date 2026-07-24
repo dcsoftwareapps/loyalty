@@ -81,8 +81,9 @@
 
             if (code && code.data) {
                 const value = code.data;
+                const callback = dotNetRef;
                 stop();
-                dotNetRef?.invokeMethodAsync("OnQrDetected", value);
+                callback?.invokeMethodAsync("OnQrDetected", value);
                 return;
             }
         }

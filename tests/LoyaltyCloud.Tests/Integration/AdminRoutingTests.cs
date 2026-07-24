@@ -232,15 +232,28 @@ public sealed class AdminRoutingTests : IClassFixture<AdminRoutingTests.AdminWeb
     public void Redeem_uses_existing_qr_scanner_and_manual_serial_fallback()
     {
         var redeemSource = File.ReadAllText(Path.Combine(GetRepositoryRoot(), "src", "LoyaltyCloud.Admin", "Pages", "Redeem.razor"));
+        var scannerSource = File.ReadAllText(Path.Combine(GetRepositoryRoot(), "src", "LoyaltyCloud.Admin", "wwwroot", "js", "qr-scanner.js"));
 
         Assert.Contains("Escanear QR", redeemSource);
         Assert.Contains("kbeautyQrScanner.start", redeemSource);
         Assert.Contains("kbeautyQrScanner.stop", redeemSource);
         Assert.Contains("[JSInvokable]", redeemSource);
         Assert.Contains("public async Task OnQrDetected(string rawValue)", redeemSource);
+        Assert.Contains("await StopScannerAsync();", redeemSource);
+        Assert.Contains("await LoadCatalogAsync();", redeemSource);
         Assert.Contains("private static string? ExtractSerial", redeemSource);
         Assert.Contains("Serial de la clienta", redeemSource);
         Assert.Contains("placeholder=\"KB-A7B9C2X\"", redeemSource);
+        Assert.Contains("@bind=\"serialInput\"", redeemSource);
+        Assert.Contains("@bind:event=\"oninput\"", redeemSource);
+        Assert.Contains("disabled=\"@(string.IsNullOrWhiteSpace(serialInput) || busy)\"", redeemSource);
+        Assert.Contains("const callback = dotNetRef;", scannerSource);
+        var callbackIndex = scannerSource.IndexOf("const callback = dotNetRef;", StringComparison.Ordinal);
+        var stopAfterCallbackIndex = scannerSource.IndexOf("stop();", callbackIndex, StringComparison.Ordinal);
+        var invokeIndex = scannerSource.IndexOf("callback?.invokeMethodAsync(\"OnQrDetected\", value);", StringComparison.Ordinal);
+        Assert.True(callbackIndex >= 0);
+        Assert.True(stopAfterCallbackIndex > callbackIndex);
+        Assert.True(invokeIndex > stopAfterCallbackIndex);
     }
 
     [Fact]
@@ -271,6 +284,9 @@ public sealed class AdminRoutingTests : IClassFixture<AdminRoutingTests.AdminWeb
         Assert.Contains("if (!reward.CanAfford || busy)", redeemSource);
         Assert.Contains("disabled=\"@(busy || selectedReward is not null)\"", redeemSource);
         Assert.Contains("if (selectedReward is null || customer is null || busy)", redeemSource);
+        Assert.Contains("if (qrDetected)", redeemSource);
+        Assert.Contains("qrDetected = true;", redeemSource);
+        Assert.Contains("qrDetected = false;", redeemSource);
         Assert.Contains("await RefreshAfterRedemptionAsync(serial);", redeemSource);
         Assert.Contains("success = result.Value;", redeemSource);
         Assert.Contains("errorMessage = result.Error;", redeemSource);
@@ -503,6 +519,68 @@ public sealed class AdminRoutingTests : IClassFixture<AdminRoutingTests.AdminWeb
         Assert.Contains("CorrelationId: candidate.CorrelationId", handler);
         Assert.Contains("ProcessImmediately: true", handler);
         Assert.Contains("new CreateMonthlyProductStartedNotificationsCommand(OperatorId, timeZoneId)", scheduler);
+    }
+
+    [Fact]
+    [Trait("Category", "AdminConfigurationCleanup")]
+    public void Config_page_hides_legacy_reward_settings_from_visible_form()
+    {
+        var source = File.ReadAllText(Path.Combine(GetRepositoryRoot(), "src", "LoyaltyCloud.Admin", "Pages", "Config.razor"));
+
+        Assert.Contains("Where(IsVisibleConfigEntry)", source);
+        Assert.Contains("!entry.Key.StartsWith(\"reward_\", StringComparison.OrdinalIgnoreCase)", source);
+        Assert.DoesNotContain("Costo de canje:", source);
+        Assert.DoesNotContain("<code", source);
+        Assert.Contains("href=\"/rewards\"", source);
+        Assert.Contains("Recompensas", source);
+    }
+
+    [Fact]
+    [Trait("Category", "AdminConfigurationCleanup")]
+    public void Config_page_keeps_general_program_settings_visible()
+    {
+        var source = File.ReadAllText(Path.Combine(GetRepositoryRoot(), "src", "LoyaltyCloud.Admin", "Pages", "Config.razor"));
+
+        Assert.Contains("LoyaltyConstants.ConfigKeys.PointsPerPesoUnit => \"Pesos por 1 punto\"", source);
+        Assert.Contains("LoyaltyConstants.ConfigKeys.WelcomeBonusPoints => \"Puntos de bienvenida\"", source);
+        Assert.Contains("LoyaltyConstants.ConfigKeys.ReferralBonusPoints => \"Puntos por referido\"", source);
+        Assert.Contains("LoyaltyConstants.ConfigKeys.BirthdayMultiplier => \"Multiplicador cumpleaños\"", source);
+        Assert.Contains("LoyaltyConstants.ConfigKeys.PointsExpirationEnabled => \"Expiracion de puntos activa\"", source);
+        Assert.Contains("LoyaltyConstants.ConfigKeys.PointsExpireAfterMonths => \"Meses de vigencia de puntos\"", source);
+    }
+
+    [Fact]
+    [Trait("Category", "AdminConfigurationCleanup")]
+    public void Reward_catalog_remains_authority_for_redemption_costs_and_monthly_product()
+    {
+        var redeemHandler = File.ReadAllText(Path.Combine(GetRepositoryRoot(), "src", "LoyaltyCloud.Application", "Redemptions", "Commands", "RedeemReward", "RedeemRewardHandler.cs"));
+        var catalogHandler = File.ReadAllText(Path.Combine(GetRepositoryRoot(), "src", "LoyaltyCloud.Application", "Redemptions", "Queries", "GetRedemptionCatalog", "GetRedemptionCatalogHandler.cs"));
+        var monthlyReadService = File.ReadAllText(Path.Combine(GetRepositoryRoot(), "src", "LoyaltyCloud.Infrastructure", "Services", "MonthlyProductNotificationReadService.cs"));
+        var rewardsPage = File.ReadAllText(Path.Combine(GetRepositoryRoot(), "src", "LoyaltyCloud.Admin", "Pages", "Rewards.razor"));
+
+        Assert.Contains("card.RedeemPoints(reward.PointsCost);", redeemHandler);
+        Assert.Contains("pointsSpent: reward.PointsCost", redeemHandler);
+        Assert.Contains("PointsCost: i.PointsCost", catalogHandler);
+        Assert.Contains("_db.RewardCatalogItems", monthlyReadService);
+        Assert.Contains("r.IsMonthlyProduct", monthlyReadService);
+        Assert.Contains("CurrentMonthlyProduct.PointsCost", rewardsPage);
+    }
+
+    [Fact]
+    [Trait("Category", "AdminConfigurationCleanup")]
+    public void Legacy_reward_program_config_values_are_preserved_but_not_operational_ui()
+    {
+        var seed = File.ReadAllText(Path.Combine(GetRepositoryRoot(), "src", "LoyaltyCloud.Infrastructure", "Persistence", "Seed", "ProgramConfigSeed.cs"));
+        var snapshot = File.ReadAllText(Path.Combine(GetRepositoryRoot(), "src", "LoyaltyCloud.Domain", "ValueObjects", "ProgramConfigSnapshot.cs"));
+
+        Assert.Contains("LoyaltyConstants.ConfigKeys.RewardMiniProductPoints", seed);
+        Assert.Contains("LoyaltyConstants.ConfigKeys.RewardFiftyOffPoints", seed);
+        Assert.Contains("LoyaltyConstants.ConfigKeys.RewardFocusSkinPoints", seed);
+        Assert.Contains("LoyaltyConstants.ConfigKeys.RewardMonthlyProductPoints", seed);
+        Assert.Contains("LoyaltyConstants.ConfigKeys.RewardHundredOffCabinaPoints", seed);
+        Assert.Contains("LoyaltyConstants.ConfigKeys.RewardFacialOffPoints", seed);
+        Assert.Contains("RewardMonthlyProductPoints", snapshot);
+        Assert.Contains("RewardCatalogItem.PointsCost", snapshot);
     }
 
     [Fact]

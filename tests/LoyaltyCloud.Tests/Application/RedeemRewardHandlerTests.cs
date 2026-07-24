@@ -52,7 +52,7 @@ public class RedeemRewardHandlerTests
 
         return new RedeemRewardHandler(
             cards.Object, rewards.Object, redemptions.Object, transactions.Object,
-            pointLots.Object, config.Object, devices.Object, apn.Object, LevelCalculator().Object, TenantContext().Object, publisher.Object,
+            pointLots.Object, devices.Object, apn.Object, LevelCalculator().Object, TenantLevels().Object, TenantContext().Object, publisher.Object,
             clock.Object, uow.Object,
             NullLogger<RedeemRewardHandler>.Instance);
     }
@@ -168,10 +168,10 @@ public class RedeemRewardHandlerTests
             new Mock<IRedemptionRepository>().Object,
             transactions.Object,
             new Mock<IPointLotRepository>().Object,
-            ConfigRepoWithDefaults().Object,
             new Mock<IDeviceRegistrationRepository>().Object,
             new Mock<IApnService>().Object,
             LevelCalculator().Object,
+            TenantLevels().Object,
             TenantContext().Object,
             new Mock<IPublisher>().Object,
             Clock().Object,

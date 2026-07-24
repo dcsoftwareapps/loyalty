@@ -4,14 +4,16 @@
 
 @using LoyaltyCloud.Application.Config.Commands.UpdateProgramConfig
 @using LoyaltyCloud.Application.Config.Queries.GetProgramConfig
+@using LoyaltyCloud.Common.Constants
 @inject ISender Sender
 
 <PageTitle>Configuración · LoyaltyCloud</PageTitle>
 
 <h1>Configuración del programa</h1>
 <p style="color: var(--kb-ink-muted); max-width: 600px;">
-    Toda la lógica del programa lee de aquí. Los cambios aplican de inmediato a las
-    siguientes operaciones (no se aplican retroactivamente al historial).
+    Reglas generales de acumulación, cumpleaños y expiración del programa.
+    Las recompensas y productos del mes se administran desde <a href="/rewards">Recompensas</a>.
+    Los niveles se administran desde <a href="/levels">Niveles</a>.
 </p>
 
 @if (entries is null)
@@ -37,7 +39,10 @@ else
             <tr>
                 <td>
                     <strong>@FriendlyName(e.Key)</strong>
-                    <br/><code style="color:var(--kb-ink-muted);font-size:0.8rem;">@e.Key</code>
+                    @if (!string.IsNullOrWhiteSpace(e.Description))
+                    {
+                        <br/><small style="color:var(--kb-ink-muted);">@e.Description</small>
+                    }
                 </td>
                 <td>
                     <input type="text" @bind="edited[e.Key]" style="max-width: 160px;" />
@@ -74,7 +79,9 @@ else
         var result = await Sender.Send(new GetProgramConfigQuery());
         if (result.IsSuccess)
         {
-            entries = result.Value.ToList();
+            entries = result.Value
+                .Where(IsVisibleConfigEntry)
+                .ToList();
             edited = entries.ToDictionary(e => e.Key, e => e.Value);
         }
     }
@@ -111,20 +118,26 @@ else
         }
     }
 
-    // Mapping legible para mostrar en la tabla — no afecta los keys reales.
+    // Mapping legible para mostrar en la tabla; no afecta los keys reales.
+    private static bool IsVisibleConfigEntry(ConfigDto entry) =>
+        !entry.Key.StartsWith("reward_", StringComparison.OrdinalIgnoreCase)
+        && !string.Equals(entry.Key, LoyaltyConstants.ConfigKeys.LevelMistMin, StringComparison.OrdinalIgnoreCase)
+        && !string.Equals(entry.Key, LoyaltyConstants.ConfigKeys.LevelGlowMin, StringComparison.OrdinalIgnoreCase)
+        && !string.Equals(entry.Key, LoyaltyConstants.ConfigKeys.LevelRadianceMin, StringComparison.OrdinalIgnoreCase)
+        && !string.Equals(entry.Key, LoyaltyConstants.ConfigKeys.RadianceRequalificationPoints, StringComparison.OrdinalIgnoreCase);
+
     private static string FriendlyName(string key) => key switch
     {
-        "points_per_peso_unit" => "Pesos por 1 punto",
-        "welcome_bonus_points" => "Puntos de bienvenida",
-        "referral_bonus_points" => "Puntos por referido",
-        "birthday_multiplier" => "Multiplicador cumpleaños",
-        "points_expiration_enabled" => "Expiracion de puntos activa",
-        "points_expire_after_months" => "Meses de vigencia de puntos",
-        "level_mist_min" => "Umbral Mist",
-        "level_glow_min" => "Umbral Glow",
-        "level_radiance_min" => "Umbral Radiance",
-        "radiance_requalification_points" => "Re-cualificación Radiance (pts/año)",
-        var k when k.StartsWith("reward_") => "Costo de canje: " + k.Replace("reward_", "").Replace("_points", "").Replace("_", " "),
+        LoyaltyConstants.ConfigKeys.PointsPerPesoUnit => "Pesos por 1 punto",
+        LoyaltyConstants.ConfigKeys.WelcomeBonusPoints => "Puntos de bienvenida",
+        LoyaltyConstants.ConfigKeys.ReferralBonusPoints => "Puntos por referido",
+        LoyaltyConstants.ConfigKeys.BirthdayMultiplier => "Multiplicador cumpleaños",
+        LoyaltyConstants.ConfigKeys.PointsExpirationEnabled => "Expiracion de puntos activa",
+        LoyaltyConstants.ConfigKeys.PointsExpireAfterMonths => "Meses de vigencia de puntos",
+        LoyaltyConstants.ConfigKeys.LevelMistMin => "Umbral Mist",
+        LoyaltyConstants.ConfigKeys.LevelGlowMin => "Umbral Glow",
+        LoyaltyConstants.ConfigKeys.LevelRadianceMin => "Umbral Radiance",
+        LoyaltyConstants.ConfigKeys.RadianceRequalificationPoints => "Re-cualificación Radiance (pts/año)",
         _ => key
     };
 }

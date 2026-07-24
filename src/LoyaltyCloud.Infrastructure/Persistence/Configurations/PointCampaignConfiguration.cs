@@ -24,7 +24,6 @@ internal sealed class PointCampaignConfiguration : IEntityTypeConfiguration<Poin
             .HasColumnType("decimal(18,2)");
 
         builder.Property(c => c.LevelEligibility)
-            .HasConversion<string>()
             .HasMaxLength(30)
             .IsRequired();
 

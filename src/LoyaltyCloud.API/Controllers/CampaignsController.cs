@@ -5,7 +5,6 @@ using LoyaltyCloud.Application.Campaigns.Commands.DeactivatePointCampaign;
 using LoyaltyCloud.Application.Campaigns.Commands.UpdatePointCampaign;
 using LoyaltyCloud.Application.Campaigns.Queries.GetPointCampaignById;
 using LoyaltyCloud.Application.Campaigns.Queries.ListPointCampaigns;
-using LoyaltyCloud.Domain.Enums;
 using MediatR;
 using Microsoft.AspNetCore.Mvc;
 
@@ -129,7 +128,7 @@ public sealed class CampaignsController : ControllerBase
         string Description,
         int Multiplier,
         decimal? MinimumPurchaseAmount,
-        CampaignLevelEligibility LevelEligibility,
+        string LevelEligibility,
         DateTime StartsAtUtc,
         DateTime EndsAtUtc,
         bool IsActive = true);

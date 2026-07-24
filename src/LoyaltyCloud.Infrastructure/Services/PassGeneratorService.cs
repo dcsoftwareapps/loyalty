@@ -5,9 +5,10 @@ using System.Security.Cryptography.X509Certificates;
 using System.Text;
 using System.Text.Json;
 using LoyaltyCloud.Application.Common.Interfaces;
-using LoyaltyCloud.Common.Constants;
+using LoyaltyCloud.Common.Services;
 using LoyaltyCloud.Domain.Entities;
 using LoyaltyCloud.Domain.Enums;
+using LoyaltyCloud.Domain.Repositories;
 using LoyaltyCloud.Infrastructure.Configuration;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
@@ -21,6 +22,10 @@ internal sealed class PassGeneratorService : IPassGeneratorService
     private readonly IWalletNotificationReadService _walletNotifications;
     private readonly ITenantWalletBrandingReadService _tenantBranding;
     private readonly ITenantWalletAssetProvider _walletAssets;
+    private readonly ITenantLoyaltyLevelReadService _tenantLevels;
+    private readonly IPointTransactionRepository _transactions;
+    private readonly ILevelProgressService _levelProgress;
+    private readonly IDateTimeProvider _dt;
     private readonly ApplePassOptions _options;
     private readonly ILogger<PassGeneratorService> _logger;
 
@@ -43,6 +48,10 @@ internal sealed class PassGeneratorService : IPassGeneratorService
         IWalletNotificationReadService walletNotifications,
         ITenantWalletBrandingReadService tenantBranding,
         ITenantWalletAssetProvider walletAssets,
+        ITenantLoyaltyLevelReadService tenantLevels,
+        IPointTransactionRepository transactions,
+        ILevelProgressService levelProgress,
+        IDateTimeProvider dt,
         IOptions<ApplePassOptions> options,
         ILogger<PassGeneratorService> logger)
     {
@@ -50,6 +59,10 @@ internal sealed class PassGeneratorService : IPassGeneratorService
         _walletNotifications = walletNotifications;
         _tenantBranding = tenantBranding;
         _walletAssets = walletAssets;
+        _tenantLevels = tenantLevels;
+        _transactions = transactions;
+        _levelProgress = levelProgress;
+        _dt = dt;
         _options = options.Value;
         _logger = logger;
     }
@@ -61,7 +74,10 @@ internal sealed class PassGeneratorService : IPassGeneratorService
 
         var walletContext = await _walletNotifications.GetActiveContextAsync(card.Id, ct);
         var branding = await _tenantBranding.GetCurrentAsync(ct);
-        var passJson = BuildPassJson(card, customer, walletContext, branding);
+        var tenantLevels = await _tenantLevels.GetActiveLevelsAsync(ct);
+        var rollingPoints = await _transactions.GetEligibleLevelPointsAsync(card.Id, _dt.UtcNow.AddMonths(-12), ct);
+        var progress = BuildLevelProgress(card, _levelProgress.Calculate(rollingPoints, tenantLevels));
+        var passJson = BuildPassJson(card, customer, walletContext, branding, progress);
         var passJsonBytes = JsonSerializer.SerializeToUtf8Bytes(passJson, PassJsonOpts);
         var assets = await _walletAssets.LoadAssetsAsync(branding.TenantSlug, ct);
 
@@ -97,7 +113,7 @@ internal sealed class PassGeneratorService : IPassGeneratorService
             "Apple Wallet generated pass diagnostic: serial={Serial}, currentPoints={CurrentPoints}, pointsFieldValue={PointsFieldValue}, lastActivityAt={LastActivityAt:O}, pkpassBytes={Bytes}, pkpassSha256={PkpassSha256}.",
             card.SerialNumber,
             card.CurrentPoints,
-            BuildLevelProgress(card).PointsText,
+            progress.PointsText,
             card.LastActivityAt,
             output.Length,
             Sha256Short(output.ToArray()));
@@ -112,14 +128,14 @@ internal sealed class PassGeneratorService : IPassGeneratorService
         LoyaltyCard card,
         Customer customer,
         WalletNotificationContext walletContext,
-        TenantWalletBrandingDto branding)
+        TenantWalletBrandingDto branding,
+        PassProgress progress)
     {
         EnsureRequiredOption(_options.PassTypeIdentifier, "Apple:PassTypeIdentifier");
         EnsureRequiredOption(_options.TeamIdentifier, "Apple:TeamIdentifier");
         EnsureRequiredOption(_options.WebServiceURL, "Apple:WebServiceURL");
         EnsureRequiredOption(_options.OrganizationName, "Apple:OrganizationName");
 
-        var progress = BuildLevelProgress(card);
         var displayName = GetWalletDisplayName(customer, branding.CustomerFallbackName);
         var levelChangeMessage = walletContext.RecentVisibleEvent?.Type == NotificationType.LevelChanged
             ? BuildLevelChangeMessage(card, walletContext.LevelChange)
@@ -224,6 +240,7 @@ internal sealed class PassGeneratorService : IPassGeneratorService
         }
 
         fields.Add(new { key = "next", label = "PR\u00d3XIMO", value = progress.NextLevelText });
+        fields.Add(new { key = "remaining", label = "FALTAN", value = progress.RemainingPointsText });
 
         object? temporalField;
         TemporalFieldSelection selection;
@@ -596,38 +613,29 @@ internal sealed class PassGeneratorService : IPassGeneratorService
             : firstName;
     }
 
-    private static PassProgress BuildLevelProgress(LoyaltyCard card)
+    private static PassProgress BuildLevelProgress(LoyaltyCard card, LevelProgressResult levelProgress)
     {
         var currentPoints = Math.Max(0, card.CurrentPoints);
-        var level = card.Level;
+        var level = levelProgress.CurrentLevel.Name;
         var levelDisplay = $"{level} Member \u2728";
         var levelShortText = $"{level} \u2728";
 
-        if (string.Equals(level, LoyaltyConstants.Levels.Radiance, StringComparison.Ordinal) ||
-            currentPoints >= LoyaltyConstants.Defaults.LevelRadianceMin)
+        if (levelProgress.IsMaxLevel)
         {
             return new PassProgress(
                 levelDisplay,
                 levelShortText,
                 $"{currentPoints} pts",
-                "\u2b50 M\u00e1ximo",
-                "0 pts");
+                "M\u00e1ximo \u2728",
+                "\u2014");
         }
-
-        var nextLevel = string.Equals(level, LoyaltyConstants.Levels.Glow, StringComparison.Ordinal)
-            ? LoyaltyConstants.Levels.Radiance
-            : LoyaltyConstants.Levels.Glow;
-        var targetPoints = string.Equals(nextLevel, LoyaltyConstants.Levels.Radiance, StringComparison.Ordinal)
-            ? LoyaltyConstants.Defaults.LevelRadianceMin
-            : LoyaltyConstants.Defaults.LevelGlowMin;
-        var remainingPoints = Math.Max(0, targetPoints - currentPoints);
 
         return new PassProgress(
             levelDisplay,
             levelShortText,
             $"{currentPoints} pts",
-            nextLevel,
-            $"{remainingPoints} pts");
+            levelProgress.NextLevel!.Name,
+            $"{levelProgress.PointsToNextLevel} pts");
     }
 
     private async Task<byte[]> SignManifestAsync(byte[] manifestBytes, CancellationToken ct)

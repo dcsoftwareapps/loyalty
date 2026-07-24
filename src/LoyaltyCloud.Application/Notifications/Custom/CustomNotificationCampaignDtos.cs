@@ -8,7 +8,7 @@ public sealed record CustomNotificationCampaignDto(
     string Title,
     string ShortMessage,
     string LongMessage,
-    CustomNotificationAudienceType AudienceType,
+    string AudienceType,
     int? MinimumPoints,
     int? PointsExpiringDaysAhead,
     DateTime? ScheduledAtUtc,
@@ -25,7 +25,7 @@ public sealed record CustomNotificationCampaignDto(
     string? FailureReason);
 
 public sealed record CustomNotificationAudiencePreviewDto(
-    CustomNotificationAudienceType AudienceType,
+    string AudienceType,
     int TotalRecipients,
     int ExcludedWithoutDeviceRegistration,
     IReadOnlyList<CustomNotificationLevelDistributionDto> LevelDistribution,

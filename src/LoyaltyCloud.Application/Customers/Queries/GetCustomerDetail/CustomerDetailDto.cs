@@ -55,11 +55,12 @@ public sealed record UpcomingExpirationDto(
 
 public sealed record RollingProgressDto(
     int RollingPoints,
-    int GlowThreshold,
-    int RadianceThreshold,
-    int PointsToNextLevel,
     string CurrentLevel,
-    string NextLevel);
+    int CurrentLevelThreshold,
+    string? NextLevelName,
+    int? NextLevelThreshold,
+    int PointsToNextLevel,
+    bool IsMaxLevel);
 
 public sealed record LotSummaryDto(
     Guid LotId,

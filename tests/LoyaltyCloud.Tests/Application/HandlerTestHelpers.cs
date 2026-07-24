@@ -53,24 +53,52 @@ internal static class HandlerTestHelpers
     public static Mock<ILevelCalculationService> LevelCalculator()
     {
         var mock = new Mock<ILevelCalculationService>();
-        mock.Setup(s => s.CalculateLevel(It.IsAny<int>(), It.IsAny<ProgramConfigSnapshot>()))
-            .Returns<int, ProgramConfigSnapshot>((points, config) => MemberLevel.FromPoints(points, config));
+        mock.Setup(s => s.CalculateLevel(It.IsAny<int>(), It.IsAny<IReadOnlyList<TenantLoyaltyLevelDto>>()))
+            .Returns<int, IReadOnlyList<TenantLoyaltyLevelDto>>((points, levels) => CalculateLevel(points, levels));
         mock.Setup(s => s.IsEligibleForLevelProgress(It.IsAny<TransactionType>()))
             .Returns<TransactionType>(LevelProgressTransactionTypes.Contains);
-        mock.Setup(s => s.CompareLevels(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<ProgramConfigSnapshot>()))
-            .Returns<string, string, ProgramConfigSnapshot>((current, next, config) =>
-                Rank(next, config).CompareTo(Rank(current, config)));
+        mock.Setup(s => s.CompareLevels(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<IReadOnlyList<TenantLoyaltyLevelDto>>()))
+            .Returns<string, string, IReadOnlyList<TenantLoyaltyLevelDto>>((current, next, levels) =>
+                Rank(next, levels).CompareTo(Rank(current, levels)));
         return mock;
     }
 
-    private static int Rank(string level, ProgramConfigSnapshot config)
+    public static Mock<ITenantLoyaltyLevelReadService> TenantLevels(
+        IReadOnlyList<TenantLoyaltyLevelDto>? levels = null)
     {
-        if (string.Equals(level, LoyaltyCloud.Common.Constants.LoyaltyConstants.Levels.Radiance, StringComparison.OrdinalIgnoreCase))
-            return config.LevelRadianceMin;
-        if (string.Equals(level, LoyaltyCloud.Common.Constants.LoyaltyConstants.Levels.Glow, StringComparison.OrdinalIgnoreCase))
-            return config.LevelGlowMin;
+        var mock = new Mock<ITenantLoyaltyLevelReadService>();
+        mock.Setup(s => s.GetActiveLevelsAsync(It.IsAny<CancellationToken>()))
+            .ReturnsAsync(levels ?? DefaultTenantLevels());
+        return mock;
+    }
 
-        return config.LevelMistMin;
+    public static IReadOnlyList<TenantLoyaltyLevelDto> DefaultTenantLevels() =>
+    [
+        new(Guid.Parse("b1000000-0000-0000-0000-000000000101"), LoyaltyCloud.Common.Constants.LoyaltyConstants.Levels.Mist, 0, 1),
+        new(Guid.Parse("b1000000-0000-0000-0000-000000000102"), LoyaltyCloud.Common.Constants.LoyaltyConstants.Levels.Glow, 1000, 2),
+        new(Guid.Parse("b1000000-0000-0000-0000-000000000103"), LoyaltyCloud.Common.Constants.LoyaltyConstants.Levels.Radiance, 3000, 3)
+    ];
+
+    private static MemberLevel CalculateLevel(int points, IReadOnlyList<TenantLoyaltyLevelDto> levels)
+    {
+        var ordered = levels.OrderBy(level => level.SortOrder).ToList();
+        var selectedIndex = 0;
+        for (var i = 0; i < ordered.Count; i++)
+        {
+            if (points >= ordered[i].Threshold)
+                selectedIndex = i;
+        }
+
+        var selected = ordered[selectedIndex];
+        var maxPoints = selectedIndex == ordered.Count - 1 ? int.MaxValue : ordered[selectedIndex + 1].Threshold - 1;
+        return new MemberLevel(selected.Id, selected.Name, selected.Threshold, maxPoints, selected.SortOrder);
+    }
+
+    private static int Rank(string level, IReadOnlyList<TenantLoyaltyLevelDto> levels)
+    {
+        var match = levels.FirstOrDefault(candidate =>
+            string.Equals(candidate.Name, level, StringComparison.OrdinalIgnoreCase));
+        return match?.SortOrder ?? 0;
     }
 
     public static Customer NewCustomer(string fullName = "Ana López", DateTime? dob = null) =>

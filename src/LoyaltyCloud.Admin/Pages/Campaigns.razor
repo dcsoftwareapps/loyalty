@@ -8,9 +8,11 @@
 @using LoyaltyCloud.Application.Campaigns.Commands.DeactivatePointCampaign
 @using LoyaltyCloud.Application.Campaigns.Commands.UpdatePointCampaign
 @using LoyaltyCloud.Application.Campaigns.Queries.ListPointCampaigns
-@using LoyaltyCloud.Domain.Enums
+@using LoyaltyCloud.Application.Common.Interfaces
+@using LoyaltyCloud.Domain.Entities
 @using System.Globalization
 @inject ISender Sender
+@inject ITenantLoyaltyLevelReadService TenantLevels
 
 <PageTitle>Campañas - LoyaltyCloud</PageTitle>
 
@@ -65,10 +67,11 @@
             <div style="flex:1;min-width:180px;">
                 <label for="campaign-level">Nivel elegible</label>
                 <select id="campaign-level" @bind="form.LevelEligibility">
-                    <option value="@CampaignLevelEligibility.All">Todos</option>
-                    <option value="@CampaignLevelEligibility.Mist">Mist</option>
-                    <option value="@CampaignLevelEligibility.Glow">Glow</option>
-                    <option value="@CampaignLevelEligibility.Radiance">Radiance</option>
+                    <option value="@PointCampaign.CampaignLevelEligibilityAll">Todos los niveles</option>
+                    @foreach (var level in levelOptions)
+                    {
+                        <option value="@level.Name">Nivel minimo: @level.Name</option>
+                    }
                 </select>
             </div>
         </div>
@@ -161,6 +164,7 @@ else
 @code {
     private List<PointCampaignAdminDto>? campaigns;
     private CampaignFormModel form = CampaignFormModel.CreateDefault();
+    private IReadOnlyList<TenantLoyaltyLevelDto> levelOptions = [];
     private readonly List<string> validationErrors = new();
     private Guid? editingId;
     private string? successMsg;
@@ -173,7 +177,11 @@ else
     private int ScheduledCount => campaigns?.Count(c => CampaignStatus(c) == "Programada") ?? 0;
     private string HighestCurrentMultiplierText => campaigns?.Where(c => CampaignStatus(c) == "Vigente").OrderByDescending(c => c.Multiplier).Select(c => $"{c.Multiplier}x").FirstOrDefault() ?? "No disponible";
 
-    protected override async Task OnInitializedAsync() => await ReloadAsync();
+    protected override async Task OnInitializedAsync()
+    {
+        levelOptions = await TenantLevels.GetActiveLevelsAsync();
+        await ReloadAsync();
+    }
 
     private async Task ReloadAsync()
     {
@@ -279,6 +287,11 @@ else
             validationErrors.Add("El multiplicador debe estar entre 2 y 5.");
         if (form.MinimumPurchaseAmount.HasValue && form.MinimumPurchaseAmount.Value < 0)
             validationErrors.Add("El monto mínimo no puede ser negativo.");
+        if (!PointCampaign.IsAllLevels(form.LevelEligibility) &&
+            !levelOptions.Any(level => string.Equals(level.Name, form.LevelEligibility, StringComparison.OrdinalIgnoreCase)))
+        {
+            validationErrors.Add("Selecciona un nivel activo del tenant.");
+        }
 
         var hasStart = TryParseLocalInput(form.StartsAtLocal, out startsAtUtc);
         var hasEnd = TryParseLocalInput(form.EndsAtLocal, out endsAtUtc);
@@ -324,7 +337,8 @@ else
     };
 
     private static string ActiveBadgeClass(bool isActive) => isActive ? "kb-badge kb-badge--success" : "kb-badge kb-badge--muted";
-    private static string LevelText(CampaignLevelEligibility eligibility) => eligibility == CampaignLevelEligibility.All ? "Todos" : eligibility.ToString();
+    private static string LevelText(string eligibility) =>
+        PointCampaign.IsAllLevels(eligibility) ? "Todos los niveles" : $"Desde {eligibility}";
     private static string FormatMoney(decimal? value) => value.HasValue ? $"${value.Value:N2}" : "Sin mínimo";
     private static string FormatValidity(PointCampaignAdminDto campaign) => $"{FormatLocalDateTime(campaign.StartsAtUtc)} - {FormatLocalDateTime(campaign.EndsAtUtc)}";
 
@@ -372,7 +386,7 @@ else
         public string Description { get; set; } = string.Empty;
         public int Multiplier { get; set; } = 2;
         public decimal? MinimumPurchaseAmount { get; set; }
-        public CampaignLevelEligibility LevelEligibility { get; set; } = CampaignLevelEligibility.All;
+        public string LevelEligibility { get; set; } = PointCampaign.CampaignLevelEligibilityAll;
         public string? StartsAtLocal { get; set; }
         public string? EndsAtLocal { get; set; }
         public bool IsActive { get; set; } = true;

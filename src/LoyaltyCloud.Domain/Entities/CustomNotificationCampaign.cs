@@ -11,7 +11,7 @@ public class CustomNotificationCampaign : Entity, ITenantOwned
     public string Title { get; private set; } = string.Empty;
     public string ShortMessage { get; private set; } = string.Empty;
     public string LongMessage { get; private set; } = string.Empty;
-    public CustomNotificationAudienceType AudienceType { get; private set; }
+    public string AudienceType { get; private set; } = AudienceAllWalletUsers;
     public int? MinimumPoints { get; private set; }
     public int? PointsExpiringDaysAhead { get; private set; }
     public DateTime? ScheduledAtUtc { get; private set; }
@@ -36,7 +36,7 @@ public class CustomNotificationCampaign : Entity, ITenantOwned
         string title,
         string shortMessage,
         string longMessage,
-        CustomNotificationAudienceType audienceType,
+        string audienceType,
         int? minimumPoints,
         int? pointsExpiringDaysAhead,
         DateTime? scheduledAtUtc,
@@ -56,7 +56,7 @@ public class CustomNotificationCampaign : Entity, ITenantOwned
         Title = cleanTitle;
         ShortMessage = cleanShortMessage;
         LongMessage = cleanLongMessage;
-        AudienceType = audienceType;
+        AudienceType = NormalizeAudienceType(audienceType);
         MinimumPoints = minimumPoints;
         PointsExpiringDaysAhead = pointsExpiringDaysAhead;
         ScheduledAtUtc = scheduledAtUtc;
@@ -107,12 +107,17 @@ public class CustomNotificationCampaign : Entity, ITenantOwned
         ScheduledAtUtc.HasValue &&
         ScheduledAtUtc.Value <= nowUtc;
 
+    public void UpdateAudienceType(string audienceType, DateTime nowUtc)
+    {
+        AudienceType = NormalizeAudienceType(audienceType);
+    }
+
     private static void Validate(
         string name,
         string title,
         string shortMessage,
         string longMessage,
-        CustomNotificationAudienceType audienceType,
+        string audienceType,
         int? minimumPoints,
         int? pointsExpiringDaysAhead,
         DateTime? scheduledAtUtc,
@@ -135,8 +140,6 @@ public class CustomNotificationCampaign : Entity, ITenantOwned
             throw new ArgumentException("Mensaje largo requerido.", nameof(longMessage));
         if (longMessage.Trim().Length > 500)
             throw new ArgumentOutOfRangeException(nameof(longMessage), "El mensaje largo no puede exceder 500 caracteres.");
-        if (!Enum.IsDefined(typeof(CustomNotificationAudienceType), audienceType))
-            throw new ArgumentException("Audiencia invalida.", nameof(audienceType));
         if (minimumPoints.HasValue && minimumPoints.Value < 0)
             throw new ArgumentOutOfRangeException(nameof(minimumPoints), "El monto minimo debe ser mayor o igual a cero.");
         if (pointsExpiringDaysAhead.HasValue && pointsExpiringDaysAhead.Value <= 0)
@@ -158,4 +161,22 @@ public class CustomNotificationCampaign : Entity, ITenantOwned
     private static string Sanitize(string value) =>
         value.Trim().Replace("<", string.Empty, StringComparison.Ordinal)
             .Replace(">", string.Empty, StringComparison.Ordinal);
+
+    public const string AudienceAllWalletUsers = "AllWalletUsers";
+    public const string AudienceMinimumPoints = "MinimumPoints";
+    public const string AudiencePointsExpiring = "PointsExpiring";
+
+    public static bool IsAllWalletUsersAudience(string? value) =>
+        string.Equals(value, AudienceAllWalletUsers, StringComparison.OrdinalIgnoreCase);
+
+    public static bool IsMinimumPointsAudience(string? value) =>
+        string.Equals(value, AudienceMinimumPoints, StringComparison.OrdinalIgnoreCase);
+
+    public static bool IsPointsExpiringAudience(string? value) =>
+        string.Equals(value, AudiencePointsExpiring, StringComparison.OrdinalIgnoreCase);
+
+    private static string NormalizeAudienceType(string value) =>
+        string.IsNullOrWhiteSpace(value)
+            ? AudienceAllWalletUsers
+            : value.Trim();
 }

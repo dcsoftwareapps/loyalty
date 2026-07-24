@@ -91,7 +91,7 @@ public sealed class ProcessCustomNotificationCampaignHandler
                 var metadataJson = JsonSerializer.Serialize(new
                 {
                     campaignId = campaign.Id,
-                    audienceType = campaign.AudienceType.ToString(),
+                    audienceType = campaign.AudienceType,
                     shortMessage = campaign.ShortMessage,
                     longMessage = campaign.LongMessage
                 });

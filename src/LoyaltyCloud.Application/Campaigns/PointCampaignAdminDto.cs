@@ -1,5 +1,3 @@
-using LoyaltyCloud.Domain.Enums;
-
 namespace LoyaltyCloud.Application.Campaigns;
 
 public sealed record PointCampaignAdminDto(
@@ -8,7 +6,7 @@ public sealed record PointCampaignAdminDto(
     string Description,
     int Multiplier,
     decimal? MinimumPurchaseAmount,
-    CampaignLevelEligibility LevelEligibility,
+    string LevelEligibility,
     DateTime StartsAtUtc,
     DateTime EndsAtUtc,
     bool IsActive,

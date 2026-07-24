@@ -1,7 +1,9 @@
 using LoyaltyCloud.Common.Constants;
+using LoyaltyCloud.Application.Common.Interfaces;
 using LoyaltyCloud.Domain.Entities;
 using LoyaltyCloud.Infrastructure.Persistence;
 using LoyaltyCloud.Infrastructure.Persistence.Seed;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 
@@ -38,9 +40,18 @@ public abstract class IntegrationTestBase : IClassFixture<CustomWebApplicationFa
     private async Task SeedAdditionalDataAsync()
     {
         using var scope = Factory.Services.CreateScope();
+        scope.ServiceProvider
+            .GetRequiredService<IMutableTenantContext>()
+            .SetTenant(TenantSeed.KBeautyTenantId, TenantSeed.KBeautySlug);
         var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        var subscription = await db.TenantSubscriptions.SingleAsync(s => s.TenantId == TenantSeed.KBeautyTenantId);
+        db.Entry(subscription).Property(nameof(TenantSubscription.PaidThroughUtc)).CurrentValue = DateTime.UtcNow.AddDays(30);
 
-        if (db.RewardCatalogItems.Any()) return;
+        if (db.RewardCatalogItems.Any())
+        {
+            await db.SaveChangesAsync();
+            return;
+        }
 
         db.RewardCatalogItems.Add(new RewardCatalogItem(
             Guid.Parse("c0000001-0000-0000-0000-000000000001"),

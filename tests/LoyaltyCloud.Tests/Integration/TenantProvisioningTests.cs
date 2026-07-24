@@ -53,7 +53,8 @@ public sealed class TenantProvisioningTests
                 Branding = t.Branding!,
                 Subscription = t.Subscription!,
                 Admin = db.TenantAdminUsers.IgnoreQueryFilters().Single(u => u.TenantId == t.Id),
-                ConfigCount = db.ProgramConfigs.IgnoreQueryFilters().Count(c => c.TenantId == t.Id)
+                ConfigCount = db.ProgramConfigs.IgnoreQueryFilters().Count(c => c.TenantId == t.Id),
+                LevelCount = db.TenantLoyaltyLevels.IgnoreQueryFilters().Count(l => l.TenantId == t.Id)
             })
             .SingleAsync());
 
@@ -72,6 +73,53 @@ public sealed class TenantProvisioningTests
         Assert.NotEqual(AdminPassword, row.Admin.PasswordHash);
         Assert.DoesNotContain(AdminPassword, row.Admin.PasswordHash, StringComparison.Ordinal);
         Assert.Equal(TenantProvisioningDefaults.ProgramConfigRows.Count, row.ConfigCount);
+        Assert.Equal(TenantProvisioningDefaults.LoyaltyLevels.Count, row.LevelCount);
+    }
+
+    [Fact]
+    [Trait("Category", "TenantProvisioning")]
+    [Trait("Category", "MTLevel1")]
+    public async Task Provisioning_creates_default_loyalty_levels_for_new_tenant()
+    {
+        await using var env = await ProvisioningTestEnvironment.CreateAsync();
+
+        var result = await env.ProvisionAsync("levels-spa", "Levels Spa", "owner", AdminPassword);
+
+        Assert.True(result.IsSuccess, result.Error);
+
+        var levels = await env.PlatformReadAsync(async db => await db.TenantLoyaltyLevels
+            .IgnoreQueryFilters()
+            .Where(level => level.TenantId == result.Value.TenantId)
+            .OrderBy(level => level.SortOrder)
+            .Select(level => new { level.Name, level.NormalizedName, level.Threshold, level.SortOrder, level.IsActive })
+            .ToListAsync());
+
+        Assert.Collection(
+            levels,
+            level =>
+            {
+                Assert.Equal(LoyaltyConstants.Levels.Mist, level.Name);
+                Assert.Equal("MIST", level.NormalizedName);
+                Assert.Equal(LoyaltyConstants.Defaults.LevelMistMin, level.Threshold);
+                Assert.Equal(1, level.SortOrder);
+                Assert.True(level.IsActive);
+            },
+            level =>
+            {
+                Assert.Equal(LoyaltyConstants.Levels.Glow, level.Name);
+                Assert.Equal("GLOW", level.NormalizedName);
+                Assert.Equal(LoyaltyConstants.Defaults.LevelGlowMin, level.Threshold);
+                Assert.Equal(2, level.SortOrder);
+                Assert.True(level.IsActive);
+            },
+            level =>
+            {
+                Assert.Equal(LoyaltyConstants.Levels.Radiance, level.Name);
+                Assert.Equal("RADIANCE", level.NormalizedName);
+                Assert.Equal(LoyaltyConstants.Defaults.LevelRadianceMin, level.Threshold);
+                Assert.Equal(3, level.SortOrder);
+                Assert.True(level.IsActive);
+            });
     }
 
     [Fact]

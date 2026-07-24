@@ -3,7 +3,6 @@ using LoyaltyCloud.Common.Results;
 using LoyaltyCloud.Common.Services;
 using LoyaltyCloud.Domain.Enums;
 using LoyaltyCloud.Domain.Repositories;
-using LoyaltyCloud.Domain.ValueObjects;
 using MediatR;
 using Microsoft.Extensions.Logging;
 
@@ -14,10 +13,10 @@ public sealed class RecalculateLevelsHandler
 {
     private readonly ILoyaltyCardRepository _cards;
     private readonly IPointTransactionRepository _transactions;
-    private readonly IProgramConfigRepository _config;
     private readonly IDeviceRegistrationRepository _devices;
     private readonly IApnService _apn;
     private readonly ILevelCalculationService _levels;
+    private readonly ITenantLoyaltyLevelReadService _tenantLevels;
     private readonly IDateTimeProvider _dt;
     private readonly IUnitOfWork _uow;
     private readonly ILogger<RecalculateLevelsHandler> _logger;
@@ -25,20 +24,20 @@ public sealed class RecalculateLevelsHandler
     public RecalculateLevelsHandler(
         ILoyaltyCardRepository cards,
         IPointTransactionRepository transactions,
-        IProgramConfigRepository config,
         IDeviceRegistrationRepository devices,
         IApnService apn,
         ILevelCalculationService levels,
+        ITenantLoyaltyLevelReadService tenantLevels,
         IDateTimeProvider dt,
         IUnitOfWork uow,
         ILogger<RecalculateLevelsHandler> logger)
     {
         _cards = cards;
         _transactions = transactions;
-        _config = config;
         _devices = devices;
         _apn = apn;
         _levels = levels;
+        _tenantLevels = tenantLevels;
         _dt = dt;
         _uow = uow;
         _logger = logger;
@@ -50,7 +49,7 @@ public sealed class RecalculateLevelsHandler
     {
         var now = _dt.UtcNow;
         var windowStart = now.AddMonths(-12);
-        var snapshot = ProgramConfigSnapshot.FromEntries(await _config.GetAllAsync(ct));
+        var tenantLevels = await _tenantLevels.GetActiveLevelsAsync(ct);
         var cards = await _cards.GetActiveAsync(ct);
         var pointsByCard = await _transactions.GetEligibleLevelPointsByCardAsync(windowStart, ct);
         var warnings = new List<string>();
@@ -62,8 +61,8 @@ public sealed class RecalculateLevelsHandler
         foreach (var card in cards)
         {
             var rollingPoints = pointsByCard.TryGetValue(card.Id, out var points) ? points : 0;
-            var calculatedLevel = _levels.CalculateLevel(rollingPoints, snapshot);
-            var comparison = _levels.CompareLevels(card.Level, calculatedLevel.Name, snapshot);
+            var calculatedLevel = _levels.CalculateLevel(rollingPoints, tenantLevels);
+            var comparison = _levels.CompareLevels(card.Level, calculatedLevel.Name, tenantLevels);
 
             if (!card.ApplyCalculatedLevel(calculatedLevel, _dt))
                 continue;

@@ -1082,6 +1082,56 @@ namespace LoyaltyCloud.Infrastructure.Persistence.Migrations
                         });
                 });
 
+            modelBuilder.Entity("LoyaltyCloud.Domain.Entities.TenantLoyaltyLevel", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2(3)");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
+
+                    b.Property<string>("NormalizedName")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
+
+                    b.Property<int>("SortOrder")
+                        .HasColumnType("int");
+
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<int>("Threshold")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("datetime2(3)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("TenantId", "NormalizedName")
+                        .IsUnique();
+
+                    b.HasIndex("TenantId", "SortOrder")
+                        .IsUnique();
+
+                    b.HasIndex("TenantId", "Threshold")
+                        .IsUnique();
+
+                    b.HasIndex("TenantId", "IsActive", "SortOrder");
+
+                    b.ToTable("TenantLoyaltyLevels", (string)null);
+                });
+
             modelBuilder.Entity("LoyaltyCloud.Domain.Entities.TenantSubscription", b =>
                 {
                     b.Property<Guid>("TenantId")
@@ -1372,6 +1422,15 @@ namespace LoyaltyCloud.Infrastructure.Persistence.Migrations
                         .IsRequired();
 
                     b.Navigation("Tenant");
+                });
+
+            modelBuilder.Entity("LoyaltyCloud.Domain.Entities.TenantLoyaltyLevel", b =>
+                {
+                    b.HasOne("LoyaltyCloud.Domain.Entities.Tenant", null)
+                        .WithMany()
+                        .HasForeignKey("TenantId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
                 });
 
             modelBuilder.Entity("LoyaltyCloud.Domain.Entities.TenantSubscription", b =>

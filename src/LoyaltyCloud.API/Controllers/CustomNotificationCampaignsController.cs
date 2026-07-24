@@ -112,7 +112,7 @@ public sealed class CustomNotificationCampaignsController : ControllerBase
     }
 
     public sealed record PreviewCustomNotificationAudienceRequest(
-        CustomNotificationAudienceType AudienceType,
+        string AudienceType,
         int? MinimumPoints,
         int? PointsExpiringDaysAhead,
         int? SampleSize);
@@ -122,7 +122,7 @@ public sealed class CustomNotificationCampaignsController : ControllerBase
         string Title,
         string ShortMessage,
         string LongMessage,
-        CustomNotificationAudienceType AudienceType,
+        string AudienceType,
         int? MinimumPoints,
         int? PointsExpiringDaysAhead,
         DateTime? ScheduledAtUtc,

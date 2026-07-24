@@ -710,7 +710,7 @@ public static class DevelopmentDataSeeder
             "Campana demo Bella Salon.",
             2,
             null,
-            CampaignLevelEligibility.All,
+            PointCampaign.CampaignLevelEligibilityAll,
             now.AddDays(-1),
             now.AddDays(14),
             now));

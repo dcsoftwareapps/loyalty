@@ -7,7 +7,7 @@ internal sealed class ListRewardsValidator : AbstractValidator<ListRewardsQuery>
     public ListRewardsValidator()
     {
         RuleFor(x => x.MinLevel)
-            .Must(level => string.IsNullOrWhiteSpace(level) || RewardValidation.IsValidMemberLevel(level))
-            .WithMessage("MinLevel debe ser Mist, Glow o Radiance.");
+            .MaximumLength(20)
+            .WithMessage("MinLevel no puede exceder 20 caracteres.");
     }
 }

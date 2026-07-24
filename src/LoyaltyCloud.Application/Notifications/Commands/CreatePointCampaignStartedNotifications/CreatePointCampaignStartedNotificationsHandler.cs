@@ -64,7 +64,7 @@ public sealed class CreatePointCampaignStartedNotificationsHandler
                 campaignName = candidate.CampaignName,
                 multiplier = candidate.Multiplier,
                 minimumPurchaseAmount = candidate.MinimumPurchaseAmount,
-                levelEligibility = candidate.LevelEligibility.ToString(),
+                levelEligibility = candidate.LevelEligibility,
                 startsAtUtc = candidate.StartsAtUtc,
                 endsAtUtc = candidate.EndsAtUtc,
                 endsAtLocal = candidate.EndsAtLocal.ToString("O", CultureInfo.InvariantCulture),
