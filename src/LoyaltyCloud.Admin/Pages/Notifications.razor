@@ -4,7 +4,6 @@
 
 @using LoyaltyCloud.Application.Notifications
 @using LoyaltyCloud.Application.Notifications.Commands.CancelNotification
-@using LoyaltyCloud.Application.Notifications.Commands.CreateNotification
 @using LoyaltyCloud.Application.Notifications.Commands.ProcessNotification
 @using LoyaltyCloud.Application.Notifications.Commands.RetryNotification
 @using LoyaltyCloud.Application.Notifications.Queries.GetNotificationMetrics
@@ -21,9 +20,6 @@
             Mensajes lógicos de lealtad y entregas por Apple Wallet.
         </p>
     </div>
-    <button class="kb-btn kb-btn--primary" @onclick="ToggleForm" disabled="@busy">
-        @(showForm ? "Cerrar" : "Nueva notificación")
-    </button>
 </div>
 
 @if (successMsg is not null) { <div class="kb-form-success">@successMsg</div> }
@@ -39,55 +35,6 @@
             <MetricCard Label="Clientas alcanzadas" Value="@metrics.CustomersReached.ToString("N0")" />
             <MetricCard Label="Pushes intentados" Value="@metrics.PushesAttempted.ToString("N0")" />
             <MetricCard Label="Pushes fallidos" Value="@metrics.PushesFailed.ToString("N0")" />
-        </div>
-    </section>
-}
-
-@if (showForm)
-{
-    <section class="kb-card" style="margin-bottom:24px;max-width:900px;">
-        <h2>Nueva notificación manual</h2>
-        <p class="kb-muted">
-            En Fase 5.1 Apple Wallet solo refresca el pass. El mensaje se muestra dentro del reverso del pass en la sección NOVEDADES.
-        </p>
-
-        @if (validationErrors.Count > 0)
-        {
-            <div class="kb-form-error">
-                @foreach (var error in validationErrors)
-                {
-                    <div>@error</div>
-                }
-            </div>
-        }
-
-        <div class="kb-form-row kb-form-row--horizontal">
-            <div style="flex:1;min-width:220px;">
-                <label for="notification-serial">Serial Wallet</label>
-                <input id="notification-serial" type="text" @bind="form.SerialNumber" />
-            </div>
-            <div style="flex:1;min-width:220px;">
-                <label for="notification-title">Título interno</label>
-                <input id="notification-title" type="text" @bind="form.Title" />
-            </div>
-            <div style="flex:1;min-width:220px;">
-                <label for="notification-until">Mostrar hasta</label>
-                <input id="notification-until" type="datetime-local" value="@form.DisplayUntilLocal" @onchange="OnDisplayUntilChanged" />
-            </div>
-        </div>
-
-        <div class="kb-form-row" style="max-width:100%;">
-            <div>
-                <label for="notification-message">Mensaje Wallet</label>
-                <textarea id="notification-message" rows="3" @bind="form.Message"></textarea>
-            </div>
-        </div>
-
-        <div class="kb-actions-inline">
-            <button class="kb-btn kb-btn--primary" @onclick="CreateAsync" disabled="@busy">
-                @(busy ? "Guardando..." : "Crear y procesar")
-            </button>
-            <button class="kb-btn kb-btn--ghost" @onclick="ResetForm" disabled="@busy">Limpiar</button>
         </div>
     </section>
 }
@@ -198,13 +145,10 @@ else
 @code {
     private List<NotificationDto>? notifications;
     private NotificationMetricsDto? metrics;
-    private NotificationFormModel form = NotificationFormModel.CreateDefault();
-    private readonly List<string> validationErrors = new();
     private string? statusFilter;
     private string? typeFilter;
     private string? successMsg;
     private string? errorMsg;
-    private bool showForm;
     private bool busy;
 
     protected override async Task OnInitializedAsync() => await LoadAsync();
@@ -240,65 +184,6 @@ else
         }
     }
 
-    private void ToggleForm()
-    {
-        showForm = !showForm;
-        validationErrors.Clear();
-        errorMsg = null;
-        successMsg = null;
-    }
-
-    private void ResetForm()
-    {
-        form = NotificationFormModel.CreateDefault();
-        validationErrors.Clear();
-    }
-
-    private void OnDisplayUntilChanged(ChangeEventArgs e) =>
-        form.DisplayUntilLocal = e.Value?.ToString() ?? string.Empty;
-
-    private async Task CreateAsync()
-    {
-        successMsg = null;
-        errorMsg = null;
-        validationErrors.Clear();
-
-        if (!ValidateForm())
-            return;
-
-        busy = true;
-        try
-        {
-            var result = await Sender.Send(new CreateNotificationCommand(
-                form.SerialNumber.Trim(),
-                NotificationType.Custom,
-                form.Title.Trim(),
-                form.Message.Trim(),
-                ScheduledAtUtc: null,
-                DisplayUntilUtc: ParseLocalDateTimeAsUtc(form.DisplayUntilLocal),
-                Channels: [NotificationChannel.AppleWallet],
-                CorrelationId: null,
-                Source: "admin",
-                MetadataJson: null,
-                ProcessImmediately: true));
-
-            if (result.IsFailure)
-            {
-                errorMsg = result.Error;
-                return;
-            }
-
-            successMsg = "Notificación creada.";
-            showForm = false;
-            ResetForm();
-            await LoadAsync();
-        }
-        finally
-        {
-            busy = false;
-        }
-    }
-
     private async Task ProcessAsync(Guid id) => await ExecuteAsync(() => Sender.Send(new ProcessNotificationCommand(id)), "Notificación procesada.");
     private async Task RetryAsync(Guid id) => await ExecuteAsync(() => Sender.Send(new RetryNotificationCommand(id)), "Notificación reintentada.");
     private async Task CancelAsync(Guid id) => await ExecuteAsync(() => Sender.Send(new CancelNotificationCommand(id)), "Notificación cancelada.");
@@ -326,28 +211,6 @@ else
         }
     }
 
-    private bool ValidateForm()
-    {
-        if (string.IsNullOrWhiteSpace(form.SerialNumber))
-            validationErrors.Add("El serial Wallet es obligatorio.");
-        if (string.IsNullOrWhiteSpace(form.Title))
-            validationErrors.Add("El título es obligatorio.");
-        if (string.IsNullOrWhiteSpace(form.Message))
-            validationErrors.Add("El mensaje es obligatorio.");
-        if (ParseLocalDateTimeAsUtc(form.DisplayUntilLocal) is not { } displayUntil || displayUntil <= DateTime.UtcNow)
-            validationErrors.Add("La fecha de vigencia debe ser futura.");
-
-        return validationErrors.Count == 0;
-    }
-
-    private static DateTime? ParseLocalDateTimeAsUtc(string value)
-    {
-        if (!DateTime.TryParse(value, out var local))
-            return null;
-
-        return DateTime.SpecifyKind(local, DateTimeKind.Local).ToUniversalTime();
-    }
-
     private static string FormatDateTime(DateTime value) => value.ToLocalTime().ToString("dd MMM yyyy HH:mm");
     private static string DisplayText(string? value) => string.IsNullOrWhiteSpace(value) ? "No disponible" : value;
 
@@ -369,17 +232,4 @@ else
         _ => "kb-badge kb-badge--muted"
     };
 
-    private sealed class NotificationFormModel
-    {
-        public string SerialNumber { get; set; } = string.Empty;
-        public string Title { get; set; } = string.Empty;
-        public string Message { get; set; } = string.Empty;
-        public string DisplayUntilLocal { get; set; } = string.Empty;
-
-        public static NotificationFormModel CreateDefault() => new()
-        {
-            Title = "Novedad K-Beauty",
-            DisplayUntilLocal = DateTime.Now.AddDays(7).ToString("yyyy-MM-ddTHH:mm")
-        };
-    }
 }

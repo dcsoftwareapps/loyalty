@@ -71,6 +71,7 @@ public static class AdminLoginRedirects
         || value.Equals("login", StringComparison.OrdinalIgnoreCase)
         || value.Equals("dashboard", StringComparison.OrdinalIgnoreCase)
         || value.Equals("scan", StringComparison.OrdinalIgnoreCase)
+        || value.Equals("redeem", StringComparison.OrdinalIgnoreCase)
         || value.Equals("customers", StringComparison.OrdinalIgnoreCase)
         || value.Equals("redemptions", StringComparison.OrdinalIgnoreCase)
         || value.Equals("rewards", StringComparison.OrdinalIgnoreCase)

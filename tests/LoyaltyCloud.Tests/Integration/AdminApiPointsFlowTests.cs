@@ -95,6 +95,31 @@ public sealed class AdminApiPointsFlowTests : IClassFixture<CustomWebApplication
         Assert.NotNull(campaigns);
     }
 
+    [Fact]
+    [Trait("Category", "AdminRedemptionFlow")]
+    public async Task Redemption_catalog_rejects_unsigned_admin_request()
+    {
+        using var response = await _client.GetAsync("/api/redemptions/catalog/KB-NOSIGN");
+
+        Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+    }
+
+    [Fact]
+    [Trait("Category", "AdminRedemptionFlow")]
+    public async Task Signed_admin_redemption_catalog_request_reaches_api()
+    {
+        await EnsureTenantOperationalAsync();
+
+        using var request = CreateSignedRequest(
+            HttpMethod.Get,
+            "/api/redemptions/catalog/KB-MISSING",
+            body: null);
+
+        using var response = await _client.SendAsync(request);
+
+        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+    }
+
     private async Task EnsureTenantOperationalAsync()
     {
         using var scope = _factory.Services.CreateScope();

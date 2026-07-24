@@ -2,12 +2,19 @@
 @attribute [Authorize]
 @rendermode InteractiveServer
 
+@using System.Globalization
 @using System.Net.Http.Json
+@using System.Security.Claims
+@using LoyaltyCloud.Admin.Auth
 @using LoyaltyCloud.Admin.Services
 @using LoyaltyCloud.Application.Notifications.Custom
 @using LoyaltyCloud.Domain.Enums
+@using LoyaltyCloud.Domain.Repositories
+@using Microsoft.AspNetCore.Components.Authorization
 @using Microsoft.AspNetCore.Mvc
 @inject AdminApiClient Api
+@inject AuthenticationStateProvider AuthenticationStateProvider
+@inject ITenantRepository Tenants
 
 <PageTitle>Mensajes - LoyaltyCloud</PageTitle>
 
@@ -42,28 +49,10 @@
                     </div>
                 }
 
-                <div class="kb-form-row kb-form-row--horizontal">
-                    <div style="flex:1;min-width:220px;">
-                        <label for="campaign-name">Nombre interno</label>
-                        <input id="campaign-name" type="text" @bind="form.Name" />
-                    </div>
-                    <div style="flex:1;min-width:220px;">
-                        <label for="campaign-title">Título</label>
-                        <input id="campaign-title" type="text" maxlength="80" @bind="form.Title" />
-                        <div class="kb-muted">@($"{(form.Title?.Length ?? 0)}/80")</div>
-                    </div>
-                </div>
-
                 <div class="kb-form-row">
-                    <label for="short-message">Mensaje corto</label>
-                    <input id="short-message" type="text" maxlength="40" @bind="form.ShortMessage" />
-                    <div class="kb-muted">@($"{(form.ShortMessage?.Length ?? 0)}/40")</div>
-                </div>
-
-                <div class="kb-form-row">
-                    <label for="long-message">Mensaje largo</label>
-                    <textarea id="long-message" rows="5" maxlength="500" @bind="form.LongMessage"></textarea>
-                    <div class="kb-muted">@($"{(form.LongMessage?.Length ?? 0)}/500")</div>
+                    <label for="message">Mensaje</label>
+                    <textarea id="message" rows="5" maxlength="500" @bind="form.Message" @bind:event="oninput"></textarea>
+                    <div class="kb-muted">@($"{(form.Message?.Length ?? 0)}/500")</div>
                 </div>
 
                 <div class="kb-form-row kb-form-row--horizontal">
@@ -138,9 +127,16 @@
             <div>
                 <div class="kb-card" style="background:rgb(250,248,244);border-color:#eee;">
                     <div class="kb-muted" style="font-size:.78rem;text-transform:uppercase;">Vista previa Wallet</div>
-                    <h3 style="margin-top:8px;">NOVEDAD</h3>
-                    <p style="font-size:1.3rem;font-weight:700;margin-bottom:16px;">@DisplayText(form.ShortMessage)</p>
-                    <div class="kb-muted" style="white-space:pre-line;">@DisplayText(form.LongMessage)</div>
+                    <h3 style="margin-top:8px;">@GeneratedTitle</h3>
+                    @if (string.IsNullOrWhiteSpace(form.Message))
+                    {
+                        <p class="kb-muted" style="margin-bottom:0;">Escribe un mensaje para previsualizarlo.</p>
+                    }
+                    else
+                    {
+                        <p style="font-size:1.3rem;font-weight:700;margin-bottom:16px;">@BuildShortMessage(form.Message)</p>
+                        <div class="kb-muted" style="white-space:pre-line;">@form.Message.Trim()</div>
+                    }
                 </div>
 
                 @if (preview is not null)
@@ -197,7 +193,6 @@
                     <td class="kb-muted">@FormatDateTime(campaign.CreatedAt)</td>
                     <td>
                         <strong>@campaign.Name</strong>
-                        <div class="kb-muted">@campaign.Title</div>
                     </td>
                     <td>@campaign.AudienceType</td>
                     <td>
@@ -227,6 +222,8 @@
 </section>
 
 @code {
+    private const string GeneratedTitle = "NOVEDAD";
+
     private List<CustomNotificationCampaignDto>? campaigns;
     private CustomNotificationAudiencePreviewDto? preview;
     private CustomMessageForm form = CustomMessageForm.CreateDefault();
@@ -312,13 +309,16 @@
         successMsg = null;
         try
         {
+            var message = form.Message.Trim();
+            var generatedName = await GenerateInternalNameAsync();
+
             var result = await Api.PostAsJsonAsync<CustomNotificationCampaignRequest, CustomNotificationCampaignDto>(
                 "api/custom-notification-campaigns",
                 new CustomNotificationCampaignRequest(
-                    form.Name.Trim(),
-                    form.Title.Trim(),
-                    form.ShortMessage.Trim(),
-                    form.LongMessage.Trim(),
+                    generatedName,
+                    GeneratedTitle,
+                    BuildShortMessage(message),
+                    message,
                     form.AudienceType,
                     form.AudienceType == CustomNotificationAudienceType.MinimumPoints ? form.MinimumPoints : null,
                     form.AudienceType == CustomNotificationAudienceType.PointsExpiring ? form.PointsExpiringDaysAhead : null,
@@ -396,16 +396,8 @@
         validationErrors.Clear();
         errorMsg = null;
 
-        if (string.IsNullOrWhiteSpace(form.Name))
-            validationErrors.Add("El nombre interno es obligatorio.");
-        if (string.IsNullOrWhiteSpace(form.Title) || form.Title.Trim().Length > 80)
-            validationErrors.Add("El título es obligatorio y debe tener máximo 80 caracteres.");
-        if (string.IsNullOrWhiteSpace(form.ShortMessage) || form.ShortMessage.Trim().Length > 40)
-            validationErrors.Add("El mensaje corto es obligatorio y debe tener máximo 40 caracteres.");
-        if (form.ShortMessage?.Any(c => c is '\n' or '\r' or '\t') == true)
-            validationErrors.Add("El mensaje corto no debe contener saltos de línea ni tabuladores.");
-        if (string.IsNullOrWhiteSpace(form.LongMessage) || form.LongMessage.Trim().Length > 500)
-            validationErrors.Add("El mensaje largo es obligatorio y debe tener máximo 500 caracteres.");
+        if (string.IsNullOrWhiteSpace(form.Message) || form.Message.Trim().Length > 500)
+            validationErrors.Add("El mensaje es obligatorio y debe tener máximo 500 caracteres.");
         var effectiveSendAtUtc = form.SendImmediately ? DateTime.UtcNow : form.ScheduledAtUtc;
 
         if (form.DisplayUntilUtc <= DateTime.UtcNow)
@@ -463,6 +455,58 @@
 
     private static string FormatDateTime(DateTime value) => value.ToLocalTime().ToString("dd MMM yyyy HH:mm");
     private static string DisplayText(string? value) => string.IsNullOrWhiteSpace(value) ? "No disponible" : value;
+
+    private async Task<string> GenerateInternalNameAsync()
+    {
+        var tenantTimeZone = await ResolveTenantTimeZoneAsync();
+        var tenantLocalTime = TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow, tenantTimeZone);
+        return $"Mensaje {tenantLocalTime.ToString("dd/MM/yyyy HH:mm", CultureInfo.InvariantCulture)}";
+    }
+
+    private async Task<TimeZoneInfo> ResolveTenantTimeZoneAsync()
+    {
+        var authState = await AuthenticationStateProvider.GetAuthenticationStateAsync();
+        var tenantIdValue = authState.User.FindFirstValue(AdminClaimTypes.TenantId);
+        if (!Guid.TryParse(tenantIdValue, out var tenantId))
+            throw new InvalidOperationException("No se encontró tenant en la sesión actual.");
+
+        var tenant = await Tenants.GetByIdAsync(tenantId);
+        if (tenant is null)
+            throw new InvalidOperationException("No se encontró configuración del tenant actual.");
+
+        try
+        {
+            return TimeZoneInfo.FindSystemTimeZoneById(tenant.TimeZoneId);
+        }
+        catch (TimeZoneNotFoundException ex)
+        {
+            throw new InvalidOperationException($"Zona horaria del tenant no válida: {tenant.TimeZoneId}.", ex);
+        }
+        catch (InvalidTimeZoneException ex)
+        {
+            throw new InvalidOperationException($"Zona horaria del tenant no válida: {tenant.TimeZoneId}.", ex);
+        }
+    }
+
+    private static string BuildShortMessage(string? value)
+    {
+        var clean = NormalizeMessage(value);
+        return clean.Length <= 40 ? clean : clean[..40].TrimEnd();
+    }
+
+    private static string NormalizeMessage(string? value)
+    {
+        var clean = (value ?? string.Empty)
+            .Replace('\r', ' ')
+            .Replace('\n', ' ')
+            .Replace('\t', ' ')
+            .Trim();
+
+        while (clean.Contains("  ", StringComparison.Ordinal))
+            clean = clean.Replace("  ", " ", StringComparison.Ordinal);
+
+        return clean;
+    }
 
     private static string CampaignStatusClass(CustomNotificationCampaignStatus status) => status switch
     {
@@ -522,10 +566,7 @@
 
     private sealed class CustomMessageForm
     {
-        public string Name { get; set; } = string.Empty;
-        public string Title { get; set; } = string.Empty;
-        public string ShortMessage { get; set; } = string.Empty;
-        public string LongMessage { get; set; } = string.Empty;
+        public string Message { get; set; } = string.Empty;
         public CustomNotificationAudienceType AudienceType { get; set; } = CustomNotificationAudienceType.AllWalletUsers;
         public int? MinimumPoints { get; set; } = 0;
         public int? PointsExpiringDaysAhead { get; set; } = 15;

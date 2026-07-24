@@ -110,6 +110,7 @@ public sealed class AdminApiAuthenticationMiddleware
     private static bool RequiresAdminApiAuthentication(HttpRequest request) =>
         request.Path.Equals("/api/points", StringComparison.OrdinalIgnoreCase)
         || request.Path.StartsWithSegments("/api/custom-notification-campaigns", StringComparison.OrdinalIgnoreCase)
+        || request.Path.StartsWithSegments("/api/redemptions", StringComparison.OrdinalIgnoreCase)
         || (HttpMethods.IsGet(request.Method)
             && request.Path.StartsWithSegments("/api/customers", StringComparison.OrdinalIgnoreCase));
 

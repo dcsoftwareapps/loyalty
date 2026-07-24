@@ -213,6 +213,95 @@ public sealed class AdminRoutingTests : IClassFixture<AdminRoutingTests.AdminWeb
     }
 
     [Fact]
+    [Trait("Category", "AdminRedemptionFlow")]
+    public void Redeem_route_is_visible_in_navigation_and_history_remains_available()
+    {
+        var layoutSource = File.ReadAllText(Path.Combine(GetRepositoryRoot(), "src", "LoyaltyCloud.Admin", "Components", "Layout", "MainLayout.razor"));
+        var redeemSource = File.ReadAllText(Path.Combine(GetRepositoryRoot(), "src", "LoyaltyCloud.Admin", "Pages", "Redeem.razor"));
+        var redemptionsSource = File.ReadAllText(Path.Combine(GetRepositoryRoot(), "src", "LoyaltyCloud.Admin", "Pages", "Redemptions.razor"));
+
+        Assert.Contains("href=\"/redeem\"", layoutSource);
+        Assert.Contains(">Canjear</NavLink>", layoutSource);
+        Assert.Contains("@page \"/redeem\"", redeemSource);
+        Assert.Contains("@page \"/redemptions\"", redemptionsSource);
+        Assert.Contains("href=\"/redemptions\"", redeemSource);
+    }
+
+    [Fact]
+    [Trait("Category", "AdminRedemptionFlow")]
+    public void Redeem_uses_existing_qr_scanner_and_manual_serial_fallback()
+    {
+        var redeemSource = File.ReadAllText(Path.Combine(GetRepositoryRoot(), "src", "LoyaltyCloud.Admin", "Pages", "Redeem.razor"));
+
+        Assert.Contains("Escanear QR", redeemSource);
+        Assert.Contains("kbeautyQrScanner.start", redeemSource);
+        Assert.Contains("kbeautyQrScanner.stop", redeemSource);
+        Assert.Contains("[JSInvokable]", redeemSource);
+        Assert.Contains("public async Task OnQrDetected(string rawValue)", redeemSource);
+        Assert.Contains("private static string? ExtractSerial", redeemSource);
+        Assert.Contains("Serial de la clienta", redeemSource);
+        Assert.Contains("placeholder=\"KB-A7B9C2X\"", redeemSource);
+    }
+
+    [Fact]
+    [Trait("Category", "AdminRedemptionFlow")]
+    public void Redeem_uses_admin_api_for_catalog_and_redemption_instead_of_mediatr()
+    {
+        var redeemSource = File.ReadAllText(Path.Combine(GetRepositoryRoot(), "src", "LoyaltyCloud.Admin", "Pages", "Redeem.razor"));
+
+        Assert.Contains("@inject AdminApiClient AdminApi", redeemSource);
+        Assert.Contains("AdminApi.GetAsync<CustomerDetailDto>", redeemSource);
+        Assert.Contains("api/customers/{Uri.EscapeDataString(serial)}", redeemSource);
+        Assert.Contains("AdminApi.GetAsync<IReadOnlyList<RewardCatalogItemDto>>", redeemSource);
+        Assert.Contains("api/redemptions/catalog/{Uri.EscapeDataString(serial)}", redeemSource);
+        Assert.Contains("AdminApi.PostAsJsonAsync<RedeemRewardRequest, RedemptionResponse>", redeemSource);
+        Assert.Contains("\"api/redemptions\"", redeemSource);
+        Assert.DoesNotContain("@inject ISender", redeemSource);
+        Assert.DoesNotContain("new RedeemRewardCommand", redeemSource);
+    }
+
+    [Fact]
+    [Trait("Category", "AdminRedemptionFlow")]
+    public void Redeem_blocks_ineligible_rewards_double_submit_and_refreshes_after_success()
+    {
+        var redeemSource = File.ReadAllText(Path.Combine(GetRepositoryRoot(), "src", "LoyaltyCloud.Admin", "Pages", "Redeem.razor"));
+
+        Assert.Contains("catalog?.Where(r => r.CanAfford).ToList()", redeemSource);
+        Assert.Contains("catalog?.Where(r => !r.CanAfford).ToList()", redeemSource);
+        Assert.Contains("if (!reward.CanAfford || busy)", redeemSource);
+        Assert.Contains("disabled=\"@(busy || selectedReward is not null)\"", redeemSource);
+        Assert.Contains("if (selectedReward is null || customer is null || busy)", redeemSource);
+        Assert.Contains("await RefreshAfterRedemptionAsync(serial);", redeemSource);
+        Assert.Contains("success = result.Value;", redeemSource);
+        Assert.Contains("errorMessage = result.Error;", redeemSource);
+    }
+
+    [Fact]
+    [Trait("Category", "AdminRedemptionFlow")]
+    public void Admin_login_redirects_treat_redeem_as_reserved_tenant_route()
+    {
+        var source = File.ReadAllText(Path.Combine(GetRepositoryRoot(), "src", "LoyaltyCloud.Admin", "Auth", "AdminLoginRedirects.cs"));
+
+        Assert.Contains("value.Equals(\"redeem\", StringComparison.OrdinalIgnoreCase)", source);
+    }
+
+    [Fact]
+    [Trait("Category", "AdminRedemptionFlow")]
+    public void Api_redemptions_use_admin_hmac_and_existing_wallet_refresh()
+    {
+        var middlewareSource = File.ReadAllText(Path.Combine(GetRepositoryRoot(), "src", "LoyaltyCloud.API", "Middleware", "AdminApiAuthenticationMiddleware.cs"));
+        var handlerSource = File.ReadAllText(Path.Combine(GetRepositoryRoot(), "src", "LoyaltyCloud.Application", "Redemptions", "Commands", "RedeemReward", "RedeemRewardHandler.cs"));
+        var controllerSource = File.ReadAllText(Path.Combine(GetRepositoryRoot(), "src", "LoyaltyCloud.API", "Controllers", "RedemptionsController.cs"));
+
+        Assert.Contains("request.Path.StartsWithSegments(\"/api/redemptions\", StringComparison.OrdinalIgnoreCase)", middlewareSource);
+        Assert.Contains("card.RedeemPoints(reward.PointsCost);", handlerSource);
+        Assert.Contains("card.Touch(_dt);", handlerSource);
+        Assert.Contains("await TryPushWalletUpdateAsync(card.SerialNumber, ct);", handlerSource);
+        Assert.Contains("PassUpdateReason.RedemptionConfirmed", handlerSource);
+        Assert.Contains("[HttpPut(\"{id:guid}/cancel\")]", controllerSource);
+    }
+
+    [Fact]
     [Trait("Category", "AdminRouting")]
     [Trait("Category", "AdminCustomerPoints")]
     public void Scan_amount_input_updates_component_state_and_button_text()
@@ -245,6 +334,7 @@ public sealed class AdminRoutingTests : IClassFixture<AdminRoutingTests.AdminWeb
 
     [Fact]
     [Trait("Category", "AdminInteractiveTenantContext")]
+    [Trait("Category", "AdminNotificationsCleanup")]
     public void Marketing_notifications_uses_signed_admin_api_client()
     {
         var source = File.ReadAllText(Path.Combine(GetRepositoryRoot(), "src", "LoyaltyCloud.Admin", "Pages", "MarketingNotifications.razor"));
@@ -255,6 +345,164 @@ public sealed class AdminRoutingTests : IClassFixture<AdminRoutingTests.AdminWeb
         Assert.Contains("Api.PostAsJsonAsync<CustomNotificationCampaignRequest, CustomNotificationCampaignDto>", source);
         Assert.DoesNotContain("@inject IHttpClientFactory", source);
         Assert.DoesNotContain("HttpClientFactory.CreateClient", source);
+    }
+
+    [Fact]
+    [Trait("Category", "AdminMarketingNotifications")]
+    public void Marketing_notifications_form_only_requires_visible_message()
+    {
+        var source = File.ReadAllText(Path.Combine(GetRepositoryRoot(), "src", "LoyaltyCloud.Admin", "Pages", "MarketingNotifications.razor"));
+
+        Assert.Contains("<label for=\"message\">Mensaje</label>", source);
+        Assert.Contains("@bind=\"form.Message\"", source);
+        Assert.Contains("@bind:event=\"oninput\"", source);
+        Assert.DoesNotContain("id=\"campaign-name\"", source);
+        Assert.DoesNotContain("id=\"campaign-title\"", source);
+        Assert.DoesNotContain("id=\"short-message\"", source);
+        Assert.DoesNotContain("id=\"long-message\"", source);
+        Assert.DoesNotContain("Nombre interno", source);
+        Assert.DoesNotContain("Mensaje corto", source);
+        Assert.DoesNotContain("Mensaje largo", source);
+        Assert.DoesNotContain("public string Name { get; set; }", source);
+        Assert.DoesNotContain("public string Title { get; set; }", source);
+        Assert.DoesNotContain("public string ShortMessage { get; set; }", source);
+        Assert.DoesNotContain("public string LongMessage { get; set; }", source);
+        Assert.Contains("public string Message { get; set; }", source);
+    }
+
+    [Fact]
+    [Trait("Category", "AdminMarketingNotifications")]
+    public void Marketing_notifications_autogenerates_backend_name_and_title()
+    {
+        var source = File.ReadAllText(Path.Combine(GetRepositoryRoot(), "src", "LoyaltyCloud.Admin", "Pages", "MarketingNotifications.razor"));
+
+        Assert.Contains("private const string GeneratedTitle = \"NOVEDAD\";", source);
+        Assert.Contains("var generatedName = await GenerateInternalNameAsync();", source);
+        Assert.Contains("generatedName,", source);
+        Assert.Contains("GeneratedTitle,", source);
+        Assert.Contains("BuildShortMessage(message),", source);
+        Assert.Contains("message,", source);
+        Assert.Contains("new CustomNotificationCampaignRequest(", source);
+        Assert.DoesNotContain("form.Name.Trim()", source);
+        Assert.DoesNotContain("form.Title.Trim()", source);
+        Assert.DoesNotContain("form.ShortMessage.Trim()", source);
+        Assert.DoesNotContain("form.LongMessage.Trim()", source);
+    }
+
+    [Fact]
+    [Trait("Category", "AdminMarketingNotifications")]
+    public void Marketing_notifications_uses_tenant_timezone_for_generated_name()
+    {
+        var source = File.ReadAllText(Path.Combine(GetRepositoryRoot(), "src", "LoyaltyCloud.Admin", "Pages", "MarketingNotifications.razor"));
+
+        Assert.Contains("@inject AuthenticationStateProvider AuthenticationStateProvider", source);
+        Assert.Contains("@inject ITenantRepository Tenants", source);
+        Assert.Contains("AdminClaimTypes.TenantId", source);
+        Assert.Contains("Tenants.GetByIdAsync(tenantId)", source);
+        Assert.Contains("tenant.TimeZoneId", source);
+        Assert.Contains("TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow, tenantTimeZone)", source);
+        Assert.Contains("dd/MM/yyyy HH:mm", source);
+        Assert.Contains("CultureInfo.InvariantCulture", source);
+        Assert.DoesNotContain("DateTime.Now", source);
+    }
+
+    [Fact]
+    [Trait("Category", "AdminMarketingNotifications")]
+    public void Marketing_notifications_preview_uses_generated_title_and_message_without_unavailable_filler()
+    {
+        var source = File.ReadAllText(Path.Combine(GetRepositoryRoot(), "src", "LoyaltyCloud.Admin", "Pages", "MarketingNotifications.razor"));
+
+        Assert.Contains("<h3 style=\"margin-top:8px;\">@GeneratedTitle</h3>", source);
+        Assert.Contains("@BuildShortMessage(form.Message)", source);
+        Assert.Contains("@form.Message.Trim()", source);
+        Assert.DoesNotContain("@DisplayText(form.ShortMessage)", source);
+        Assert.DoesNotContain("@DisplayText(form.LongMessage)", source);
+    }
+
+    [Fact]
+    [Trait("Category", "AdminNotificationsCleanup")]
+    public void Notifications_is_hidden_from_tenant_admin_navigation_but_messages_remains_visible()
+    {
+        var source = File.ReadAllText(Path.Combine(GetRepositoryRoot(), "src", "LoyaltyCloud.Admin", "Components", "Layout", "MainLayout.razor"));
+
+        Assert.DoesNotContain("href=\"/notifications\"", source);
+        Assert.DoesNotContain(">Notificaciones</NavLink>", source);
+        Assert.Contains("href=\"/marketing-notifications\"", source);
+        Assert.Contains(">Mensajes</NavLink>", source);
+    }
+
+    [Fact]
+    [Trait("Category", "AdminNotificationsCleanup")]
+    public void Notifications_route_remains_available_for_internal_history()
+    {
+        var source = File.ReadAllText(Path.Combine(GetRepositoryRoot(), "src", "LoyaltyCloud.Admin", "Pages", "Notifications.razor"));
+
+        Assert.Contains("@page \"/notifications\"", source);
+        Assert.Contains("new ListNotificationsQuery(Status: status, Type: type, Take: 100)", source);
+        Assert.Contains("new GetNotificationMetricsQuery()", source);
+        Assert.Contains("metrics.Pending", source);
+        Assert.Contains("metrics.Processed", source);
+        Assert.Contains("metrics.Failed", source);
+        Assert.Contains("metrics.CustomersReached", source);
+        Assert.Contains("metrics.PushesAttempted", source);
+        Assert.Contains("metrics.PushesFailed", source);
+    }
+
+    [Fact]
+    [Trait("Category", "AdminNotificationsCleanup")]
+    public void Notifications_legacy_manual_form_is_not_visible()
+    {
+        var source = File.ReadAllText(Path.Combine(GetRepositoryRoot(), "src", "LoyaltyCloud.Admin", "Pages", "Notifications.razor"));
+
+        Assert.DoesNotContain("Nueva notificación manual", source);
+        Assert.DoesNotContain("En Fase 5.1 Apple Wallet solo refresca el pass", source);
+        Assert.DoesNotContain("notification-serial", source);
+        Assert.DoesNotContain("notification-title", source);
+        Assert.DoesNotContain("notification-until", source);
+        Assert.DoesNotContain("notification-message", source);
+        Assert.DoesNotContain("Crear y procesar", source);
+        Assert.DoesNotContain("@onclick=\"ToggleForm\"", source);
+    }
+
+    [Fact]
+    [Trait("Category", "AdminNotificationsCleanup")]
+    public void Point_campaign_started_notifications_are_due_only_for_active_campaigns_and_deduplicated()
+    {
+        var readService = File.ReadAllText(Path.Combine(GetRepositoryRoot(), "src", "LoyaltyCloud.Infrastructure", "Services", "PointCampaignNotificationReadService.cs"));
+        var handler = File.ReadAllText(Path.Combine(GetRepositoryRoot(), "src", "LoyaltyCloud.Application", "Notifications", "Commands", "CreatePointCampaignStartedNotifications", "CreatePointCampaignStartedNotificationsHandler.cs"));
+        var scheduler = File.ReadAllText(Path.Combine(GetRepositoryRoot(), "src", "LoyaltyCloud.API", "Services", "LoyaltyMaintenanceBackgroundService.cs"));
+
+        Assert.Contains("c.StartsAtUtc <= nowUtc", readService);
+        Assert.Contains("c.EndsAtUtc >= nowUtc", readService);
+        Assert.Contains("BuildCorrelationId(x.Campaign!.Id, x.Card.SerialNumber)", readService);
+        Assert.Contains("n.Type == NotificationType.PointCampaignStarted", readService);
+        Assert.Contains("existing.Contains(correlationId)", readService);
+        Assert.Contains("if (candidate.AlreadyNotified)", handler);
+        Assert.Contains("NotificationType.PointCampaignStarted", handler);
+        Assert.Contains("CorrelationId: candidate.CorrelationId", handler);
+        Assert.Contains("ProcessImmediately: true", handler);
+        Assert.Contains("new CreatePointCampaignStartedNotificationsCommand(OperatorId, timeZoneId)", scheduler);
+    }
+
+    [Fact]
+    [Trait("Category", "AdminNotificationsCleanup")]
+    public void Monthly_product_started_notifications_are_due_only_for_current_product_and_deduplicated()
+    {
+        var readService = File.ReadAllText(Path.Combine(GetRepositoryRoot(), "src", "LoyaltyCloud.Infrastructure", "Services", "MonthlyProductNotificationReadService.cs"));
+        var handler = File.ReadAllText(Path.Combine(GetRepositoryRoot(), "src", "LoyaltyCloud.Application", "Notifications", "Commands", "CreateMonthlyProductStartedNotifications", "CreateMonthlyProductStartedNotificationsHandler.cs"));
+        var scheduler = File.ReadAllText(Path.Combine(GetRepositoryRoot(), "src", "LoyaltyCloud.API", "Services", "LoyaltyMaintenanceBackgroundService.cs"));
+
+        Assert.Contains("r.IsMonthlyProduct", readService);
+        Assert.Contains("r.ValidFrom.Value <= nowUtc", readService);
+        Assert.Contains("r.ValidTo.Value >= nowUtc", readService);
+        Assert.Contains("BuildCorrelationId(product.Id, x.SerialNumber)", readService);
+        Assert.Contains("n.Type == NotificationType.MonthlyProductStarted", readService);
+        Assert.Contains("existing.Contains(correlationId)", readService);
+        Assert.Contains("if (candidate.AlreadyNotified)", handler);
+        Assert.Contains("NotificationType.MonthlyProductStarted", handler);
+        Assert.Contains("CorrelationId: candidate.CorrelationId", handler);
+        Assert.Contains("ProcessImmediately: true", handler);
+        Assert.Contains("new CreateMonthlyProductStartedNotificationsCommand(OperatorId, timeZoneId)", scheduler);
     }
 
     [Fact]
