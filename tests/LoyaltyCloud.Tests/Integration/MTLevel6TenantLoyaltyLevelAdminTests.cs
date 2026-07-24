@@ -338,6 +338,32 @@ public sealed class MTLevel6TenantLoyaltyLevelAdminTests : IClassFixture<CustomW
         Assert.Contains("RadianceRequalificationPoints", config);
     }
 
+    [Fact]
+    [Trait("Category", "MTLevel6")]
+    public void Level_update_uses_ef_execution_strategy_around_explicit_transaction()
+    {
+        var source = File.ReadAllText(Path.Combine(
+            GetRepositoryRoot(),
+            "src",
+            "LoyaltyCloud.Infrastructure",
+            "Services",
+            "TenantLoyaltyLevelManagementService.cs"));
+
+        Assert.Contains("CreateExecutionStrategy()", source);
+        Assert.Contains("ExecuteAsync", source);
+        Assert.Contains("BeginTransactionAsync", source);
+
+        var strategyIndex = source.IndexOf("CreateExecutionStrategy()", StringComparison.Ordinal);
+        var executeIndex = source.IndexOf("ExecuteAsync", strategyIndex, StringComparison.Ordinal);
+        var transactionIndex = source.IndexOf("BeginTransactionAsync", StringComparison.Ordinal);
+        var notifyIndex = source.IndexOf("NotifyWalletsAsync", StringComparison.Ordinal);
+
+        Assert.True(strategyIndex >= 0);
+        Assert.True(executeIndex > strategyIndex);
+        Assert.True(transactionIndex > executeIndex);
+        Assert.True(notifyIndex > executeIndex);
+    }
+
     private async Task<IReadOnlyList<TenantLoyaltyLevelAdminDto>> GetLevelsAsync()
     {
         using var request = CreateSignedRequest(HttpMethod.Get, "/api/levels", body: null);

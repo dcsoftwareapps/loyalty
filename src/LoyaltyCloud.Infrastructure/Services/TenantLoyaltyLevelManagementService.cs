@@ -79,104 +79,13 @@ internal sealed class TenantLoyaltyLevelManagementService : ITenantLoyaltyLevelM
         if (validationError is not null)
             return Result.Fail<UpdateTenantLoyaltyLevelsResultDto>(validationError);
 
-        await using var tx = _db.Database.IsRelational()
-            ? await _db.Database.BeginTransactionAsync(ct)
-            : null;
-
+        DatabaseUpdateResult dbResult;
         try
         {
-            var currentLevels = await _db.TenantLoyaltyLevels
-                .Where(level => level.TenantId == tenantId && level.IsActive)
-                .OrderBy(level => level.SortOrder)
-                .ToListAsync(ct);
-            var currentById = currentLevels.ToDictionary(level => level.Id);
-            var submittedIds = levels.Where(level => level.Id.HasValue).Select(level => level.Id!.Value).ToHashSet();
-
-            if (submittedIds.Any(id => !currentById.ContainsKey(id)))
-                return Result.Fail<UpdateTenantLoyaltyLevelsResultDto>("La lista contiene un nivel que no pertenece al tenant actual.");
-
-            var removedLevels = currentLevels.Where(level => !submittedIds.Contains(level.Id)).ToList();
-            var deleteBlockers = await FindDeleteBlockersAsync(removedLevels, tenantId, ct);
-            if (deleteBlockers.Count > 0)
-                return Result.Fail<UpdateTenantLoyaltyLevelsResultDto>(BuildDeleteBlockedMessage(deleteBlockers));
-
-            var oldLevelRanks = currentLevels.ToDictionary(level => level.Name, level => level.SortOrder, StringComparer.OrdinalIgnoreCase);
-            var renameMap = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
-
-            if (removedLevels.Count > 0)
-            {
-                _logger.LogInformation(
-                    "Tenant level update removing levels before reorder. tenant={TenantId}, removed={RemovedCount}.",
-                    tenantId,
-                    removedLevels.Count);
-                _db.TenantLoyaltyLevels.RemoveRange(removedLevels);
-                await _db.SaveChangesAsync(ct);
-            }
-
-            for (var i = 0; i < levels.Count; i++)
-            {
-                var incoming = levels[i];
-                var sortOrder = i + 1;
-                if (incoming.Id.HasValue)
-                {
-                    var existing = currentById[incoming.Id.Value];
-                    if (!string.Equals(existing.Name, incoming.Name.Trim(), StringComparison.Ordinal))
-                        renameMap[existing.Name] = incoming.Name.Trim();
-
-                    existing.Update(incoming.Name, incoming.PointsRequired, sortOrder, isActive: true, now);
-                }
-                else
-                {
-                    _db.TenantLoyaltyLevels.Add(new TenantLoyaltyLevel(
-                        Guid.NewGuid(),
-                        tenantId,
-                        incoming.Name,
-                        incoming.PointsRequired,
-                        sortOrder,
-                        now));
-                }
-            }
-
-            await UpdateOperationalLevelReferencesAsync(renameMap, tenantId, ct);
-            await _db.SaveChangesAsync(ct);
-
-            var activeLevels = await _db.TenantLoyaltyLevels
-                .AsNoTracking()
-                .Where(level => level.TenantId == tenantId && level.IsActive)
-                .OrderBy(level => level.SortOrder)
-                .Select(level => new TenantLoyaltyLevelDto(level.Id, level.Name, level.Threshold, level.SortOrder))
-                .ToListAsync(ct);
-            var recalc = await RecalculateCardsAsync(activeLevels, oldLevelRanks, ct);
-
-            await _db.SaveChangesAsync(ct);
-            if (tx is not null)
-                await tx.CommitAsync(ct);
-
-            var walletsNotified = await NotifyWalletsAsync(recalc.ChangedSerials, recalc.Warnings, ct);
-
-            var updatedLevels = activeLevels
-                .Select(level => new TenantLoyaltyLevelAdminDto(level.Id, level.Name, level.Threshold, level.SortOrder, true))
-                .ToList()
-                .AsReadOnly();
-
-            _logger.LogInformation(
-                "Tenant loyalty levels updated. tenant={TenantId}, operator={OperatorId}, cardsReviewed={CardsReviewed}, cardsChanged={CardsChanged}, upgraded={CardsUpgraded}, downgraded={CardsDowngraded}, walletsNotified={WalletsNotified}.",
-                tenantId,
-                operatorId,
-                recalc.CardsReviewed,
-                recalc.CardsChanged,
-                recalc.CardsUpgraded,
-                recalc.CardsDowngraded,
-                walletsNotified);
-
-            return Result.Ok(new UpdateTenantLoyaltyLevelsResultDto(
-                updatedLevels,
-                recalc.CardsReviewed,
-                recalc.CardsChanged,
-                recalc.CardsUpgraded,
-                recalc.CardsDowngraded,
-                walletsNotified,
-                recalc.Warnings.AsReadOnly()));
+            var strategy = _db.Database.CreateExecutionStrategy();
+            dbResult = await strategy.ExecuteAsync(
+                ct,
+                async cancellationToken => await ExecuteDatabaseUpdateAsync(levels, tenantId, now, cancellationToken));
         }
         catch (Exception ex)
         {
@@ -188,6 +97,116 @@ internal sealed class TenantLoyaltyLevelManagementService : ITenantLoyaltyLevelM
                 levels.Count);
             throw;
         }
+
+        if (dbResult.ValidationError is not null)
+            return Result.Fail<UpdateTenantLoyaltyLevelsResultDto>(dbResult.ValidationError);
+
+        var recalc = dbResult.Recalculation ?? new RecalculationResult(CardsReviewed: 0);
+        var walletsNotified = await NotifyWalletsAsync(recalc.ChangedSerials, recalc.Warnings, ct);
+
+        _logger.LogInformation(
+            "Tenant loyalty levels updated. tenant={TenantId}, operator={OperatorId}, cardsReviewed={CardsReviewed}, cardsChanged={CardsChanged}, upgraded={CardsUpgraded}, downgraded={CardsDowngraded}, walletsNotified={WalletsNotified}.",
+            tenantId,
+            operatorId,
+            recalc.CardsReviewed,
+            recalc.CardsChanged,
+            recalc.CardsUpgraded,
+            recalc.CardsDowngraded,
+            walletsNotified);
+
+        return Result.Ok(new UpdateTenantLoyaltyLevelsResultDto(
+            dbResult.UpdatedLevels,
+            recalc.CardsReviewed,
+            recalc.CardsChanged,
+            recalc.CardsUpgraded,
+            recalc.CardsDowngraded,
+            walletsNotified,
+            recalc.Warnings.AsReadOnly()));
+    }
+
+    private async Task<DatabaseUpdateResult> ExecuteDatabaseUpdateAsync(
+        IReadOnlyList<TenantLoyaltyLevelUpdateItemDto> levels,
+        Guid tenantId,
+        DateTime now,
+        CancellationToken ct)
+    {
+        await using var tx = _db.Database.IsRelational()
+            ? await _db.Database.BeginTransactionAsync(ct)
+            : null;
+
+        var currentLevels = await _db.TenantLoyaltyLevels
+            .Where(level => level.TenantId == tenantId && level.IsActive)
+            .OrderBy(level => level.SortOrder)
+            .ToListAsync(ct);
+        var currentById = currentLevels.ToDictionary(level => level.Id);
+        var submittedIds = levels.Where(level => level.Id.HasValue).Select(level => level.Id!.Value).ToHashSet();
+
+        if (submittedIds.Any(id => !currentById.ContainsKey(id)))
+            return DatabaseUpdateResult.Failed("La lista contiene un nivel que no pertenece al tenant actual.");
+
+        var removedLevels = currentLevels.Where(level => !submittedIds.Contains(level.Id)).ToList();
+        var deleteBlockers = await FindDeleteBlockersAsync(removedLevels, tenantId, ct);
+        if (deleteBlockers.Count > 0)
+            return DatabaseUpdateResult.Failed(BuildDeleteBlockedMessage(deleteBlockers));
+
+        var oldLevelRanks = currentLevels.ToDictionary(level => level.Name, level => level.SortOrder, StringComparer.OrdinalIgnoreCase);
+        var renameMap = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+
+        if (removedLevels.Count > 0)
+        {
+            _logger.LogInformation(
+                "Tenant level update removing levels before reorder. tenant={TenantId}, removed={RemovedCount}.",
+                tenantId,
+                removedLevels.Count);
+            _db.TenantLoyaltyLevels.RemoveRange(removedLevels);
+            await _db.SaveChangesAsync(ct);
+        }
+
+        for (var i = 0; i < levels.Count; i++)
+        {
+            var incoming = levels[i];
+            var sortOrder = i + 1;
+            if (incoming.Id.HasValue)
+            {
+                var existing = currentById[incoming.Id.Value];
+                if (!string.Equals(existing.Name, incoming.Name.Trim(), StringComparison.Ordinal))
+                    renameMap[existing.Name] = incoming.Name.Trim();
+
+                existing.Update(incoming.Name, incoming.PointsRequired, sortOrder, isActive: true, now);
+            }
+            else
+            {
+                _db.TenantLoyaltyLevels.Add(new TenantLoyaltyLevel(
+                    Guid.NewGuid(),
+                    tenantId,
+                    incoming.Name,
+                    incoming.PointsRequired,
+                    sortOrder,
+                    now));
+            }
+        }
+
+        await UpdateOperationalLevelReferencesAsync(renameMap, tenantId, ct);
+        await _db.SaveChangesAsync(ct);
+
+        var activeLevels = await _db.TenantLoyaltyLevels
+            .AsNoTracking()
+            .Where(level => level.TenantId == tenantId && level.IsActive)
+            .OrderBy(level => level.SortOrder)
+            .Select(level => new TenantLoyaltyLevelDto(level.Id, level.Name, level.Threshold, level.SortOrder))
+            .ToListAsync(ct);
+        var recalc = await RecalculateCardsAsync(activeLevels, oldLevelRanks, ct);
+
+        await _db.SaveChangesAsync(ct);
+        if (tx is not null)
+            await tx.CommitAsync(ct);
+
+        var updatedLevels = activeLevels
+            .Select(level => new TenantLoyaltyLevelAdminDto(level.Id, level.Name, level.Threshold, level.SortOrder, true))
+            .ToList()
+            .AsReadOnly();
+
+        return DatabaseUpdateResult.Succeeded(updatedLevels, recalc);
     }
 
     private async Task<RecalculationResult> RecalculateCardsAsync(
@@ -401,5 +420,19 @@ internal sealed class TenantLoyaltyLevelManagementService : ITenantLoyaltyLevelM
         public int CardsDowngraded { get; set; }
         public List<string> ChangedSerials { get; } = [];
         public List<string> Warnings { get; } = [];
+    }
+
+    private sealed record DatabaseUpdateResult(
+        IReadOnlyList<TenantLoyaltyLevelAdminDto> UpdatedLevels,
+        RecalculationResult? Recalculation,
+        string? ValidationError)
+    {
+        public static DatabaseUpdateResult Failed(string error) =>
+            new([], null, error);
+
+        public static DatabaseUpdateResult Succeeded(
+            IReadOnlyList<TenantLoyaltyLevelAdminDto> levels,
+            RecalculationResult recalc) =>
+            new(levels, recalc, null);
     }
 }
