@@ -154,6 +154,43 @@ public sealed class MTLevel6TenantLoyaltyLevelAdminTests : IClassFixture<CustomW
 
     [Fact]
     [Trait("Category", "MTLevel6")]
+    public async Task Glow_to_plata_rename_with_same_thresholds_updates_references_without_level_changed()
+    {
+        await SeedCardAsync("KB-MTL6-PLATA", "Glow", rollingPoints: 1500, pushToken: "push-mtl6-plata");
+        await SeedRewardCampaignAndAudienceAsync("Glow");
+        var current = await GetLevelsAsync();
+
+        var payload = new
+        {
+            levels = new TenantLoyaltyLevelUpdateItemDto[]
+            {
+                new(current.Single(level => level.Name == "Mist").Id, "Mist", 0),
+                new(current.Single(level => level.Name == "Glow").Id, "Plata", 1000),
+                new(current.Single(level => level.Name == "Radiance").Id, "Radiance", 3000)
+            }
+        };
+
+        using var request = CreateSignedRequest(HttpMethod.Put, "/api/levels", payload);
+        using var response = await _client.SendAsync(request);
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        await WithTenantAsync(async db =>
+        {
+            var plata = await db.TenantLoyaltyLevels.SingleAsync(level => level.SortOrder == 2);
+            Assert.Equal("Plata", plata.Name);
+            Assert.Equal("PLATA", plata.NormalizedName);
+            Assert.Equal(1000, plata.Threshold);
+
+            Assert.Equal("Plata", await db.LoyaltyCards.Where(c => c.SerialNumber == "KB-MTL6-PLATA").Select(c => c.Level).SingleAsync());
+            Assert.Equal("Plata", await db.RewardCatalogItems.Select(r => r.MinLevel).SingleAsync());
+            Assert.Equal("Plata", await db.PointCampaigns.Select(c => c.LevelEligibility).SingleAsync());
+            Assert.Equal("Plata", await db.CustomNotificationCampaigns.Select(c => c.AudienceType).SingleAsync());
+            Assert.False(await db.LoyaltyNotifications.AnyAsync(n => n.Type == NotificationType.LevelChanged));
+        });
+    }
+
+    [Fact]
+    [Trait("Category", "MTLevel6")]
     public async Task Threshold_update_recalculates_cards_and_only_upgrades_create_level_changed_notifications()
     {
         await SeedCardAsync("KB-MTL6-UP", "Mist", rollingPoints: 700, pushToken: "push-mtl6-up");
@@ -336,7 +373,7 @@ public sealed class MTLevel6TenantLoyaltyLevelAdminTests : IClassFixture<CustomW
             db.TenantLoyaltyLevels.AddRange(
                 new TenantLoyaltyLevel(Guid.NewGuid(), TenantSeed.KBeautyTenantId, "Mist", 0, 1, now),
                 new TenantLoyaltyLevel(Guid.NewGuid(), TenantSeed.KBeautyTenantId, "Glow", 1000, 2, now),
-                new TenantLoyaltyLevel(Guid.NewGuid(), TenantSeed.KBeautyTenantId, "Radiance", 2000, 3, now));
+                new TenantLoyaltyLevel(Guid.NewGuid(), TenantSeed.KBeautyTenantId, "Radiance", 3000, 3, now));
             await db.SaveChangesAsync();
         });
         _factory.Apn.Calls.Clear();
