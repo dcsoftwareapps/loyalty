@@ -3,7 +3,7 @@ using LoyaltyCloud.Domain.Common;
 namespace LoyaltyCloud.Domain.Entities;
 
 /// <summary>
-/// Registro de un dispositivo que tiene instalado el pase de una clienta.
+/// Registro de un dispositivo que tiene instalado el pase de un cliente.
 /// Apple llama POST /v1/devices/.../registrations/... cuando un iPhone agrega
 /// el pase a Wallet, y este registro nos da el push token que necesitamos
 /// para enviar actualizaciones a ese pase específico.

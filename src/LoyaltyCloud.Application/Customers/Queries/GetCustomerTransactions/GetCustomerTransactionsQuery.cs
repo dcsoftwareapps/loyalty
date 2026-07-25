@@ -4,7 +4,7 @@ using MediatR;
 
 namespace LoyaltyCloud.Application.Customers.Queries.GetCustomerTransactions;
 
-/// <summary>Historial paginado de movimientos de puntos de una clienta.</summary>
+/// <summary>Historial paginado de movimientos de puntos de un cliente.</summary>
 public sealed record GetCustomerTransactionsQuery(
     string SerialNumber,
     PaginationParams Pagination) : IRequest<Result<PagedResult<TransactionDto>>>;

@@ -6,4 +6,5 @@ namespace LoyaltyCloud.Application.Notifications.Commands.CreateMonthlyProductSt
 
 public sealed record CreateMonthlyProductStartedNotificationsCommand(
     string OperatorId,
-    string TimeZoneId = "America/Tijuana") : IRequest<Result<CreateMonthlyProductStartedNotificationsResponse>>;
+    string TimeZoneId = "America/Tijuana",
+    Guid? RewardId = null) : IRequest<Result<CreateMonthlyProductStartedNotificationsResponse>>;

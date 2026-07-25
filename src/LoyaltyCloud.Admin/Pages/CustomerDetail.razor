@@ -9,7 +9,7 @@
 @inject ISender Sender
 @inject NavigationManager Nav
 
-<PageTitle>@(detail?.Summary.FullName ?? "Clienta") - LoyaltyCloud</PageTitle>
+<PageTitle>@(detail?.Summary.FullName ?? "Cliente") - LoyaltyCloud</PageTitle>
 
 @if (errorMsg is not null)
 {
@@ -24,7 +24,7 @@ else
 {
     <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:16px;margin-bottom:24px;">
         <div>
-            <a href="/customers" style="color: var(--kb-ink-muted);">Volver a clientas</a>
+            <a href="/customers" style="color: var(--kb-ink-muted);">Volver a clientes</a>
             <h1 style="margin-top:12px;">@detail.Summary.FullName</h1>
             <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
                 <LevelBadge Level="@detail.Summary.Level" />
@@ -166,7 +166,7 @@ else
         {
             <div class="kb-card">
                 <div class="kb-detail-grid">
-                    <DetailItem Label="Número de tarjeta" Value="@DisplayText(detail.Wallet.SerialNumber)" />
+                    <DetailItem Label="ID del cliente" Value="@DisplayText(detail.Wallet.SerialNumber)" />
                     <DetailItem Label="Puntos actuales" Value="@FormatNullableNumber(detail.Wallet.CurrentPoints)" />
                     <DetailItem Label="Fecha de emisión" Value="@FormatNullableDate(detail.Wallet.IssuedAt)" />
                     <DetailItem Label="Última actualización" Value="@FormatNullableDateTime(detail.Wallet.LastActivityAt)" />

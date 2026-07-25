@@ -16,7 +16,7 @@ public interface IPassGeneratorService
 
     /// <summary>
     /// URL de descarga del pase actualmente almacenado para este serial.
-    /// Útil para reenviar el pase a la clienta sin regenerarlo.
+    /// Útil para reenviar el pase al cliente sin regenerarlo.
     /// </summary>
     Task<string> GetPassDownloadUrlAsync(string serialNumber, CancellationToken ct = default);
 }

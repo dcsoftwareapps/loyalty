@@ -1,6 +1,6 @@
 namespace LoyaltyCloud.Application.Customers.Queries.GetCustomers;
 
-/// <summary>Fila resumida para la tabla de clientas.</summary>
+/// <summary>Fila resumida para la tabla de clientes.</summary>
 public sealed record CustomerListItemDto(
     Guid CustomerId,
     string FullName,

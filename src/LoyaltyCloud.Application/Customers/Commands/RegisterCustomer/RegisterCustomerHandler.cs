@@ -13,7 +13,7 @@ using Microsoft.Extensions.Logging;
 namespace LoyaltyCloud.Application.Customers.Commands.RegisterCustomer;
 
 /// <summary>
-/// Implementa el alta de clienta:
+/// Implementa el alta de cliente:
 /// <list type="number">
 ///   <item>Verifica unicidad de email.</item>
 ///   <item>Resuelve referidor (si se proveyó serial).</item>
@@ -88,12 +88,12 @@ public sealed class RegisterCustomerHandler
             await _customers.GetByNormalizedPhoneAsync(normalizedPhone, ct) is not null)
         {
             return Result.Fail<RegisterCustomerResponse>(
-                "Ya existe una clienta con ese telefono en el tenant actual.");
+                "Ya existe un cliente con ese telefono en el tenant actual.");
         }
 
         var emailNormalized = command.Email.Trim().ToLowerInvariant();
         if (await _customers.EmailExistsAsync(emailNormalized, ct))
-            return Result.Fail<RegisterCustomerResponse>($"Ya existe una clienta con email {emailNormalized}.");
+            return Result.Fail<RegisterCustomerResponse>($"Ya existe un cliente con email {emailNormalized}.");
 
         // 2. Resolver referidor (si aplica)
         LoyaltyCard? referrerCard = null;

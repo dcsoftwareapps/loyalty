@@ -3,7 +3,7 @@ using LoyaltyCloud.Common.Constants;
 namespace LoyaltyCloud.Domain.ValueObjects;
 
 /// <summary>
-/// Nivel del programa al que pertenece una clienta en un momento dado.
+/// Nivel del programa al que pertenece un cliente en un momento dado.
 /// Es un value object; dos niveles con el mismo Name son iguales sin importar la instancia.
 /// </summary>
 /// <param name="Id">Identificador del nivel configurado por tenant.</param>

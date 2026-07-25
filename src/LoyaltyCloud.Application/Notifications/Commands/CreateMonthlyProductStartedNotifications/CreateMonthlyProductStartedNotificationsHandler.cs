@@ -40,6 +40,7 @@ public sealed class CreateMonthlyProductStartedNotificationsHandler
         var preview = await _read.ListCandidatesAsync(
             command.TimeZoneId,
             includeAlreadyNotified: true,
+            command.RewardId,
             ct);
 
         if (preview.MonthlyProductId is null)

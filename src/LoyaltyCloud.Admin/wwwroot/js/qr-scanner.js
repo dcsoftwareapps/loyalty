@@ -13,21 +13,21 @@
         if (!window.isSecureContext) {
             return {
                 Ok: false,
-                Message: "Este dispositivo no permite escanear QR desde el navegador. Ingresa el serial manualmente."
+                Message: "Este dispositivo no permite escanear QR desde el navegador. Ingresa el ID del cliente manualmente."
             };
         }
 
         if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
             return {
                 Ok: false,
-                Message: "Este dispositivo no permite escanear QR desde el navegador. Ingresa el serial manualmente."
+                Message: "Este dispositivo no permite escanear QR desde el navegador. Ingresa el ID del cliente manualmente."
             };
         }
 
         if (typeof window.jsQR !== "function") {
             return {
                 Ok: false,
-                Message: "El lector QR no esta disponible. Ingresa el serial manualmente."
+                Message: "El lector QR no esta disponible. Ingresa el ID del cliente manualmente."
             };
         }
 
@@ -59,7 +59,7 @@
             stop();
             return {
                 Ok: false,
-                Message: "No se pudo acceder a la cámara. Puedes ingresar el serial manualmente."
+                Message: "No se pudo acceder a la cámara. Puedes ingresar el ID del cliente manualmente."
             };
         }
     }

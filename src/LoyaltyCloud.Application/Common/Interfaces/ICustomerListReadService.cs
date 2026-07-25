@@ -5,7 +5,7 @@ using LoyaltyCloud.Common.Results;
 namespace LoyaltyCloud.Application.Common.Interfaces;
 
 /// <summary>
-/// Búsqueda paginada de clientas con filtros — separada de los repositorios
+/// Búsqueda paginada de clientes con filtros — separada de los repositorios
 /// porque hace JOIN entre Customer y LoyaltyCard y proyecta a un DTO de lista,
 /// no a entidades. La implementación en Infrastructure usa <c>AsNoTracking</c>.
 /// </summary>

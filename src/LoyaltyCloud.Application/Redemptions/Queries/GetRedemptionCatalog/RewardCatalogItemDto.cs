@@ -6,7 +6,7 @@ namespace LoyaltyCloud.Application.Redemptions.Queries.GetRedemptionCatalog;
 /// <param name="PointsCost">Costo en puntos.</param>
 /// <param name="MinLevel">Nivel minimo requerido.</param>
 /// <param name="IsMonthlyProduct">Indica si es producto del mes.</param>
-/// <param name="CanAfford">True si el saldo actual de la clienta alcanza para este beneficio.</param>
+/// <param name="CanAfford">True si el saldo actual del cliente alcanza para este beneficio.</param>
 /// <param name="ValidTo">Fecha limite de vigencia, si existe.</param>
 public sealed record RewardCatalogItemDto(
     Guid Id,

@@ -2,7 +2,7 @@
 @operatorId = ana@kbeautymx.com
 
 ###############################################
-# 1. Registrar clienta nueva
+# 1. Registrar cliente nuevo
 ###############################################
 POST {{host}}/api/customers
 Content-Type: application/json
@@ -15,7 +15,7 @@ Content-Type: application/json
 }
 
 ###############################################
-# 2. Buscar clienta por serial (escaneo de QR)
+# 2. Buscar cliente por serial (escaneo de QR)
 ###############################################
 GET {{host}}/api/customers/KB-A7B9C2X
 
@@ -37,12 +37,12 @@ X-Operator-Id: {{operatorId}}
 }
 
 ###############################################
-# 5. Catálogo de canjes filtrado por nivel de la clienta
+# 5. Catálogo de canjes filtrado por nivel del cliente
 ###############################################
 GET {{host}}/api/redemptions/catalog/KB-A7B9C2X
 
 ###############################################
-# 6. Iniciar canje (la clienta solicita)
+# 6. Iniciar canje (el cliente solicita)
 ###############################################
 POST {{host}}/api/redemptions
 Content-Type: application/json

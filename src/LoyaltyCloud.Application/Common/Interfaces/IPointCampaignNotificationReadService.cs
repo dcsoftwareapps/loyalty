@@ -7,5 +7,6 @@ public interface IPointCampaignNotificationReadService
     Task<PointCampaignNotificationPreviewDto> ListCandidatesAsync(
         string timeZoneId,
         bool includeAlreadyNotified,
+        Guid? campaignId = null,
         CancellationToken ct = default);
 }

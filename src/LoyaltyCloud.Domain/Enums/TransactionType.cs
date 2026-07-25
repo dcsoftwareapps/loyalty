@@ -1,6 +1,6 @@
 namespace LoyaltyCloud.Domain.Enums;
 
-/// <summary>Naturaleza de un movimiento en el saldo de puntos de una clienta.</summary>
+/// <summary>Naturaleza de un movimiento en el saldo de puntos de un cliente.</summary>
 public enum TransactionType
 {
     /// <summary>Compra en tienda física — suma puntos según ratio configurado.</summary>
@@ -12,7 +12,7 @@ public enum TransactionType
     /// <summary>Bono x2 durante el mes de cumpleaños.</summary>
     BonusBirthday = 2,
 
-    /// <summary>Bono recibido por traer a una nueva clienta.</summary>
+    /// <summary>Bono recibido por traer a un cliente nuevo.</summary>
     BonusReferral = 3,
 
     /// <summary>Canje de un beneficio del catálogo — resta puntos.</summary>

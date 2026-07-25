@@ -3,15 +3,13 @@
 @rendermode InteractiveServer
 
 @using LoyaltyCloud.Application.Campaigns
-@using LoyaltyCloud.Application.Campaigns.Commands.ActivatePointCampaign
-@using LoyaltyCloud.Application.Campaigns.Commands.CreatePointCampaign
-@using LoyaltyCloud.Application.Campaigns.Commands.DeactivatePointCampaign
-@using LoyaltyCloud.Application.Campaigns.Commands.UpdatePointCampaign
 @using LoyaltyCloud.Application.Campaigns.Queries.ListPointCampaigns
 @using LoyaltyCloud.Application.Common.Interfaces
+@using LoyaltyCloud.Admin.Services
 @using LoyaltyCloud.Domain.Entities
 @using System.Globalization
 @inject ISender Sender
+@inject AdminApiClient Api
 @inject ITenantLoyaltyLevelReadService TenantLevels
 
 <PageTitle>Campañas - LoyaltyCloud</PageTitle>
@@ -225,9 +223,18 @@ else
             return;
 
         busy = true;
+        var request = new CampaignRequest(
+            form.Name.Trim(),
+            form.Description.Trim(),
+            form.Multiplier,
+            form.MinimumPurchaseAmount,
+            form.LevelEligibility,
+            startsAtUtc,
+            endsAtUtc,
+            form.IsActive);
         var result = editingId.HasValue
-            ? await Sender.Send(new UpdatePointCampaignCommand(editingId.Value, form.Name.Trim(), form.Description.Trim(), form.Multiplier, form.MinimumPurchaseAmount, form.LevelEligibility, startsAtUtc, endsAtUtc, form.IsActive))
-            : await Sender.Send(new CreatePointCampaignCommand(form.Name.Trim(), form.Description.Trim(), form.Multiplier, form.MinimumPurchaseAmount, form.LevelEligibility, startsAtUtc, endsAtUtc, form.IsActive));
+            ? await Api.PutAsJsonAsync<CampaignRequest, PointCampaignAdminDto>($"/api/campaigns/{editingId.Value}", request)
+            : await Api.PostAsJsonAsync<CampaignRequest, PointCampaignAdminDto>("/api/campaigns", request);
         busy = false;
 
         if (result.IsFailure)
@@ -247,7 +254,7 @@ else
     {
         ClearMessages();
         busy = true;
-        var result = await Sender.Send(new ActivatePointCampaignCommand(id));
+        var result = await Api.PutAsync<PointCampaignAdminDto>($"/api/campaigns/{id}/activate");
         busy = false;
         successMsg = result.IsSuccess ? "Campaña activada." : null;
         errorMsg = result.IsFailure ? result.Error : null;
@@ -258,7 +265,7 @@ else
     {
         ClearMessages();
         busy = true;
-        var result = await Sender.Send(new DeactivatePointCampaignCommand(id));
+        var result = await Api.PutAsync<PointCampaignAdminDto>($"/api/campaigns/{id}/deactivate");
         busy = false;
         successMsg = result.IsSuccess ? "Campaña desactivada." : null;
         errorMsg = result.IsFailure ? result.Error : null;
@@ -401,4 +408,14 @@ else
             };
         }
     }
+
+    private sealed record CampaignRequest(
+        string Name,
+        string Description,
+        int Multiplier,
+        decimal? MinimumPurchaseAmount,
+        string LevelEligibility,
+        DateTime StartsAtUtc,
+        DateTime EndsAtUtc,
+        bool IsActive);
 }

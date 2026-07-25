@@ -5,7 +5,7 @@ namespace LoyaltyCloud.Domain.Repositories;
 /// <summary>Acceso persistente al agregado <see cref="LoyaltyCard"/>.</summary>
 public interface ILoyaltyCardRepository
 {
-    /// <summary>Tarjeta de una clienta dada (la relación es 1:1).</summary>
+    /// <summary>Tarjeta de un cliente dado (la relación es 1:1).</summary>
     Task<LoyaltyCard?> GetByCustomerIdAsync(Guid customerId, CancellationToken ct = default);
 
     /// <summary>Tarjeta por su serial — el caso más usado (al escanear QR).</summary>

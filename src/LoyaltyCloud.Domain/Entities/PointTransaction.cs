@@ -27,7 +27,7 @@ public class PointTransaction : Entity, ITenantOwned
     /// <summary>Modificador opcional (ej: Birthday cuando la compra recibió x2).</summary>
     public BonusType? BonusType { get; private set; }
 
-    /// <summary>Descripción legible para reportes y para mostrar en el historial de la clienta.</summary>
+    /// <summary>Descripción legible para reportes y para mostrar en el historial del cliente.</summary>
     public string Description { get; private set; } = string.Empty;
 
     /// <summary>Monto de la compra original (solo para Type=Purchase).</summary>

@@ -90,7 +90,7 @@ public sealed class AddPointsHandler : IRequestHandler<AddPointsCommand, Result<
 
         var customer = await _customers.GetByIdAsync(card.CustomerId, ct);
         if (customer is null || !customer.IsActive)
-            return Result.Fail<AddPointsResponse>("La clienta no esta activa.");
+            return Result.Fail<AddPointsResponse>("El cliente no esta activo.");
 
         var snapshot = ProgramConfigSnapshot.FromEntries(await _config.GetAllAsync(ct));
         var tenantLevels = await _tenantLevels.GetActiveLevelsAsync(ct);

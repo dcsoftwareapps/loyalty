@@ -17,7 +17,7 @@ public class LoyaltyCard : Entity, ITenantOwned
 {
     public Guid TenantId { get; private set; }
 
-    /// <summary>FK a la clienta dueña de esta tarjeta.</summary>
+    /// <summary>FK al cliente dueño de esta tarjeta.</summary>
     public Guid CustomerId { get; private set; }
 
     /// <summary>Identificador imprimible/escaneable (ej: <c>KB-A7B9C2X</c>) — único.</summary>
@@ -205,7 +205,7 @@ public class LoyaltyCard : Entity, ITenantOwned
         return PointsEarnedThisYear < requiredPointsPerYear;
     }
 
-    /// <summary>Marca actividad sin movimiento de puntos (ej: la clienta abrió el pase).</summary>
+    /// <summary>Marca actividad sin movimiento de puntos (ej: el cliente abrió el pase).</summary>
     public void Touch(IDateTimeProvider dt)
     {
         ArgumentNullException.ThrowIfNull(dt);

@@ -11,7 +11,7 @@ namespace LoyaltyCloud.Infrastructure.Services;
 
 /// <summary>
 /// Almacena archivos <c>.pkpass</c> en Azure Blob Storage y genera SAS URLs
-/// temporales para que la clienta descargue su pase.
+/// temporales para que el cliente descargue su pase.
 /// </summary>
 /// <remarks>
 /// Para local dev: usar Azurite y connection string "UseDevelopmentStorage=true".

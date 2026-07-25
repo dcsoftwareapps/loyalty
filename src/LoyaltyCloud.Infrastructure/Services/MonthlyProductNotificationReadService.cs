@@ -26,12 +26,14 @@ internal sealed class MonthlyProductNotificationReadService : IMonthlyProductNot
     public async Task<MonthlyProductNotificationPreviewDto> ListCandidatesAsync(
         string timeZoneId,
         bool includeAlreadyNotified,
+        Guid? rewardId = null,
         CancellationToken ct = default)
     {
         var nowUtc = DateTime.UtcNow;
         var tenantId = _tenantContext.RequireTenantId();
         var timeZone = PointsExpirationNotificationReadService.ResolveTimeZone(timeZoneId);
-        var product = await _db.RewardCatalogItems
+
+        var productQuery = _db.RewardCatalogItems
             .AsNoTracking()
             .Where(r => r.TenantId == tenantId
                      && r.IsMonthlyProduct
@@ -39,7 +41,12 @@ internal sealed class MonthlyProductNotificationReadService : IMonthlyProductNot
                      && r.ValidFrom.HasValue
                      && r.ValidTo.HasValue
                      && r.ValidFrom.Value <= nowUtc
-                     && r.ValidTo.Value >= nowUtc)
+                     && r.ValidTo.Value >= nowUtc);
+
+        if (rewardId.HasValue)
+            productQuery = productQuery.Where(r => r.Id == rewardId.Value);
+
+        var product = await productQuery
             .OrderBy(r => r.ValidFrom)
             .Select(r => new
             {
@@ -53,7 +60,11 @@ internal sealed class MonthlyProductNotificationReadService : IMonthlyProductNot
 
         if (product is null)
         {
-            _logger.LogInformation("Monthly product notification preview skipped: no active monthly product at {NowUtc}.", nowUtc);
+            _logger.LogInformation(
+                "Monthly product notification preview skipped: no active monthly product at {NowUtc}. tenant={TenantId}, rewardId={RewardId}.",
+                nowUtc,
+                tenantId,
+                rewardId);
             return new MonthlyProductNotificationPreviewDto(
                 nowUtc,
                 null,

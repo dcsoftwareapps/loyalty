@@ -16,7 +16,7 @@ public sealed class CustomersController : ControllerBase
 
     public CustomersController(ISender sender) => _sender = sender;
 
-    /// <summary>POST /api/customers — registra una clienta nueva y genera su pase.</summary>
+    /// <summary>POST /api/customers — registra un cliente nuevo y genera su pase.</summary>
     [HttpPost]
     [ProducesResponseType(typeof(RegisterCustomerResponse), StatusCodes.Status201Created)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
@@ -33,7 +33,7 @@ public sealed class CustomersController : ControllerBase
             value: result.Value);
     }
 
-    /// <summary>GET /api/customers/{serialNumber} — busca clienta por serial escaneado.</summary>
+    /// <summary>GET /api/customers/{serialNumber} — busca cliente por serial escaneado.</summary>
     [HttpGet("{serialNumber}")]
     [ProducesResponseType(typeof(CustomerDetailDto), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]

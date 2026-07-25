@@ -1,6 +1,6 @@
 namespace LoyaltyCloud.Application.Customers.Queries.GetCustomerBySerial;
 
-/// <summary>Vista completa de una clienta para el flujo de escaneo en tienda.</summary>
+/// <summary>Vista completa de un cliente para el flujo de escaneo en tienda.</summary>
 public sealed record CustomerDetailDto(
     Guid CustomerId,
     string FullName,

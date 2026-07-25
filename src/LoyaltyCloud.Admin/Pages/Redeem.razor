@@ -49,14 +49,14 @@
                 }
 
                 <div>
-                    <label for="serial">Serial de la clienta</label>
+                    <label for="serial">ID del cliente</label>
                     <input id="serial" type="text" @bind="serialInput" @bind:event="oninput"
                            @onkeydown="HandleSerialKeyDownAsync"
                            placeholder="KB-A7B9C2X" autocomplete="off" />
                 </div>
                 <button class="kb-btn kb-btn--primary kb-btn--large kb-btn--block"
                         @onclick="LoadCatalogAsync" disabled="@(string.IsNullOrWhiteSpace(serialInput) || busy)">
-                    @(busy ? "Buscando..." : "Buscar clienta")
+                    @(busy ? "Buscando..." : "Buscar cliente")
                 </button>
             </div>
         </section>
@@ -141,11 +141,11 @@
 
         @if (catalog is not null && catalog.Count == 0)
         {
-            <p class="kb-muted" style="text-align:center;margin-top:24px;">No hay recompensas disponibles para esta clienta.</p>
+            <p class="kb-muted" style="text-align:center;margin-top:24px;">No hay recompensas disponibles para este cliente.</p>
         }
 
         <button class="kb-btn kb-btn--ghost kb-btn--block" style="margin-top:24px;" @onclick="Reset" disabled="@busy">
-            Escanear otra clienta
+            Escanear otro cliente
         </button>
     }
 
@@ -196,7 +196,7 @@
         if (!result.Ok)
         {
             scanning = false;
-            errorMessage = result.Message ?? "No se pudo acceder a la camara. Puedes ingresar el serial manualmente.";
+            errorMessage = result.Message ?? "No se pudo acceder a la camara. Puedes ingresar el ID del cliente manualmente.";
         }
     }
 
@@ -246,7 +246,7 @@
         var serial = ExtractSerial(serialInput);
         if (serial is null)
         {
-            errorMessage = "Ingresa un serial valido, por ejemplo KB-A7B9C2X.";
+            errorMessage = "Ingresa un ID del cliente valido, por ejemplo KB-A7B9C2X.";
             return;
         }
 

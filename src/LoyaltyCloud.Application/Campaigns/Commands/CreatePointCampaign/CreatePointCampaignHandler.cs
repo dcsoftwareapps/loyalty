@@ -61,12 +61,25 @@ public sealed class CreatePointCampaignHandler : IRequestHandler<CreatePointCamp
 
     private async Task TriggerPointCampaignNotificationsIfActiveAsync(PointCampaign campaign, CancellationToken ct)
     {
-        if (!campaign.IsCurrentlyActive(_dt.UtcNow))
+        var nowUtc = _dt.UtcNow;
+        var isCurrentlyActive = campaign.IsCurrentlyActive(nowUtc);
+        _logger.LogInformation(
+            "Immediate PointCampaign notification trigger. Tenant={TenantId}, CampaignId={CampaignId}, CampaignName={CampaignName}, IsActive={IsActive}, StartsAtUtc={StartsAtUtc:O}, EndsAtUtc={EndsAtUtc:O}, NowUtc={NowUtc:O}, IsCurrentlyActive={IsCurrentlyActive}.",
+            campaign.TenantId,
+            campaign.Id,
+            campaign.Name,
+            campaign.IsActive,
+            campaign.StartsAtUtc,
+            campaign.EndsAtUtc,
+            nowUtc,
+            isCurrentlyActive);
+
+        if (!isCurrentlyActive)
             return;
 
         try
         {
-            var result = await _sender.Send(new CreatePointCampaignStartedNotificationsCommand("campaign-admin"), ct);
+            var result = await _sender.Send(new CreatePointCampaignStartedNotificationsCommand("campaign-admin", CampaignId: campaign.Id), ct);
             if (result.IsFailure)
             {
                 _logger.LogWarning(
@@ -77,8 +90,9 @@ public sealed class CreatePointCampaignHandler : IRequestHandler<CreatePointCamp
             }
 
             _logger.LogInformation(
-                "Immediate point campaign notification scan completed after campaign create. campaign={CampaignId}, created={Created}, alreadyNotified={AlreadyNotified}.",
+                "Directed PointCampaign notification generation completed after campaign create. CampaignId={CampaignId}, EligibleCards={EligibleCards}, Created={Created}, AlreadyNotified={AlreadyNotified}.",
                 campaign.Id,
+                result.Value.CardsEligible,
                 result.Value.NotificationsCreated,
                 result.Value.AlreadyNotified);
         }

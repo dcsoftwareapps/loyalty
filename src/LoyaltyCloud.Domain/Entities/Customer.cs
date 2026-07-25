@@ -3,7 +3,7 @@ using LoyaltyCloud.Domain.Common;
 namespace LoyaltyCloud.Domain.Entities;
 
 /// <summary>
-/// Clienta del programa. Toda clienta tiene una y solo una <see cref="LoyaltyCard"/>
+/// Cliente del programa. Todo cliente tiene una y solo una <see cref="LoyaltyCard"/>
 /// asociada — la creación de Customer y Card es atómica en
 /// <c>RegisterCustomerHandler</c>.
 /// </summary>
@@ -28,7 +28,7 @@ public class Customer : Entity, ITenantOwned
     /// <summary>Fecha de nacimiento — usada para el bono x2 en mes de cumpleaños.</summary>
     public DateTime DateOfBirth { get; private set; }
 
-    /// <summary>Id de la clienta que la refirió (si la registraron por referido).</summary>
+    /// <summary>Id del cliente que lo refirió (si lo registraron por referido).</summary>
     public Guid? ReferredBy { get; private set; }
 
     /// <summary>Timestamp UTC del alta en el programa.</summary>
@@ -91,10 +91,10 @@ public class Customer : Entity, ITenantOwned
         DateOfBirth = new DateTime(CapturedBirthdayYear, month, day);
     }
 
-    /// <summary>Da de baja a la clienta (no borra historial).</summary>
+    /// <summary>Da de baja al cliente (no borra historial).</summary>
     public void Deactivate() => IsActive = false;
 
-    /// <summary>Reactiva una clienta previamente dada de baja.</summary>
+    /// <summary>Reactiva un cliente previamente dado de baja.</summary>
     public void Reactivate() => IsActive = true;
 
     private static string? NormalizePhone(string? phone)

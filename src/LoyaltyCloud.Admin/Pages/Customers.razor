@@ -6,13 +6,13 @@
 @using LoyaltyCloud.Common.Results
 @inject ISender Sender
 
-<PageTitle>Clientas · LoyaltyCloud</PageTitle>
+<PageTitle>Clientes · LoyaltyCloud</PageTitle>
 
-<h1>Clientas</h1>
+<h1>Clientes</h1>
 
 <div class="kb-form-row kb-form-row--horizontal">
     <div style="flex: 2; min-width: 240px;">
-        <label for="search">Buscar (nombre, email o serial)</label>
+        <label for="search">Buscar (nombre, email o ID del cliente)</label>
         <input id="search" type="text" @bind="searchTerm" @bind:event="oninput"
                @onkeydown="HandleSearchKeyDownAsync" />
     </div>
@@ -43,7 +43,7 @@ else
             <tr>
                 <th>Nombre</th>
                 <th>Email</th>
-                <th>Serial</th>
+                <th>ID del cliente</th>
                 <th>Nivel</th>
                 <th>Puntos</th>
                 <th>Alta</th>
@@ -69,7 +69,7 @@ else
     <div class="kb-form-row kb-form-row--horizontal" style="margin-top: 20px;">
         <button class="kb-btn kb-btn--ghost" @onclick="PrevPage" disabled="@(!page.HasPrevious)">← Anterior</button>
         <span style="color: var(--kb-ink-muted);">
-            Página @(page.PageNumber) de @(page.TotalPages) (@(page.TotalCount) clientas)
+            Página @(page.PageNumber) de @(page.TotalPages) (@(page.TotalCount) clientes)
         </span>
         <button class="kb-btn kb-btn--ghost" @onclick="NextPage" disabled="@(!page.HasNext)">Siguiente →</button>
     </div>

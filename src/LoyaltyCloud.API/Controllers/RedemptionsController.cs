@@ -16,7 +16,7 @@ public sealed class RedemptionsController : ControllerBase
 
     public RedemptionsController(ISender sender) => _sender = sender;
 
-    /// <summary>POST /api/redemptions — la clienta inicia un canje.</summary>
+    /// <summary>POST /api/redemptions — el cliente inicia un canje.</summary>
     [HttpPost]
     [ProducesResponseType(typeof(RedemptionResponse), StatusCodes.Status201Created)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
@@ -78,7 +78,7 @@ public sealed class RedemptionsController : ControllerBase
         return Ok(result.Value);
     }
 
-    /// <summary>GET /api/redemptions/catalog/{serialNumber} — catálogo filtrado al nivel de la clienta.</summary>
+    /// <summary>GET /api/redemptions/catalog/{serialNumber} — catálogo filtrado al nivel del cliente.</summary>
     [HttpGet("catalog/{serialNumber}")]
     public async Task<IActionResult> GetCatalog(string serialNumber, CancellationToken ct)
     {

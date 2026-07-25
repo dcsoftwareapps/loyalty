@@ -21,7 +21,7 @@ public sealed class ListPointCampaignNotificationCandidatesHandler
             var preview = await _read.ListCandidatesAsync(
                 query.TimeZoneId,
                 query.IncludeAlreadyNotified,
-                ct);
+                ct: ct);
 
             return Result.Ok(preview);
         }

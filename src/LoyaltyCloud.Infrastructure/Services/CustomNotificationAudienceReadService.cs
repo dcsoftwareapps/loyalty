@@ -216,13 +216,13 @@ internal sealed class CustomNotificationAudienceReadService : ICustomNotificatio
         int? pointsExpiringDaysAhead)
     {
         if (CustomNotificationCampaign.IsAllWalletUsersAudience(audienceType))
-            return "Clientas activas con Wallet registrado.";
+            return "Clientes activos con Wallet registrado.";
         if (CustomNotificationCampaign.IsMinimumPointsAudience(audienceType))
-            return $"Clientas con al menos {minimumPoints ?? 0:N0} puntos y Wallet registrado.";
+            return $"Clientes con al menos {minimumPoints ?? 0:N0} puntos y Wallet registrado.";
         if (CustomNotificationCampaign.IsPointsExpiringAudience(audienceType))
-            return $"Clientas con puntos que expiran en {pointsExpiringDaysAhead ?? 15:N0} dia(s) y Wallet registrado.";
+            return $"Clientes con puntos que expiran en {pointsExpiringDaysAhead ?? 15:N0} dia(s) y Wallet registrado.";
 
-        return $"Clientas desde nivel {audienceType} con Wallet registrado.";
+        return $"Clientes desde nivel {audienceType} con Wallet registrado.";
     }
 
     private async Task<string[]?> ResolveEligibleLevelNamesAsync(string audienceType, CancellationToken ct)

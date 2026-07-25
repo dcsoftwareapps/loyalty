@@ -6,4 +6,5 @@ namespace LoyaltyCloud.Application.Notifications.Commands.CreatePointCampaignSta
 
 public sealed record CreatePointCampaignStartedNotificationsCommand(
     string OperatorId,
-    string TimeZoneId = "America/Tijuana") : IRequest<Result<CreatePointCampaignStartedNotificationsResponse>>;
+    string TimeZoneId = "America/Tijuana",
+    Guid? CampaignId = null) : IRequest<Result<CreatePointCampaignStartedNotificationsResponse>>;

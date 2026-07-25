@@ -13,7 +13,7 @@ public static class DateTimeExtensions
     /// Determina si el mes de la fecha de nacimiento coincide con el mes de <paramref name="now"/>.
     /// Usado para aplicar el bono x2 en mes de cumpleaños.
     /// </summary>
-    /// <param name="dob">Fecha de nacimiento de la clienta.</param>
+    /// <param name="dob">Fecha de nacimiento del cliente.</param>
     /// <param name="now">Fecha "ahora" inyectada (UTC o local, debe ser consistente con dob).</param>
     public static bool IsBirthMonth(this DateTime dob, DateTime now) =>
         dob.Date != new DateTime(1900, 1, 1) && dob.Month == now.Month;

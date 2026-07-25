@@ -30,7 +30,6 @@ else
             <tr>
                 <th>Regla</th>
                 <th>Valor</th>
-                <th>Última actualización</th>
             </tr>
         </thead>
         <tbody>
@@ -45,13 +44,16 @@ else
                     }
                 </td>
                 <td>
-                    <input type="text" @bind="edited[e.Key]" style="max-width: 160px;" />
-                </td>
-                <td style="color: var(--kb-ink-muted);">
-                    @e.UpdatedAt.ToLocalTime().ToString("dd MMM yyyy HH:mm")
-                    @if (!string.IsNullOrEmpty(e.UpdatedBy))
+                    @if (IsPointsExpirationEnabled(e.Key))
                     {
-                        <br/><small>por @e.UpdatedBy</small>
+                        <select @bind="edited[e.Key]" style="max-width: 160px;">
+                            <option value="true">Sí</option>
+                            <option value="false">No</option>
+                        </select>
+                    }
+                    else
+                    {
+                        <input type="text" @bind="edited[e.Key]" style="max-width: 160px;" />
                     }
                 </td>
             </tr>
@@ -124,13 +126,16 @@ else
         && !string.Equals(entry.Key, LoyaltyConstants.ConfigKeys.LevelMistMin, StringComparison.OrdinalIgnoreCase)
         && !string.Equals(entry.Key, LoyaltyConstants.ConfigKeys.LevelGlowMin, StringComparison.OrdinalIgnoreCase)
         && !string.Equals(entry.Key, LoyaltyConstants.ConfigKeys.LevelRadianceMin, StringComparison.OrdinalIgnoreCase)
-        && !string.Equals(entry.Key, LoyaltyConstants.ConfigKeys.RadianceRequalificationPoints, StringComparison.OrdinalIgnoreCase);
+        && !string.Equals(entry.Key, LoyaltyConstants.ConfigKeys.RadianceRequalificationPoints, StringComparison.OrdinalIgnoreCase)
+        && !string.Equals(entry.Key, LoyaltyConstants.ConfigKeys.ReferralBonusPoints, StringComparison.OrdinalIgnoreCase);
+
+    private static bool IsPointsExpirationEnabled(string key) =>
+        string.Equals(key, LoyaltyConstants.ConfigKeys.PointsExpirationEnabled, StringComparison.OrdinalIgnoreCase);
 
     private static string FriendlyName(string key) => key switch
     {
         LoyaltyConstants.ConfigKeys.PointsPerPesoUnit => "Pesos por 1 punto",
         LoyaltyConstants.ConfigKeys.WelcomeBonusPoints => "Puntos de bienvenida",
-        LoyaltyConstants.ConfigKeys.ReferralBonusPoints => "Puntos por referido",
         LoyaltyConstants.ConfigKeys.BirthdayMultiplier => "Multiplicador cumpleaños",
         LoyaltyConstants.ConfigKeys.PointsExpirationEnabled => "Expiracion de puntos activa",
         LoyaltyConstants.ConfigKeys.PointsExpireAfterMonths => "Meses de vigencia de puntos",

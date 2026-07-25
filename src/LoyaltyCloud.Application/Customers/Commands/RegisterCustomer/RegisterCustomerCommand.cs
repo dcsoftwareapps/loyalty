@@ -4,7 +4,7 @@ using MediatR;
 namespace LoyaltyCloud.Application.Customers.Commands.RegisterCustomer;
 
 /// <summary>
-/// Alta de una clienta nueva: crea <c>Customer</c>, <c>LoyaltyCard</c>,
+/// Alta de un cliente nuevo: crea <c>Customer</c>, <c>LoyaltyCard</c>,
 /// suma bono de bienvenida, suma bono al referidor si aplica, y devuelve
 /// el serial + URL para descargar el pase de Wallet.
 /// </summary>

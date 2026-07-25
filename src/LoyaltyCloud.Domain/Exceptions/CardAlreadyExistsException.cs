@@ -1,7 +1,7 @@
 namespace LoyaltyCloud.Domain.Exceptions;
 
 /// <summary>
-/// Se intentó registrar una clienta con un email que ya tiene tarjeta.
+/// Se intentó registrar un cliente con un email que ya tiene tarjeta.
 /// </summary>
 public sealed class CardAlreadyExistsException : DomainException
 {

@@ -86,12 +86,26 @@ public sealed class CreateRewardHandler : IRequestHandler<CreateRewardCommand, R
 
     private async Task TriggerMonthlyProductNotificationsIfActiveAsync(RewardCatalogItem reward, CancellationToken ct)
     {
-        if (!reward.IsMonthlyProduct || !reward.IsAvailableOn(_dt.UtcNow))
+        var nowUtc = _dt.UtcNow;
+        var isAvailable = reward.IsMonthlyProduct && reward.IsAvailableOn(nowUtc);
+        _logger.LogInformation(
+            "Immediate MonthlyProduct notification trigger. Tenant={TenantId}, RewardId={RewardId}, RewardName={RewardName}, IsMonthlyProduct={IsMonthlyProduct}, IsActive={IsActive}, ValidFromUtc={ValidFromUtc:O}, ValidToUtc={ValidToUtc:O}, NowUtc={NowUtc:O}, IsCurrentlyActive={IsCurrentlyActive}.",
+            reward.TenantId,
+            reward.Id,
+            reward.Name,
+            reward.IsMonthlyProduct,
+            reward.IsActive,
+            reward.ValidFrom,
+            reward.ValidTo,
+            nowUtc,
+            isAvailable);
+
+        if (!isAvailable)
             return;
 
         try
         {
-            var result = await _sender.Send(new CreateMonthlyProductStartedNotificationsCommand("reward-admin"), ct);
+            var result = await _sender.Send(new CreateMonthlyProductStartedNotificationsCommand("reward-admin", RewardId: reward.Id), ct);
             if (result.IsFailure)
             {
                 _logger.LogWarning(
@@ -102,8 +116,9 @@ public sealed class CreateRewardHandler : IRequestHandler<CreateRewardCommand, R
             }
 
             _logger.LogInformation(
-                "Immediate monthly product notification scan completed after reward create. reward={RewardId}, created={Created}, alreadyNotified={AlreadyNotified}.",
+                "Directed MonthlyProduct notification generation completed after reward create. RewardId={RewardId}, EligibleCards={EligibleCards}, Created={Created}, AlreadyNotified={AlreadyNotified}.",
                 reward.Id,
+                result.Value.CardsEligible,
                 result.Value.NotificationsCreated,
                 result.Value.AlreadyNotified);
         }

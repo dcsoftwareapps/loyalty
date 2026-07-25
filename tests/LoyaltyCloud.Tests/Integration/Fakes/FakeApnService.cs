@@ -7,10 +7,14 @@ namespace LoyaltyCloud.Tests.Integration.Fakes;
 public sealed class FakeApnService : IApnService
 {
     public List<(string Token, PassUpdateReason Reason)> Calls { get; } = new();
+    public bool FailSends { get; set; }
 
     public Task SendPassUpdateAsync(string pushToken, PassUpdateReason reason, CancellationToken ct = default)
     {
         Calls.Add((pushToken, reason));
+        if (FailSends)
+            throw new InvalidOperationException("Fake APNs failure.");
+
         return Task.CompletedTask;
     }
 }

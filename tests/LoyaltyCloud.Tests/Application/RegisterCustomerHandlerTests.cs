@@ -165,7 +165,7 @@ public class RegisterCustomerHandlerTests
             CancellationToken.None);
 
         Assert.True(result.IsSuccess);
-        // Dos transacciones: welcome para la nueva clienta + referral para la referidora
+        // Dos transacciones: welcome para el cliente nuevo + referral para quien lo refirió
         Assert.Equal(2, addedTransactions.Count);
         Assert.Contains(addedTransactions, t => t.LoyaltyCardId == referrerCard.Id && t.Points == 150);
 

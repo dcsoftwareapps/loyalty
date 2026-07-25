@@ -1,7 +1,7 @@
 namespace LoyaltyCloud.Domain.Events;
 
 /// <summary>
-/// Se levanta cuando una clienta inicia un canje (estado Pending).
+/// Se levanta cuando un cliente inicia un canje (estado Pending).
 /// Útil para notificar al operador en el panel admin que hay un canje por confirmar.
 /// </summary>
 /// <param name="RedemptionId">Id del canje recién creado.</param>

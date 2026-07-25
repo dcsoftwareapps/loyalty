@@ -403,6 +403,7 @@ internal sealed class WalletNotificationReadService : IWalletNotificationReadSer
         CancellationToken ct)
     {
         var now = DateTime.UtcNow;
+        var notificationList = notifications.ToList();
         var card = await (
             from loyaltyCard in _db.LoyaltyCards.AsNoTracking()
             join customer in _db.Customers.AsNoTracking() on loyaltyCard.CustomerId equals customer.Id
@@ -432,7 +433,30 @@ internal sealed class WalletNotificationReadService : IWalletNotificationReadSer
                      && c.EndsAtUtc >= now)
             .ToListAsync(ct);
         var levelRanks = await BuildLevelRanksAsync(ct);
-        var bestCampaign = PointCampaignNotificationReadService.SelectBestCampaign(activeCampaigns, card.Level, levelRanks);
+        var eligibleCampaigns = activeCampaigns
+            .Where(c => c.AppliesToLevel(card.Level, levelRanks))
+            .ToList();
+        var notifiedCampaign = notificationList
+            .Select(notification => new
+            {
+                Notification = notification,
+                Campaign = TryReadPointCampaignId(notification.MetadataJson, out var campaignId)
+                    ? eligibleCampaigns.FirstOrDefault(c => c.Id == campaignId)
+                    : null
+            })
+            .FirstOrDefault(x => x.Campaign is not null);
+
+        if (notifiedCampaign is not null)
+        {
+            _logger.LogInformation(
+                "Point campaign wallet field selected from recent processed notification for serial {Serial}: notification={NotificationId}, campaign={CampaignId}.",
+                card.SerialNumber,
+                notifiedCampaign.Notification.Id,
+                notifiedCampaign.Campaign!.Id);
+            return BuildPointCampaignMessage(notifiedCampaign.Campaign!, notifiedCampaign.Notification, card.SerialNumber);
+        }
+
+        var bestCampaign = PointCampaignNotificationReadService.SelectBestCampaign(eligibleCampaigns, card.Level, levelRanks);
 
         if (bestCampaign is null)
         {
@@ -443,7 +467,7 @@ internal sealed class WalletNotificationReadService : IWalletNotificationReadSer
             return null;
         }
 
-        var matchingNotification = notifications.FirstOrDefault(n =>
+        var matchingNotification = notificationList.FirstOrDefault(n =>
             TryReadPointCampaignId(n.MetadataJson, out var campaignId) &&
             campaignId == bestCampaign.Id);
 
@@ -456,31 +480,33 @@ internal sealed class WalletNotificationReadService : IWalletNotificationReadSer
             return null;
         }
 
-        var timeZoneId = TryReadTimeZone(matchingNotification.MetadataJson) ?? "America/Tijuana";
+        return BuildPointCampaignMessage(bestCampaign, matchingNotification, card.SerialNumber);
+    }
+
+    private static WalletPointCampaignMessage BuildPointCampaignMessage(
+        PointCampaign campaign,
+        WalletNotificationMessage notification,
+        string serialNumber)
+    {
+        var timeZoneId = TryReadTimeZone(notification.MetadataJson) ?? "America/Tijuana";
         var timeZone = PointsExpirationNotificationReadService.ResolveTimeZone(timeZoneId);
-        var endsAtLocalDate = DateOnly.FromDateTime(TimeZoneInfo.ConvertTimeFromUtc(bestCampaign.EndsAtUtc, timeZone).Date);
-        var value = FormatMultiplier(bestCampaign.Multiplier);
-        var backValue = $"{bestCampaign.Name}\n\n{value}\n\nVigente hasta {FormatDate(endsAtLocalDate)}";
+        var endsAtLocalDate = DateOnly.FromDateTime(TimeZoneInfo.ConvertTimeFromUtc(campaign.EndsAtUtc, timeZone).Date);
+        var value = $"{campaign.Name} \u00b7 Gana puntos x{Math.Max(1, campaign.Multiplier).ToString(CultureInfo.InvariantCulture)}";
+        var backValue = $"{campaign.Name}\n\n{value}\n\nVigente hasta {FormatDate(endsAtLocalDate)}";
 
-        if (bestCampaign.MinimumPurchaseAmount.HasValue)
-            backValue += $"\n\nCompra m\u00ednima: ${bestCampaign.MinimumPurchaseAmount.Value:N0} MXN";
-
-        _logger.LogInformation(
-            "Point campaign wallet field included for serial {Serial}: campaign={CampaignId}, value={Value}.",
-            card.SerialNumber,
-            bestCampaign.Id,
-            value);
+        if (campaign.MinimumPurchaseAmount.HasValue)
+            backValue += $"\n\nCompra m\u00ednima: ${campaign.MinimumPurchaseAmount.Value:N0} MXN";
 
         return new WalletPointCampaignMessage(
-            matchingNotification.Id,
-            bestCampaign.Id,
-            bestCampaign.Name,
-            bestCampaign.Multiplier,
-            bestCampaign.MinimumPurchaseAmount,
-            bestCampaign.EndsAtUtc,
+            notification.Id,
+            campaign.Id,
+            campaign.Name,
+            campaign.Multiplier,
+            campaign.MinimumPurchaseAmount,
+            campaign.EndsAtUtc,
             endsAtLocalDate,
             value,
-            "\ud83d\udd25 \u00a1Promoci\u00f3n activa! %@",
+            "\ud83c\udf89 %@",
             backValue);
     }
 

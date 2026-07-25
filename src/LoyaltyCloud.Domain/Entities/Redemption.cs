@@ -25,7 +25,7 @@ public class Redemption : Entity, ITenantOwned
     /// <summary>Estado actual del canje.</summary>
     public RedemptionStatus Status { get; private set; }
 
-    /// <summary>Fecha (UTC) en que la clienta inició el canje.</summary>
+    /// <summary>Fecha (UTC) en que el cliente inició el canje.</summary>
     public DateTime RedeemedAt { get; private set; }
 
     /// <summary>Fecha (UTC) en que el operador confirmó o canceló el canje.</summary>

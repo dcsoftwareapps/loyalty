@@ -30,18 +30,24 @@ internal sealed class PointCampaignNotificationReadService : IPointCampaignNotif
     public async Task<PointCampaignNotificationPreviewDto> ListCandidatesAsync(
         string timeZoneId,
         bool includeAlreadyNotified,
+        Guid? campaignId = null,
         CancellationToken ct = default)
     {
         var nowUtc = DateTime.UtcNow;
         var tenantId = _tenantContext.RequireTenantId();
         var timeZone = PointsExpirationNotificationReadService.ResolveTimeZone(timeZoneId);
 
-        var activeCampaigns = await _db.PointCampaigns
+        var activeCampaignsQuery = _db.PointCampaigns
             .AsNoTracking()
             .Where(c => c.TenantId == tenantId
                      && c.IsActive
                      && c.StartsAtUtc <= nowUtc
-                     && c.EndsAtUtc >= nowUtc)
+                     && c.EndsAtUtc >= nowUtc);
+
+        if (campaignId.HasValue)
+            activeCampaignsQuery = activeCampaignsQuery.Where(c => c.Id == campaignId.Value);
+
+        var activeCampaigns = await activeCampaignsQuery
             .OrderByDescending(c => c.Multiplier)
             .ThenBy(c => c.MinimumPurchaseAmount ?? 0)
             .ThenByDescending(c => c.StartsAtUtc)
@@ -49,7 +55,9 @@ internal sealed class PointCampaignNotificationReadService : IPointCampaignNotif
             .ToListAsync(ct);
 
         _logger.LogInformation(
-            "Point campaign notification preview: activeCampaignsFound={ActiveCampaignsFound}.",
+            "Point campaign notification preview: tenant={TenantId}, campaignId={CampaignId}, activeCampaignsFound={ActiveCampaignsFound}.",
+            tenantId,
+            campaignId,
             activeCampaigns.Count);
 
         if (activeCampaigns.Count == 0)
@@ -87,7 +95,9 @@ internal sealed class PointCampaignNotificationReadService : IPointCampaignNotif
             .Select(card => new
             {
                 Card = card,
-                Campaign = SelectBestCampaign(activeCampaigns, card.Level, levelRanks)
+                Campaign = campaignId.HasValue
+                    ? activeCampaigns.FirstOrDefault(c => c.AppliesToLevel(card.Level, levelRanks))
+                    : SelectBestCampaign(activeCampaigns, card.Level, levelRanks)
             })
             .Where(x => x.Campaign is not null)
             .ToList();

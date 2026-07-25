@@ -33,7 +33,7 @@ public sealed class JoinCustomerHandler : IRequestHandler<JoinCustomerCommand, R
         {
             var existingCard = await _cards.GetByCustomerIdAsync(existingCustomer.Id, ct);
             if (existingCard is null)
-                return Result.Fail<JoinCustomerResponse>("La clienta existe pero no tiene tarjeta Loyalty.");
+                return Result.Fail<JoinCustomerResponse>("El cliente existe pero no tiene tarjeta Loyalty.");
 
             return Result.Ok(new JoinCustomerResponse(
                 existingCustomer.Id,
@@ -57,7 +57,7 @@ public sealed class JoinCustomerHandler : IRequestHandler<JoinCustomerCommand, R
 
         var createdCustomer = await _customers.GetByNormalizedPhoneAsync(phone, ct);
         if (createdCustomer is null)
-            return Result.Fail<JoinCustomerResponse>("La clienta fue registrada pero no pudo recuperarse por telefono.");
+            return Result.Fail<JoinCustomerResponse>("El cliente fue registrado pero no pudo recuperarse por telefono.");
 
         return Result.Ok(new JoinCustomerResponse(
             CustomerId: createdCustomer.Id,

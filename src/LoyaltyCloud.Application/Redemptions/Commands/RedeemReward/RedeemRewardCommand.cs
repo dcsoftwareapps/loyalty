@@ -4,7 +4,7 @@ using MediatR;
 namespace LoyaltyCloud.Application.Redemptions.Commands.RedeemReward;
 
 /// <summary>
-/// La clienta inicia el canje de un beneficio. Crea el <c>Redemption</c> en
+/// El cliente inicia el canje de un beneficio. Crea el <c>Redemption</c> en
 /// estado Pending, descuenta los puntos del saldo y dispara push a Wallet.
 /// El operador lo confirma luego desde el panel admin.
 /// </summary>

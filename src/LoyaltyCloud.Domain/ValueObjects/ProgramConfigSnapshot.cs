@@ -66,7 +66,7 @@ public sealed record ProgramConfigSnapshot(
     /// <summary>
     /// Calcula cuántos puntos genera una compra con el ratio configurado.
     /// Ej: $250 MXN con ratio 10 → 25 pts. Redondeo hacia abajo
-    /// (la clienta solo gana puntos enteros).
+    /// (el cliente solo gana puntos enteros).
     /// </summary>
     public int CalculatePointsForPurchase(decimal purchaseAmount)
     {

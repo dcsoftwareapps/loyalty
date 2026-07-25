@@ -209,7 +209,7 @@ public sealed class AdminRoutingTests : IClassFixture<AdminRoutingTests.AdminWeb
 
         Assert.Contains("@page \"/scan\"", scanSource);
         Assert.Contains("Escanear QR", scanSource);
-        Assert.Contains("Serial de la clienta", scanSource);
+        Assert.Contains("ID del cliente", scanSource);
     }
 
     [Fact]
@@ -221,10 +221,68 @@ public sealed class AdminRoutingTests : IClassFixture<AdminRoutingTests.AdminWeb
         var redemptionsSource = File.ReadAllText(Path.Combine(GetRepositoryRoot(), "src", "LoyaltyCloud.Admin", "Pages", "Redemptions.razor"));
 
         Assert.Contains("href=\"/redeem\"", layoutSource);
-        Assert.Contains(">Canjear</NavLink>", layoutSource);
+        Assert.Contains(">Canjear puntos</NavLink>", layoutSource);
         Assert.Contains("@page \"/redeem\"", redeemSource);
         Assert.Contains("@page \"/redemptions\"", redemptionsSource);
         Assert.Contains("href=\"/redemptions\"", redeemSource);
+    }
+
+    [Fact]
+    [Trait("Category", "AdminRouting")]
+    public void Tenant_admin_navigation_is_grouped_without_changing_routes()
+    {
+        var source = File.ReadAllText(Path.Combine(GetRepositoryRoot(), "src", "LoyaltyCloud.Admin", "Components", "Layout", "MainLayout.razor"));
+
+        var orderedItems = new[]
+        {
+            "<NavLink href=\"/dashboard\" Match=\"NavLinkMatch.All\">Dashboard</NavLink>",
+            "<span class=\"kb-sidebar-section\">Puntos</span>",
+            "<NavLink href=\"/scan\">Sumar puntos</NavLink>",
+            "<NavLink href=\"/redeem\">Canjear puntos</NavLink>",
+            "<span class=\"kb-sidebar-section\">Clientes</span>",
+            "<NavLink href=\"/customers\">Clientes</NavLink>",
+            "<NavLink href=\"/redemptions\">Canjes</NavLink>",
+            "<span class=\"kb-sidebar-section\">Programa de lealtad</span>",
+            "<NavLink href=\"/rewards\">Recompensas</NavLink>",
+            "<NavLink href=\"/campaigns\">Campañas</NavLink>",
+            "<span class=\"kb-sidebar-section\">Comunicación</span>",
+            "<NavLink href=\"/marketing-notifications\">Mensajes</NavLink>",
+            "<span class=\"kb-sidebar-section\">Administración</span>",
+            "<NavLink href=\"/levels\">Niveles</NavLink>",
+            "<NavLink href=\"/config\">Configuración</NavLink>"
+        };
+
+        var previousIndex = -1;
+        foreach (var item in orderedItems)
+        {
+            var index = source.IndexOf(item, StringComparison.Ordinal);
+            Assert.True(index > previousIndex, $"Expected menu item after previous item: {item}");
+            previousIndex = index;
+        }
+
+        Assert.Equal(1, CountOccurrences(source, "href=\"/dashboard\""));
+        Assert.Equal(1, CountOccurrences(source, "href=\"/scan\""));
+        Assert.Equal(1, CountOccurrences(source, "href=\"/redeem\""));
+        Assert.Equal(1, CountOccurrences(source, "href=\"/customers\""));
+        Assert.Equal(1, CountOccurrences(source, "href=\"/redemptions\""));
+        Assert.Equal(1, CountOccurrences(source, "href=\"/rewards\""));
+        Assert.Equal(1, CountOccurrences(source, "href=\"/levels\""));
+        Assert.Equal(1, CountOccurrences(source, "href=\"/campaigns\""));
+        Assert.Equal(1, CountOccurrences(source, "href=\"/marketing-notifications\""));
+        Assert.Equal(1, CountOccurrences(source, "href=\"/config\""));
+        Assert.Equal(5, CountOccurrences(source, "class=\"kb-sidebar-section\""));
+        Assert.DoesNotContain("Operación</span>", source);
+        Assert.DoesNotContain("<NavLink href=\"/notifications\"", source);
+        Assert.DoesNotContain(">Clientas</NavLink>", source);
+        Assert.True(
+            source.IndexOf("<NavLink href=\"/dashboard\" Match=\"NavLinkMatch.All\">Dashboard</NavLink>", StringComparison.Ordinal) <
+            source.IndexOf("<span class=\"kb-sidebar-section\">Puntos</span>", StringComparison.Ordinal));
+        Assert.DoesNotContain("href=\"/operacion\"", source, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("href=\"/puntos\"", source, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("href=\"/clientes\"", source, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("href=\"/programa-de-lealtad\"", source, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("href=\"/comunicacion\"", source, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("href=\"/administracion\"", source, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]
@@ -242,7 +300,7 @@ public sealed class AdminRoutingTests : IClassFixture<AdminRoutingTests.AdminWeb
         Assert.Contains("await StopScannerAsync();", redeemSource);
         Assert.Contains("await LoadCatalogAsync();", redeemSource);
         Assert.Contains("private static string? ExtractSerial", redeemSource);
-        Assert.Contains("Serial de la clienta", redeemSource);
+        Assert.Contains("ID del cliente", redeemSource);
         Assert.Contains("placeholder=\"KB-A7B9C2X\"", redeemSource);
         Assert.Contains("@bind=\"serialInput\"", redeemSource);
         Assert.Contains("@bind:event=\"oninput\"", redeemSource);
@@ -529,8 +587,10 @@ public sealed class AdminRoutingTests : IClassFixture<AdminRoutingTests.AdminWeb
 
         Assert.Contains("Where(IsVisibleConfigEntry)", source);
         Assert.Contains("!entry.Key.StartsWith(\"reward_\", StringComparison.OrdinalIgnoreCase)", source);
+        Assert.Contains("LoyaltyConstants.ConfigKeys.ReferralBonusPoints", source);
         Assert.DoesNotContain("Costo de canje:", source);
         Assert.DoesNotContain("<code", source);
+        Assert.DoesNotContain("Puntos por referido", source);
         Assert.Contains("href=\"/rewards\"", source);
         Assert.Contains("Recompensas", source);
     }
@@ -543,10 +603,27 @@ public sealed class AdminRoutingTests : IClassFixture<AdminRoutingTests.AdminWeb
 
         Assert.Contains("LoyaltyConstants.ConfigKeys.PointsPerPesoUnit => \"Pesos por 1 punto\"", source);
         Assert.Contains("LoyaltyConstants.ConfigKeys.WelcomeBonusPoints => \"Puntos de bienvenida\"", source);
-        Assert.Contains("LoyaltyConstants.ConfigKeys.ReferralBonusPoints => \"Puntos por referido\"", source);
         Assert.Contains("LoyaltyConstants.ConfigKeys.BirthdayMultiplier => \"Multiplicador cumpleaños\"", source);
         Assert.Contains("LoyaltyConstants.ConfigKeys.PointsExpirationEnabled => \"Expiracion de puntos activa\"", source);
         Assert.Contains("LoyaltyConstants.ConfigKeys.PointsExpireAfterMonths => \"Meses de vigencia de puntos\"", source);
+    }
+
+    [Fact]
+    [Trait("Category", "AdminConfigurationCleanup")]
+    public void Config_page_uses_boolean_select_and_hides_audit_column()
+    {
+        var source = File.ReadAllText(Path.Combine(GetRepositoryRoot(), "src", "LoyaltyCloud.Admin", "Pages", "Config.razor"));
+
+        Assert.Contains("IsPointsExpirationEnabled(e.Key)", source);
+        Assert.Contains("<select @bind=\"edited[e.Key]\"", source);
+        Assert.Contains("<option value=\"true\">Sí</option>", source);
+        Assert.Contains("<option value=\"false\">No</option>", source);
+        Assert.Contains("new ConfigEntry(e.Key, edited[e.Key])", source);
+        Assert.DoesNotContain("<th>Última actualización</th>", source);
+        Assert.DoesNotContain("UpdatedAt.ToLocalTime()", source);
+        Assert.DoesNotContain("por @e.UpdatedBy", source);
+        Assert.DoesNotContain("admin-panel</small>", source);
+        Assert.DoesNotContain("system</small>", source);
     }
 
     [Fact]
@@ -593,6 +670,44 @@ public sealed class AdminRoutingTests : IClassFixture<AdminRoutingTests.AdminWeb
         Assert.DoesNotContain("AccessDeniedPath = \"/login\"", source);
     }
 
+    [Fact]
+    [Trait("Category", "AdminRouting")]
+    public void Admin_visible_razor_text_uses_generic_customer_language()
+    {
+        var adminRoot = Path.Combine(GetRepositoryRoot(), "src", "LoyaltyCloud.Admin");
+        var razorFiles = Directory.EnumerateFiles(adminRoot, "*.razor", SearchOption.AllDirectories)
+            .Where(path => !path.Contains($"{Path.DirectorySeparatorChar}obj{Path.DirectorySeparatorChar}", StringComparison.OrdinalIgnoreCase))
+            .Where(path => !path.Contains($"{Path.DirectorySeparatorChar}bin{Path.DirectorySeparatorChar}", StringComparison.OrdinalIgnoreCase));
+
+        foreach (var file in razorFiles)
+        {
+            var source = File.ReadAllText(file).ToLowerInvariant();
+            Assert.DoesNotContain("clienta", source);
+            Assert.DoesNotContain("clientas", source);
+        }
+    }
+
+    [Fact]
+    [Trait("Category", "AdminRouting")]
+    public void Admin_visible_text_uses_customer_id_instead_of_serial_wording()
+    {
+        var adminRoot = Path.Combine(GetRepositoryRoot(), "src", "LoyaltyCloud.Admin");
+        var visibleTextFiles = Directory.EnumerateFiles(adminRoot, "*.razor", SearchOption.AllDirectories)
+            .Concat(Directory.EnumerateFiles(Path.Combine(adminRoot, "wwwroot", "js"), "*.js", SearchOption.AllDirectories))
+            .Where(path => !path.Contains($"{Path.DirectorySeparatorChar}obj{Path.DirectorySeparatorChar}", StringComparison.OrdinalIgnoreCase))
+            .Where(path => !path.Contains($"{Path.DirectorySeparatorChar}bin{Path.DirectorySeparatorChar}", StringComparison.OrdinalIgnoreCase));
+
+        foreach (var file in visibleTextFiles)
+        {
+            var source = File.ReadAllText(file);
+            Assert.DoesNotContain(">Serial<", source, StringComparison.Ordinal);
+            Assert.DoesNotContain("Serial del cliente", source, StringComparison.Ordinal);
+            Assert.DoesNotContain("Buscar por serial", source, StringComparison.OrdinalIgnoreCase);
+            Assert.DoesNotContain("serial manualmente", source, StringComparison.OrdinalIgnoreCase);
+            Assert.DoesNotContain("Ingresa un serial", source, StringComparison.OrdinalIgnoreCase);
+        }
+    }
+
     private static string GetRepositoryRoot()
     {
         var current = new DirectoryInfo(AppContext.BaseDirectory);
@@ -600,6 +715,19 @@ public sealed class AdminRoutingTests : IClassFixture<AdminRoutingTests.AdminWeb
             current = current.Parent;
 
         return current?.FullName ?? throw new InvalidOperationException("Repository root was not found.");
+    }
+
+    private static int CountOccurrences(string source, string value)
+    {
+        var count = 0;
+        var index = 0;
+        while ((index = source.IndexOf(value, index, StringComparison.Ordinal)) >= 0)
+        {
+            count++;
+            index += value.Length;
+        }
+
+        return count;
     }
 
     public sealed class AdminWebApplicationFactory : WebApplicationFactory<AdminApp::Program>

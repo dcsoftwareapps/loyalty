@@ -20,7 +20,7 @@
         <label for="redemption-search">Buscar</label>
         <input id="redemption-search" type="text" @bind="searchTerm" @bind:event="oninput"
                @onkeydown="HandleSearchKeyDownAsync"
-               placeholder="Cliente, serial o recompensa" />
+               placeholder="Cliente, ID del cliente o recompensa" />
     </div>
     <button class="kb-btn kb-btn--primary" style="align-self:end;" @onclick="ReloadAsync">Buscar</button>
     <button class="kb-btn kb-btn--ghost" style="align-self:end;" @onclick="ClearSearch">Limpiar</button>
@@ -47,7 +47,7 @@ else
         <thead>
             <tr>
                 <th>Cliente</th>
-                <th>Serial</th>
+                <th>ID del cliente</th>
                 <th>Recompensa</th>
                 <th class="kb-cell-number">Puntos</th>
                 <th>Estado</th>
@@ -98,7 +98,7 @@ else
 
 <ConfirmModal Show="@showConfirmModal"
               Title="Confirmar entrega"
-              Message="Confirmas que entregaste el beneficio a la clienta?"
+              Message="Confirmas que entregaste el beneficio al cliente?"
               ConfirmText="Si, entregado"
               OnConfirm="DoConfirmAsync"
               OnCancel="CloseConfirmModal" />
@@ -108,7 +108,7 @@ else
     <div class="kb-modal-overlay" @onclick="CloseCancelModal">
         <div class="kb-modal" @onclick:stopPropagation>
             <h3>Cancelar canje</h3>
-            <p>Al cancelar, los puntos se restauran a la clienta y Wallet se actualiza.</p>
+            <p>Al cancelar, los puntos se restauran al cliente y Wallet se actualiza.</p>
             <label for="cancel-notes">Nota opcional</label>
             <textarea id="cancel-notes" rows="3" @bind="cancelNotes"></textarea>
             <div class="kb-modal-actions">

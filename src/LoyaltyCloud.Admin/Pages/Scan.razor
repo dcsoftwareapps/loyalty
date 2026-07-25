@@ -46,14 +46,14 @@
             }
 
             <div>
-                <label for="serial">Serial de la clienta</label>
+                <label for="serial">ID del cliente</label>
                 <input id="serial" type="text" @bind="serialInput" @bind:event="oninput"
                        @onkeydown="HandleSerialKeyDownAsync"
                        placeholder="KB-A7B9C2X" autocomplete="off" />
             </div>
             <button class="kb-btn kb-btn--primary kb-btn--large kb-btn--block"
                     @onclick="SearchAsync" disabled="@(string.IsNullOrWhiteSpace(serialInput) || busy)">
-                @(busy ? "Buscando..." : "Buscar clienta")
+                @(busy ? "Buscando..." : "Buscar cliente")
             </button>
             @if (errorMessage is not null) { <div class="kb-form-error">@errorMessage</div> }
         </div>
@@ -91,7 +91,7 @@
             </button>
 
             <button class="kb-btn kb-btn--ghost kb-btn--block" @onclick="Reset">
-                Buscar otra clienta
+                Buscar otro cliente
             </button>
 
             @if (errorMessage is not null) { <div class="kb-form-error">@errorMessage</div> }
@@ -156,7 +156,7 @@
         if (!result.Ok)
         {
             scanning = false;
-            errorMessage = result.Message ?? "No se pudo acceder a la cámara. Puedes ingresar el serial manualmente.";
+            errorMessage = result.Message ?? "No se pudo acceder a la cámara. Puedes ingresar el ID del cliente manualmente.";
         }
     }
 
@@ -194,7 +194,7 @@
         var serial = ExtractSerial(serialInput);
         if (serial is null)
         {
-            errorMessage = "Ingresa un serial válido, por ejemplo KB-A7B9C2X.";
+            errorMessage = "Ingresa un ID del cliente válido, por ejemplo KB-A7B9C2X.";
             return;
         }
 

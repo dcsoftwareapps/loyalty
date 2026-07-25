@@ -40,6 +40,7 @@ public sealed class CreatePointCampaignStartedNotificationsHandler
         var preview = await _read.ListCandidatesAsync(
             command.TimeZoneId,
             includeAlreadyNotified: true,
+            command.CampaignId,
             ct);
 
         var created = 0;

@@ -21,7 +21,7 @@ public sealed class ListMonthlyProductNotificationCandidatesHandler
             var preview = await _read.ListCandidatesAsync(
                 query.TimeZoneId,
                 query.IncludeAlreadyNotified,
-                ct);
+                ct: ct);
 
             return Result.Ok(preview);
         }

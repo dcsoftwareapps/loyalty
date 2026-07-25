@@ -1,3 +1,6 @@
+using System.Net;
+using System.Net.Http.Json;
+using System.Text.Json;
 using LoyaltyCloud.Application.Campaigns.Commands.CreatePointCampaign;
 using LoyaltyCloud.Application.Campaigns.Commands.UpdatePointCampaign;
 using LoyaltyCloud.Application.Common.Interfaces;
@@ -19,17 +22,24 @@ namespace LoyaltyCloud.Tests.Integration;
 
 public sealed class AutomaticWalletNotificationTriggerTests : IClassFixture<CustomWebApplicationFactory>, IAsyncLifetime
 {
+    private const string SharedSecret = "test-admin-api-shared-secret-with-enough-length";
     private const string Serial = "KB-AUTO-NOTIFY";
     private const string PushToken = "push-auto-notify";
 
     private readonly CustomWebApplicationFactory _factory;
+    private readonly HttpClient _client;
 
-    public AutomaticWalletNotificationTriggerTests(CustomWebApplicationFactory factory) => _factory = factory;
+    public AutomaticWalletNotificationTriggerTests(CustomWebApplicationFactory factory)
+    {
+        _factory = factory;
+        _client = factory.CreateClient();
+    }
 
     public async Task InitializeAsync()
     {
         await _factory.EnsureDatabaseCreatedAsync();
         _factory.Apn.Calls.Clear();
+        _factory.Apn.FailSends = false;
         await ResetDataAsync();
         await SeedWalletCustomerAsync();
     }
@@ -50,6 +60,51 @@ public sealed class AutomaticWalletNotificationTriggerTests : IClassFixture<Cust
 
     [Fact]
     [Trait("Category", "AutomaticWalletNotifications")]
+    public async Task Point_campaign_wallet_message_uses_campaign_name_and_multiplier()
+    {
+        var result = await WithTenantAsync(sp => sp.GetRequiredService<ISender>().Send(CreateCurrentCampaign("Freee")));
+        Assert.True(result.IsSuccess, result.Error);
+
+        var context = await GetWalletNotificationContextAsync();
+        var finalVisibleMessage = $"{context.PointCampaign!.ChangeMessage.Replace("%@", context.PointCampaign.Value, StringComparison.Ordinal)}";
+
+        Assert.Equal("Freee \u00b7 Gana puntos x2", context.PointCampaign.Value);
+        Assert.Equal("\ud83c\udf89 %@", context.PointCampaign.ChangeMessage);
+        Assert.Equal("\ud83c\udf89 Freee \u00b7 Gana puntos x2", finalVisibleMessage);
+        Assert.NotEqual("Promoci\u00f3n activa \u00b7 Puntos x2", finalVisibleMessage);
+    }
+
+    [Fact]
+    [Trait("Category", "AutomaticWalletNotifications")]
+    public async Task Creating_current_point_campaign_sends_directed_notification_even_when_another_campaign_is_better()
+    {
+        var better = await WithTenantAsync(sp => sp.GetRequiredService<ISender>().Send(new CreatePointCampaignCommand(
+            "Better campaign",
+            "Better global campaign.",
+            3,
+            null,
+            PointCampaign.CampaignLevelEligibilityAll,
+            DateTime.UtcNow.AddMinutes(-10),
+            DateTime.UtcNow.AddHours(2),
+            true)));
+        Assert.True(better.IsSuccess, better.Error);
+
+        var poolParty = await WithTenantAsync(sp => sp.GetRequiredService<ISender>().Send(new CreatePointCampaignCommand(
+            "Pool Party",
+            "Directed campaign with lower benefit.",
+            2,
+            100m,
+            PointCampaign.CampaignLevelEligibilityAll,
+            DateTime.UtcNow.AddMinutes(-5),
+            DateTime.UtcNow.AddHours(2),
+            true)));
+
+        Assert.True(poolParty.IsSuccess, poolParty.Error);
+        Assert.Equal(1, await CountCampaignNotificationsAsync(poolParty.Value.Id));
+    }
+
+    [Fact]
+    [Trait("Category", "AutomaticWalletNotifications")]
     public async Task Creating_future_point_campaign_waits_for_scheduler_window()
     {
         var result = await WithTenantAsync(sp => sp.GetRequiredService<ISender>().Send(CreateFutureCampaign("Future campaign")));
@@ -63,6 +118,34 @@ public sealed class AutomaticWalletNotificationTriggerTests : IClassFixture<Cust
 
         Assert.True(scheduler.IsSuccess, scheduler.Error);
         Assert.Equal(1, await CountNotificationsAsync(NotificationType.PointCampaignStarted));
+    }
+
+    [Fact]
+    [Trait("Category", "AutomaticWalletNotifications")]
+    public async Task Signed_admin_campaign_create_request_runs_in_api_and_sends_immediate_notification()
+    {
+        using var request = CreateSignedRequest(
+            HttpMethod.Post,
+            "/api/campaigns",
+            new
+            {
+                name = "HTTP Pool Party",
+                description = "Created through signed Admin API.",
+                multiplier = 2,
+                minimumPurchaseAmount = 100m,
+                levelEligibility = PointCampaign.CampaignLevelEligibilityAll,
+                startsAtUtc = DateTime.UtcNow.AddMinutes(-5),
+                endsAtUtc = DateTime.UtcNow.AddHours(2),
+                isActive = true
+            });
+
+        using var response = await _client.SendAsync(request);
+
+        Assert.Equal(HttpStatusCode.Created, response.StatusCode);
+        var campaign = await response.Content.ReadFromJsonAsync<LoyaltyCloud.Application.Campaigns.PointCampaignAdminDto>();
+        Assert.NotNull(campaign);
+        Assert.Equal(1, await CountCampaignNotificationsAsync(campaign!.Id));
+        Assert.Contains(_factory.Apn.Calls, call => call.Token == PushToken);
     }
 
     [Fact]
@@ -134,6 +217,20 @@ public sealed class AutomaticWalletNotificationTriggerTests : IClassFixture<Cust
 
     [Fact]
     [Trait("Category", "AutomaticWalletNotifications")]
+    public async Task Apns_failure_does_not_revert_current_point_campaign_creation()
+    {
+        _factory.Apn.FailSends = true;
+
+        var result = await WithTenantAsync(sp => sp.GetRequiredService<ISender>().Send(CreateCurrentCampaign("APNs fail campaign")));
+
+        Assert.True(result.IsSuccess, result.Error);
+        Assert.True(await CampaignExistsAsync(result.Value.Id));
+        Assert.Equal(1, await CountCampaignNotificationsAsync(result.Value.Id));
+        Assert.Equal(1, await CountDeliveriesAsync(NotificationType.PointCampaignStarted, NotificationDeliveryStatus.Failed));
+    }
+
+    [Fact]
+    [Trait("Category", "AutomaticWalletNotifications")]
     public async Task Creating_active_current_monthly_product_sends_immediate_wallet_notification()
     {
         var result = await WithTenantAsync(sp => sp.GetRequiredService<ISender>().Send(CreateCurrentMonthlyProduct("Immediate monthly product")));
@@ -142,6 +239,16 @@ public sealed class AutomaticWalletNotificationTriggerTests : IClassFixture<Cust
         Assert.Equal(1, await CountNotificationsAsync(NotificationType.MonthlyProductStarted));
         Assert.Equal(1, await CountDeliveriesAsync(NotificationType.MonthlyProductStarted, NotificationDeliveryStatus.Succeeded));
         Assert.Contains(_factory.Apn.Calls, call => call.Token == PushToken);
+    }
+
+    [Fact]
+    [Trait("Category", "AutomaticWalletNotifications")]
+    public async Task Creating_current_monthly_product_sends_directed_notification_for_that_reward()
+    {
+        var result = await WithTenantAsync(sp => sp.GetRequiredService<ISender>().Send(CreateCurrentMonthlyProduct("Directed monthly product")));
+
+        Assert.True(result.IsSuccess, result.Error);
+        Assert.Equal(1, await CountMonthlyProductNotificationsAsync(result.Value.Id));
     }
 
     [Fact]
@@ -226,6 +333,41 @@ public sealed class AutomaticWalletNotificationTriggerTests : IClassFixture<Cust
 
         Assert.True(update.IsSuccess, update.Error);
         Assert.Equal(1, await CountNotificationsAsync(NotificationType.MonthlyProductStarted));
+    }
+
+    [Fact]
+    [Trait("Category", "AutomaticWalletNotifications")]
+    public async Task Apns_failure_does_not_revert_current_monthly_product_creation()
+    {
+        _factory.Apn.FailSends = true;
+
+        var result = await WithTenantAsync(sp => sp.GetRequiredService<ISender>().Send(CreateCurrentMonthlyProduct("APNs fail monthly product")));
+
+        Assert.True(result.IsSuccess, result.Error);
+        Assert.True(await RewardExistsAsync(result.Value.Id));
+        Assert.Equal(1, await CountMonthlyProductNotificationsAsync(result.Value.Id));
+        Assert.Equal(1, await CountDeliveriesAsync(NotificationType.MonthlyProductStarted, NotificationDeliveryStatus.Failed));
+    }
+
+    [Fact]
+    [Trait("Category", "AutomaticWalletNotifications")]
+    public void Admin_campaigns_and_rewards_use_api_for_mutations_that_can_trigger_apns()
+    {
+        var root = GetRepositoryRoot();
+        var campaigns = File.ReadAllText(Path.Combine(root, "src", "LoyaltyCloud.Admin", "Pages", "Campaigns.razor"));
+        var rewards = File.ReadAllText(Path.Combine(root, "src", "LoyaltyCloud.Admin", "Pages", "Rewards.razor"));
+
+        Assert.Contains("AdminApiClient", campaigns);
+        Assert.Contains("/api/campaigns", campaigns);
+        Assert.DoesNotContain("CreatePointCampaignCommand", campaigns);
+        Assert.DoesNotContain("UpdatePointCampaignCommand", campaigns);
+        Assert.DoesNotContain("ActivatePointCampaignCommand", campaigns);
+
+        Assert.Contains("AdminApiClient", rewards);
+        Assert.Contains("/api/rewards", rewards);
+        Assert.DoesNotContain("CreateRewardCommand", rewards);
+        Assert.DoesNotContain("UpdateRewardCommand", rewards);
+        Assert.DoesNotContain("ActivateRewardCommand", rewards);
     }
 
     private static CreatePointCampaignCommand CreateCurrentCampaign(string name) =>
@@ -371,6 +513,36 @@ public sealed class AutomaticWalletNotificationTriggerTests : IClassFixture<Cust
             .LoyaltyNotifications
             .CountAsync(n => n.Type == type));
 
+    private async Task<int> CountCampaignNotificationsAsync(Guid campaignId)
+    {
+        var prefix = $"point-campaign-started:{campaignId:N}:";
+        return await WithTenantAsync(sp => sp.GetRequiredService<AppDbContext>()
+            .LoyaltyNotifications
+            .CountAsync(n => n.Type == NotificationType.PointCampaignStarted
+                          && n.CorrelationId != null
+                          && n.CorrelationId.StartsWith(prefix)));
+    }
+
+    private async Task<int> CountMonthlyProductNotificationsAsync(Guid rewardId)
+    {
+        var prefix = $"monthly-product-started:{rewardId:N}:";
+        return await WithTenantAsync(sp => sp.GetRequiredService<AppDbContext>()
+            .LoyaltyNotifications
+            .CountAsync(n => n.Type == NotificationType.MonthlyProductStarted
+                          && n.CorrelationId != null
+                          && n.CorrelationId.StartsWith(prefix)));
+    }
+
+    private async Task<bool> CampaignExistsAsync(Guid campaignId) =>
+        await WithTenantAsync(sp => sp.GetRequiredService<AppDbContext>()
+            .PointCampaigns
+            .AnyAsync(c => c.Id == campaignId));
+
+    private async Task<bool> RewardExistsAsync(Guid rewardId) =>
+        await WithTenantAsync(sp => sp.GetRequiredService<AppDbContext>()
+            .RewardCatalogItems
+            .AnyAsync(r => r.Id == rewardId));
+
     private async Task<int> CountDeliveriesAsync(NotificationType type, NotificationDeliveryStatus status) =>
         await WithTenantAsync(sp =>
         {
@@ -382,6 +554,14 @@ public sealed class AutomaticWalletNotificationTriggerTests : IClassFixture<Cust
                     equals new { notification.TenantId, notification.Id }
                 where notification.Type == type && delivery.Status == status
                 select delivery).CountAsync();
+        });
+
+    private async Task<WalletNotificationContext> GetWalletNotificationContextAsync() =>
+        await WithTenantAsync(async sp =>
+        {
+            var db = sp.GetRequiredService<AppDbContext>();
+            var card = await db.LoyaltyCards.SingleAsync(c => c.SerialNumber == Serial);
+            return await sp.GetRequiredService<IWalletNotificationReadService>().GetActiveContextAsync(card.Id);
         });
 
     private async Task<T> WithTenantAsync<T>(Func<IServiceProvider, Task<T>> action)
@@ -396,5 +576,45 @@ public sealed class AutomaticWalletNotificationTriggerTests : IClassFixture<Cust
         using var scope = _factory.Services.CreateScope();
         scope.ServiceProvider.GetRequiredService<IMutableTenantContext>().SetTenant(TenantSeed.KBeautyTenantId, TenantSeed.KBeautySlug);
         await action(scope.ServiceProvider);
+    }
+
+    private static HttpRequestMessage CreateSignedRequest(HttpMethod method, string path, object? body)
+    {
+        const string tenantSlug = "kbeauty";
+        const string operatorId = "automatic-wallet-notification-test";
+        var timestamp = DateTimeOffset.UtcNow.ToString("O");
+        var bodyBytes = body is null
+            ? []
+            : JsonSerializer.SerializeToUtf8Bytes(body, new JsonSerializerOptions(JsonSerializerDefaults.Web));
+        var signature = AdminApiSignature.CreateSignature(
+            SharedSecret,
+            method.Method,
+            path,
+            timestamp,
+            tenantSlug,
+            operatorId,
+            bodyBytes);
+
+        var request = new HttpRequestMessage(method, path);
+        if (body is not null)
+        {
+            request.Content = new ByteArrayContent(bodyBytes);
+            request.Content.Headers.ContentType = new("application/json");
+        }
+
+        request.Headers.Add(AdminApiSignature.TenantSlugHeader, tenantSlug);
+        request.Headers.Add(AdminApiSignature.OperatorHeader, operatorId);
+        request.Headers.Add(AdminApiSignature.TimestampHeader, timestamp);
+        request.Headers.Add(AdminApiSignature.SignatureHeader, signature);
+        return request;
+    }
+
+    private static string GetRepositoryRoot()
+    {
+        var directory = new DirectoryInfo(AppContext.BaseDirectory);
+        while (directory is not null && !File.Exists(Path.Combine(directory.FullName, "LoyaltyCloud.sln")))
+            directory = directory.Parent;
+
+        return directory?.FullName ?? throw new DirectoryNotFoundException("No se encontro LoyaltyCloud.sln.");
     }
 }

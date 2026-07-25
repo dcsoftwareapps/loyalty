@@ -72,7 +72,7 @@ public class RewardCatalogItem : Entity, ITenantOwned
         return true;
     }
 
-    /// <summary>Determina si la clienta con <paramref name="customerLevel"/> puede canjear este item.</summary>
+    /// <summary>Determina si el cliente con <paramref name="customerLevel"/> puede canjear este item.</summary>
     public bool IsEligibleFor(MemberLevel customerLevel, MemberLevel? requiredLevel) =>
         requiredLevel is null || customerLevel.IsAtLeast(requiredLevel);
 

@@ -3,14 +3,12 @@
 @rendermode InteractiveServer
 
 @using LoyaltyCloud.Application.Rewards
-@using LoyaltyCloud.Application.Rewards.Commands.ActivateReward
-@using LoyaltyCloud.Application.Rewards.Commands.CreateReward
-@using LoyaltyCloud.Application.Rewards.Commands.DeactivateReward
-@using LoyaltyCloud.Application.Rewards.Commands.UpdateReward
 @using LoyaltyCloud.Application.Rewards.Queries.ListRewards
 @using LoyaltyCloud.Application.Common.Interfaces
+@using LoyaltyCloud.Admin.Services
 @using System.Globalization
 @inject ISender Sender
+@inject AdminApiClient Api
 @inject ITenantLoyaltyLevelReadService TenantLevels
 
 <PageTitle>Recompensas - LoyaltyCloud</PageTitle>
@@ -292,26 +290,18 @@ else
         var validFrom = BuildDateForSave(form.ValidFromDate, form.OriginalValidFrom, endOfDay: false);
         var validTo = BuildDateForSave(form.ValidToDate, form.OriginalValidTo, endOfDay: true);
 
+        var request = new RewardRequest(
+            form.Name.Trim(),
+            form.Description.Trim(),
+            form.PointsCost,
+            form.MinLevel,
+            form.IsMonthlyProduct,
+            validFrom,
+            validTo,
+            form.IsActive);
         var result = editingId.HasValue
-            ? await Sender.Send(new UpdateRewardCommand(
-                editingId.Value,
-                form.Name.Trim(),
-                form.Description.Trim(),
-                form.PointsCost,
-                form.MinLevel,
-                form.IsMonthlyProduct,
-                validFrom,
-                validTo,
-                form.IsActive))
-            : await Sender.Send(new CreateRewardCommand(
-                form.Name.Trim(),
-                form.Description.Trim(),
-                form.PointsCost,
-                form.MinLevel,
-                form.IsMonthlyProduct,
-                validFrom,
-                validTo,
-                form.IsActive));
+            ? await Api.PutAsJsonAsync<RewardRequest, RewardAdminDto>($"/api/rewards/{editingId.Value}", request)
+            : await Api.PostAsJsonAsync<RewardRequest, RewardAdminDto>("/api/rewards", request);
 
         busy = false;
 
@@ -332,7 +322,7 @@ else
     {
         ClearMessages();
         busy = true;
-        var result = await Sender.Send(new ActivateRewardCommand(id));
+        var result = await Api.PutAsync<RewardAdminDto>($"/api/rewards/{id}/activate");
         busy = false;
 
         if (result.IsFailure)
@@ -349,7 +339,7 @@ else
     {
         ClearMessages();
         busy = true;
-        var result = await Sender.Send(new DeactivateRewardCommand(id));
+        var result = await Api.PutAsync<RewardAdminDto>($"/api/rewards/{id}/deactivate");
         busy = false;
 
         if (result.IsFailure)
@@ -540,4 +530,14 @@ else
 
         public static RewardFormModel CreateDefault() => new();
     }
+
+    private sealed record RewardRequest(
+        string Name,
+        string Description,
+        int PointsCost,
+        string MinLevel,
+        bool IsMonthlyProduct,
+        DateTime? ValidFrom,
+        DateTime? ValidTo,
+        bool IsActive);
 }

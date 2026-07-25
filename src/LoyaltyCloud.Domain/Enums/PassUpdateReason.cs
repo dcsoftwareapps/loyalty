@@ -10,7 +10,7 @@ public enum PassUpdateReason
     /// <summary>Se sumaron puntos a la tarjeta.</summary>
     PointsAdded = 0,
 
-    /// <summary>La clienta subió de nivel.</summary>
+    /// <summary>El cliente subió de nivel.</summary>
     LevelChanged = 1,
 
     /// <summary>Se confirmó un canje y el saldo bajó.</summary>

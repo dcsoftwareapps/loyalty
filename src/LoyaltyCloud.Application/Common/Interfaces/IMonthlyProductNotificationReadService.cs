@@ -7,5 +7,6 @@ public interface IMonthlyProductNotificationReadService
     Task<MonthlyProductNotificationPreviewDto> ListCandidatesAsync(
         string timeZoneId,
         bool includeAlreadyNotified,
+        Guid? rewardId = null,
         CancellationToken ct = default);
 }

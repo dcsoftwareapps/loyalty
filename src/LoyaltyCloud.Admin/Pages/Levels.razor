@@ -147,7 +147,7 @@ else
         }
 
         var value = result.Value;
-        successMsg = $"Niveles actualizados. {value.CardsReviewed:N0} clientas revisadas, {value.CardsChanged:N0} cambiaron de nivel, {value.CardsUpgraded:N0} subieron, {value.CardsDowngraded:N0} bajaron.";
+        successMsg = $"Niveles actualizados. {FormatReviewedCustomers(value.CardsReviewed)}, {value.CardsChanged:N0} cambiaron de nivel, {value.CardsUpgraded:N0} subieron, {value.CardsDowngraded:N0} bajaron.";
         if (value.Warnings.Count > 0)
             errorMsg = string.Join(" ", value.Warnings);
 
@@ -186,6 +186,9 @@ else
 
         return validationErrors.Count == 0;
     }
+
+    private static string FormatReviewedCustomers(int count) =>
+        count == 1 ? "1 cliente revisado" : $"{count:N0} clientes revisados";
 
     private sealed class LevelFormModel(Guid? id, string name, int pointsRequired)
     {

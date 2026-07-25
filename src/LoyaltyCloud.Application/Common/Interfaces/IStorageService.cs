@@ -7,7 +7,7 @@ namespace LoyaltyCloud.Application.Common.Interfaces;
 public interface IStorageService
 {
     /// <summary>
-    /// Sube el archivo del pase y devuelve una URL accesible para la clienta
+    /// Sube el archivo del pase y devuelve una URL accesible para el cliente
     /// (en Azure Blob: SAS URL con expiración corta).
     /// </summary>
     Task<string> UploadPassAsync(string serialNumber, byte[] passBytes, CancellationToken ct = default);
