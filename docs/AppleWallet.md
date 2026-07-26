@@ -1807,7 +1807,7 @@ Fase 5.2 no requiere cambios de esquema ni migracion nueva.
 
 Fase 5.3 esta implementada y pendiente de validacion manual.
 
-El objetivo es avisar automaticamente cuando una clienta tenga puntos disponibles que expiran exactamente dentro de 15 dias calendario en la zona `America/Tijuana`.
+El objetivo es avisar automaticamente cuando un cliente tenga puntos disponibles que expiran exactamente dentro de 15 dias calendario en la zona `America/Tijuana`.
 
 ## Regla
 
@@ -1826,7 +1826,7 @@ Ejemplo:
 100 pts + 80 pts + 70 pts = 250 pts
 ```
 
-La clienta recibe una sola notificacion:
+El cliente recibe una sola notificacion:
 
 ```text
 ⚠️ 250 puntos vencerán en 15 días.
@@ -1978,7 +1978,7 @@ La persistencia y la comparacion de vigencia siguen en UTC. Las fechas visibles 
 
 La notificacion automatica se crea solo para tarjetas activas con cliente activo y al menos un `DeviceRegistration`.
 
-Decision tecnica: en esta fase no se crean notificaciones para tarjetas sin dispositivo registrado. El motivo es evitar registros logicos sin posibilidad real de entrega Apple Wallet. Si la clienta instala Wallet despues, el pass mostrara el Producto del mes vigente al descargarse porque la lectura del pass consulta el reward vigente dinamicamente.
+Decision tecnica: en esta fase no se crean notificaciones para tarjetas sin dispositivo registrado. El motivo es evitar registros logicos sin posibilidad real de entrega Apple Wallet. Si el cliente instala Wallet despues, el pass mostrara el Producto del mes vigente al descargarse porque la lectura del pass consulta el reward vigente dinamicamente.
 
 ## Idempotencia
 
@@ -2139,7 +2139,7 @@ Fase 5.5 no cambia esa regla. Solo comunica el beneficio.
 
 La deteccion de candidatos usa fecha local de tienda en `America/Tijuana`.
 
-La regla es mensual, por lo que una clienta nacida el 29 de febrero conserva febrero como mes de cumpleanos. No se requiere regla especial de dia en anos no bisiestos.
+La regla es mensual, por lo que un cliente nacido el 29 de febrero conserva febrero como mes de cumpleanos. No se requiere regla especial de dia en anos no bisiestos.
 
 `DisplayUntilUtc` se calcula como el inicio del primer dia del mes siguiente en `America/Tijuana`, convertido a UTC.
 
@@ -2152,7 +2152,7 @@ Se consideran solo:
 - `DateOfBirth` con mes igual al mes local actual;
 - al menos un `DeviceRegistration`.
 
-No se crean notificaciones para clientas sin pass instalado en esta fase.
+No se crean notificaciones para clientes sin pass instalado en esta fase.
 
 ## Idempotencia
 
@@ -2460,7 +2460,7 @@ Fase 5.6 no requiere migracion nueva. Reutiliza:
 - `DeviceRegistrations`.
 ## Fase 5.7 - Centro de mensajes personalizados
 
-El proyecto cuenta con un centro administrativo para crear, previsualizar, enviar y programar mensajes personalizados para clientas con Apple Wallet instalado.
+El proyecto cuenta con un centro administrativo para crear, previsualizar, enviar y programar mensajes personalizados para clientes con Apple Wallet instalado.
 
 La fase reutiliza el motor existente de notificaciones:
 
@@ -2537,4 +2537,59 @@ Migracion:
 - `20260716120000_AddCustomNotificationCampaigns`
 - Crea `CustomNotificationCampaigns`.
 - Agrega `CustomNotificationCampaignId`, `ShortMessage` y `LongMessage` a `LoyaltyNotifications`.
+- No se aplica automaticamente.
+
+## RC1 - Logo por tenant en Apple Wallet
+
+LoyaltyCloud ya soporta logos por tenant para el pass Apple Wallet.
+
+El logo se administra desde Platform Admin:
+
+- Crear tenant: campo `Logo` opcional.
+- Detalle tenant: cambiar logo.
+- Detalle tenant: eliminar logo y volver al fallback.
+
+Al subir un logo, el sistema acepta PNG/JPG, valida tamano y contenido de imagen, guarda el original en Azure Blob Storage y genera automaticamente los assets raster requeridos por PassKit:
+
+- `logo.png`
+- `logo@2x.png`
+- `logo@3x.png`
+- `icon.png`
+- `icon@2x.png`
+- `icon@3x.png`
+
+Storage:
+
+```text
+tenant-branding/{tenantId}/logo-original...
+tenant-branding/{tenantId}/wallet/logo.png
+tenant-branding/{tenantId}/wallet/logo@2x.png
+tenant-branding/{tenantId}/wallet/logo@3x.png
+tenant-branding/{tenantId}/wallet/icon.png
+tenant-branding/{tenantId}/wallet/icon@2x.png
+tenant-branding/{tenantId}/wallet/icon@3x.png
+```
+
+SQL guarda solo la referencia:
+
+```text
+TenantBrandings.LogoBlobName
+```
+
+`PassGeneratorService` pide assets a `TenantWalletAssetProvider` usando `TenantId`, no slug, para evitar mezclar logos entre tenants.
+
+Reglas visuales RC1:
+
+- El pass productivo no usa `logoText`.
+- No debe aparecer `LC` en Wallet.
+- El fallback incluido en el proyecto es grafico neutral, sin texto.
+- `backgroundColor` es claro/blanco.
+- `foregroundColor` es negro para valores principales.
+- `labelColor` usa `TenantBranding.PrimaryColor`.
+- PassKit `storeCard` no ofrece una propiedad simple separada para color de header; no usar hacks visuales.
+
+Migracion:
+
+- `20260726055027_AddTenantBrandingLogoBlobName`
+- Agrega `LogoBlobName` nullable a `TenantBrandings`.
 - No se aplica automaticamente.

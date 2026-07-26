@@ -1,34 +1,79 @@
 # Roadmap
 
-## Completado
+## Estado Actual
 
-- Fase 2.3 - Cancelacion de canjes
-- Fase 2.4 - Historial de canjes
-- Fase 2.5 - Pulido Admin
-- Fase 3.1 - Dashboard / Analytics
-- Fase 3.2 - Customer Detail
-- Fase 3.3 - Expiracion de puntos con FIFO
-- Fase 3.4 - Niveles automaticos con ventana movil de 12 meses
-- Fase 3.5 - Scheduler diario de mantenimiento
-- Fase 3.6 - Customer Detail avanzado
-- Fase 3.7 - Producto del mes: Completada
-- Fase 3.8 - Campanas de puntos: Completada
-- Fase 5.1 - Motor base de notificaciones: Implementada, pendiente de validacion manual
-- Fase 5.2 - Notificaciones visibles Apple Wallet con changeMessage: Implementada, pendiente de validacion manual
-- Fase 5.3 - Aviso de puntos por expirar: Implementada, pendiente de validacion manual
-- Fase 5.4 - Producto del mes visible en Wallet: Implementada, pendiente de validacion manual
-- Fase 5.5 - Beneficio de cumpleanos visible en Wallet: Implementada, pendiente de validacion manual
-  - Refinamiento: prioridad de eventos visibles recientes para evitar que un estado permanente bloquee `changeMessage`.
-  - Refinamiento: formato visual dinamico `Puntos xN`.
-- Fase 5.6 - Campana de puntos visible en Apple Wallet: Implementada, pendiente de validacion manual
-- Fase 5.7 - Centro de mensajes personalizados: Implementada, pendiente de validacion manual
+LoyaltyCloud esta en RC1 / UAT real.
 
-## Siguiente
+La base activa de produccion/UAT es `LoyaltyCloudFree`.
 
-### Fase 5.8 - Canales externos de notificacion
+## DONE
 
-- Email.
-- SMS.
-- WhatsApp.
-- Mobile Push.
+- Apple Wallet firmado y descargable.
+- APNs y Device Registration.
+- Web Service PassKit `/v1/*`.
+- Registro publico tenant-aware `/{tenantSlug}/join`.
+- API publica `POST /api/public/{tenantSlug}/join`.
+- Admin tenant-aware `/{tenantSlug}/login`.
+- Platform Admin `/platform/login` y `/platform/tenants`.
+- Multi-tenant foundation sin tenant KBeauty especial.
+- Eliminacion del seed productivo de KBeauty.
+- Provisioning de tenants desde Platform Admin.
+- Tenant Admin por tenant.
+- TenantContext en Blazor Interactive Server.
+- Guardrail: `/platform/*` sin TenantContext.
+- Hard delete tenant desde Platform Admin.
+- Sesion Tenant Admin persistente de 168 horas con sliding expiration.
+- Dashboard / Analytics.
+- Customer Detail.
+- Customer Detail avanzado para auditoria de puntos.
+- Sumar puntos con QR/camara.
+- Canjear puntos con QR/camara.
+- Reward Catalog API y Admin.
+- Canjes, historial, confirmacion y cancelacion con restauracion FIFO.
+- PointLots, FIFO, PointLotConsumptions y expiracion de puntos.
+- Niveles dinamicos por tenant.
+- Recalculo de niveles por tenant.
+- Campanas de puntos.
+- Producto del mes.
+- Mensajes personalizados Apple Wallet.
+- Motor base de notificaciones.
+- Notificaciones visibles Apple Wallet con `changeMessage`.
+- LevelChanged, PointsAdded, PointsExpiring, MonthlyProductStarted, BirthdayBenefitStarted, PointCampaignStarted y Custom.
+- Prioridad temporal de eventos visibles recientes.
+- Scheduler de mantenimiento cada 12 horas.
+- Processor de notificaciones cada 60 segundos.
+- Quick Help `/quick-help`.
+- QR imprimible de registro con QRCoder.
+- Guardrail contra hostname Admin antiguo `loyaltycloud-admin-894839`.
+- Branding tenant-aware en Admin.
+- Logo por tenant para Apple Wallet.
+- Fallback grafico neutral de Wallet sin texto `LC`.
+- Wallet pass con fondo claro, valores negros y labels en PrimaryColor.
+
+## RC1 / UAT
+
+- Crear tenants reales desde Platform Admin.
+- Configurar KBeauty como tenant UAT, no como seed.
+- Subir logo real de KBeauty desde Platform Admin.
+- Validar alta publica, pass Wallet real, puntos, canjes y notificaciones en `LoyaltyCloudFree`.
+- Validar deploy API Linux con ZIP creado por `tar -a`.
+- Validar deploy Admin Windows con `Compress-Archive`.
+
+## TODO
+
+- Revisar ruido de logs diagnosticos temporales antes de GA.
+- Confirmar configuracion final de CORS/App Settings para Admin oficial.
+- Agregar refresh tenant-wide si se requiere que cambios de branding/logo disparen APNs inmediato.
+- Definir prefijo neutral/configurable de seriales.
+- Definir estrategia Apple Pass Type ID/certificados para SaaS GA.
+- Actualizar defaults de provisioning para no crear `Mist/Glow/Radiance` como plantilla generica.
+
+## DEFERRED
+
+- Canales externos: email, SMS, WhatsApp, mobile push.
 - Plantillas por canal.
+- A/B testing.
+- Journeys automatizados.
+- Reportes avanzados.
+- Inventario/stock de recompensas.
+- Sucursales/stores.

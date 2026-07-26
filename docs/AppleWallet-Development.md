@@ -253,7 +253,7 @@ ORDER BY lc.SerialNumber;
 
 Escenarios manuales recomendados:
 
-1. Crear una clienta nueva y confirmar que inicia en Mist.
+1. Crear un cliente nuevo y confirmar que inicia en Mist.
 2. Agregar compras suficientes para llegar a Glow y ejecutar `POST /api/admin/levels/recalculate`.
 3. Confirmar que `Level` cambio, `LastActivityAt` se actualizo y Wallet recibe APNs si el pass esta registrado.
 4. Crear un canje y confirmar que no reduce el progreso de nivel.
@@ -352,8 +352,8 @@ incluye informacion de auditoria de puntos para soporte.
 
 Validacion manual sugerida:
 
-1. Abrir listado de clientas.
-2. Entrar al detalle de una clienta con Wallet.
+1. Abrir listado de clientes.
+2. Entrar al detalle de un cliente con Wallet.
 3. Confirmar que se muestran saldo disponible, rolling points, lifetime points, nivel y fecha de nivel.
 4. Confirmar la seccion de proxima expiracion.
 5. Validar tabla de lotes:
@@ -362,7 +362,7 @@ Validacion manual sugerida:
    - monto original;
    - monto disponible;
    - estado.
-6. Validar tabla de consumo FIFO en una clienta con canjes o expiraciones.
+6. Validar tabla de consumo FIFO en un cliente con canjes o expiraciones.
 7. Confirmar que clientes sin lotes o sin consumos muestran mensajes amigables.
 8. Confirmar que el historial de puntos muestra balance despues de cada movimiento visible.
 
@@ -401,7 +401,7 @@ Content-Type: application/json
 }
 ```
 
-Verificar que aparece como vigente en `/rewards`, aparece en catalogo para clientas elegibles y puede canjearse.
+Verificar que aparece como vigente en `/rewards`, aparece en catalogo para clientes elegibles y puede canjearse.
 
 ### Escenario 2 - Traslape
 
@@ -1110,7 +1110,7 @@ Para validar manualmente:
 
 Tambien se puede validar el origen automatico:
 
-1. Usar una clienta Mist con pass instalado.
+1. Usar un cliente Mist con pass instalado.
 2. Agregar puntos suficientes para subir a Glow.
 3. Confirmar que se crea una notificacion `LevelChanged`.
 4. Confirmar que Wallet refresca el pass y muestra la novedad activa.
@@ -1179,7 +1179,7 @@ No se debe intentar enviar texto dentro del payload APNs. El texto siempre vive 
 
 ## Aviso de puntos por expirar - Fase 5.3
 
-El mantenimiento diario ahora busca clientas con puntos que expiran exactamente dentro de 15 dias calendario en `America/Tijuana`.
+El mantenimiento diario ahora busca clientes con puntos que expiran exactamente dentro de 15 dias calendario en `America/Tijuana`.
 
 El flujo es:
 
@@ -1380,7 +1380,7 @@ Caso 8 - Pass:
 
 ## Beneficio de cumpleanos visible - Fase 5.5
 
-Fase 5.5 agrega notificacion automatica Apple Wallet cuando una clienta entra en su mes de cumpleanos.
+Fase 5.5 agrega notificacion automatica Apple Wallet cuando un cliente entra en su mes de cumpleanos.
 
 La regla existente se conserva:
 
@@ -1522,7 +1522,7 @@ Antes de commit final, dejar:
 
 ## Campana de puntos visible - Fase 5.6
 
-Fase 5.6 agrega notificacion automatica Apple Wallet cuando existe una campana de puntos vigente y aplicable a una clienta con pass instalado.
+Fase 5.6 agrega notificacion automatica Apple Wallet cuando existe una campana de puntos vigente y aplicable a un cliente con pass instalado.
 
 Reglas:
 
@@ -1702,7 +1702,7 @@ Para desarrollo local, la pantalla requiere:
 - SQL LocalDB con la migracion `20260716120000_AddCustomNotificationCampaigns` aplicada manualmente;
 - API y Admin levantados;
 - Apple Wallet real si se desea validar APNs y refresh en iPhone;
-- al menos una clienta con pase instalado y `DeviceRegistration`.
+- al menos un cliente con pase instalado y `DeviceRegistration`.
 
 Configuracion:
 
