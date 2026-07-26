@@ -1,7 +1,6 @@
 using Azure;
 using Azure.Storage.Blobs;
 using LoyaltyCloud.Infrastructure.Configuration;
-using LoyaltyCloud.Infrastructure.Persistence.Seed;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 
@@ -31,6 +30,7 @@ internal sealed class TenantWalletAssetProvider : ITenantWalletAssetProvider
     }
 
     public async Task<IReadOnlyList<WalletPassAsset>> LoadAssetsAsync(
+        Guid tenantId,
         string tenantSlug,
         CancellationToken cancellationToken = default)
     {
@@ -38,17 +38,15 @@ internal sealed class TenantWalletAssetProvider : ITenantWalletAssetProvider
             ? "unknown"
             : tenantSlug.Trim().ToLowerInvariant();
 
-        var tenantAssets = await TryLoadTenantBlobAssetsAsync(normalizedSlug, cancellationToken);
+        var tenantAssets = await TryLoadTenantBlobAssetsAsync(tenantId, normalizedSlug, cancellationToken);
         if (tenantAssets is not null)
             return tenantAssets;
-
-        if (string.Equals(normalizedSlug, TenantSeed.KBeautySlug, StringComparison.Ordinal))
-            return LoadLocalAssets(Path.Combine(AppContext.BaseDirectory, "Assets", "AppleWallet"), "legacy-kbeauty", normalizedSlug);
 
         return LoadLocalAssets(Path.Combine(AppContext.BaseDirectory, "Assets", "AppleWalletGeneric"), "generic-loyaltycloud", normalizedSlug);
     }
 
     private async Task<IReadOnlyList<WalletPassAsset>?> TryLoadTenantBlobAssetsAsync(
+        Guid tenantId,
         string tenantSlug,
         CancellationToken cancellationToken)
     {
@@ -63,7 +61,7 @@ internal sealed class TenantWalletAssetProvider : ITenantWalletAssetProvider
 
             foreach (var spec in RequiredAssets)
             {
-                var blobName = $"tenants/{tenantSlug}/branding/wallet/{spec.Name}";
+                var blobName = $"{TenantBrandingLogoService.GetTenantBrandingPrefix(tenantId)}/wallet/{spec.Name}";
                 var blob = container.GetBlobClient(blobName);
                 if (!await blob.ExistsAsync(cancellationToken))
                 {

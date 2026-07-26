@@ -10,15 +10,18 @@ internal sealed class TenantBrandingReadService : ITenantBrandingReadService
 {
     private readonly IServiceScopeFactory _scopeFactory;
     private readonly ITenantContext _tenantContext;
+    private readonly ITenantBrandingLogoUrlProvider _logoUrls;
     private readonly ILogger<TenantBrandingReadService> _logger;
 
     public TenantBrandingReadService(
         IServiceScopeFactory scopeFactory,
         ITenantContext tenantContext,
+        ITenantBrandingLogoUrlProvider logoUrls,
         ILogger<TenantBrandingReadService> logger)
     {
         _scopeFactory = scopeFactory;
         _tenantContext = tenantContext;
+        _logoUrls = logoUrls;
         _logger = logger;
     }
 
@@ -39,6 +42,7 @@ internal sealed class TenantBrandingReadService : ITenantBrandingReadService
                 tenant.Slug,
                 tenant.DisplayName,
                 LogoUrl = tenant.Branding == null ? null : tenant.Branding.LogoUrl,
+                LogoBlobName = tenant.Branding == null ? null : tenant.Branding.LogoBlobName,
                 PrimaryColor = tenant.Branding == null ? null : tenant.Branding.PrimaryColor,
                 SecondaryColor = tenant.Branding == null ? null : tenant.Branding.SecondaryColor,
                 SupportPhone = tenant.Branding == null ? null : tenant.Branding.SupportPhone,
@@ -57,7 +61,8 @@ internal sealed class TenantBrandingReadService : ITenantBrandingReadService
             string.IsNullOrWhiteSpace(row.DisplayName) ? TenantBrandingSanitizer.DefaultDisplayName : row.DisplayName,
             TenantBrandingSanitizer.ColorOrDefault(row.PrimaryColor, TenantBrandingSanitizer.DefaultPrimaryColor, row.Id, "PrimaryColor", _logger),
             TenantBrandingSanitizer.ColorOrDefault(row.SecondaryColor, TenantBrandingSanitizer.DefaultSecondaryColor, row.Id, "SecondaryColor", _logger),
-            TenantBrandingSanitizer.UrlOrNull(row.LogoUrl, row.Id, "LogoUrl", _logger, Uri.UriSchemeHttps, Uri.UriSchemeHttp),
+            _logoUrls.GetDisplayUrl(row.LogoBlobName)
+                ?? TenantBrandingSanitizer.UrlOrNull(row.LogoUrl, row.Id, "LogoUrl", _logger, Uri.UriSchemeHttps, Uri.UriSchemeHttp),
             TenantBrandingSanitizer.TextOrNull(row.SupportPhone),
             TenantBrandingSanitizer.UrlOrNull(row.WhatsAppUrl, row.Id, "WhatsAppUrl", _logger, Uri.UriSchemeHttps, Uri.UriSchemeHttp, "tel"),
             TenantBrandingSanitizer.UrlOrNull(row.InstagramUrl, row.Id, "InstagramUrl", _logger, Uri.UriSchemeHttps, Uri.UriSchemeHttp),

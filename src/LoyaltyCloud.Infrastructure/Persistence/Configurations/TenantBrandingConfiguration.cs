@@ -12,6 +12,7 @@ internal sealed class TenantBrandingConfiguration : IEntityTypeConfiguration<Ten
         builder.HasKey(b => b.TenantId);
 
         builder.Property(b => b.LogoUrl).HasMaxLength(1000);
+        builder.Property(b => b.LogoBlobName).HasMaxLength(500);
         builder.Property(b => b.PrimaryColor).HasMaxLength(20).IsRequired();
         builder.Property(b => b.SecondaryColor).HasMaxLength(20).IsRequired();
         builder.Property(b => b.SupportPhone).HasMaxLength(50);

@@ -1,9 +1,12 @@
 extern alias AdminApp;
 
 using System.Net;
+using System.Text.RegularExpressions;
 using AdminApp::LoyaltyCloud.Admin.Auth;
-using LoyaltyCloud.Domain.Entities;
 using LoyaltyCloud.Application.Common.Interfaces;
+using LoyaltyCloud.Application.Provisioning;
+using LoyaltyCloud.Domain.Entities;
+using LoyaltyCloud.Domain.Enums;
 using LoyaltyCloud.Infrastructure.Persistence;
 using LoyaltyCloud.Infrastructure.Persistence.Seed;
 using LoyaltyCloud.Infrastructure.Services;
@@ -151,6 +154,76 @@ public sealed class AdminRoutingTests : IClassFixture<AdminRoutingTests.AdminWeb
 
     [Fact]
     [Trait("Category", "AdminRouting")]
+    [Trait("Category", "TenantAdminAuth")]
+    public async Task Platform_login_cookie_round_trip_allows_platform_tenants()
+    {
+        using var client = _factory.CreateClient(new WebApplicationFactoryClientOptions
+        {
+            AllowAutoRedirect = false
+        });
+
+        var getLogin = await client.GetAsync("/platform/login");
+        var loginHtml = await getLogin.Content.ReadAsStringAsync();
+        var antiForgeryCookies = ExtractCookies(getLogin);
+
+        using var post = new HttpRequestMessage(HttpMethod.Post, "/platform/login")
+        {
+            Content = new FormUrlEncodedContent(BuildLoginForm(loginHtml, SuperAdminUsername, SuperAdminPassword))
+        };
+        post.Headers.Add("Cookie", antiForgeryCookies);
+
+        using var loginResponse = await client.SendAsync(post);
+
+        Assert.Equal(HttpStatusCode.Redirect, loginResponse.StatusCode);
+        Assert.Equal("/platform/tenants", loginResponse.Headers.Location?.OriginalString);
+        var platformCookie = ExtractCookie(loginResponse, "loyaltycloud.platform.auth");
+
+        using var protectedRequest = new HttpRequestMessage(HttpMethod.Get, "/platform/tenants");
+        protectedRequest.Headers.Add("Cookie", platformCookie);
+
+        using var protectedResponse = await client.SendAsync(protectedRequest);
+
+        Assert.Equal(HttpStatusCode.OK, protectedResponse.StatusCode);
+        Assert.Null(protectedResponse.Headers.Location);
+    }
+
+    [Fact]
+    [Trait("Category", "AdminRouting")]
+    [Trait("Category", "TenantAdminAuth")]
+    public async Task Tenant_admin_login_cookie_round_trip_allows_dashboard()
+    {
+        using var client = _factory.CreateClient(new WebApplicationFactoryClientOptions
+        {
+            AllowAutoRedirect = false
+        });
+
+        var getLogin = await client.GetAsync("/kbeauty/login");
+        var loginHtml = await getLogin.Content.ReadAsStringAsync();
+        var antiForgeryCookies = ExtractCookies(getLogin);
+
+        using var post = new HttpRequestMessage(HttpMethod.Post, "/kbeauty/login")
+        {
+            Content = new FormUrlEncodedContent(BuildLoginForm(loginHtml, TenantAdminUsername, TenantAdminPassword))
+        };
+        post.Headers.Add("Cookie", antiForgeryCookies);
+
+        using var loginResponse = await client.SendAsync(post);
+
+        Assert.Equal(HttpStatusCode.Redirect, loginResponse.StatusCode);
+        Assert.Equal("/dashboard", loginResponse.Headers.Location?.OriginalString);
+        var adminCookie = ExtractCookie(loginResponse, "loyaltycloud.admin.auth");
+
+        using var protectedRequest = new HttpRequestMessage(HttpMethod.Get, "/dashboard");
+        protectedRequest.Headers.Add("Cookie", adminCookie);
+
+        using var protectedResponse = await client.SendAsync(protectedRequest);
+
+        Assert.Equal(HttpStatusCode.OK, protectedResponse.StatusCode);
+        Assert.Null(protectedResponse.Headers.Location);
+    }
+
+    [Fact]
+    [Trait("Category", "AdminRouting")]
     public async Task Tenant_admin_authenticated_cannot_access_platform_tenants()
     {
         using var client = _factory.CreateClient(new WebApplicationFactoryClientOptions
@@ -270,10 +343,15 @@ public sealed class AdminRoutingTests : IClassFixture<AdminRoutingTests.AdminWeb
         Assert.Equal(1, CountOccurrences(source, "href=\"/campaigns\""));
         Assert.Equal(1, CountOccurrences(source, "href=\"/marketing-notifications\""));
         Assert.Equal(1, CountOccurrences(source, "href=\"/config\""));
+        Assert.Equal(1, CountOccurrences(source, "href=\"/quick-help\""));
         Assert.Equal(5, CountOccurrences(source, "class=\"kb-sidebar-section\""));
         Assert.DoesNotContain("Operación</span>", source);
         Assert.DoesNotContain("<NavLink href=\"/notifications\"", source);
         Assert.DoesNotContain(">Clientas</NavLink>", source);
+        Assert.Contains("Ayuda rápida", source);
+        Assert.True(
+            source.IndexOf("href=\"/quick-help\"", StringComparison.Ordinal) >
+            source.IndexOf("href=\"/config\"", StringComparison.Ordinal));
         Assert.True(
             source.IndexOf("<NavLink href=\"/dashboard\" Match=\"NavLinkMatch.All\">Dashboard</NavLink>", StringComparison.Ordinal) <
             source.IndexOf("<span class=\"kb-sidebar-section\">Puntos</span>", StringComparison.Ordinal));
@@ -283,6 +361,65 @@ public sealed class AdminRoutingTests : IClassFixture<AdminRoutingTests.AdminWeb
         Assert.DoesNotContain("href=\"/programa-de-lealtad\"", source, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("href=\"/comunicacion\"", source, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("href=\"/administracion\"", source, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    [Trait("Category", "AdminRouting")]
+    public async Task Quick_help_route_is_available_for_authenticated_tenant_admin()
+    {
+        using var client = _factory.CreateClient(new WebApplicationFactoryClientOptions
+        {
+            AllowAutoRedirect = false
+        });
+        client.DefaultRequestHeaders.Add("Cookie", await _factory.CreateTenantAdminCookieAsync());
+
+        using var response = await client.GetAsync("/quick-help");
+        var html = await response.Content.ReadAsStringAsync();
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.Contains("Ayuda rápida", html);
+        Assert.Contains("Las tareas más comunes para atender clientes.", html);
+        Assert.Contains("/kbeauty/join", html);
+        Assert.Contains("QR de registro", html);
+        Assert.Contains("Escanea para registrarte", html);
+        Assert.Contains("Imprimir QR", html);
+        Assert.Contains("Regístrate y empieza a acumular puntos", html);
+        Assert.Contains("Powered by LoyaltyCloud", html);
+    }
+
+    [Fact]
+    [Trait("Category", "AdminRouting")]
+    public void Quick_help_documents_real_admin_flows_without_hardcoded_tenant_branding()
+    {
+        var source = File.ReadAllText(Path.Combine(GetRepositoryRoot(), "src", "LoyaltyCloud.Admin", "Pages", "QuickHelp.razor"));
+
+        Assert.Contains("@page \"/quick-help\"", source);
+        Assert.Contains("href=\"/scan\"", source);
+        Assert.Contains("href=\"/redeem\"", source);
+        Assert.Contains("ID del cliente", source);
+        Assert.Contains("nombre, email o ID del cliente", source);
+        Assert.Contains("{tenantSlug.Trim().ToLowerInvariant()}/join", source);
+        Assert.Contains("QrCodeSvgGenerator.GenerateDataUri(registrationUrl", source);
+        Assert.Contains("PrintQrAsync", source);
+        Assert.Contains("window.print", source);
+        Assert.Contains("BusinessName", source);
+        Assert.DoesNotContain("Serial", source, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("kbeauty", source, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("bitcafe", source, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("loyaltycloud-admin-894839", source, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    [Trait("Category", "AdminRouting")]
+    public void Quick_help_qr_generator_encodes_registration_url_as_local_svg()
+    {
+        var dataUri = AdminApp::LoyaltyCloud.Admin.Services.QrCodeSvgGenerator.GenerateDataUri(
+            "https://loyaltycloud-admin.azurewebsites.net/bitcafe/join");
+
+        Assert.StartsWith("data:image/svg+xml;utf8,", dataUri, StringComparison.Ordinal);
+        Assert.Contains("svg", Uri.UnescapeDataString(dataUri), StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("QR de registro", Uri.UnescapeDataString(dataUri));
+        Assert.DoesNotContain("loyaltycloud-admin-894839", dataUri, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]
@@ -672,6 +809,28 @@ public sealed class AdminRoutingTests : IClassFixture<AdminRoutingTests.AdminWeb
 
     [Fact]
     [Trait("Category", "AdminRouting")]
+    [Trait("Category", "TenantAdminAuth")]
+    public void Tenant_admin_cookie_uses_configured_session_hours_and_persistent_data_protection()
+    {
+        var program = File.ReadAllText(Path.Combine(GetRepositoryRoot(), "src", "LoyaltyCloud.Admin", "Program.cs"));
+        var appsettings = File.ReadAllText(Path.Combine(GetRepositoryRoot(), "src", "LoyaltyCloud.Admin", "appsettings.json"));
+
+        Assert.Contains("\"SessionHours\": 168", appsettings);
+        Assert.Contains("GetSection(AdminAuthOptions.SectionName)", program);
+        Assert.Contains("var adminSessionHours = Math.Max(1, adminAuthOptions.SessionHours);", program);
+        Assert.Contains("options.ExpireTimeSpan = TimeSpan.FromHours(adminSessionHours);", program);
+        Assert.DoesNotContain("options.ExpireTimeSpan = TimeSpan.FromHours(8);", program);
+        Assert.Contains("options.SlidingExpiration = true;", program);
+        Assert.DoesNotContain("AddDataProtection()", program);
+        Assert.DoesNotContain("PersistKeysToFileSystem", program);
+        Assert.DoesNotContain("data-protection-keys", program);
+        Assert.Contains("\"SuperAdmin:SessionHours\") ?? 8", program);
+        Assert.Contains("\"SuperAdmin\":", appsettings);
+        Assert.Contains("\"SessionHours\": 8", appsettings);
+    }
+
+    [Fact]
+    [Trait("Category", "AdminRouting")]
     public void Admin_visible_razor_text_uses_generic_customer_language()
     {
         var adminRoot = Path.Combine(GetRepositoryRoot(), "src", "LoyaltyCloud.Admin");
@@ -708,6 +867,59 @@ public sealed class AdminRoutingTests : IClassFixture<AdminRoutingTests.AdminWeb
         }
     }
 
+    [Fact]
+    [Trait("Category", "AdminRouting")]
+    public void Product_files_do_not_reference_retired_admin_hostname()
+    {
+        var root = GetRepositoryRoot();
+        var retiredHost = "loyaltycloud-admin-" + "894839";
+        var allowedApiHost = "loyaltycloud-api-" + "894839";
+        var searchRoots = new[]
+        {
+            Path.Combine(root, "src"),
+            Path.Combine(root, "docs"),
+            Path.Combine(root, "scripts")
+        };
+        var extensions = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+        {
+            ".cs",
+            ".razor",
+            ".json",
+            ".md",
+            ".ps1",
+            ".http",
+            ".yml",
+            ".yaml",
+            ".props",
+            ".targets",
+            ".csproj"
+        };
+
+        var files = searchRoots
+            .Where(Directory.Exists)
+            .SelectMany(path => Directory.EnumerateFiles(path, "*.*", SearchOption.AllDirectories))
+            .Concat(new[]
+            {
+                Path.Combine(root, "README.md"),
+                Path.Combine(root, "Directory.Build.props")
+            }.Where(File.Exists))
+            .Where(path => extensions.Contains(Path.GetExtension(path)))
+            .Where(path => !path.Contains($"{Path.DirectorySeparatorChar}bin{Path.DirectorySeparatorChar}", StringComparison.OrdinalIgnoreCase))
+            .Where(path => !path.Contains($"{Path.DirectorySeparatorChar}obj{Path.DirectorySeparatorChar}", StringComparison.OrdinalIgnoreCase))
+            .ToList();
+
+        foreach (var file in files)
+        {
+            var source = File.ReadAllText(file);
+            Assert.DoesNotContain(retiredHost, source, StringComparison.OrdinalIgnoreCase);
+        }
+
+        Assert.Contains(
+            allowedApiHost,
+            File.ReadAllText(Path.Combine(root, "tests", "LoyaltyCloud.Tests", "Integration", "WalletProductionUpdateDiagnosticsTests.cs")),
+            StringComparison.OrdinalIgnoreCase);
+    }
+
     private static string GetRepositoryRoot()
     {
         var current = new DirectoryInfo(AppContext.BaseDirectory);
@@ -728,6 +940,56 @@ public sealed class AdminRoutingTests : IClassFixture<AdminRoutingTests.AdminWeb
         }
 
         return count;
+    }
+
+    private static Dictionary<string, string> BuildLoginForm(string html, string username, string password)
+    {
+        var form = ExtractHiddenInputs(html);
+        form["Input.Username"] = username;
+        form["Input.Password"] = password;
+        return form;
+    }
+
+    private static Dictionary<string, string> ExtractHiddenInputs(string html)
+    {
+        var values = new Dictionary<string, string>(StringComparer.Ordinal);
+        foreach (Match input in Regex.Matches(html, "<input[^>]*>", RegexOptions.IgnoreCase))
+        {
+            var attributes = Regex.Matches(input.Value, "(?<name>[A-Za-z_:][-A-Za-z0-9_:.]*)=\"(?<value>[^\"]*)\"")
+                .ToDictionary(
+                    match => match.Groups["name"].Value,
+                    match => WebUtility.HtmlDecode(match.Groups["value"].Value),
+                    StringComparer.OrdinalIgnoreCase);
+
+            if (!attributes.TryGetValue("type", out var type)
+                || !string.Equals(type, "hidden", StringComparison.OrdinalIgnoreCase)
+                || !attributes.TryGetValue("name", out var name))
+            {
+                continue;
+            }
+
+            values[name] = attributes.GetValueOrDefault("value") ?? string.Empty;
+        }
+
+        Assert.Contains(values, item => item.Key.Contains("RequestVerificationToken", StringComparison.OrdinalIgnoreCase));
+        return values;
+    }
+
+    private static string ExtractCookies(HttpResponseMessage response)
+    {
+        Assert.True(response.Headers.TryGetValues("Set-Cookie", out var cookies));
+        return string.Join("; ", cookies.Select(cookie => cookie.Split(';', 2)[0]));
+    }
+
+    private static string ExtractCookie(HttpResponseMessage response, string cookieName)
+    {
+        Assert.True(response.Headers.TryGetValues("Set-Cookie", out var cookies));
+        var cookie = cookies
+            .Select(value => value.Split(';', 2)[0])
+            .FirstOrDefault(value => value.StartsWith(cookieName + "=", StringComparison.OrdinalIgnoreCase));
+
+        Assert.False(string.IsNullOrWhiteSpace(cookie));
+        return cookie!;
     }
 
     public sealed class AdminWebApplicationFactory : WebApplicationFactory<AdminApp::Program>
@@ -782,11 +1044,12 @@ public sealed class AdminRoutingTests : IClassFixture<AdminRoutingTests.AdminWeb
             using var scope = Services.CreateScope();
             var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
             await db.Database.EnsureCreatedAsync();
+            scope.ServiceProvider.GetRequiredService<IMutableTenantContext>().SetTenant(TenantSeed.KBeautyTenantId, TenantSeed.KBeautySlug);
+            await SeedKBeautyPlatformRowsAsync(db);
 
             var subscription = await db.TenantSubscriptions.SingleAsync(s => s.TenantId == TenantSeed.KBeautyTenantId);
             db.Entry(subscription).Property(nameof(TenantSubscription.PaidThroughUtc)).CurrentValue = DateTime.UtcNow.AddDays(30);
 
-            scope.ServiceProvider.GetRequiredService<IMutableTenantContext>().SetTenant(TenantSeed.KBeautyTenantId, TenantSeed.KBeautySlug);
             if (!await db.TenantAdminUsers.AnyAsync(u => u.TenantId == TenantSeed.KBeautyTenantId && u.NormalizedUsername == TenantAdminUser.NormalizeUsername(TenantAdminUsername)))
             {
                 var passwords = scope.ServiceProvider.GetRequiredService<IPasswordHashingService>();
@@ -799,6 +1062,43 @@ public sealed class AdminRoutingTests : IClassFixture<AdminRoutingTests.AdminWeb
             }
 
             await db.SaveChangesAsync();
+        }
+
+        private static async Task SeedKBeautyPlatformRowsAsync(AppDbContext db)
+        {
+            if (!await db.Tenants.IgnoreQueryFilters().AnyAsync(t => t.Id == TenantSeed.KBeautyTenantId))
+            {
+                var now = DateTime.UtcNow;
+                db.Tenants.Add(new Tenant(
+                    TenantSeed.KBeautyTenantId,
+                    TenantSeed.KBeautySlug,
+                    "KBeauty",
+                    "America/Tijuana",
+                    now));
+                db.TenantBrandings.Add(new TenantBranding(
+                    TenantSeed.KBeautyTenantId,
+                    primaryColor: "#1C1C1C",
+                    secondaryColor: "#E8668E"));
+                db.TenantSubscriptions.Add(new TenantSubscription(
+                    TenantSeed.KBeautyTenantId,
+                    TenantSubscriptionStatus.Active,
+                    "internal",
+                    paidThroughUtc: DateTime.UtcNow.AddDays(30)));
+
+                foreach (var row in TenantProvisioningDefaults.ProgramConfigRows)
+                {
+                    db.ProgramConfigs.Add(new ProgramConfig(
+                        Guid.NewGuid(),
+                        TenantSeed.KBeautyTenantId,
+                        row.Key,
+                        row.Value,
+                        now,
+                        row.Description,
+                        TenantProvisioningDefaults.UpdatedBy));
+                }
+
+                await db.SaveChangesAsync();
+            }
         }
 
         public async Task<string> CreateSuperAdminCookieAsync()

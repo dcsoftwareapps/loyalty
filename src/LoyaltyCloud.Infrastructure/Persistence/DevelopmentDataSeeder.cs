@@ -1,11 +1,10 @@
-using System.Data;
+﻿using System.Data;
 using LoyaltyCloud.Application.Common.Interfaces;
 using LoyaltyCloud.Common.Constants;
 using LoyaltyCloud.Common.Services;
 using LoyaltyCloud.Domain.Entities;
 using LoyaltyCloud.Domain.Enums;
 using LoyaltyCloud.Domain.ValueObjects;
-using LoyaltyCloud.Infrastructure.Persistence.Seed;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -26,6 +25,8 @@ public static class DevelopmentDataSeeder
     private const string SentinelEmail = "demo.customer.001@kbeauty.local";
     private const string SharedIsolationPhone = "6461234567";
     private const string KBeautyIsolationSerial = "KB-TEST-001";
+    private static readonly Guid KBeautyTenantId = Guid.Parse("b1000000-0000-0000-0000-000000000001");
+    private const string KBeautySlug = "kbeauty";
     private const string BellaIsolationSerial = "BS-TEST-001";
     private static readonly Guid BellaTenantId = Guid.Parse("b2000000-0000-0000-0000-000000000001");
     private const string BellaSlug = "bella-salon";
@@ -48,9 +49,6 @@ public static class DevelopmentDataSeeder
             return;
 
         using var scope = services.CreateScope();
-        var tenantContext = scope.ServiceProvider.GetRequiredService<IMutableTenantContext>();
-        tenantContext.SetTenant(TenantSeed.KBeautyTenantId, TenantSeed.KBeautySlug);
-
         var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
         var configuration = scope.ServiceProvider.GetRequiredService<IConfiguration>();
         var passwordHasher = scope.ServiceProvider.GetRequiredService<IPasswordHashingService>();
@@ -63,6 +61,17 @@ public static class DevelopmentDataSeeder
             logger.LogDebug("Skipping development demo seed for InMemory provider.");
             return;
         }
+
+        if (!await db.Tenants.AsNoTracking().AnyAsync(t => t.Id == KBeautyTenantId && t.Slug == KBeautySlug, ct))
+        {
+            logger.LogInformation(
+                "Development demo seed skipped because tenant {TenantSlug} does not exist. Create tenants through Platform provisioning.",
+                KBeautySlug);
+            return;
+        }
+
+        var tenantContext = scope.ServiceProvider.GetRequiredService<IMutableTenantContext>();
+        tenantContext.SetTenant(KBeautyTenantId, KBeautySlug);
 
         var customersCreated = 0;
         var transactionsCreated = 0;
@@ -82,14 +91,14 @@ public static class DevelopmentDataSeeder
                 db,
                 passwordHasher,
                 logger,
-                TenantSeed.KBeautyTenantId,
+                KBeautyTenantId,
                 "KBeauty",
                 configuration["DevelopmentTenants:KBeauty:AdminUsername"],
                 configuration["DevelopmentTenants:KBeauty:AdminPassword"],
                 ct);
             await db.SaveChangesAsync(ct);
 
-            var sentinelExists = await db.Customers.AnyAsync(c => c.TenantId == TenantSeed.KBeautyTenantId && c.Email == SentinelEmail, ct);
+            var sentinelExists = await db.Customers.AnyAsync(c => c.TenantId == KBeautyTenantId && c.Email == SentinelEmail, ct);
             if (!sentinelExists)
             {
                 var counts = await SeedCustomersAsync(db, ct);
@@ -126,7 +135,7 @@ public static class DevelopmentDataSeeder
     {
         var now = DateTime.UtcNow;
         var existing = await db.ProgramConfigs
-            .Where(c => c.TenantId == TenantSeed.KBeautyTenantId)
+            .Where(c => c.TenantId == KBeautyTenantId)
             .Select(c => c.Key)
             .ToListAsync(ct);
         var existingSet = existing.ToHashSet(StringComparer.Ordinal);
@@ -157,7 +166,7 @@ public static class DevelopmentDataSeeder
 
             db.ProgramConfigs.Add(new ProgramConfig(
                 Guid.NewGuid(),
-                TenantSeed.KBeautyTenantId,
+                KBeautyTenantId,
                 entry.Key,
                 entry.Value,
                 now,
@@ -172,7 +181,7 @@ public static class DevelopmentDataSeeder
     private static async Task<int> EnsureRewardsAsync(AppDbContext db, CancellationToken ct)
     {
         var existing = await db.RewardCatalogItems
-            .Where(r => r.TenantId == TenantSeed.KBeautyTenantId && DemoRewardNames.Contains(r.Name))
+            .Where(r => r.TenantId == KBeautyTenantId && DemoRewardNames.Contains(r.Name))
             .Select(r => r.Name)
             .ToListAsync(ct);
         var existingSet = existing.ToHashSet(StringComparer.Ordinal);
@@ -195,7 +204,7 @@ public static class DevelopmentDataSeeder
 
             db.RewardCatalogItems.Add(new RewardCatalogItem(
                 Guid.NewGuid(),
-                TenantSeed.KBeautyTenantId,
+                KBeautyTenantId,
                 reward.Name,
                 reward.Description,
                 reward.Cost,
@@ -213,7 +222,7 @@ public static class DevelopmentDataSeeder
         AppDbContext db,
         CancellationToken ct)
     {
-        var config = ProgramConfigSnapshot.FromEntries(await db.ProgramConfigs.Where(c => c.TenantId == TenantSeed.KBeautyTenantId).ToListAsync(ct));
+        var config = ProgramConfigSnapshot.FromEntries(await db.ProgramConfigs.Where(c => c.TenantId == KBeautyTenantId).ToListAsync(ct));
         var now = DateTime.UtcNow;
         var clock = new MutableClock(now);
         var customerSpecs = DemoCustomers();
@@ -228,13 +237,13 @@ public static class DevelopmentDataSeeder
             var createdAt = now.Date.AddDays(-60 + ordinal * 2).AddHours(16);
             var customer = new Customer(
                 customerId,
-                TenantSeed.KBeautyTenantId,
+                KBeautyTenantId,
                 spec.Name,
                 $"{DemoEmailPrefix}{ordinal:000}{DemoEmailDomain}",
                 spec.BirthDate,
                 createdAt,
                 $"+52 646 555 {1000 + ordinal:0000}");
-            var card = new LoyaltyCard(cardId, TenantSeed.KBeautyTenantId, customerId, $"KB-DEMO{ordinal:000}", createdAt);
+            var card = new LoyaltyCard(cardId, KBeautyTenantId, customerId, $"KB-DEMO{ordinal:000}", createdAt);
 
             db.Customers.Add(customer);
             db.LoyaltyCards.Add(card);
@@ -310,7 +319,7 @@ public static class DevelopmentDataSeeder
         CancellationToken ct)
     {
         var demoCards = await db.LoyaltyCards
-            .Where(c => c.TenantId == TenantSeed.KBeautyTenantId && c.SerialNumber.StartsWith("KB-DEMO"))
+            .Where(c => c.TenantId == KBeautyTenantId && c.SerialNumber.StartsWith("KB-DEMO"))
             .OrderBy(c => c.SerialNumber)
             .Take(9)
             .ToListAsync(ct);
@@ -325,13 +334,13 @@ public static class DevelopmentDataSeeder
             return (0, 0);
 
         var rewards = await db.RewardCatalogItems
-            .Where(r => r.TenantId == TenantSeed.KBeautyTenantId && DemoRewardNames.Contains(r.Name))
+            .Where(r => r.TenantId == KBeautyTenantId && DemoRewardNames.Contains(r.Name))
             .OrderBy(r => r.PointsCost)
             .ToListAsync(ct);
         if (rewards.Count == 0)
             return (0, 0);
 
-        var config = ProgramConfigSnapshot.FromEntries(await db.ProgramConfigs.Where(c => c.TenantId == TenantSeed.KBeautyTenantId).ToListAsync(ct));
+        var config = ProgramConfigSnapshot.FromEntries(await db.ProgramConfigs.Where(c => c.TenantId == KBeautyTenantId).ToListAsync(ct));
         var clock = new MutableClock(DateTime.UtcNow);
         var now = DateTime.UtcNow;
         var transactionsCreated = 0;
@@ -401,15 +410,15 @@ public static class DevelopmentDataSeeder
         AppDbContext db,
         CancellationToken ct)
     {
-        if (await db.LoyaltyCards.AnyAsync(c => c.TenantId == TenantSeed.KBeautyTenantId && c.SerialNumber == KBeautyIsolationSerial, ct))
+        if (await db.LoyaltyCards.AnyAsync(c => c.TenantId == KBeautyTenantId && c.SerialNumber == KBeautyIsolationSerial, ct))
             return (0, 0);
 
         var now = DateTime.UtcNow;
-        var config = ProgramConfigSnapshot.FromEntries(await db.ProgramConfigs.Where(c => c.TenantId == TenantSeed.KBeautyTenantId).ToListAsync(ct));
+        var config = ProgramConfigSnapshot.FromEntries(await db.ProgramConfigs.Where(c => c.TenantId == KBeautyTenantId).ToListAsync(ct));
         var clock = new MutableClock(now);
         var customer = new Customer(
             Guid.Parse("b1000001-0000-0000-0000-000000000101"),
-            TenantSeed.KBeautyTenantId,
+            KBeautyTenantId,
             "KBeauty Test Customer",
             "isolation.kbeauty@kbeauty.local",
             new DateTime(1992, 7, 21),
@@ -417,7 +426,7 @@ public static class DevelopmentDataSeeder
             SharedIsolationPhone);
         var card = new LoyaltyCard(
             Guid.Parse("b1000001-0000-0000-0000-000000000201"),
-            TenantSeed.KBeautyTenantId,
+            KBeautyTenantId,
             customer.Id,
             KBeautyIsolationSerial,
             now);
@@ -532,11 +541,11 @@ public static class DevelopmentDataSeeder
 
     private static async Task EnsureKBeautyBrandingAsync(AppDbContext db, CancellationToken ct)
     {
-        var branding = await db.TenantBrandings.FirstOrDefaultAsync(b => b.TenantId == TenantSeed.KBeautyTenantId, ct);
+        var branding = await db.TenantBrandings.FirstOrDefaultAsync(b => b.TenantId == KBeautyTenantId, ct);
         if (branding is null)
         {
             db.TenantBrandings.Add(new TenantBranding(
-                TenantSeed.KBeautyTenantId,
+                KBeautyTenantId,
                 primaryColor: "#1C1C1C",
                 secondaryColor: "#E8668E",
                 supportPhone: "+52 646 238 6962",
@@ -783,3 +792,4 @@ public static class DevelopmentDataSeeder
         public DateTime Today => UtcNow.Date;
     }
 }
+

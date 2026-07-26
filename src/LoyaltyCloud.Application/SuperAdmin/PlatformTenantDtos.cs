@@ -43,6 +43,7 @@ public sealed record PlatformTenantBrandingDto(
     string PrimaryColor,
     string SecondaryColor,
     string? LogoUrl,
+    string? LogoBlobName,
     string? SupportPhone,
     string? WhatsAppUrl,
     string? InstagramUrl,

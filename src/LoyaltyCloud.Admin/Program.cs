@@ -43,6 +43,11 @@ builder.Services.AddRazorComponents()
     .AddInteractiveServerComponents();
 
 // Auth básica con cookie — credenciales desde appsettings.
+var adminAuthOptions = builder.Configuration
+    .GetSection(AdminAuthOptions.SectionName)
+    .Get<AdminAuthOptions>() ?? new AdminAuthOptions();
+var adminSessionHours = Math.Max(1, adminAuthOptions.SessionHours);
+
 builder.Services.Configure<AdminAuthOptions>(builder.Configuration.GetSection(AdminAuthOptions.SectionName));
 builder.Services.AddScoped<AdminAuthService>();
 builder.Services.Configure<SuperAdminAuthOptions>(builder.Configuration.GetSection(SuperAdminAuthOptions.SectionName));
@@ -54,7 +59,7 @@ builder.Services
     {
         options.LoginPath = "/platform/login";
         options.AccessDeniedPath = "/platform/login";
-        options.ExpireTimeSpan = TimeSpan.FromHours(8);
+        options.ExpireTimeSpan = TimeSpan.FromHours(adminSessionHours);
         options.SlidingExpiration = true;
         options.Cookie.HttpOnly = true;
         options.Cookie.SameSite = SameSiteMode.Strict;

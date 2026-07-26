@@ -1,5 +1,6 @@
 extern alias AdminApp;
 
+using System.Globalization;
 using System.Net;
 using System.Security.Claims;
 using AdminApp::LoyaltyCloud.Admin.Auth;
@@ -199,6 +200,38 @@ public sealed class TenantAdminAuthTests
         Assert.Equal($"/{BellaSlug}/login", path);
     }
 
+    [Fact]
+    [Trait("Category", "TenantAdminAuth")]
+    public async Task Tenant_admin_login_cookie_is_persistent_for_configured_session_hours()
+    {
+        await using var env = await AuthTestEnvironment.CreateAsync();
+
+        var beforeLogin = DateTimeOffset.UtcNow;
+        var result = await env.SignInAsync("kbeauty", SharedUsername, KBeautyPassword);
+
+        Assert.Equal(AdminLoginResult.Success, result.Result);
+        var expires = ExtractCookieExpires(result.SetCookieHeader);
+        var duration = expires - beforeLogin;
+        Assert.True(duration >= TimeSpan.FromHours(167), $"Expected roughly 168h cookie lifetime, got {duration}.");
+        Assert.True(duration <= TimeSpan.FromHours(169), $"Expected roughly 168h cookie lifetime, got {duration}.");
+    }
+
+    [Fact]
+    [Trait("Category", "TenantAdminAuth")]
+    public async Task Tenant_admin_logout_invalidates_cookie()
+    {
+        await using var env = await AuthTestEnvironment.CreateAsync();
+
+        var setCookie = await env.SignOutAsync(AuthTestEnvironment.CreatePrincipal(
+            TenantSeed.KBeautyTenantId,
+            TenantSeed.KBeautySlug,
+            KBeautyAdminId,
+            SharedUsername));
+
+        Assert.Contains("loyaltycloud.admin.auth=", setCookie);
+        Assert.Contains("expires=Thu, 01 Jan 1970", setCookie, StringComparison.OrdinalIgnoreCase);
+    }
+
     private sealed class AuthTestEnvironment : IAsyncDisposable
     {
         private readonly ServiceProvider _services;
@@ -225,7 +258,8 @@ public sealed class TenantAdminAuthTests
                     ["Apple:WebServiceURL"] = "https://test.local",
                     ["Apple:OrganizationName"] = "LoyaltyCloud Test",
                     ["Wallet:UseRealPassSigning"] = "false",
-                    ["Wallet:UseRealApns"] = "false"
+                    ["Wallet:UseRealApns"] = "false",
+                    ["Admin:Auth:SessionHours"] = "168"
                 })
                 .Build();
 
@@ -233,7 +267,7 @@ public sealed class TenantAdminAuthTests
             services.AddLogging();
             services.AddApplication();
             services.AddInfrastructure(configuration, new TestHostEnvironment());
-            services.Configure<AdminAuthOptions>(_ => { });
+            services.Configure<AdminAuthOptions>(configuration.GetSection(AdminAuthOptions.SectionName));
             services.AddScoped<AdminAuthService>();
             services
                 .AddAuthentication(CookieAuthenticationDefaults.AuthenticationScheme)
@@ -330,6 +364,16 @@ public sealed class TenantAdminAuthTests
             return scope.ServiceProvider.GetRequiredService<AdminAuthService>().GetLoginPathForCurrentPrincipal(context);
         }
 
+        public async Task<string> SignOutAsync(ClaimsPrincipal principal)
+        {
+            using var scope = _services.CreateScope();
+            var context = CreateHttpContext(scope.ServiceProvider);
+            context.User = principal;
+            await scope.ServiceProvider.GetRequiredService<AdminAuthService>().SignOutAsync(context);
+            return context.Response.Headers.SetCookie.FirstOrDefault()
+                ?? throw new InvalidOperationException("Sign-out did not emit Set-Cookie.");
+        }
+
         public static ClaimsPrincipal CreatePrincipal(Guid tenantId, string tenantSlug, Guid adminUserId, string username)
         {
             var claims = new[]
@@ -351,6 +395,9 @@ public sealed class TenantAdminAuthTests
                 var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
                 await db.Database.EnsureDeletedAsync();
                 await db.Database.MigrateAsync();
+                var kbeautySubscription = await db.TenantSubscriptions.SingleAsync(s => s.TenantId == TenantSeed.KBeautyTenantId);
+                db.Entry(kbeautySubscription).Property(nameof(TenantSubscription.PaidThroughUtc)).CurrentValue = DateTime.UtcNow.AddDays(30);
+                await db.SaveChangesAsync();
             }
 
             await SeedBellaTenantAsync();
@@ -363,7 +410,11 @@ public sealed class TenantAdminAuthTests
             var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
             db.Tenants.Add(new Tenant(BellaTenantId, BellaSlug, "Bella Salon", "America/Tijuana", DateTime.UtcNow));
             db.TenantBrandings.Add(new TenantBranding(BellaTenantId, primaryColor: "#8B5CF6", secondaryColor: "#F5D0FE"));
-            db.TenantSubscriptions.Add(new TenantSubscription(BellaTenantId, TenantSubscriptionStatus.Active, "test"));
+            db.TenantSubscriptions.Add(new TenantSubscription(
+                BellaTenantId,
+                TenantSubscriptionStatus.Active,
+                "test",
+                paidThroughUtc: DateTime.UtcNow.AddDays(30)));
             await db.SaveChangesAsync();
         }
 
@@ -403,6 +454,19 @@ public sealed class TenantAdminAuthTests
             context.Request.Host = new HostString("admin.test");
             return context;
         }
+    }
+
+    private static DateTimeOffset ExtractCookieExpires(string? setCookie)
+    {
+        Assert.False(string.IsNullOrWhiteSpace(setCookie));
+        const string marker = "expires=";
+        var start = setCookie!.IndexOf(marker, StringComparison.OrdinalIgnoreCase);
+        Assert.True(start >= 0, $"Set-Cookie header did not include expires: {setCookie}");
+        start += marker.Length;
+
+        var end = setCookie.IndexOf(';', start);
+        var value = end >= 0 ? setCookie[start..end] : setCookie[start..];
+        return DateTimeOffset.Parse(value, CultureInfo.InvariantCulture);
     }
 
     private sealed class TestHostEnvironment : IHostEnvironment

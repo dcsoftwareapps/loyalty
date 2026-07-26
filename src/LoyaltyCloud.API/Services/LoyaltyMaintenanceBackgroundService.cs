@@ -1,5 +1,4 @@
 using System.Diagnostics;
-using System.Globalization;
 using LoyaltyCloud.API.Configuration;
 using LoyaltyCloud.Application.Common.Interfaces;
 using LoyaltyCloud.Application.Levels.Commands.RecalculateLevels;
@@ -17,11 +16,6 @@ public sealed class LoyaltyMaintenanceBackgroundService : BackgroundService
 {
     private const string OperatorId = "loyalty-maintenance";
     private static readonly TimeSpan InvalidConfigurationDelay = TimeSpan.FromHours(1);
-    private static readonly IReadOnlyDictionary<string, string> IanaToWindowsTimeZones =
-        new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
-        {
-            ["America/Tijuana"] = "Pacific Standard Time (Mexico)"
-        };
 
     private readonly ITenantExecutionRunner _tenantRunner;
     private readonly IServiceScopeFactory _scopeFactory;
@@ -53,7 +47,7 @@ public sealed class LoyaltyMaintenanceBackgroundService : BackgroundService
                 return;
             }
 
-            if (!TryResolveSchedule(options, out var runAtLocalTime, out var timeZone))
+            if (!TryResolveInterval(options, out var interval))
             {
                 await DelaySafelyAsync(InvalidConfigurationDelay, stoppingToken);
                 continue;
@@ -66,19 +60,11 @@ public sealed class LoyaltyMaintenanceBackgroundService : BackgroundService
                 await RunMaintenanceAsync(options, stoppingToken);
             }
 
-            var nextRunUtc = CalculateNextRunUtc(DateTimeOffset.UtcNow, runAtLocalTime, timeZone);
-            var nextRunLocal = TimeZoneInfo.ConvertTime(nextRunUtc, timeZone);
-            var delay = nextRunUtc - DateTimeOffset.UtcNow;
-            if (delay < TimeSpan.Zero)
-                delay = TimeSpan.Zero;
-
             _logger.LogInformation(
-                "Next loyalty maintenance scheduled at {NextRunLocal} ({TimeZoneId}) / {NextRunUtc} UTC.",
-                nextRunLocal,
-                timeZone.Id,
-                nextRunUtc);
+                "Next loyalty maintenance scheduled in {IntervalHours} hour(s).",
+                interval.TotalHours);
 
-            await DelaySafelyAsync(delay, stoppingToken);
+            await DelaySafelyAsync(interval, stoppingToken);
             if (stoppingToken.IsCancellationRequested)
                 break;
 
@@ -378,84 +364,22 @@ public sealed class LoyaltyMaintenanceBackgroundService : BackgroundService
             string.Join(" | ", warnings));
     }
 
-    private bool TryResolveSchedule(
+    private bool TryResolveInterval(
         LoyaltyMaintenanceOptions options,
-        out TimeOnly runAtLocalTime,
-        out TimeZoneInfo timeZone)
+        out TimeSpan interval)
     {
-        runAtLocalTime = default;
-        timeZone = TimeZoneInfo.Utc;
+        interval = default;
 
-        if (!TimeOnly.TryParseExact(
-                options.RunAtLocalTime,
-                "HH:mm",
-                CultureInfo.InvariantCulture,
-                DateTimeStyles.None,
-                out runAtLocalTime))
+        if (options.IntervalHours <= 0)
         {
             _logger.LogError(
-                "Invalid LoyaltyMaintenance:RunAtLocalTime value '{RunAtLocalTime}'. Expected format HH:mm.",
-                options.RunAtLocalTime);
+                "Invalid LoyaltyMaintenance:IntervalHours value '{IntervalHours}'. Expected a positive integer.",
+                options.IntervalHours);
             return false;
         }
 
-        if (TryFindTimeZone(options.TimeZoneId, out timeZone))
-            return true;
-
-        _logger.LogError(
-            "Invalid LoyaltyMaintenance:TimeZoneId value '{TimeZoneId}'. Maintenance loop will retry later.",
-            options.TimeZoneId);
-        return false;
-    }
-
-    private static bool TryFindTimeZone(string timeZoneId, out TimeZoneInfo timeZone)
-    {
-        try
-        {
-            timeZone = TimeZoneInfo.FindSystemTimeZoneById(timeZoneId);
-            return true;
-        }
-        catch (TimeZoneNotFoundException)
-        {
-        }
-        catch (InvalidTimeZoneException)
-        {
-        }
-
-        if (IanaToWindowsTimeZones.TryGetValue(timeZoneId, out var windowsId))
-        {
-            try
-            {
-                timeZone = TimeZoneInfo.FindSystemTimeZoneById(windowsId);
-                return true;
-            }
-            catch (TimeZoneNotFoundException)
-            {
-            }
-            catch (InvalidTimeZoneException)
-            {
-            }
-        }
-
-        timeZone = TimeZoneInfo.Utc;
-        return false;
-    }
-
-    private static DateTimeOffset CalculateNextRunUtc(
-        DateTimeOffset nowUtc,
-        TimeOnly runAtLocalTime,
-        TimeZoneInfo timeZone)
-    {
-        var nowLocal = TimeZoneInfo.ConvertTime(nowUtc, timeZone);
-        var candidateLocal = nowLocal.Date + runAtLocalTime.ToTimeSpan();
-        if (candidateLocal <= nowLocal.DateTime)
-            candidateLocal = candidateLocal.AddDays(1);
-
-        while (timeZone.IsInvalidTime(candidateLocal))
-            candidateLocal = candidateLocal.AddMinutes(30);
-
-        var candidateUtc = TimeZoneInfo.ConvertTimeToUtc(candidateLocal, timeZone);
-        return new DateTimeOffset(candidateUtc, TimeSpan.Zero);
+        interval = TimeSpan.FromHours(options.IntervalHours);
+        return true;
     }
 
     private static async Task DelaySafelyAsync(TimeSpan delay, CancellationToken ct)

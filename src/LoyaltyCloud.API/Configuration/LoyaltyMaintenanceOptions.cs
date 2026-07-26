@@ -6,6 +6,7 @@ public sealed class LoyaltyMaintenanceOptions
 
     public bool Enabled { get; init; } = true;
     public bool RunOnStartup { get; init; }
+    public int IntervalHours { get; init; } = 12;
     public string RunAtLocalTime { get; init; } = "02:00";
     public string TimeZoneId { get; init; } = "America/Tijuana";
 }

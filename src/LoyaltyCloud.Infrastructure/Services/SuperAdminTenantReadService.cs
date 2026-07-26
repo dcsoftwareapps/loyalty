@@ -11,11 +11,16 @@ internal sealed class SuperAdminTenantReadService : ISuperAdminTenantReadService
 {
     private readonly AppDbContext _db;
     private readonly IDateTimeProvider _clock;
+    private readonly ITenantBrandingLogoUrlProvider _logoUrls;
 
-    public SuperAdminTenantReadService(AppDbContext db, IDateTimeProvider clock)
+    public SuperAdminTenantReadService(
+        AppDbContext db,
+        IDateTimeProvider clock,
+        ITenantBrandingLogoUrlProvider logoUrls)
     {
         _db = db;
         _clock = clock;
+        _logoUrls = logoUrls;
     }
 
     public async Task<IReadOnlyList<PlatformTenantListItemDto>> ListTenantsAsync(
@@ -95,7 +100,8 @@ internal sealed class SuperAdminTenantReadService : ISuperAdminTenantReadService
                     : new PlatformTenantBrandingDto(
                         t.Branding.PrimaryColor,
                         t.Branding.SecondaryColor,
-                        t.Branding.LogoUrl,
+                        _logoUrls.GetDisplayUrl(t.Branding.LogoBlobName) ?? t.Branding.LogoUrl,
+                        t.Branding.LogoBlobName,
                         t.Branding.SupportPhone,
                         t.Branding.WhatsAppUrl,
                         t.Branding.InstagramUrl,

@@ -4,7 +4,6 @@ using LoyaltyCloud.Domain.Common;
 using LoyaltyCloud.Domain.Entities;
 using LoyaltyCloud.Domain.Events;
 using LoyaltyCloud.Domain.Repositories;
-using LoyaltyCloud.Infrastructure.Persistence.Seed;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.ChangeTracking;
@@ -77,9 +76,6 @@ public class AppDbContext : DbContext, IUnitOfWork
             }
         }
 
-        // Seed de la configuración del programa con sus valores default.
-        ProgramConfigSeed.Apply(modelBuilder);
-        TenantSeed.Apply(modelBuilder);
         ApplyTenantQueryFilters(modelBuilder);
     }
 

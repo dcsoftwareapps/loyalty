@@ -179,6 +179,7 @@ input:focus, select:focus, textarea:focus {
 .kb-btn:disabled { opacity: 0.5; cursor: not-allowed; }
 .kb-btn--primary { background: var(--kb-blush); }
 .kb-btn--ghost { background: transparent; color: var(--kb-ink); border: 1px solid var(--kb-sand-100); }
+.kb-btn--danger { background: #B23B3B; color: #fff; }
 .kb-btn--large { font-size: 1.15rem; padding: 18px 32px; min-height: 56px; }
 .kb-btn--block { display: flex; width: 100%; }
 .kb-btn--small { padding: 8px 12px; font-size: 0.9rem; }
@@ -253,12 +254,194 @@ input:focus, select:focus, textarea:focus {
 }
 
 /* ============================================================================
+   Quick help
+   ============================================================================ */
+.kb-help { max-width: 980px; }
+.kb-help-header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 16px;
+    margin-bottom: 24px;
+}
+.kb-help-header p { margin: -8px 0 0; }
+.kb-help-registration { margin-bottom: 20px; }
+.kb-help-registration-layout {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 180px;
+    gap: 20px;
+    align-items: center;
+}
+.kb-help-link {
+    padding: 12px 14px;
+    border: 1px solid var(--kb-sand-100);
+    border-radius: var(--kb-radius-sm);
+    background: var(--kb-sand-50);
+    color: var(--kb-ink);
+    font-weight: 700;
+    overflow-wrap: anywhere;
+}
+.kb-help-actions { margin-top: 14px; flex-wrap: wrap; }
+.kb-logo-preview {
+    display: inline-flex;
+    align-items: center;
+    gap: 12px;
+    margin-top: 10px;
+    padding: 10px 12px;
+    border: 1px solid var(--kb-sand-100);
+    border-radius: var(--kb-radius-sm);
+    background: #fff;
+}
+.kb-logo-preview img {
+    display: block;
+    width: auto;
+    max-width: 160px;
+    max-height: 56px;
+    object-fit: contain;
+}
+.kb-logo-preview span {
+    color: var(--kb-ink-muted);
+    font-size: 0.86rem;
+    font-weight: 700;
+}
+.kb-help-qr {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+    padding: 14px;
+    border: 1px solid var(--kb-sand-100);
+    border-radius: var(--kb-radius);
+    background: var(--kb-bg-card);
+}
+.kb-help-qr img {
+    width: 152px;
+    height: 152px;
+    image-rendering: crisp-edges;
+}
+.kb-help-qr span {
+    color: var(--kb-ink-muted);
+    font-size: 0.86rem;
+    font-weight: 700;
+}
+.kb-help-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    gap: 18px;
+    margin-bottom: 20px;
+}
+.kb-help-card {
+    display: grid;
+    grid-template-columns: 44px 1fr;
+    gap: 16px;
+}
+.kb-help-number {
+    width: 44px;
+    height: 44px;
+    border-radius: 50%;
+    background: var(--kb-sand-100);
+    color: var(--kb-ink);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 800;
+    font-size: 1.1rem;
+}
+.kb-help-card h2,
+.kb-help-common h2 { margin-bottom: 10px; }
+.kb-help-card ol,
+.kb-help-card ul {
+    margin: 0 0 16px;
+    padding-left: 20px;
+}
+.kb-help-card li { margin-bottom: 6px; }
+.kb-help-common-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 16px;
+}
+.kb-help-common h3 {
+    font-family: var(--font-body);
+    font-size: 1rem;
+    font-weight: 800;
+    margin-bottom: 6px;
+}
+.kb-help-common p {
+    margin: 0;
+    color: var(--kb-ink-muted);
+}
+.kb-registration-poster {
+    margin: 0 0 20px;
+    display: flex;
+    justify-content: center;
+}
+.kb-registration-poster-inner {
+    width: min(100%, 480px);
+    padding: 36px 30px;
+    border: 2px solid var(--kb-blush);
+    border-radius: var(--kb-radius-lg);
+    background: linear-gradient(180deg, var(--kb-bg-card), var(--kb-sand-50));
+    text-align: center;
+    box-shadow: var(--kb-shadow);
+}
+.kb-poster-brand {
+    color: var(--kb-blush);
+    font-family: var(--font-display);
+    font-size: 2rem;
+    line-height: 1;
+    font-weight: 700;
+}
+.kb-poster-kicker {
+    margin: 8px 0 22px;
+    color: var(--kb-ink-muted);
+    font-size: 0.78rem;
+    font-weight: 800;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+}
+.kb-registration-poster h2 {
+    max-width: 360px;
+    margin: 0 auto 12px;
+    font-size: 2.2rem;
+}
+.kb-registration-poster p {
+    max-width: 340px;
+    margin: 0 auto 24px;
+    color: var(--kb-ink-muted);
+}
+.kb-registration-poster img {
+    width: min(72vw, 280px);
+    height: min(72vw, 280px);
+    padding: 12px;
+    border-radius: var(--kb-radius);
+    background: #fff;
+}
+.kb-registration-poster strong {
+    display: block;
+    margin-top: 14px;
+    color: var(--kb-ink);
+    font-size: 1.25rem;
+}
+.kb-registration-poster span {
+    display: block;
+    margin-top: 28px;
+    color: var(--kb-ink-muted);
+    font-size: 0.85rem;
+    font-weight: 700;
+}
+
+/* ============================================================================
    Form filas
    ============================================================================ */
 .kb-form-row { display: flex; flex-direction: column; gap: 20px; max-width: 480px; margin-bottom: 24px; }
 .kb-form-row--horizontal { flex-direction: row; align-items: end; max-width: 100%; flex-wrap: wrap; }
 .kb-form-error { color: #B23B3B; background: #FDEDED; padding: 12px 16px; border-radius: var(--kb-radius-sm); margin-bottom: 16px; }
 .kb-form-success { color: var(--kb-sage); background: #ECF3EF; padding: 12px 16px; border-radius: var(--kb-radius-sm); margin-bottom: 16px; }
+.kb-danger-zone {
+    border-color: #E5B8B8;
+    background: #FFF8F8;
+}
+.kb-danger-zone h2 { color: #8F2D2D; }
 
 /* ============================================================================
    Modal
@@ -354,4 +537,48 @@ input:focus, select:focus, textarea:focus {
     .kb-main { padding: 20px 16px; }
     .kb-card-value { font-size: 2rem; }
     h1 { font-size: 1.85rem; }
+    .kb-help-registration-layout { grid-template-columns: 1fr; }
+    .kb-help-qr { max-width: 220px; }
+    .kb-registration-poster-inner { padding: 28px 20px; }
+}
+
+@media print {
+    body:has(.kb-registration-poster) {
+        background: #fff;
+        -webkit-print-color-adjust: exact;
+        print-color-adjust: exact;
+    }
+    body:has(.kb-registration-poster) .kb-sidebar,
+    body:has(.kb-registration-poster) .kb-help-header,
+    body:has(.kb-registration-poster) .kb-help-registration,
+    body:has(.kb-registration-poster) .kb-help-grid,
+    body:has(.kb-registration-poster) .kb-help-common {
+        display: none !important;
+    }
+    body:has(.kb-registration-poster) .kb-app,
+    body:has(.kb-registration-poster) .kb-main {
+        display: block;
+        min-height: auto;
+        max-width: none;
+        padding: 0;
+    }
+    body:has(.kb-registration-poster) .kb-registration-poster {
+        min-height: 100vh;
+        margin: 0;
+        align-items: center;
+        page-break-inside: avoid;
+    }
+    body:has(.kb-registration-poster) .kb-registration-poster-inner {
+        width: 7in;
+        min-height: 9.3in;
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        box-shadow: none;
+    }
+    body:has(.kb-registration-poster) .kb-registration-poster img {
+        width: 2.6in;
+        height: 2.6in;
+        margin: 0 auto;
+    }
 }

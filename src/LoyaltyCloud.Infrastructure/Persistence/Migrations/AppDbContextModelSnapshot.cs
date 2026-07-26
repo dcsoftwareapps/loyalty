@@ -676,168 +676,6 @@ namespace LoyaltyCloud.Infrastructure.Persistence.Migrations
                         .IsUnique();
 
                     b.ToTable("ProgramConfigs", (string)null);
-
-                    b.HasData(
-                        new
-                        {
-                            Id = new Guid("a1000000-0000-0000-0000-000000000001"),
-                            Description = "Pesos MXN por 1 punto (1 pt cada $10).",
-                            Key = "points_per_peso_unit",
-                            TenantId = new Guid("b1000000-0000-0000-0000-000000000001"),
-                            UpdatedAt = new DateTime(2025, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
-                            UpdatedBy = "system",
-                            Value = "10"
-                        },
-                        new
-                        {
-                            Id = new Guid("a1000000-0000-0000-0000-000000000002"),
-                            Description = "Puntos al registrarse.",
-                            Key = "welcome_bonus_points",
-                            TenantId = new Guid("b1000000-0000-0000-0000-000000000001"),
-                            UpdatedAt = new DateTime(2025, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
-                            UpdatedBy = "system",
-                            Value = "50"
-                        },
-                        new
-                        {
-                            Id = new Guid("a1000000-0000-0000-0000-000000000003"),
-                            Description = "Puntos por referido confirmado.",
-                            Key = "referral_bonus_points",
-                            TenantId = new Guid("b1000000-0000-0000-0000-000000000001"),
-                            UpdatedAt = new DateTime(2025, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
-                            UpdatedBy = "system",
-                            Value = "150"
-                        },
-                        new
-                        {
-                            Id = new Guid("a1000000-0000-0000-0000-000000000004"),
-                            Description = "Multiplicador en mes de cumpleaños.",
-                            Key = "birthday_multiplier",
-                            TenantId = new Guid("b1000000-0000-0000-0000-000000000001"),
-                            UpdatedAt = new DateTime(2025, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
-                            UpdatedBy = "system",
-                            Value = "2"
-                        },
-                        new
-                        {
-                            Id = new Guid("a1000000-0000-0000-0000-00000000000f"),
-                            Description = "Activa la expiracion automatica de puntos.",
-                            Key = "points_expiration_enabled",
-                            TenantId = new Guid("b1000000-0000-0000-0000-000000000001"),
-                            UpdatedAt = new DateTime(2025, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
-                            UpdatedBy = "system",
-                            Value = "true"
-                        },
-                        new
-                        {
-                            Id = new Guid("a1000000-0000-0000-0000-000000000010"),
-                            Description = "Meses de vigencia de cada lote de puntos.",
-                            Key = "points_expire_after_months",
-                            TenantId = new Guid("b1000000-0000-0000-0000-000000000001"),
-                            UpdatedAt = new DateTime(2025, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
-                            UpdatedBy = "system",
-                            Value = "12"
-                        },
-                        new
-                        {
-                            Id = new Guid("a1000000-0000-0000-0000-000000000005"),
-                            Description = "Umbral inicio nivel Mist.",
-                            Key = "level_mist_min",
-                            TenantId = new Guid("b1000000-0000-0000-0000-000000000001"),
-                            UpdatedAt = new DateTime(2025, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
-                            UpdatedBy = "system",
-                            Value = "0"
-                        },
-                        new
-                        {
-                            Id = new Guid("a1000000-0000-0000-0000-000000000006"),
-                            Description = "Umbral inicio nivel Glow.",
-                            Key = "level_glow_min",
-                            TenantId = new Guid("b1000000-0000-0000-0000-000000000001"),
-                            UpdatedAt = new DateTime(2025, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
-                            UpdatedBy = "system",
-                            Value = "1000"
-                        },
-                        new
-                        {
-                            Id = new Guid("a1000000-0000-0000-0000-000000000007"),
-                            Description = "Umbral inicio nivel Radiance.",
-                            Key = "level_radiance_min",
-                            TenantId = new Guid("b1000000-0000-0000-0000-000000000001"),
-                            UpdatedAt = new DateTime(2025, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
-                            UpdatedBy = "system",
-                            Value = "3000"
-                        },
-                        new
-                        {
-                            Id = new Guid("a1000000-0000-0000-0000-000000000008"),
-                            Description = "Puntos anuales para mantener Radiance.",
-                            Key = "radiance_requalification_points",
-                            TenantId = new Guid("b1000000-0000-0000-0000-000000000001"),
-                            UpdatedAt = new DateTime(2025, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
-                            UpdatedBy = "system",
-                            Value = "500"
-                        },
-                        new
-                        {
-                            Id = new Guid("a1000000-0000-0000-0000-000000000009"),
-                            Description = "Costo del mini producto.",
-                            Key = "reward_mini_product_points",
-                            TenantId = new Guid("b1000000-0000-0000-0000-000000000001"),
-                            UpdatedAt = new DateTime(2025, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
-                            UpdatedBy = "system",
-                            Value = "300"
-                        },
-                        new
-                        {
-                            Id = new Guid("a1000000-0000-0000-0000-00000000000a"),
-                            Description = "Costo del $50 off en compra.",
-                            Key = "reward_fifty_off_points",
-                            TenantId = new Guid("b1000000-0000-0000-0000-000000000001"),
-                            UpdatedAt = new DateTime(2025, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
-                            UpdatedBy = "system",
-                            Value = "500"
-                        },
-                        new
-                        {
-                            Id = new Guid("a1000000-0000-0000-0000-00000000000b"),
-                            Description = "Costo del análisis FocusSkin (Glow+).",
-                            Key = "reward_focusskin_points",
-                            TenantId = new Guid("b1000000-0000-0000-0000-000000000001"),
-                            UpdatedAt = new DateTime(2025, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
-                            UpdatedBy = "system",
-                            Value = "400"
-                        },
-                        new
-                        {
-                            Id = new Guid("a1000000-0000-0000-0000-00000000000c"),
-                            Description = "Costo del producto del mes (Glow+).",
-                            Key = "reward_monthly_product_points",
-                            TenantId = new Guid("b1000000-0000-0000-0000-000000000001"),
-                            UpdatedAt = new DateTime(2025, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
-                            UpdatedBy = "system",
-                            Value = "700"
-                        },
-                        new
-                        {
-                            Id = new Guid("a1000000-0000-0000-0000-00000000000d"),
-                            Description = "Costo del $100 off en cabina (Glow+).",
-                            Key = "reward_hundred_off_cabina_points",
-                            TenantId = new Guid("b1000000-0000-0000-0000-000000000001"),
-                            UpdatedAt = new DateTime(2025, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
-                            UpdatedBy = "system",
-                            Value = "800"
-                        },
-                        new
-                        {
-                            Id = new Guid("a1000000-0000-0000-0000-00000000000e"),
-                            Description = "Costo del $300 off en facial (Radiance).",
-                            Key = "reward_facial_off_points",
-                            TenantId = new Guid("b1000000-0000-0000-0000-000000000001"),
-                            UpdatedAt = new DateTime(2025, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
-                            UpdatedBy = "system",
-                            Value = "1200"
-                        });
                 });
 
             modelBuilder.Entity("LoyaltyCloud.Domain.Entities.Redemption", b =>
@@ -978,17 +816,6 @@ namespace LoyaltyCloud.Infrastructure.Persistence.Migrations
                         .IsUnique();
 
                     b.ToTable("Tenants", (string)null);
-
-                    b.HasData(
-                        new
-                        {
-                            Id = new Guid("b1000000-0000-0000-0000-000000000001"),
-                            CreatedAt = new DateTime(2026, 7, 1, 0, 0, 0, 0, DateTimeKind.Utc),
-                            DisplayName = "KBeauty",
-                            IsActive = true,
-                            Slug = "kbeauty",
-                            TimeZoneId = "America/Tijuana"
-                        });
                 });
 
             modelBuilder.Entity("LoyaltyCloud.Domain.Entities.TenantAdminUser", b =>
@@ -1043,6 +870,10 @@ namespace LoyaltyCloud.Infrastructure.Persistence.Migrations
                         .HasMaxLength(1000)
                         .HasColumnType("nvarchar(1000)");
 
+                    b.Property<string>("LogoBlobName")
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
                     b.Property<string>("LogoUrl")
                         .HasMaxLength(1000)
                         .HasColumnType("nvarchar(1000)");
@@ -1072,14 +903,6 @@ namespace LoyaltyCloud.Infrastructure.Persistence.Migrations
                     b.HasKey("TenantId");
 
                     b.ToTable("TenantBrandings", (string)null);
-
-                    b.HasData(
-                        new
-                        {
-                            TenantId = new Guid("b1000000-0000-0000-0000-000000000001"),
-                            PrimaryColor = "#1C1C1C",
-                            SecondaryColor = "#E8668E"
-                        });
                 });
 
             modelBuilder.Entity("LoyaltyCloud.Domain.Entities.TenantLoyaltyLevel", b =>
@@ -1171,14 +994,6 @@ namespace LoyaltyCloud.Infrastructure.Persistence.Migrations
                     b.HasIndex("Status");
 
                     b.ToTable("TenantSubscriptions", (string)null);
-
-                    b.HasData(
-                        new
-                        {
-                            TenantId = new Guid("b1000000-0000-0000-0000-000000000001"),
-                            PlanCode = "internal",
-                            Status = "Active"
-                        });
                 });
 
             modelBuilder.Entity("LoyaltyCloud.Domain.Entities.CustomNotificationCampaign", b =>

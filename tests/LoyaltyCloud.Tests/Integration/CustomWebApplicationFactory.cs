@@ -1,6 +1,8 @@
 using LoyaltyCloud.Application.Common.Interfaces;
+using LoyaltyCloud.Application.Provisioning;
 using LoyaltyCloud.Common.Constants;
 using LoyaltyCloud.Domain.Entities;
+using LoyaltyCloud.Domain.Enums;
 using LoyaltyCloud.Infrastructure.Persistence;
 using LoyaltyCloud.Infrastructure.Persistence.Seed;
 using LoyaltyCloud.Tests.Integration.Fakes;
@@ -72,7 +74,45 @@ public sealed class CustomWebApplicationFactory : WebApplicationFactory<Program>
             .SetTenant(TenantSeed.KBeautyTenantId, TenantSeed.KBeautySlug);
         var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
         await db.Database.EnsureCreatedAsync();
+        await SeedKBeautyPlatformRowsAsync(db);
         await SeedDefaultTenantLevelsAsync(db);
+    }
+
+    private static async Task SeedKBeautyPlatformRowsAsync(AppDbContext db)
+    {
+        if (!await db.Tenants.IgnoreQueryFilters().AnyAsync(t => t.Id == TenantSeed.KBeautyTenantId))
+        {
+            var now = DateTime.UtcNow;
+            db.Tenants.Add(new Tenant(
+                TenantSeed.KBeautyTenantId,
+                TenantSeed.KBeautySlug,
+                "KBeauty",
+                "America/Tijuana",
+                now));
+            db.TenantBrandings.Add(new TenantBranding(
+                TenantSeed.KBeautyTenantId,
+                primaryColor: "#1C1C1C",
+                secondaryColor: "#E8668E"));
+            db.TenantSubscriptions.Add(new TenantSubscription(
+                TenantSeed.KBeautyTenantId,
+                TenantSubscriptionStatus.Active,
+                "internal",
+                paidThroughUtc: DateTime.UtcNow.AddDays(30)));
+
+            foreach (var row in TenantProvisioningDefaults.ProgramConfigRows)
+            {
+                db.ProgramConfigs.Add(new ProgramConfig(
+                    Guid.NewGuid(),
+                    TenantSeed.KBeautyTenantId,
+                    row.Key,
+                    row.Value,
+                    now,
+                    row.Description,
+                    TenantProvisioningDefaults.UpdatedBy));
+            }
+
+            await db.SaveChangesAsync();
+        }
     }
 
     private static async Task SeedDefaultTenantLevelsAsync(AppDbContext db)

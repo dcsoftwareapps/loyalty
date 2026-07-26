@@ -4,6 +4,7 @@ using System.Security.Claims;
 using AdminApp::LoyaltyCloud.Admin.Auth;
 using LoyaltyCloud.Application.Common.Interfaces;
 using MediatR;
+using Microsoft.AspNetCore.Components;
 using Microsoft.AspNetCore.Components.Authorization;
 using Microsoft.Extensions.Logging.Abstractions;
 using Xunit;
@@ -111,6 +112,41 @@ public sealed class AdminInteractiveTenantContextTests
         Assert.False(tenantContext.HasTenant);
     }
 
+    [Fact]
+    [Trait("Category", "AdminInteractiveTenantContext")]
+    [Trait("Category", "TenantProvisioning")]
+    public async Task Platform_route_does_not_restore_tenant_context_even_when_tenant_cookie_exists()
+    {
+        var tenantContext = new TestTenantContext();
+        var initializer = CreateInitializer(
+            tenantContext,
+            CreateTenantPrincipal(KBeautyTenantId, "kbeauty"),
+            "https://admin.test/platform/tenants");
+
+        var initialized = await initializer.EnsureTenantContextAsync();
+
+        Assert.False(initialized);
+        Assert.False(tenantContext.HasTenant);
+    }
+
+    [Fact]
+    [Trait("Category", "AdminInteractiveTenantContext")]
+    [Trait("Category", "TenantProvisioning")]
+    public async Task Platform_route_clears_existing_tenant_context_before_platform_operations()
+    {
+        var tenantContext = new TestTenantContext();
+        tenantContext.SetTenant(KBeautyTenantId, "kbeauty");
+        var initializer = CreateInitializer(
+            tenantContext,
+            CreateTenantPrincipal(KBeautyTenantId, "kbeauty"),
+            "https://admin.test/platform/tenants");
+
+        var initialized = await initializer.EnsureTenantContextAsync();
+
+        Assert.False(initialized);
+        Assert.False(tenantContext.HasTenant);
+    }
+
     private static AdminTenantContextBehavior<Unit, Guid> CreateBehavior(
         IMutableTenantContext tenantContext,
         ClaimsPrincipal principal) =>
@@ -119,10 +155,12 @@ public sealed class AdminInteractiveTenantContextTests
 
     private static AdminTenantContextInitializer CreateInitializer(
         IMutableTenantContext tenantContext,
-        ClaimsPrincipal principal) =>
+        ClaimsPrincipal principal,
+        string currentUri = "https://admin.test/kbeauty/dashboard") =>
         new(
             new FixedAuthenticationStateProvider(principal),
             tenantContext,
+            new TestNavigationManager(currentUri),
             NullLogger<AdminTenantContextInitializer>.Instance);
 
     private static ClaimsPrincipal CreateTenantPrincipal(Guid tenantId, string tenantSlug)
@@ -159,6 +197,18 @@ public sealed class AdminInteractiveTenantContextTests
 
         public override Task<AuthenticationState> GetAuthenticationStateAsync() =>
             Task.FromResult(new AuthenticationState(_principal));
+    }
+
+    private sealed class TestNavigationManager : NavigationManager
+    {
+        public TestNavigationManager(string currentUri)
+        {
+            Initialize("https://admin.test/", currentUri);
+        }
+
+        protected override void NavigateToCore(string uri, bool forceLoad)
+        {
+        }
     }
 
     private sealed class TestTenantContext : IMutableTenantContext

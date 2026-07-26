@@ -7,8 +7,10 @@
 @using LoyaltyCloud.Admin.Auth
 @using LoyaltyCloud.Application.Provisioning
 @using LoyaltyCloud.Application.SuperAdmin
+@using LoyaltyCloud.Application.SuperAdmin.Commands.UploadTenantLogo
 @using LoyaltyCloud.Application.SuperAdmin.Queries.ListPlatformTenants
 @using LoyaltyCloud.Domain.Enums
+@using Microsoft.AspNetCore.Components.Forms
 @inject ISender Sender
 @inject NavigationManager Nav
 
@@ -96,6 +98,19 @@
             </div>
         </div>
 
+        <div class="kb-form-row">
+            <label for="tenant-logo">Logo</label>
+            <InputFile id="tenant-logo" OnChange="OnLogoSelected" accept="image/png,image/jpeg" />
+            @if (logoPreviewUrl is not null)
+            {
+                <div class="kb-logo-preview">
+                    <img src="@logoPreviewUrl" alt="Preview logo" />
+                    <span>@selectedLogoName</span>
+                </div>
+            }
+            <p class="kb-muted">PNG o JPG, maximo 2 MB. LoyaltyCloud genera automaticamente los assets de Apple Wallet.</p>
+        </div>
+
         <div class="kb-actions-inline">
             <button class="kb-btn kb-btn--primary" @onclick="CreateAsync" disabled="@busy">Guardar</button>
             <button class="kb-btn kb-btn--ghost" @onclick="CancelCreate" disabled="@busy">Cancelar</button>
@@ -155,6 +170,9 @@ else
 }
 
 @code {
+    [SupplyParameterFromQuery(Name = "deleted")]
+    public string? Deleted { get; set; }
+
     private IReadOnlyList<PlatformTenantListItemDto>? tenants;
     private readonly TenantForm form = new();
     private readonly List<string> validationErrors = new();
@@ -162,8 +180,18 @@ else
     private bool busy;
     private string? success;
     private string? error;
+    private IBrowserFile? selectedLogo;
+    private string? selectedLogoName;
+    private string? logoPreviewUrl;
+    private const long MaxLogoBytes = 2 * 1024 * 1024;
 
-    protected override async Task OnInitializedAsync() => await LoadAsync();
+    protected override async Task OnInitializedAsync()
+    {
+        if (Deleted == "1")
+            success = "Tenant eliminado.";
+
+        await LoadAsync();
+    }
 
     private async Task LoadAsync()
     {
@@ -182,6 +210,7 @@ else
         showCreate = false;
         validationErrors.Clear();
         form.Clear();
+        ClearSelectedLogo();
     }
 
     private async Task CreateAsync()
@@ -192,6 +221,8 @@ else
 
         if (string.IsNullOrWhiteSpace(form.AdminPassword) || form.AdminPassword.Length < 8)
             validationErrors.Add("El password inicial debe tener al menos 8 caracteres.");
+        if (selectedLogo is not null)
+            ValidateLogoSelection(selectedLogo, validationErrors);
         if (validationErrors.Count > 0)
             return;
 
@@ -217,7 +248,24 @@ else
                 return;
             }
 
+            if (selectedLogo is not null)
+            {
+                await using var logoStream = selectedLogo.OpenReadStream(MaxLogoBytes);
+                var logoResult = await Sender.Send(new UploadTenantLogoCommand(
+                    result.Value.TenantId,
+                    selectedLogo.Name,
+                    selectedLogo.ContentType,
+                    logoStream,
+                    selectedLogo.Size));
+                if (logoResult.IsFailure)
+                {
+                    validationErrors.AddRange(logoResult.Errors);
+                    return;
+                }
+            }
+
             form.Clear();
+            ClearSelectedLogo();
             Nav.NavigateTo($"/platform/tenants/{result.Value.TenantId}");
         }
         finally
@@ -243,6 +291,45 @@ else
         tenant.SubscriptionStatus == TenantSubscriptionStatus.Active && !tenant.PaidThroughUtc.HasValue
             ? "Vigencia requerida"
             : "—";
+
+    private async Task OnLogoSelected(InputFileChangeEventArgs args)
+    {
+        validationErrors.Clear();
+        selectedLogo = args.File;
+        selectedLogoName = selectedLogo.Name;
+        if (selectedLogo is null)
+            return;
+        ValidateLogoSelection(selectedLogo, validationErrors);
+        if (validationErrors.Count > 0)
+        {
+            ClearSelectedLogo();
+            return;
+        }
+
+        await using var stream = selectedLogo.OpenReadStream(MaxLogoBytes);
+        using var ms = new MemoryStream();
+        await stream.CopyToAsync(ms);
+        logoPreviewUrl = $"data:{selectedLogo.ContentType};base64,{Convert.ToBase64String(ms.ToArray())}";
+    }
+
+    private void ClearSelectedLogo()
+    {
+        selectedLogo = null;
+        selectedLogoName = null;
+        logoPreviewUrl = null;
+    }
+
+    private static void ValidateLogoSelection(IBrowserFile file, List<string> errors)
+    {
+        if (file.Size <= 0 || file.Size > MaxLogoBytes)
+            errors.Add("El logo debe pesar maximo 2 MB.");
+        if (!file.ContentType.Equals("image/png", StringComparison.OrdinalIgnoreCase)
+            && !file.ContentType.Equals("image/jpeg", StringComparison.OrdinalIgnoreCase)
+            && !file.ContentType.Equals("image/jpg", StringComparison.OrdinalIgnoreCase))
+        {
+            errors.Add("El logo debe ser PNG o JPG.");
+        }
+    }
 
     private sealed class TenantForm
     {

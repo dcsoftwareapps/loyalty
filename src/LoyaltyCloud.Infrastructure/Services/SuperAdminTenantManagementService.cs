@@ -16,15 +16,18 @@ internal sealed class SuperAdminTenantManagementService : ISuperAdminTenantManag
     private static readonly TimeSpan MaximumGraceExtension = TimeSpan.FromDays(365);
 
     private readonly AppDbContext _db;
+    private readonly IMutableTenantContext _tenantContext;
     private readonly IDateTimeProvider _clock;
     private readonly ILogger<SuperAdminTenantManagementService> _logger;
 
     public SuperAdminTenantManagementService(
         AppDbContext db,
+        IMutableTenantContext tenantContext,
         IDateTimeProvider clock,
         ILogger<SuperAdminTenantManagementService> logger)
     {
         _db = db;
+        _tenantContext = tenantContext;
         _clock = clock;
         _logger = logger;
     }
@@ -83,6 +86,77 @@ internal sealed class SuperAdminTenantManagementService : ISuperAdminTenantManag
         await _db.SaveChangesAsync(cancellationToken);
         _logger.LogInformation("Tenant cancelled. TenantId={TenantId}, TenantSlug={TenantSlug}", tenant.Id, tenant.Slug);
         return Result.Ok();
+    }
+
+    public async Task<Result> DeleteAsync(
+        Guid tenantId,
+        string confirmationSlug,
+        CancellationToken cancellationToken = default)
+    {
+        if (tenantId == Guid.Empty)
+            return Result.Fail("TenantId requerido.");
+        if (string.IsNullOrWhiteSpace(confirmationSlug))
+            return Result.Fail("Escribe el slug del tenant para confirmar.");
+
+        var tenant = await _db.Tenants
+            .IgnoreQueryFilters()
+            .AsNoTracking()
+            .SingleOrDefaultAsync(t => t.Id == tenantId, cancellationToken);
+        if (tenant is null)
+            return Result.Fail("Tenant no encontrado.");
+        if (!string.Equals(tenant.Slug, confirmationSlug.Trim(), StringComparison.Ordinal))
+            return Result.Fail("El slug de confirmacion no coincide.");
+
+        var strategy = _db.Database.CreateExecutionStrategy();
+        return await strategy.ExecuteAsync(async () =>
+        {
+            await using var tx = _db.Database.IsRelational()
+                ? await _db.Database.BeginTransactionAsync(cancellationToken)
+                : null;
+            try
+            {
+                if (_db.Database.IsRelational())
+                    await DeleteTenantDataWithBulkSqlAsync(tenantId, cancellationToken);
+                else
+                    await DeleteTenantDataWithTrackedEntitiesAsync(tenantId, tenant.Slug, cancellationToken);
+
+                if (_db.Database.IsRelational())
+                {
+                    await _db.Tenants
+                        .Where(t => t.Id == tenantId)
+                        .ExecuteDeleteAsync(cancellationToken);
+                }
+                else
+                {
+                    var trackedTenant = await _db.Tenants
+                        .SingleAsync(t => t.Id == tenantId, cancellationToken);
+                    _db.Tenants.Remove(trackedTenant);
+                    await _db.SaveChangesAsync(cancellationToken);
+                }
+
+                if (tx is not null)
+                    await tx.CommitAsync(cancellationToken);
+
+                _logger.LogInformation(
+                    "Tenant hard deleted. TenantId={TenantId}, TenantSlug={TenantSlug}",
+                    tenant.Id,
+                    tenant.Slug);
+
+                return Result.Ok();
+            }
+            catch (Exception ex)
+            {
+                if (tx is not null)
+                    await tx.RollbackAsync(cancellationToken);
+
+                _logger.LogError(
+                    ex,
+                    "Tenant hard delete failed. TenantId={TenantId}, TenantSlug={TenantSlug}",
+                    tenant.Id,
+                    tenant.Slug);
+                throw;
+            }
+        });
     }
 
     public async Task<Result> ExtendTrialAsync(
@@ -193,6 +267,52 @@ internal sealed class SuperAdminTenantManagementService : ISuperAdminTenantManag
         await _db.Tenants
             .Include(t => t.Subscription)
             .FirstOrDefaultAsync(t => t.Id == tenantId, cancellationToken);
+
+    private async Task DeleteTenantDataWithBulkSqlAsync(Guid tenantId, CancellationToken ct)
+    {
+        await _db.NotificationDeliveries.IgnoreQueryFilters().Where(x => x.TenantId == tenantId).ExecuteDeleteAsync(ct);
+        await _db.LoyaltyNotifications.IgnoreQueryFilters().Where(x => x.TenantId == tenantId).ExecuteDeleteAsync(ct);
+        await _db.PointLotConsumptions.IgnoreQueryFilters().Where(x => x.TenantId == tenantId).ExecuteDeleteAsync(ct);
+        await _db.PointLots.IgnoreQueryFilters().Where(x => x.TenantId == tenantId).ExecuteDeleteAsync(ct);
+        await _db.Redemptions.IgnoreQueryFilters().Where(x => x.TenantId == tenantId).ExecuteDeleteAsync(ct);
+        await _db.PointTransactions.IgnoreQueryFilters().Where(x => x.TenantId == tenantId).ExecuteDeleteAsync(ct);
+        await _db.DeviceRegistrations.IgnoreQueryFilters().Where(x => x.TenantId == tenantId).ExecuteDeleteAsync(ct);
+        await _db.LoyaltyCards.IgnoreQueryFilters().Where(x => x.TenantId == tenantId).ExecuteDeleteAsync(ct);
+        await _db.CustomNotificationCampaigns.IgnoreQueryFilters().Where(x => x.TenantId == tenantId).ExecuteDeleteAsync(ct);
+        await _db.PointCampaigns.IgnoreQueryFilters().Where(x => x.TenantId == tenantId).ExecuteDeleteAsync(ct);
+        await _db.RewardCatalogItems.IgnoreQueryFilters().Where(x => x.TenantId == tenantId).ExecuteDeleteAsync(ct);
+        await _db.Customers.IgnoreQueryFilters().Where(x => x.TenantId == tenantId).ExecuteDeleteAsync(ct);
+        await _db.ProgramConfigs.IgnoreQueryFilters().Where(x => x.TenantId == tenantId).ExecuteDeleteAsync(ct);
+        await _db.TenantLoyaltyLevels.IgnoreQueryFilters().Where(x => x.TenantId == tenantId).ExecuteDeleteAsync(ct);
+        await _db.TenantAdminUsers.IgnoreQueryFilters().Where(x => x.TenantId == tenantId).ExecuteDeleteAsync(ct);
+        await _db.TenantBrandings.Where(x => x.TenantId == tenantId).ExecuteDeleteAsync(ct);
+        await _db.TenantSubscriptions.Where(x => x.TenantId == tenantId).ExecuteDeleteAsync(ct);
+    }
+
+    private async Task DeleteTenantDataWithTrackedEntitiesAsync(Guid tenantId, string tenantSlug, CancellationToken ct)
+    {
+        if (!_tenantContext.HasTenant)
+            _tenantContext.SetTenant(tenantId, tenantSlug);
+
+        _db.NotificationDeliveries.RemoveRange(await _db.NotificationDeliveries.ToListAsync(ct));
+        _db.LoyaltyNotifications.RemoveRange(await _db.LoyaltyNotifications.ToListAsync(ct));
+        _db.PointLotConsumptions.RemoveRange(await _db.PointLotConsumptions.ToListAsync(ct));
+        _db.PointLots.RemoveRange(await _db.PointLots.ToListAsync(ct));
+        _db.Redemptions.RemoveRange(await _db.Redemptions.ToListAsync(ct));
+        _db.PointTransactions.RemoveRange(await _db.PointTransactions.ToListAsync(ct));
+        _db.DeviceRegistrations.RemoveRange(await _db.DeviceRegistrations.ToListAsync(ct));
+        _db.LoyaltyCards.RemoveRange(await _db.LoyaltyCards.ToListAsync(ct));
+        _db.CustomNotificationCampaigns.RemoveRange(await _db.CustomNotificationCampaigns.ToListAsync(ct));
+        _db.PointCampaigns.RemoveRange(await _db.PointCampaigns.ToListAsync(ct));
+        _db.RewardCatalogItems.RemoveRange(await _db.RewardCatalogItems.ToListAsync(ct));
+        _db.Customers.RemoveRange(await _db.Customers.ToListAsync(ct));
+        _db.ProgramConfigs.RemoveRange(await _db.ProgramConfigs.ToListAsync(ct));
+        _db.TenantLoyaltyLevels.RemoveRange(await _db.TenantLoyaltyLevels.ToListAsync(ct));
+        _db.TenantAdminUsers.RemoveRange(await _db.TenantAdminUsers.ToListAsync(ct));
+        _db.TenantBrandings.RemoveRange(await _db.TenantBrandings.Where(x => x.TenantId == tenantId).ToListAsync(ct));
+        _db.TenantSubscriptions.RemoveRange(await _db.TenantSubscriptions.Where(x => x.TenantId == tenantId).ToListAsync(ct));
+        await _db.SaveChangesAsync(ct);
+    }
 
     private static DateTime NormalizeUtc(DateTime value) =>
         value.Kind switch

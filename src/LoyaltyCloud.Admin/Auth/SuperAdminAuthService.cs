@@ -57,14 +57,24 @@ public sealed class SuperAdminAuthService
             ClaimTypes.Role);
         var principal = new ClaimsPrincipal(identity);
 
+        var properties = new AuthenticationProperties
+        {
+            IsPersistent = true,
+            ExpiresUtc = DateTimeOffset.UtcNow.AddHours(Math.Max(1, _options.SessionHours))
+        };
+
         await context.SignInAsync(
             SuperAdminAuthDefaults.AuthenticationScheme,
             principal,
-            new AuthenticationProperties
-            {
-                IsPersistent = true,
-                ExpiresUtc = DateTimeOffset.UtcNow.AddHours(Math.Max(1, _options.SessionHours))
-            });
+            properties);
+
+        _logger.LogInformation(
+            "Platform admin sign-in diagnostic. Scheme={Scheme}, HasUsernameClaim={HasUsernameClaim}, HasRoleClaim={HasRoleClaim}, IsPersistent={IsPersistent}, ExpiresUtc={ExpiresUtc:O}.",
+            SuperAdminAuthDefaults.AuthenticationScheme,
+            principal.HasClaim(claim => claim.Type == ClaimTypes.Name),
+            principal.HasClaim(claim => claim.Type == ClaimTypes.Role),
+            properties.IsPersistent,
+            properties.ExpiresUtc);
 
         _logger.LogInformation("Platform admin logged in.");
         return SuperAdminLoginResult.Success;

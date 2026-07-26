@@ -6,6 +6,7 @@ using LoyaltyCloud.Application;
 using LoyaltyCloud.Application.Common.Interfaces;
 using LoyaltyCloud.Application.Customers.Commands.JoinCustomer;
 using LoyaltyCloud.Application.Provisioning;
+using LoyaltyCloud.Application.SuperAdmin.Commands.DeleteTenant;
 using LoyaltyCloud.Common.Constants;
 using LoyaltyCloud.Common.Results;
 using LoyaltyCloud.Common.Services;
@@ -261,6 +262,66 @@ public sealed class TenantProvisioningTests
         Assert.True(result.IsSuccess, result.Error);
     }
 
+    [Fact]
+    [Trait("Category", "TenantProvisioning")]
+    [Trait("Category", "PlatformTenantDeletion")]
+    public async Task Platform_admin_can_hard_delete_tenant_and_preserve_other_tenants()
+    {
+        await using var env = await ProvisioningTestEnvironment.CreateAsync();
+        var target = await env.ProvisionAsync("delete-me", "Delete Me", "owner", AdminPassword);
+        var other = await env.ProvisionAsync("keep-me", "Keep Me", "owner", AdminPassword);
+        Assert.True(target.IsSuccess, target.Error);
+        Assert.True(other.IsSuccess, other.Error);
+
+        var joined = await env.JoinAsync(target.Value.TenantId, "delete-me", "Ana", "Delete", "6465559999");
+        Assert.True(joined.IsSuccess, joined.Error);
+
+        var delete = await env.DeleteTenantAsync(target.Value.TenantId, "delete-me");
+
+        Assert.True(delete.IsSuccess, delete.Error);
+        var counts = await env.PlatformReadAsync(async db => new
+        {
+            Tenants = await db.Tenants.IgnoreQueryFilters().CountAsync(t => t.Id == target.Value.TenantId),
+            AdminUsers = await db.TenantAdminUsers.IgnoreQueryFilters().CountAsync(t => t.TenantId == target.Value.TenantId),
+            Branding = await db.TenantBrandings.CountAsync(t => t.TenantId == target.Value.TenantId),
+            Subscription = await db.TenantSubscriptions.CountAsync(t => t.TenantId == target.Value.TenantId),
+            Configs = await db.ProgramConfigs.IgnoreQueryFilters().CountAsync(t => t.TenantId == target.Value.TenantId),
+            Levels = await db.TenantLoyaltyLevels.IgnoreQueryFilters().CountAsync(t => t.TenantId == target.Value.TenantId),
+            Customers = await db.Customers.IgnoreQueryFilters().CountAsync(t => t.TenantId == target.Value.TenantId),
+            Cards = await db.LoyaltyCards.IgnoreQueryFilters().CountAsync(t => t.TenantId == target.Value.TenantId),
+            OtherTenant = await db.Tenants.IgnoreQueryFilters().CountAsync(t => t.Id == other.Value.TenantId),
+            OtherAdmin = await db.TenantAdminUsers.IgnoreQueryFilters().CountAsync(t => t.TenantId == other.Value.TenantId)
+        });
+
+        Assert.Equal(0, counts.Tenants);
+        Assert.Equal(0, counts.AdminUsers);
+        Assert.Equal(0, counts.Branding);
+        Assert.Equal(0, counts.Subscription);
+        Assert.Equal(0, counts.Configs);
+        Assert.Equal(0, counts.Levels);
+        Assert.Equal(0, counts.Customers);
+        Assert.Equal(0, counts.Cards);
+        Assert.Equal(1, counts.OtherTenant);
+        Assert.Equal(1, counts.OtherAdmin);
+    }
+
+    [Fact]
+    [Trait("Category", "TenantProvisioning")]
+    [Trait("Category", "PlatformTenantDeletion")]
+    public async Task Hard_delete_requires_exact_slug_confirmation()
+    {
+        await using var env = await ProvisioningTestEnvironment.CreateAsync();
+        var tenant = await env.ProvisionAsync("exact-slug", "Exact Slug", "owner", AdminPassword);
+        Assert.True(tenant.IsSuccess, tenant.Error);
+
+        var delete = await env.DeleteTenantAsync(tenant.Value.TenantId, "EXACT-SLUG");
+
+        Assert.True(delete.IsFailure);
+        Assert.Equal("El slug de confirmacion no coincide.", delete.Error);
+        var exists = await env.PlatformReadAsync(db => db.Tenants.IgnoreQueryFilters().AnyAsync(t => t.Id == tenant.Value.TenantId));
+        Assert.True(exists);
+    }
+
     private sealed class ProvisioningTestEnvironment : IAsyncDisposable
     {
         private readonly ServiceProvider _services;
@@ -359,6 +420,12 @@ public sealed class TenantProvisioningTests
             using var scope = _services.CreateScope();
             scope.ServiceProvider.GetRequiredService<IMutableTenantContext>().SetTenant(tenantId, tenantSlug);
             return await scope.ServiceProvider.GetRequiredService<ISender>().Send(new JoinCustomerCommand(firstName, lastName, phone));
+        }
+
+        public async Task<Result> DeleteTenantAsync(Guid tenantId, string confirmationSlug)
+        {
+            using var scope = _services.CreateScope();
+            return await scope.ServiceProvider.GetRequiredService<ISender>().Send(new DeleteTenantCommand(tenantId, confirmationSlug));
         }
 
         public async Task<T> PlatformReadAsync<T>(Func<AppDbContext, Task<T>> query)

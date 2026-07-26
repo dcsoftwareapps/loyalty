@@ -1,6 +1,7 @@
 using System.Security.Claims;
 using LoyaltyCloud.Application.Common.Interfaces;
 using Microsoft.AspNetCore.Components.Authorization;
+using Microsoft.AspNetCore.Components;
 
 namespace LoyaltyCloud.Admin.Auth;
 
@@ -13,20 +14,34 @@ public sealed class AdminTenantContextInitializer
 {
     private readonly AuthenticationStateProvider _authenticationStateProvider;
     private readonly IMutableTenantContext _tenantContext;
+    private readonly NavigationManager _navigation;
     private readonly ILogger<AdminTenantContextInitializer> _logger;
 
     public AdminTenantContextInitializer(
         AuthenticationStateProvider authenticationStateProvider,
         IMutableTenantContext tenantContext,
+        NavigationManager navigation,
         ILogger<AdminTenantContextInitializer> logger)
     {
         _authenticationStateProvider = authenticationStateProvider;
         _tenantContext = tenantContext;
+        _navigation = navigation;
         _logger = logger;
     }
 
     public async Task<bool> EnsureTenantContextAsync(CancellationToken ct = default)
     {
+        if (IsPlatformRoute())
+        {
+            if (_tenantContext.HasTenant)
+            {
+                _tenantContext.Clear();
+                _logger.LogDebug("Tenant context cleared for platform route.");
+            }
+
+            return false;
+        }
+
         if (_tenantContext.HasTenant)
             return true;
 
@@ -54,5 +69,12 @@ public sealed class AdminTenantContextInitializer
             tenantId,
             tenantSlug);
         return true;
+    }
+
+    private bool IsPlatformRoute()
+    {
+        var relativePath = _navigation.ToBaseRelativePath(_navigation.Uri);
+        return relativePath.Equals("platform", StringComparison.OrdinalIgnoreCase)
+            || relativePath.StartsWith("platform/", StringComparison.OrdinalIgnoreCase);
     }
 }

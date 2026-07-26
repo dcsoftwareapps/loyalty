@@ -9,9 +9,9 @@ namespace LoyaltyCloud.Infrastructure.Services;
 
 internal sealed class TenantWalletBrandingReadService : ITenantWalletBrandingReadService
 {
-    private const string DefaultBackgroundColor = "rgb(250,248,244)";
-    private const string DefaultForegroundColor = "rgb(28,28,28)";
-    private const string DefaultLabelColor = "rgb(132,124,120)";
+    private const string DefaultBackgroundColor = "rgb(255,255,255)";
+    private const string DefaultForegroundColor = "rgb(0,0,0)";
+    private const string DefaultLabelColor = "rgb(17,24,39)";
     private const string GenericContactFallback = "LoyaltyCloud";
 
     private readonly AppDbContext _db;
@@ -72,11 +72,9 @@ internal sealed class TenantWalletBrandingReadService : ITenantWalletBrandingRea
             OrganizationName: row.DisplayName,
             Description: $"Tarjeta de Lealtad {row.DisplayName}",
             BackgroundColor: DefaultBackgroundColor,
-            ForegroundColor: TenantBrandingSanitizer.ToRgbColor(
-                TenantBrandingSanitizer.ColorOrDefault(row.PrimaryColor, TenantBrandingSanitizer.DefaultPrimaryColor, tenantId, "PrimaryColor", _logger),
-                DefaultForegroundColor),
+            ForegroundColor: DefaultForegroundColor,
             LabelColor: TenantBrandingSanitizer.ToRgbColor(
-                TenantBrandingSanitizer.ColorOrDefault(row.SecondaryColor, TenantBrandingSanitizer.DefaultSecondaryColor, tenantId, "SecondaryColor", _logger),
+                TenantBrandingSanitizer.ColorOrDefault(row.PrimaryColor, TenantBrandingSanitizer.DefaultPrimaryColor, tenantId, "PrimaryColor", _logger),
                 DefaultLabelColor),
             ContactValue: contactValue!,
             CustomerFallbackName: $"Cliente {row.DisplayName}",

@@ -4,7 +4,6 @@ using LoyaltyCloud.Domain.Entities;
 using LoyaltyCloud.Domain.Enums;
 using LoyaltyCloud.Infrastructure;
 using LoyaltyCloud.Infrastructure.Persistence;
-using LoyaltyCloud.Infrastructure.Persistence.Seed;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -22,17 +21,13 @@ public sealed class TenantBrandingTests
 
     [Fact]
     [Trait("Category", "TenantBranding")]
-    public async Task KBeauty_and_Bella_return_their_own_branding()
+    public async Task Bella_returns_its_own_branding()
     {
         await using var env = await BrandingTestEnvironment.CreateAsync();
 
-        var kbeauty = await env.ResolvePublicAsync(TenantSeed.KBeautySlug);
         var bella = await env.ResolvePublicAsync(BellaSlug);
 
-        Assert.NotNull(kbeauty);
         Assert.NotNull(bella);
-        Assert.Equal("KBeauty", kbeauty!.DisplayName);
-        Assert.Equal("#1C1C1C", kbeauty.PrimaryColor);
         Assert.Equal("Bella Salon", bella!.DisplayName);
         Assert.Equal("#8B5CF6", bella.PrimaryColor);
         Assert.Equal("#F5D0FE", bella.SecondaryColor);
@@ -78,8 +73,9 @@ public sealed class TenantBrandingTests
         Assert.Equal(BellaSlug, wallet.TenantSlug);
         Assert.Equal("Bella Salon", wallet.OrganizationName);
         Assert.Equal("Tarjeta de Lealtad Bella Salon", wallet.Description);
-        Assert.Equal("rgb(139,92,246)", wallet.ForegroundColor);
-        Assert.Equal("rgb(245,208,254)", wallet.LabelColor);
+        Assert.Equal("rgb(255,255,255)", wallet.BackgroundColor);
+        Assert.Equal("rgb(0,0,0)", wallet.ForegroundColor);
+        Assert.Equal("rgb(139,92,246)", wallet.LabelColor);
         Assert.Contains("instagram.com/bella_salon", wallet.ContactValue);
     }
 
@@ -115,15 +111,16 @@ public sealed class TenantBrandingTests
 
     [Fact]
     [Trait("Category", "TenantBranding")]
-    public void Wallet_asset_provider_uses_tenant_path_generic_fallback_and_kbeauty_legacy_fallback()
+    public void Wallet_asset_provider_uses_tenant_id_path_and_generic_fallback()
     {
         var root = GetRepositoryRoot();
         var source = File.ReadAllText(Path.Combine(root, "src", "LoyaltyCloud.Infrastructure", "Services", "TenantWalletAssetProvider.cs"));
 
-        Assert.Contains("tenants/{tenantSlug}/branding/wallet/{spec.Name}", source);
+        Assert.Contains("GetTenantBrandingPrefix(tenantId)", source);
+        Assert.Contains("tenant-branding/{tenantId:D}", File.ReadAllText(Path.Combine(root, "src", "LoyaltyCloud.Infrastructure", "Services", "TenantBrandingLogoService.cs")));
         Assert.Contains("AppleWalletGeneric", source);
-        Assert.Contains("TenantSeed.KBeautySlug", source);
-        Assert.Contains("\"legacy-kbeauty\"", source);
+        Assert.DoesNotContain("TenantSeed.KBeautySlug", source);
+        Assert.DoesNotContain("legacy-kbeauty", source);
     }
 
     [Fact]
@@ -146,6 +143,38 @@ public sealed class TenantBrandingTests
             Assert.True(File.Exists(Path.Combine(dir, name)), $"Missing generic wallet asset: {name}");
     }
 
+    [Fact]
+    [Trait("Category", "TenantBranding")]
+    public async Task Logo_upload_rejects_invalid_format_before_blob_storage()
+    {
+        await using var env = await BrandingTestEnvironment.CreateAsync(blobConnectionString: "");
+
+        var result = await env.UploadLogoAsync(
+            BellaTenantId,
+            "logo.gif",
+            "image/gif",
+            new byte[] { 1, 2, 3 });
+
+        Assert.True(result.IsFailure);
+        Assert.Contains("El logo debe ser PNG o JPG.", result.Errors);
+    }
+
+    [Fact]
+    [Trait("Category", "TenantBranding")]
+    public async Task Logo_upload_rejects_invalid_size_before_blob_storage()
+    {
+        await using var env = await BrandingTestEnvironment.CreateAsync(blobConnectionString: "");
+
+        var result = await env.UploadLogoAsync(
+            BellaTenantId,
+            "logo.png",
+            "image/png",
+            Array.Empty<byte>());
+
+        Assert.True(result.IsFailure);
+        Assert.Contains("El logo debe pesar maximo 2 MB.", result.Errors);
+    }
+
     private sealed class BrandingTestEnvironment : IAsyncDisposable
     {
         private readonly ServiceProvider _services;
@@ -155,7 +184,7 @@ public sealed class TenantBrandingTests
             _services = services;
         }
 
-        public static async Task<BrandingTestEnvironment> CreateAsync()
+        public static async Task<BrandingTestEnvironment> CreateAsync(string blobConnectionString = "UseDevelopmentStorage=true")
         {
             var dbName = "LoyaltyCloud_MT3D_" + Guid.NewGuid().ToString("N");
             var configuration = new ConfigurationBuilder()
@@ -163,7 +192,7 @@ public sealed class TenantBrandingTests
                 {
                     ["ConnectionStrings:DefaultConnection"] = $"Server=(localdb)\\MSSQLLocalDB;Database={dbName};Trusted_Connection=True;TrustServerCertificate=True;",
                     ["Azure:KeyVaultUri"] = "",
-                    ["Azure:BlobStorage:ConnectionString"] = "UseDevelopmentStorage=true",
+                    ["Azure:BlobStorage:ConnectionString"] = blobConnectionString,
                     ["Apple:PassTypeIdentifier"] = "pass.com.kbeautymx.loyalty",
                     ["Apple:TeamIdentifier"] = "TESTTEAM01",
                     ["Apple:WebServiceURL"] = "https://test.local",
@@ -215,6 +244,18 @@ public sealed class TenantBrandingTests
             using var scope = _services.CreateScope();
             scope.ServiceProvider.GetRequiredService<IMutableTenantContext>().SetTenant(tenantId, tenantSlug);
             return await scope.ServiceProvider.GetRequiredService<ITenantWalletBrandingReadService>().GetCurrentAsync();
+        }
+
+        public async Task<LoyaltyCloud.Common.Results.Result<LoyaltyCloud.Application.Common.Interfaces.TenantBrandingLogoResult>> UploadLogoAsync(
+            Guid tenantId,
+            string fileName,
+            string contentType,
+            byte[] bytes)
+        {
+            using var scope = _services.CreateScope();
+            await using var stream = new MemoryStream(bytes);
+            return await scope.ServiceProvider.GetRequiredService<ITenantBrandingLogoService>()
+                .UploadAsync(tenantId, fileName, contentType, stream, bytes.LongLength);
         }
 
         private async Task InitializeAsync()

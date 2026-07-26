@@ -96,7 +96,7 @@ internal sealed class PassGeneratorService : IPassGeneratorService
 
         var passJson = BuildPassJson(card, customer, walletContext, branding, progress);
         var passJsonBytes = JsonSerializer.SerializeToUtf8Bytes(passJson, PassJsonOpts);
-        var assets = await _walletAssets.LoadAssetsAsync(branding.TenantSlug, ct);
+        var assets = await _walletAssets.LoadAssetsAsync(branding.TenantId, branding.TenantSlug, ct);
 
         var manifest = new Dictionary<string, string>(StringComparer.Ordinal)
         {

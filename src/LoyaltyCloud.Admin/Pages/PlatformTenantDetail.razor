@@ -6,14 +6,18 @@
 @using LoyaltyCloud.Admin.Auth
 @using LoyaltyCloud.Application.SuperAdmin
 @using LoyaltyCloud.Application.SuperAdmin.Commands.CancelTenant
+@using LoyaltyCloud.Application.SuperAdmin.Commands.DeleteTenant
 @using LoyaltyCloud.Application.SuperAdmin.Commands.ExtendTenantTrial
 @using LoyaltyCloud.Application.SuperAdmin.Commands.ReactivateTenant
 @using LoyaltyCloud.Application.SuperAdmin.Commands.RecordManualSubscriptionPayment
+@using LoyaltyCloud.Application.SuperAdmin.Commands.RemoveTenantLogo
 @using LoyaltyCloud.Application.SuperAdmin.Commands.SuspendTenant
 @using LoyaltyCloud.Application.SuperAdmin.Commands.UpdateTenantGracePeriod
+@using LoyaltyCloud.Application.SuperAdmin.Commands.UploadTenantLogo
 @using LoyaltyCloud.Application.SuperAdmin.Queries.GetPlatformTenant
 @using LoyaltyCloud.Domain.Entities
 @using LoyaltyCloud.Domain.Enums
+@using Microsoft.AspNetCore.Components.Forms
 @inject ISender Sender
 @inject NavigationManager Nav
 
@@ -103,7 +107,22 @@ else
             {
                 <p><strong>Color primario:</strong> @tenant.Branding.PrimaryColor</p>
                 <p><strong>Color secundario:</strong> @tenant.Branding.SecondaryColor</p>
-                <p><strong>Logo URL:</strong> @Display(tenant.Branding.LogoUrl)</p>
+                <p><strong>Logo:</strong> @(tenant.Branding.LogoBlobName is null ? "Fallback" : "Configurado")</p>
+                @if (!string.IsNullOrWhiteSpace(tenant.Branding.LogoUrl))
+                {
+                    <div class="kb-logo-preview">
+                        <img src="@tenant.Branding.LogoUrl" alt="Logo actual" />
+                        <span>Logo actual</span>
+                    </div>
+                }
+                <div class="kb-form-row">
+                    <label for="tenant-logo-update">Cambiar logo</label>
+                    <InputFile id="tenant-logo-update" OnChange="UploadLogoAsync" accept="image/png,image/jpeg" disabled="@busy" />
+                    <p class="kb-muted">PNG o JPG, maximo 2 MB.</p>
+                    <button class="kb-btn kb-btn--ghost" @onclick="RemoveLogoAsync" disabled="@(tenant.Branding.LogoBlobName is null || busy)">
+                        Eliminar logo
+                    </button>
+                </div>
                 <p><strong>Soporte:</strong> @Display(tenant.Branding.SupportPhone)</p>
                 <p><strong>WhatsApp:</strong> @Display(tenant.Branding.WhatsAppUrl)</p>
                 <p><strong>Instagram:</strong> @Display(tenant.Branding.InstagramUrl)</p>
@@ -129,6 +148,27 @@ else
                 <input type="checkbox" @bind="confirmCancel" />
                 Confirmo cancelación definitiva
             </label>
+        </div>
+    </section>
+
+    <section class="kb-card kb-danger-zone" style="margin-top:24px;">
+        <h2>Eliminar tenant</h2>
+        <p class="kb-muted">
+            Esta acciÃ³n eliminarÃ¡ permanentemente el tenant y todos sus datos.
+        </p>
+        <p><strong>Nombre:</strong> @tenant.DisplayName</p>
+        <p><strong>Slug:</strong> <code>@tenant.Slug</code></p>
+
+        <div class="kb-form-row">
+            <div>
+                <label for="delete-confirmation">Escribe "@tenant.Slug" para confirmar.</label>
+                <input id="delete-confirmation" type="text" @bind="deleteConfirmationSlug" @bind:event="oninput" />
+            </div>
+            <button class="kb-btn kb-btn--danger"
+                    @onclick="DeleteTenantAsync"
+                    disabled="@(!CanDeleteTenant || busy)">
+                Eliminar permanentemente
+            </button>
         </div>
     </section>
 
@@ -195,11 +235,13 @@ else
     private bool confirmSuspend;
     private bool confirmCancel;
     private bool confirmPayment;
+    private string deleteConfirmationSlug = string.Empty;
     private int paymentMonths = 1;
     private string? trialEndDate;
     private string? graceEndDate;
     private string? success;
     private string? error;
+    private const long MaxLogoBytes = 2 * 1024 * 1024;
 
     private bool CanSuspend => tenant?.Subscription?.Status is not null
         && tenant.Subscription.Status is not TenantSubscriptionStatus.Suspended and not TenantSubscriptionStatus.Cancelled;
@@ -214,6 +256,8 @@ else
              && tenant.Subscription.SuspensionReason is null or nameof(TenantSuspensionReason.Administrative));
     private bool CanExtendTrial => tenant?.Subscription?.Status == TenantSubscriptionStatus.Trial;
     private bool CanUpdateGrace => tenant?.Subscription?.Status == TenantSubscriptionStatus.PastDue;
+    private bool CanDeleteTenant => tenant is not null
+        && string.Equals(deleteConfirmationSlug, tenant.Slug, StringComparison.Ordinal);
     private DateTime? EstimatedPaidThrough
     {
         get
@@ -292,6 +336,81 @@ else
         await ExecuteAsync(() => Sender.Send(new CancelTenantCommand(TenantId)), "Tenant cancelado.");
         confirmCancel = false;
     }
+
+    private async Task DeleteTenantAsync()
+    {
+        if (tenant is null || !CanDeleteTenant)
+        {
+            error = "Escribe el slug exacto para confirmar la eliminaciÃ³n.";
+            return;
+        }
+
+        busy = true;
+        success = null;
+        error = null;
+        try
+        {
+            var result = await Sender.Send(new DeleteTenantCommand(TenantId, deleteConfirmationSlug));
+            if (result.IsFailure)
+            {
+                error = string.Join(" ", result.Errors);
+                return;
+            }
+
+            Nav.NavigateTo("/platform/tenants?deleted=1");
+        }
+        finally
+        {
+            busy = false;
+        }
+    }
+
+    private async Task UploadLogoAsync(InputFileChangeEventArgs args)
+    {
+        busy = true;
+        success = null;
+        error = null;
+        try
+        {
+            var file = args.File;
+            if (file.Size <= 0 || file.Size > MaxLogoBytes)
+            {
+                error = "El logo debe pesar maximo 2 MB.";
+                return;
+            }
+
+            if (!file.ContentType.Equals("image/png", StringComparison.OrdinalIgnoreCase)
+                && !file.ContentType.Equals("image/jpeg", StringComparison.OrdinalIgnoreCase)
+                && !file.ContentType.Equals("image/jpg", StringComparison.OrdinalIgnoreCase))
+            {
+                error = "El logo debe ser PNG o JPG.";
+                return;
+            }
+
+            await using var stream = file.OpenReadStream(MaxLogoBytes);
+            var result = await Sender.Send(new UploadTenantLogoCommand(
+                TenantId,
+                file.Name,
+                file.ContentType,
+                stream,
+                file.Size));
+            if (result.IsFailure)
+            {
+                error = string.Join(" ", result.Errors);
+                return;
+            }
+
+            success = "Logo actualizado.";
+            await LoadAsync();
+        }
+        finally
+        {
+            busy = false;
+        }
+    }
+
+    private async Task RemoveLogoAsync() =>
+        await ExecuteAsync(() => Sender.Send(new RemoveTenantLogoCommand(TenantId)), "Logo eliminado.");
 
     private async Task ExtendTrialAsync()
     {

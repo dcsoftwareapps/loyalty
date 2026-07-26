@@ -53,6 +53,10 @@ public sealed class WalletPassJsonUpdateStructureTests
         Assert.Equal(passA["webServiceURL"]!.GetValue<string>(), passB["webServiceURL"]!.GetValue<string>());
         Assert.Equal(passA["organizationName"]!.GetValue<string>(), passB["organizationName"]!.GetValue<string>());
         Assert.Equal(passA["formatVersion"]!.GetValue<int>(), passB["formatVersion"]!.GetValue<int>());
+        Assert.Null(passB["logoText"]);
+        Assert.Equal("rgb(255,255,255)", passB["backgroundColor"]!.GetValue<string>());
+        Assert.Equal("rgb(0,0,0)", passB["foregroundColor"]!.GetValue<string>());
+        Assert.Equal("rgb(28,28,28)", passB["labelColor"]!.GetValue<string>());
 
         var pointsA = SingleField(passA, "points");
         var pointsB = SingleField(passB, "points");
@@ -291,9 +295,9 @@ public sealed class WalletPassJsonUpdateStructureTests
                     "KBeauty",
                     "KBeauty MX",
                     "KBeauty Loyalty",
-                    "rgb(250,248,244)",
+                    "rgb(255,255,255)",
+                    "rgb(0,0,0)",
                     "rgb(28,28,28)",
-                    "rgb(132,124,120)",
                     "@kbeauty_mx\n\nkbeautymx.com\n\n+52 646 238 6962",
                     "Cliente K-Beauty",
                     UsesBundledAssetsFallback: true,

@@ -1,0 +1,219 @@
+@page "/quick-help"
+@attribute [Authorize]
+@rendermode InteractiveServer
+
+@using System.Security.Claims
+@using LoyaltyCloud.Admin.Auth
+@using LoyaltyCloud.Admin.Services
+@using LoyaltyCloud.Application.Common.Interfaces
+@inject AuthenticationStateProvider AuthenticationStateProvider
+@inject ITenantBrandingReadService Branding
+@inject IJSRuntime JS
+@inject NavigationManager Navigation
+
+<PageTitle>Ayuda rápida - LoyaltyCloud</PageTitle>
+
+<section class="kb-help" style="@TenantStyle">
+    <header class="kb-help-header">
+        <div>
+            <h1>Ayuda rápida</h1>
+            <p class="kb-muted">Las tareas más comunes para atender clientes.</p>
+        </div>
+    </header>
+
+    <section class="kb-card kb-help-registration">
+        <div>
+            <span class="kb-card-label">Registro público</span>
+            <h2>Enlace para nuevos clientes</h2>
+            <p class="kb-muted">
+                Comparte este enlace para que una persona se registre, capture sus datos y agregue su tarjeta a Apple Wallet.
+            </p>
+            @if (registrationUrl is null)
+            {
+                <p class="kb-form-error">No se pudo resolver el enlace de registro del tenant actual.</p>
+            }
+            else
+            {
+                <div class="kb-help-registration-layout">
+                    <div>
+                        <div class="kb-help-link">@registrationUrl</div>
+                        <div class="kb-actions-inline kb-help-actions">
+                            <a class="kb-btn kb-btn--ghost" href="@registrationUrl" target="_blank" rel="noopener noreferrer">
+                                Abrir enlace
+                            </a>
+                            <button class="kb-btn kb-btn--primary" type="button" @onclick="CopyRegistrationLinkAsync">
+                                Copiar enlace de registro
+                            </button>
+                            <button class="kb-btn kb-btn--ghost" type="button" @onclick="PrintQrAsync">
+                                Imprimir QR
+                            </button>
+                        </div>
+                    </div>
+                    @if (registrationQrDataUri is not null)
+                    {
+                        <div class="kb-help-qr">
+                            <img src="@registrationQrDataUri" alt="QR de registro" />
+                            <span>Escanea para registrarte</span>
+                        </div>
+                    }
+                </div>
+                @if (copyMessage is not null)
+                {
+                    <div class="kb-form-success">@copyMessage</div>
+                }
+            }
+        </div>
+    </section>
+
+    @if (registrationUrl is not null && registrationQrDataUri is not null)
+    {
+        <section class="kb-registration-poster">
+            <div class="kb-registration-poster-inner">
+                <div class="kb-poster-brand">@BusinessName</div>
+                <div class="kb-poster-kicker">Programa de lealtad</div>
+                <h2>Regístrate y empieza a acumular puntos</h2>
+                <p>Escanea el código QR para crear tu cuenta y agregar tu tarjeta de lealtad.</p>
+                <img src="@registrationQrDataUri" alt="QR de registro" />
+                <strong>Escanéame</strong>
+                <span>Powered by LoyaltyCloud</span>
+            </div>
+        </section>
+    }
+
+    <div class="kb-help-grid">
+        <article class="kb-card kb-help-card">
+            <div class="kb-help-number">1</div>
+            <div>
+                <h2>Dar de alta a un cliente</h2>
+                <ol>
+                    <li>Abre o comparte el enlace de registro.</li>
+                    <li>El cliente captura nombre, apellido y teléfono.</li>
+                    <li>LoyaltyCloud crea su cuenta y tarjeta de lealtad.</li>
+                    <li>El cliente toca “Agregar a Apple Wallet”.</li>
+                </ol>
+            </div>
+        </article>
+
+        <article class="kb-card kb-help-card">
+            <div class="kb-help-number">2</div>
+            <div>
+                <h2>Sumar puntos</h2>
+                <ol>
+                    <li>Busca o escanea el ID del cliente.</li>
+                    <li>Confirma que sea el cliente correcto.</li>
+                    <li>Captura el monto de la compra.</li>
+                    <li>Confirma la compra.</li>
+                    <li>Los puntos aparecen en su tarjeta Wallet.</li>
+                </ol>
+                <p class="kb-muted">Si existe una campaña aplicable, LoyaltyCloud calcula automáticamente el beneficio correspondiente.</p>
+                <a class="kb-btn kb-btn--primary" href="/scan">Ir a Sumar puntos</a>
+            </div>
+        </article>
+
+        <article class="kb-card kb-help-card">
+            <div class="kb-help-number">3</div>
+            <div>
+                <h2>Canjear puntos</h2>
+                <ol>
+                    <li>Busca o escanea el ID del cliente.</li>
+                    <li>Revisa las recompensas disponibles.</li>
+                    <li>Elige la recompensa.</li>
+                    <li>Confirma el canje.</li>
+                    <li>El saldo se actualiza automáticamente.</li>
+                </ol>
+                <a class="kb-btn kb-btn--primary" href="/redeem">Ir a Canjear puntos</a>
+            </div>
+        </article>
+
+        <article class="kb-card kb-help-card">
+            <div class="kb-help-number">4</div>
+            <div>
+                <h2>Buscar o escanear cliente</h2>
+                <ul>
+                    <li>En Clientes puedes buscar por nombre, email o ID del cliente.</li>
+                    <li>En Sumar puntos y Canjear puntos puedes escanear el QR de Wallet.</li>
+                    <li>También puedes escribir manualmente el ID del cliente si la cámara no está disponible.</li>
+                </ul>
+            </div>
+        </article>
+    </div>
+
+    <section class="kb-card kb-help-common">
+        <h2>Problemas comunes</h2>
+        <div class="kb-help-common-grid">
+            <div>
+                <h3>El cliente no aparece</h3>
+                <p>Verifica nombre, email o ID del cliente. Confirma también que el cliente esté activo.</p>
+            </div>
+            <div>
+                <h3>No puede agregar Wallet</h3>
+                <p>Abre nuevamente el enlace de registro del tenant. Si el cliente ya existe, LoyaltyCloud mostrará el botón para agregar su tarjeta a Apple Wallet.</p>
+            </div>
+            <div>
+                <h3>No tiene puntos suficientes</h3>
+                <p>No realices el canje. Revisa saldo y recompensas disponibles desde Canjear puntos.</p>
+            </div>
+            <div>
+                <h3>Canje equivocado</h3>
+                <p>Ve a Canjes, busca el canje pendiente y usa Cancelar si todavía no fue confirmado.</p>
+            </div>
+        </div>
+    </section>
+</section>
+
+@code {
+    private string? registrationUrl;
+    private string? registrationQrDataUri;
+    private string? copyMessage;
+    private TenantBrandingInfo? branding;
+
+    private string BusinessName => branding?.DisplayName ?? "LoyaltyCloud";
+
+    private string TenantStyle =>
+        branding is null
+            ? string.Empty
+            : $"--kb-blush:{CssColorOrFallback(branding.PrimaryColor, "#111827")};--kb-sand-100:{CssColorOrFallback(branding.SecondaryColor, "#F3F4F6")};";
+
+    protected override async Task OnInitializedAsync()
+    {
+        var auth = await AuthenticationStateProvider.GetAuthenticationStateAsync();
+        var tenantSlug = auth.User.FindFirstValue(AdminClaimTypes.TenantSlug);
+
+        if (!string.IsNullOrWhiteSpace(tenantSlug))
+        {
+            registrationUrl = new Uri(new Uri(Navigation.BaseUri), $"{tenantSlug.Trim().ToLowerInvariant()}/join").ToString();
+            registrationQrDataUri = QrCodeSvgGenerator.GenerateDataUri(registrationUrl, scale: 7);
+            branding = await Branding.GetCurrentAsync();
+        }
+    }
+
+    private async Task CopyRegistrationLinkAsync()
+    {
+        if (string.IsNullOrWhiteSpace(registrationUrl))
+            return;
+
+        try
+        {
+            await JS.InvokeVoidAsync("navigator.clipboard.writeText", registrationUrl);
+            copyMessage = "Enlace copiado.";
+        }
+        catch
+        {
+            copyMessage = "No se pudo copiar automáticamente. Puedes seleccionar el enlace manualmente.";
+        }
+    }
+
+    private async Task PrintQrAsync() => await JS.InvokeVoidAsync("window.print");
+
+    private static string CssColorOrFallback(string? value, string fallback)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+            return fallback;
+
+        var trimmed = value.Trim();
+        if (trimmed.StartsWith('#') && (trimmed.Length == 4 || trimmed.Length == 7))
+            return trimmed;
+
+        return fallback;
+    }
+}

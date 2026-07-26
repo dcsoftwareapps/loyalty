@@ -4,6 +4,7 @@ public sealed class TenantBranding
 {
     public Guid TenantId { get; private set; }
     public string? LogoUrl { get; private set; }
+    public string? LogoBlobName { get; private set; }
     public string PrimaryColor { get; private set; } = "#1C1C1C";
     public string SecondaryColor { get; private set; } = "#E8668E";
     public string? SupportPhone { get; private set; }
@@ -30,12 +31,28 @@ public sealed class TenantBranding
             : tenantId;
 
         LogoUrl = NormalizeOptional(logoUrl, 1000);
+        LogoBlobName = null;
         PrimaryColor = NormalizeColor(primaryColor, "#1C1C1C", nameof(primaryColor));
         SecondaryColor = NormalizeColor(secondaryColor, "#E8668E", nameof(secondaryColor));
         SupportPhone = NormalizeOptional(supportPhone, 50);
         WhatsAppUrl = NormalizeOptional(whatsAppUrl, 1000);
         InstagramUrl = NormalizeOptional(instagramUrl, 1000);
         TermsUrl = NormalizeOptional(termsUrl, 1000);
+    }
+
+    public void SetLogo(string? logoUrl, string logoBlobName)
+    {
+        if (string.IsNullOrWhiteSpace(logoBlobName))
+            throw new ArgumentException("LogoBlobName requerido.", nameof(logoBlobName));
+
+        LogoUrl = NormalizeOptional(logoUrl, 1000);
+        LogoBlobName = NormalizeOptional(logoBlobName, 500);
+    }
+
+    public void ClearLogo()
+    {
+        LogoUrl = null;
+        LogoBlobName = null;
     }
 
     private static string NormalizeColor(string? value, string fallback, string paramName)
