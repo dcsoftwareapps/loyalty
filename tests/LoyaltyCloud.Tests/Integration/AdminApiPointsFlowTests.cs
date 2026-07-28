@@ -1,8 +1,10 @@
 using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
+using LoyaltyCloud.Application.Config.Queries.GetProgramConfig;
 using LoyaltyCloud.Application.Common.Interfaces;
 using LoyaltyCloud.Application.Points.Commands.AddPoints;
+using LoyaltyCloud.Common.Constants;
 using LoyaltyCloud.Common.Security;
 using LoyaltyCloud.Domain.Entities;
 using LoyaltyCloud.Domain.Enums;
@@ -17,6 +19,8 @@ namespace LoyaltyCloud.Tests.Integration;
 public sealed class AdminApiPointsFlowTests : IClassFixture<CustomWebApplicationFactory>, IAsyncLifetime
 {
     private const string SharedSecret = "test-admin-api-shared-secret-with-enough-length";
+    private static readonly Guid BellaTenantId = Guid.Parse("c2000000-0000-0000-0000-000000000001");
+    private const string BellaTenantSlug = "bella-api";
     private readonly CustomWebApplicationFactory _factory;
     private readonly HttpClient _client;
 
@@ -120,6 +124,64 @@ public sealed class AdminApiPointsFlowTests : IClassFixture<CustomWebApplication
         Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
     }
 
+    [Fact]
+    [Trait("Category", "AdminRedemptionFlow")]
+    public async Task Signed_admin_config_request_resolves_tenant_and_returns_only_that_tenant_config()
+    {
+        await EnsureTenantOperationalAsync();
+        await EnsureBellaTenantWithConfigAsync();
+
+        using var kbeautyRequest = CreateSignedRequest(
+            HttpMethod.Get,
+            "/api/config",
+            body: null,
+            tenantSlug: TenantSeed.KBeautySlug);
+        using var kbeautyResponse = await _client.SendAsync(kbeautyRequest);
+
+        Assert.Equal(HttpStatusCode.OK, kbeautyResponse.StatusCode);
+        var kbeautyConfig = await kbeautyResponse.Content.ReadFromJsonAsync<List<ConfigDto>>();
+        Assert.NotNull(kbeautyConfig);
+        Assert.Contains(kbeautyConfig!, entry =>
+            entry.Key == LoyaltyConstants.ConfigKeys.PointsPerPesoUnit
+            && entry.Value == LoyaltyConstants.Defaults.PointsPerPesoUnit.ToString(System.Globalization.CultureInfo.InvariantCulture));
+        Assert.DoesNotContain(kbeautyConfig!, entry =>
+            entry.Key == LoyaltyConstants.ConfigKeys.PointsPerPesoUnit
+            && entry.Value == "42");
+
+        using var bellaRequest = CreateSignedRequest(
+            HttpMethod.Get,
+            "/api/config",
+            body: null,
+            tenantSlug: BellaTenantSlug);
+        using var bellaResponse = await _client.SendAsync(bellaRequest);
+
+        Assert.Equal(HttpStatusCode.OK, bellaResponse.StatusCode);
+        var bellaConfig = await bellaResponse.Content.ReadFromJsonAsync<List<ConfigDto>>();
+        Assert.NotNull(bellaConfig);
+        Assert.Contains(bellaConfig!, entry =>
+            entry.Key == LoyaltyConstants.ConfigKeys.PointsPerPesoUnit
+            && entry.Value == "42");
+        Assert.DoesNotContain(bellaConfig!, entry =>
+            entry.Key == LoyaltyConstants.ConfigKeys.PointsPerPesoUnit
+            && entry.Value == LoyaltyConstants.Defaults.PointsPerPesoUnit.ToString(System.Globalization.CultureInfo.InvariantCulture));
+
+        using var customerRequest = CreateSignedRequest(
+            HttpMethod.Get,
+            "/api/customers/KB-MISSING",
+            body: null,
+            tenantSlug: BellaTenantSlug);
+        using var customerResponse = await _client.SendAsync(customerRequest);
+        Assert.Equal(HttpStatusCode.NotFound, customerResponse.StatusCode);
+
+        using var catalogRequest = CreateSignedRequest(
+            HttpMethod.Get,
+            "/api/redemptions/catalog/KB-MISSING",
+            body: null,
+            tenantSlug: BellaTenantSlug);
+        using var catalogResponse = await _client.SendAsync(catalogRequest);
+        Assert.Equal(HttpStatusCode.NotFound, catalogResponse.StatusCode);
+    }
+
     private async Task EnsureTenantOperationalAsync()
     {
         using var scope = _factory.Services.CreateScope();
@@ -175,15 +237,55 @@ public sealed class AdminApiPointsFlowTests : IClassFixture<CustomWebApplication
         await db.SaveChangesAsync();
     }
 
+    private async Task EnsureBellaTenantWithConfigAsync()
+    {
+        using var scope = _factory.Services.CreateScope();
+        var tenantContext = scope.ServiceProvider.GetRequiredService<IMutableTenantContext>();
+        tenantContext.SetTenant(BellaTenantId, BellaTenantSlug);
+        var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+
+        if (!await db.Tenants.IgnoreQueryFilters().AnyAsync(t => t.Id == BellaTenantId))
+        {
+            var now = DateTime.UtcNow;
+            db.Tenants.Add(new Tenant(
+                BellaTenantId,
+                BellaTenantSlug,
+                "Bella API",
+                "America/Tijuana",
+                now));
+            db.TenantBrandings.Add(new TenantBranding(
+                BellaTenantId,
+                primaryColor: "#2D2D2D",
+                secondaryColor: "#7C3AED"));
+            db.TenantSubscriptions.Add(new TenantSubscription(
+                BellaTenantId,
+                TenantSubscriptionStatus.Active,
+                "internal",
+                paidThroughUtc: now.AddDays(30)));
+            db.ProgramConfigs.Add(new ProgramConfig(
+                Guid.NewGuid(),
+                BellaTenantId,
+                LoyaltyConstants.ConfigKeys.PointsPerPesoUnit,
+                "42",
+                now,
+                "Valor distintivo para prueba multi-tenant.",
+                "test"));
+            await db.SaveChangesAsync();
+        }
+    }
+
     private static HttpRequestMessage CreateSignedAddPointsRequest(string serial, decimal purchaseAmount) =>
         CreateSignedRequest(
             HttpMethod.Post,
             "/api/points",
             new { serialNumber = serial, purchaseAmount });
 
-    private static HttpRequestMessage CreateSignedRequest(HttpMethod method, string path, object? body)
+    private static HttpRequestMessage CreateSignedRequest(
+        HttpMethod method,
+        string path,
+        object? body,
+        string tenantSlug = TenantSeed.KBeautySlug)
     {
-        const string tenantSlug = "kbeauty";
         const string operatorId = "admin-api-test";
         var timestamp = DateTimeOffset.UtcNow.ToString("O");
         var bodyBytes = body is null

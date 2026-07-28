@@ -8,7 +8,7 @@ public static class TenantProvisioningDefaults
 
     public static IReadOnlyList<(string Key, string Value, string Description)> ProgramConfigRows { get; } =
     [
-        (LoyaltyConstants.ConfigKeys.PointsPerPesoUnit, LoyaltyConstants.Defaults.PointsPerPesoUnit.ToString("0.##"), "Pesos MXN por 1 punto."),
+        (LoyaltyConstants.ConfigKeys.PointsPerPesoUnit, LoyaltyConstants.Defaults.PointsPerPesoUnit.ToString("0.##"), "Puntos necesarios para obtener $1 MXN en canje directo."),
         (LoyaltyConstants.ConfigKeys.WelcomeBonusPoints, LoyaltyConstants.Defaults.WelcomeBonusPoints.ToString(), "Puntos al registrarse."),
         (LoyaltyConstants.ConfigKeys.ReferralBonusPoints, LoyaltyConstants.Defaults.ReferralBonusPoints.ToString(), "Puntos por referido confirmado."),
         (LoyaltyConstants.ConfigKeys.BirthdayMultiplier, LoyaltyConstants.Defaults.BirthdayMultiplier.ToString(), "Multiplicador en mes de cumpleanos."),

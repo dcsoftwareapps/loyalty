@@ -48,7 +48,7 @@ else
             <tr>
                 <th>Cliente</th>
                 <th>ID del cliente</th>
-                <th>Recompensa</th>
+                <th>Canje</th>
                 <th class="kb-cell-number">Puntos</th>
                 <th>Estado</th>
                 <th>Solicitud</th>
@@ -64,7 +64,14 @@ else
             <tr>
                 <td><strong>@item.CustomerName</strong></td>
                 <td><code>@item.SerialNumber</code></td>
-                <td>@item.RewardName</td>
+                <td>
+                    @item.RewardName
+                    @if (item.MonetaryAmount.HasValue)
+                    {
+                        <br />
+                        <small class="kb-muted">@FormatMoney(item.MonetaryAmount.Value, item.MonetaryCurrency)</small>
+                    }
+                </td>
                 <td class="kb-cell-number" style="color: var(--kb-blush); font-weight: 600;">@item.PointsSpent.ToString("N0")</td>
                 <td><span class="@RedemptionStatusBadgeClass(item.Status)">@item.Status</span></td>
                 <td class="kb-muted">@FormatDate(item.RedeemedAt)</td>
@@ -264,6 +271,9 @@ else
 
     private static string FormatDate(DateTime? value) =>
         value.HasValue ? value.Value.ToLocalTime().ToString("dd MMM yyyy HH:mm") : "-";
+
+    private static string FormatMoney(decimal amount, string? currency) =>
+        $"${amount:N2} {currency ?? "MXN"}";
 
     private static string DisplayText(string? value) =>
         string.IsNullOrWhiteSpace(value) ? "-" : value;

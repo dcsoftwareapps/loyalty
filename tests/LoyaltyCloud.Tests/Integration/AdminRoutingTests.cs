@@ -432,6 +432,8 @@ public sealed class AdminRoutingTests : IClassFixture<AdminRoutingTests.AdminWeb
         Assert.Contains("Escanear QR", redeemSource);
         Assert.Contains("kbeautyQrScanner.start", redeemSource);
         Assert.Contains("kbeautyQrScanner.stop", redeemSource);
+        Assert.Contains("private bool scannerStarted;", redeemSource);
+        Assert.Contains("if (!scannerStarted)", redeemSource);
         Assert.Contains("[JSInvokable]", redeemSource);
         Assert.Contains("public async Task OnQrDetected(string rawValue)", redeemSource);
         Assert.Contains("await StopScannerAsync();", redeemSource);
@@ -458,11 +460,14 @@ public sealed class AdminRoutingTests : IClassFixture<AdminRoutingTests.AdminWeb
         var redeemSource = File.ReadAllText(Path.Combine(GetRepositoryRoot(), "src", "LoyaltyCloud.Admin", "Pages", "Redeem.razor"));
 
         Assert.Contains("@inject AdminApiClient AdminApi", redeemSource);
+        Assert.Contains("@inject ILogger<Redeem> Logger", redeemSource);
         Assert.Contains("AdminApi.GetAsync<CustomerDetailDto>", redeemSource);
         Assert.Contains("api/customers/{Uri.EscapeDataString(serial)}", redeemSource);
         Assert.Contains("AdminApi.GetAsync<IReadOnlyList<RewardCatalogItemDto>>", redeemSource);
         Assert.Contains("api/redemptions/catalog/{Uri.EscapeDataString(serial)}", redeemSource);
-        Assert.Contains("AdminApi.PostAsJsonAsync<RedeemRewardRequest, RedemptionResponse>", redeemSource);
+        Assert.Contains("Redeem customer lookup failed.", redeemSource);
+        Assert.Contains("Redeem customer lookup API returned failure.", redeemSource);
+        Assert.Contains("AdminApi.PostAsJsonAsync<RedeemRedemptionRequest, RedemptionResponse>", redeemSource);
         Assert.Contains("\"api/redemptions\"", redeemSource);
         Assert.DoesNotContain("@inject ISender", redeemSource);
         Assert.DoesNotContain("new RedeemRewardCommand", redeemSource);

@@ -12,4 +12,8 @@ public sealed record RedemptionHistoryItemDto(
     DateTime RedeemedAt,
     DateTime? ResolvedAt,
     string? ResolvedBy,
-    string? Notes);
+    string? Notes,
+    RedemptionType Type,
+    decimal? MonetaryAmount,
+    string? MonetaryCurrency,
+    decimal? MonetaryPointsPerPesoUnit);

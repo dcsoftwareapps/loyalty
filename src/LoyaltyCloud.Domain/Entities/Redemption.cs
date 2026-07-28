@@ -17,10 +17,18 @@ public class Redemption : Entity, ITenantOwned
     public Guid LoyaltyCardId { get; private set; }
 
     /// <summary>Beneficio del catálogo elegido al momento del canje.</summary>
-    public Guid RewardCatalogItemId { get; private set; }
+    public RedemptionType Type { get; private set; }
+
+    public Guid? RewardCatalogItemId { get; private set; }
 
     /// <summary>Puntos descontados (snapshot — si el costo del catálogo cambia luego, este valor no cambia).</summary>
     public int PointsSpent { get; private set; }
+
+    public decimal? MonetaryAmount { get; private set; }
+
+    public string? MonetaryCurrency { get; private set; }
+
+    public decimal? MonetaryPointsPerPesoUnit { get; private set; }
 
     /// <summary>Estado actual del canje.</summary>
     public RedemptionStatus Status { get; private set; }
@@ -58,8 +66,44 @@ public class Redemption : Entity, ITenantOwned
 
         TenantId = tenantId;
         LoyaltyCardId = loyaltyCardId;
+        Type = RedemptionType.CatalogReward;
         RewardCatalogItemId = rewardCatalogItemId;
         PointsSpent = pointsSpent;
+        Status = RedemptionStatus.Pending;
+        RedeemedAt = redeemedAtUtc;
+    }
+
+    public Redemption(
+        Guid id,
+        Guid tenantId,
+        Guid loyaltyCardId,
+        int pointsSpent,
+        decimal monetaryAmount,
+        string monetaryCurrency,
+        decimal pointsPerPesoUnit,
+        DateTime redeemedAtUtc) : base(id)
+    {
+        if (tenantId == Guid.Empty)
+            throw new ArgumentException("TenantId requerido.", nameof(tenantId));
+        if (loyaltyCardId == Guid.Empty)
+            throw new ArgumentException("LoyaltyCardId requerido.", nameof(loyaltyCardId));
+        if (pointsSpent <= 0)
+            throw new ArgumentOutOfRangeException(nameof(pointsSpent), "Debe descontar al menos 1 punto.");
+        if (monetaryAmount <= 0)
+            throw new ArgumentOutOfRangeException(nameof(monetaryAmount), "El descuento monetario debe ser positivo.");
+        if (string.IsNullOrWhiteSpace(monetaryCurrency))
+            throw new ArgumentException("Moneda requerida.", nameof(monetaryCurrency));
+        if (pointsPerPesoUnit <= 0)
+            throw new ArgumentOutOfRangeException(nameof(pointsPerPesoUnit), "La tasa de canje debe ser positiva.");
+
+        TenantId = tenantId;
+        LoyaltyCardId = loyaltyCardId;
+        Type = RedemptionType.MonetaryDiscount;
+        RewardCatalogItemId = null;
+        PointsSpent = pointsSpent;
+        MonetaryAmount = decimal.Round(monetaryAmount, 2, MidpointRounding.AwayFromZero);
+        MonetaryCurrency = monetaryCurrency.Trim().ToUpperInvariant();
+        MonetaryPointsPerPesoUnit = pointsPerPesoUnit;
         Status = RedemptionStatus.Pending;
         RedeemedAt = redeemedAtUtc;
     }

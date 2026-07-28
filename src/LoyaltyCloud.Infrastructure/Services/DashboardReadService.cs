@@ -166,15 +166,16 @@ internal sealed class DashboardReadService : IDashboardReadService
             from redemption in _db.Redemptions.AsNoTracking()
             join card in _db.LoyaltyCards.AsNoTracking() on redemption.LoyaltyCardId equals card.Id
             join customer in _db.Customers.AsNoTracking() on card.CustomerId equals customer.Id
-            join reward in _db.RewardCatalogItems.AsNoTracking() on redemption.RewardCatalogItemId equals reward.Id
+            join reward in _db.RewardCatalogItems.AsNoTracking() on redemption.RewardCatalogItemId equals reward.Id into rewards
+            from reward in rewards.DefaultIfEmpty()
             where redemption.TenantId == tenantId
                && card.TenantId == tenantId
                && customer.TenantId == tenantId
-               && reward.TenantId == tenantId
+               && (reward == null || reward.TenantId == tenantId)
             orderby redemption.RedeemedAt descending
             select new DashboardRecentActivityItemDto(
                 "Canje",
-                reward.Name,
+                reward == null ? "Descuento en dinero" : reward.Name,
                 customer.FullName,
                 card.SerialNumber,
                 -redemption.PointsSpent,

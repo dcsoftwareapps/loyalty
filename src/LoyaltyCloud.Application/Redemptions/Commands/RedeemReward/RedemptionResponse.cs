@@ -8,4 +8,7 @@ public sealed record RedemptionResponse(
     int PointsSpent,
     int RemainingPoints,
     RedemptionStatus Status,
-    DateTime RedeemedAt);
+    DateTime RedeemedAt,
+    decimal? MonetaryAmount = null,
+    string? MonetaryCurrency = null,
+    decimal? MonetaryPointsPerPesoUnit = null);

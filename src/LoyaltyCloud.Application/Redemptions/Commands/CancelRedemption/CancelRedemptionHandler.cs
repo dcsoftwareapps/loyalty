@@ -61,7 +61,9 @@ public sealed class CancelRedemptionHandler
         if (card is null)
             return Result.Fail<CancelRedemptionResponse>("No se encontro la tarjeta asociada al canje.");
 
-        var reward = await _rewards.GetByIdAsync(redemption.RewardCatalogItemId, ct);
+        var reward = redemption.RewardCatalogItemId.HasValue
+            ? await _rewards.GetByIdAsync(redemption.RewardCatalogItemId.Value, ct)
+            : null;
         var now = _dt.UtcNow;
         var consumptions = await _pointLots.GetActiveConsumptionsByRedemptionIdAsync(redemption.Id, ct);
         if (consumptions.Count == 0)
@@ -99,7 +101,7 @@ public sealed class CancelRedemptionHandler
             loyaltyCardId: card.Id,
             points: redemption.PointsSpent,
             type: TransactionType.RedemptionReversal,
-            description: $"Cancelacion de canje: {reward?.Name ?? redemption.RewardCatalogItemId.ToString()}",
+            description: $"Cancelacion de canje: {reward?.Name ?? "Descuento en dinero"}",
             createdAtUtc: now,
             createdBy: command.OperatorId), ct);
 
@@ -112,7 +114,7 @@ public sealed class CancelRedemptionHandler
             PointsRestored: redemption.PointsSpent,
             CurrentPoints: card.CurrentPoints,
             CancelledAt: redemption.ConfirmedAt,
-            RewardName: reward?.Name));
+            RewardName: reward?.Name ?? "Descuento en dinero"));
     }
 
     private async Task TryPushWalletUpdateAsync(string serial, CancellationToken ct)

@@ -28,6 +28,7 @@ La base activa de produccion/UAT es `LoyaltyCloudFree`.
 - Customer Detail avanzado para auditoria de puntos.
 - Sumar puntos con QR/camara.
 - Canjear puntos con QR/camara.
+- Canje directo de puntos por descuento en dinero.
 - Reward Catalog API y Admin.
 - Canjes, historial, confirmacion y cancelacion con restauracion FIFO.
 - PointLots, FIFO, PointLotConsumptions y expiracion de puntos.

@@ -1,5 +1,6 @@
 using LoyaltyCloud.Application.Redemptions.Commands.ConfirmRedemption;
 using LoyaltyCloud.Application.Redemptions.Commands.CancelRedemption;
+using LoyaltyCloud.Application.Redemptions.Commands.RedeemMonetaryDiscount;
 using LoyaltyCloud.Application.Redemptions.Commands.RedeemReward;
 using LoyaltyCloud.Application.Redemptions.Queries.GetRedemptionCatalog;
 using MediatR;
@@ -25,9 +26,23 @@ public sealed class RedemptionsController : ControllerBase
         [FromHeader(Name = "X-Operator-Id")] string? operatorId,
         CancellationToken ct)
     {
-        var result = await _sender.Send(
-            new RedeemRewardCommand(body.SerialNumber, body.RewardCatalogItemId, operatorId ?? "api"),
-            ct);
+        var resolvedOperatorId = operatorId ?? "api";
+        var result = IsMonetaryDiscount(body)
+            ? await _sender.Send(
+                new RedeemMonetaryDiscountCommand(body.SerialNumber, body.PointsToRedeem.GetValueOrDefault(), resolvedOperatorId),
+                ct)
+            : body.RewardCatalogItemId.HasValue
+                ? await _sender.Send(
+                    new RedeemRewardCommand(body.SerialNumber, body.RewardCatalogItemId.Value, resolvedOperatorId),
+                    ct)
+                : null;
+
+        if (result is null)
+            return BadRequest(new ProblemDetails
+            {
+                Title = "Canje",
+                Detail = "Indica RewardCatalogItemId para una recompensa o PointsToRedeem para descuento en dinero."
+            });
 
         if (result.IsFailure)
             return BadRequest(new ProblemDetails { Title = "Canje", Detail = result.Error });
@@ -90,7 +105,16 @@ public sealed class RedemptionsController : ControllerBase
         return Ok(result.Value);
     }
 
-    public sealed record RedeemRewardRequest(string SerialNumber, Guid RewardCatalogItemId);
+    private static bool IsMonetaryDiscount(RedeemRewardRequest body) =>
+        string.Equals(body.Type, "MonetaryDiscount", StringComparison.OrdinalIgnoreCase)
+        || string.Equals(body.Type, "DescuentoEnDinero", StringComparison.OrdinalIgnoreCase)
+        || body.PointsToRedeem.HasValue;
+
+    public sealed record RedeemRewardRequest(
+        string SerialNumber,
+        Guid? RewardCatalogItemId,
+        string? Type = null,
+        int? PointsToRedeem = null);
     public sealed record ConfirmRedemptionRequest(string? Notes);
     public sealed record CancelRedemptionRequest(string? Notes);
 }

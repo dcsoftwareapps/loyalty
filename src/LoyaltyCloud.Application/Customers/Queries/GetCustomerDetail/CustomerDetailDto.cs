@@ -109,4 +109,7 @@ public sealed record CustomerRedemptionHistoryItemDto(
     DateTime RedeemedAt,
     string RewardName,
     RedemptionStatus Status,
-    int PointsSpent);
+    int PointsSpent,
+    RedemptionType Type,
+    decimal? MonetaryAmount,
+    string? MonetaryCurrency);

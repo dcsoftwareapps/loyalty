@@ -214,7 +214,7 @@ internal sealed class CustomerDetailReadService : ICustomerDetailReadService
                     consumption.CreatedAt,
                     IsReversed = consumption.ReversedAt != null,
                     Reason = tx.Type.ToString(),
-                    RewardName = reward == null ? null : reward.Name
+                    RewardName = reward == null && redemption != null ? "Descuento en dinero" : reward == null ? null : reward.Name
                 })
                 .ToListAsync(ct)
             : [];
@@ -292,16 +292,20 @@ internal sealed class CustomerDetailReadService : ICustomerDetailReadService
         var redemptionHistory = hasCard
             ? await (
                 from redemption in _db.Redemptions.AsNoTracking()
-                join reward in _db.RewardCatalogItems.AsNoTracking() on redemption.RewardCatalogItemId equals reward.Id
+                join reward in _db.RewardCatalogItems.AsNoTracking() on redemption.RewardCatalogItemId equals reward.Id into rewards
+                from reward in rewards.DefaultIfEmpty()
                 where redemption.TenantId == tenantId
-                   && reward.TenantId == tenantId
+                   && (reward == null || reward.TenantId == tenantId)
                    && redemption.LoyaltyCardId == cardId
                 orderby redemption.RedeemedAt descending
                 select new CustomerRedemptionHistoryItemDto(
                     redemption.RedeemedAt,
-                    reward.Name,
+                    reward == null ? "Descuento en dinero" : reward.Name,
                     redemption.Status,
-                    redemption.PointsSpent))
+                    redemption.PointsSpent,
+                    redemption.Type,
+                    redemption.MonetaryAmount,
+                    redemption.MonetaryCurrency))
                 .Take(50)
                 .ToListAsync(ct)
             : new List<CustomerRedemptionHistoryItemDto>();

@@ -1,6 +1,6 @@
 # LoyaltyCloud - AI Development Context
 
-Last updated: 2026-07-26
+Last updated: 2026-07-27
 
 Purpose:
 This document is the canonical technical handoff for continuing development of LoyaltyCloud with ChatGPT/Codex.
@@ -428,7 +428,7 @@ Main API controllers and route groups:
 
 - `CustomersController`: `POST /api/customers`, `GET /api/customers/{serialNumber}`, `GET /api/customers/{serialNumber}/transactions`.
 - `PointsController`: `POST /api/points`.
-- `RedemptionsController`: `POST /api/redemptions`, `PUT /api/redemptions/{id}/confirm`, `PUT /api/redemptions/{id}/cancel`, `GET /api/redemptions/catalog/{serialNumber}`.
+- `RedemptionsController`: `POST /api/redemptions`, `PUT /api/redemptions/{id}/confirm`, `PUT /api/redemptions/{id}/cancel`, `GET /api/redemptions/catalog/{serialNumber}`. `POST /api/redemptions` supports both catalog rewards and monetary discount redemptions.
 - `RewardsController`: `GET /api/rewards`, `GET /api/rewards/{id}`, `POST /api/rewards`, `PUT /api/rewards/{id}`, `PUT /api/rewards/{id}/activate`, `PUT /api/rewards/{id}/deactivate`.
 - `CampaignsController`: `GET /api/campaigns`, `GET /api/campaigns/{id}`, `POST /api/campaigns`, `PUT /api/campaigns/{id}`, `PUT /api/campaigns/{id}/activate`, `PUT /api/campaigns/{id}/deactivate`.
 - `LevelsController`: `GET /api/levels`, `PUT /api/levels`.
@@ -554,6 +554,8 @@ Implemented:
 - `PointLotConsumption`.
 - Expiration after configured number of months; default config is 12 months.
 - Redemption consumes points immediately.
+- Direct monetary redemption uses `ProgramConfig.points_per_peso_unit` as the server-side conversion rate. Formula: `monetaryAmount = pointsRedeemed / PointsPerPesoUnit`. Example: `10` means 10 points = $1.00 MXN, so 500 points = $50.00 MXN.
+- Monetary redemptions persist a historical snapshot on `Redemption`: type, monetary amount, currency and points-per-peso rate. Do not recalculate old monetary redemptions from current ProgramConfig.
 - Pending redemption can be confirmed or cancelled.
 - Cancellation restores exact consumed lots through reversal.
 - Dynamic tenant levels via `TenantLoyaltyLevel`.
@@ -561,6 +563,39 @@ Implemented:
 - Customer Detail includes advanced audit data: balance, rolling progress, lots, FIFO consumption, point history and redemption history.
 
 Do not use `CurrentPoints` for level progress. Level progress is rolling points, not available balance.
+
+## Monetary Redemptions
+
+Admin `/redeem` supports two redemption modes after identifying the customer:
+
+- `Descuento en dinero` (default).
+- `Recompensa`.
+
+For `Descuento en dinero`, the cashier enters points to redeem. The UI shows an estimated monetary discount and a `Usar todos` action that rounds down to the nearest valid conversion unit. The browser calculation is UX only.
+
+Server authority:
+
+- Input authority: serial/customer and requested points.
+- The API recalculates the monetary amount from tenant `ProgramConfig`.
+- The browser never supplies a trusted monetary amount.
+- Tenant context selects the tenant-specific rate; do not accept TenantId from UI.
+
+Persistence:
+
+- `Redemption.Type = MonetaryDiscount`.
+- `RewardCatalogItemId = null`.
+- `PointsSpent` stores the redeemed points.
+- `MonetaryAmount`, `MonetaryCurrency` and `MonetaryPointsPerPesoUnit` store the historical snapshot.
+
+FIFO/cancellation:
+
+- Monetary redemptions consume `PointLot`s with the same FIFO mechanism as catalog reward redemptions.
+- `PointLotConsumption.RedemptionId` links the consumed lots.
+- Cancellation uses the existing cancellation flow and restores the exact consumed lots.
+
+POS:
+
+LoyaltyCloud calculates and records the discount. It does not apply the discount automatically in an external POS. The cashier must apply the shown amount manually in the store/POS before confirming the redemption.
 
 ## Notifications / Wallet Visible Events
 
