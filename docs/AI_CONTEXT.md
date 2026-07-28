@@ -674,7 +674,7 @@ Current defaults:
 
 - `Enabled = true`.
 - `RunOnStartup = false`.
-- `PollIntervalSeconds = 60`.
+- `PollIntervalSeconds = 43200` (12 hours).
 - Minimum poll interval in code: 15 seconds.
 - `BatchSize = 25`.
 - `MaxAttempts = 3`.
@@ -685,7 +685,7 @@ Runs:
 - Due custom notification campaigns.
 - Pending notification deliveries / retries.
 
-This remains frequent because immediate messages and Wallet pushes must not wait 12 hours.
+RC1 cost-control decision: this worker intentionally runs every 12 hours to let Azure SQL Free/Serverless reach `AutoPauseDelay = 60` minutes and minimize vCore-seconds. Due custom campaigns, pending notification deliveries, Wallet delivery retries and background notification processing can take up to approximately 12 hours. Immediate user-triggered flows still create/process notifications through their foreground handlers when explicitly wired.
 
 ## Known RC1 Issues / Technical Debt
 
@@ -718,6 +718,7 @@ Must fix before GA or before broad multi-tenant scale:
 8. Do not recreate a production KBeauty seed.
 9. Do not invent endpoints; inspect controllers.
 10. Before `database update`, verify target DB is `LoyaltyCloudFree`.
+11. RC1 cost control: maintenance worker and notification worker are 12h. Do not reduce notification polling to minutes without evaluating Azure SQL Free/Serverless autopause and vCore-second impact.
 
 ## Working Rules
 

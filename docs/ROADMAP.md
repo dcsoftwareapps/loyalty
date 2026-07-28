@@ -42,7 +42,7 @@ La base activa de produccion/UAT es `LoyaltyCloudFree`.
 - LevelChanged, PointsAdded, PointsExpiring, MonthlyProductStarted, BirthdayBenefitStarted, PointCampaignStarted y Custom.
 - Prioridad temporal de eventos visibles recientes.
 - Scheduler de mantenimiento cada 12 horas.
-- Processor de notificaciones cada 60 segundos.
+- Processor de notificaciones cada 12 horas para control de costo Azure SQL Free.
 - Quick Help `/quick-help`.
 - QR imprimible de registro con QRCoder.
 - Guardrail contra hostname Admin antiguo `loyaltycloud-admin-894839`.
