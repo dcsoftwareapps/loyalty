@@ -20,6 +20,7 @@ public class AddPointsHandlerTests
         Mock<ICustomerRepository> Customers,
         Mock<IPointTransactionRepository> Transactions,
         Mock<ILoyaltyNotificationService> Notifications,
+        Mock<IGoogleWalletService> GoogleWallet,
         Mock<IUnitOfWork> Uow);
 
     private static HandlerSetup BuildHandler(LoyaltyCard? card, Customer? customer, DateTime? now = null)
@@ -36,10 +37,11 @@ public class AddPointsHandlerTests
         transactions.Setup(r => r.GetEligibleLevelPointsAsync(
                 It.IsAny<Guid>(), It.IsAny<DateTime>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(0);
+
         var pointLots = new Mock<IPointLotRepository>();
         var config = ConfigRepoWithDefaults();
-
         var notifications = NotificationService(card, customer, now);
+        var googleWallet = new Mock<IGoogleWalletService>();
         var clock = Clock(now);
         var uow = NoOpUnitOfWork();
 
@@ -52,21 +54,19 @@ public class AddPointsHandlerTests
             LevelCalculator().Object,
             TenantLevels().Object,
             notifications.Object,
+            googleWallet.Object,
             TenantContext().Object,
             clock.Object,
             uow.Object,
             NullLogger<AddPointsHandler>.Instance);
 
-        return new HandlerSetup(handler, cards, customers, transactions, notifications, uow);
+        return new HandlerSetup(handler, cards, customers, transactions, notifications, googleWallet, uow);
     }
-
-    // =========================================================================
 
     [Fact]
     public async Task Handle_ShouldAddCorrectPoints_WhenValidPurchase()
     {
-        // ratio default = 10 → $250 / 10 = 25 pts (no es mes de cumple).
-        var customer = NewCustomer(dob: new DateTime(1990, 1, 1)); // Enero
+        var customer = NewCustomer(dob: new DateTime(1990, 1, 1));
         var card = NewCard(customer.Id);
         var setup = BuildHandler(card, customer, now: new DateTime(2025, 6, 15, 10, 0, 0, DateTimeKind.Utc));
 
@@ -85,7 +85,6 @@ public class AddPointsHandlerTests
     [Fact]
     public async Task Handle_ShouldApplyDoublePoints_WhenBirthdayMonth()
     {
-        // Cliente nació en junio; "now" = 15 junio 2025 → cumple este mes
         var customer = NewCustomer(dob: new DateTime(1990, 6, 5));
         var card = NewCard(customer.Id);
         var setup = BuildHandler(card, customer, now: new DateTime(2025, 6, 15, 10, 0, 0, DateTimeKind.Utc));
@@ -95,45 +94,22 @@ public class AddPointsHandlerTests
             CancellationToken.None);
 
         Assert.True(result.IsSuccess);
-        Assert.Equal(50, result.Value.PointsAdded); // 25 base × 2
+        Assert.Equal(50, result.Value.PointsAdded);
         Assert.True(result.Value.BirthdayBonusApplied);
     }
 
     [Fact]
-    public async Task Handle_ShouldCreatePointsAddedNotification_WhenPointsAdded()
+    public async Task Handle_ShouldCreatePointsAddedNotificationAndSyncGoogleWallet_WhenPointsAdded()
     {
         var customer = NewCustomer();
         var card = NewCard(customer.Id);
+        var setup = BuildHandler(card, customer);
 
-        var cards = new Mock<ILoyaltyCardRepository>();
-        cards.Setup(r => r.GetBySerialNumberAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
-             .ReturnsAsync(card);
-
-        var customers = new Mock<ICustomerRepository>();
-        customers.Setup(r => r.GetByIdAsync(It.IsAny<Guid>(), It.IsAny<CancellationToken>()))
-                 .ReturnsAsync(customer);
-
-        var transactions = new Mock<IPointTransactionRepository>();
-        transactions.Setup(r => r.GetEligibleLevelPointsAsync(
-                It.IsAny<Guid>(), It.IsAny<DateTime>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync(0);
-        var pointLots = new Mock<IPointLotRepository>();
-        var config = ConfigRepoWithDefaults();
-
-        var notifications = NotificationService(card, customer);
-        var clock = Clock();
-        var uow = NoOpUnitOfWork();
-
-        var handler = new AddPointsHandler(
-            cards.Object, customers.Object, transactions.Object, pointLots.Object, config.Object,
-            LevelCalculator().Object, TenantLevels().Object, notifications.Object, TenantContext().Object, clock.Object, uow.Object,
-            NullLogger<AddPointsHandler>.Instance);
-
-        await handler.Handle(
+        await setup.Handler.Handle(
             new AddPointsCommand("KB-TEST001", 200m, "test"),
             CancellationToken.None);
 
-        notifications.Verify(s => s.CreateAsync(
+        setup.Notifications.Verify(s => s.CreateAsync(
             It.Is<CreateLoyaltyNotificationRequest>(request =>
                 request.SerialNumber == "KB-TEST001" &&
                 request.Type == NotificationType.PointsAdded &&
@@ -145,6 +121,10 @@ public class AddPointsHandlerTests
                 request.MetadataJson.Contains("\"previousPoints\":0", StringComparison.Ordinal) &&
                 request.MetadataJson.Contains("\"newTotal\":20", StringComparison.Ordinal) &&
                 request.ProcessImmediately),
+            It.IsAny<CancellationToken>()), Times.Once);
+
+        setup.GoogleWallet.Verify(s => s.SynchronizeBySerialNumberIfExistsAsync(
+            "KB-TEST001",
             It.IsAny<CancellationToken>()), Times.Once);
     }
 
@@ -158,16 +138,18 @@ public class AddPointsHandlerTests
             CancellationToken.None);
 
         Assert.True(result.IsFailure);
-        Assert.Contains("No se encontró", result.Error);
+        Assert.Contains("No se encontro", result.Error);
         setup.Notifications.Verify(s => s.CreateAsync(
             It.IsAny<CreateLoyaltyNotificationRequest>(), It.IsAny<CancellationToken>()),
+            Times.Never);
+        setup.GoogleWallet.Verify(s => s.SynchronizeBySerialNumberIfExistsAsync(
+            It.IsAny<string>(), It.IsAny<CancellationToken>()),
             Times.Never);
     }
 
     [Fact]
     public async Task Handle_ShouldReturnFail_WhenAmountTooSmall()
     {
-        // $5 con ratio 10 = 0 pts → falla
         var customer = NewCustomer();
         var card = NewCard(customer.Id);
         var setup = BuildHandler(card, customer);

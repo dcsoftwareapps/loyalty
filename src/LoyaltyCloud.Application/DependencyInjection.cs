@@ -3,6 +3,7 @@ using FluentValidation;
 using LoyaltyCloud.Application.Common.Behaviors;
 using LoyaltyCloud.Application.Common.Interfaces;
 using LoyaltyCloud.Application.Services;
+using LoyaltyCloud.Application.Wallets;
 using MediatR;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -38,6 +39,7 @@ public static class DependencyInjection
         services.AddScoped<ILevelCalculationService, LevelCalculationService>();
         services.AddScoped<ILevelProgressService, LevelProgressService>();
         services.AddScoped<IPointCampaignSelector, PointCampaignSelector>();
+        services.AddScoped<IMemberWalletDataService, MemberWalletDataService>();
 
         return services;
     }

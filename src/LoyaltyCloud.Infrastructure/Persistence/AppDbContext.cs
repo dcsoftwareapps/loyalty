@@ -32,6 +32,7 @@ public class AppDbContext : DbContext, IUnitOfWork
     public DbSet<CustomNotificationCampaign> CustomNotificationCampaigns => Set<CustomNotificationCampaign>();
     public DbSet<ProgramConfig> ProgramConfigs => Set<ProgramConfig>();
     public DbSet<DeviceRegistration> DeviceRegistrations => Set<DeviceRegistration>();
+    public DbSet<MemberDigitalWallet> MemberDigitalWallets => Set<MemberDigitalWallet>();
     public DbSet<LoyaltyNotification> LoyaltyNotifications => Set<LoyaltyNotification>();
     public DbSet<NotificationDelivery> NotificationDeliveries => Set<NotificationDelivery>();
     public DbSet<Tenant> Tenants => Set<Tenant>();
@@ -214,6 +215,7 @@ public class AppDbContext : DbContext, IUnitOfWork
         ApplyTenantQueryFilter<Redemption>(modelBuilder);
         ApplyTenantQueryFilter<LoyaltyNotification>(modelBuilder);
         ApplyTenantQueryFilter<DeviceRegistration>(modelBuilder);
+        ApplyTenantQueryFilter<MemberDigitalWallet>(modelBuilder);
         ApplyTenantQueryFilter<PointTransaction>(modelBuilder);
         ApplyTenantQueryFilter<PointLot>(modelBuilder);
         ApplyTenantQueryFilter<PointLotConsumption>(modelBuilder);

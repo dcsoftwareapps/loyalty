@@ -1,6 +1,7 @@
 using LoyaltyCloud.Application;
 using LoyaltyCloud.Application.Common.Interfaces;
 using LoyaltyCloud.Domain.Entities;
+using LoyaltyCloud.Domain.Enums;
 using LoyaltyCloud.Infrastructure;
 using LoyaltyCloud.Infrastructure.Persistence;
 using LoyaltyCloud.Infrastructure.Persistence.Seed;
@@ -336,7 +337,16 @@ public sealed class TenantAdminPasswordToolTests
             var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
             await db.Database.EnsureCreatedAsync();
 
+            scope.ServiceProvider.GetRequiredService<IMutableTenantContext>().SetTenant(TenantId, TenantSlug);
+            await IntegrationTestSeed.EnsureKBeautyPlatformRowsAsync(db);
+
             db.Tenants.Add(new Tenant(BellaTenantId, BellaTenantSlug, "Bella", "America/Tijuana", DateTime.UtcNow));
+            db.TenantBrandings.Add(new TenantBranding(BellaTenantId));
+            db.TenantSubscriptions.Add(new TenantSubscription(
+                BellaTenantId,
+                TenantSubscriptionStatus.Active,
+                "test",
+                paidThroughUtc: DateTime.UtcNow.AddDays(30)));
             await db.SaveChangesAsync();
 
             scope.ServiceProvider.GetRequiredService<IMutableTenantContext>().SetTenant(TenantId, TenantSlug);

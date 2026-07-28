@@ -19,12 +19,16 @@ public static class QrCodeSvgGenerator
         using var data = generator.CreateQrCode(value, QRCodeGenerator.ECCLevel.Q);
         var qr = new SvgQRCode(data);
 
-        return qr.GetGraphic(
+        var svg = qr.GetGraphic(
             scale,
             DarkModuleColor,
             LightModuleColor,
             drawQuietZones: true,
             sizingMode: SvgQRCode.SizingMode.ViewBoxAttribute);
+        return svg.Replace(
+            "<svg ",
+            "<svg role=\"img\" aria-label=\"QR de registro\" ",
+            StringComparison.Ordinal);
     }
 
     public static string GenerateDataUri(string value, int scale = 8, int quietZone = 4)

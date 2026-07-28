@@ -45,6 +45,12 @@ public class LoyaltyCardTests
     private static LoyaltyCard NewCard() =>
         new(Guid.NewGuid(), KBeautyTenantId, Guid.NewGuid(), "KB-TEST001", Now);
 
+    private static MemberLevel GlowLevel() =>
+        new(Guid.Parse("b1000000-0000-0000-0000-000000000102"), LoyaltyConstants.Levels.Glow, 1000, 2999, 2);
+
+    private static MemberLevel RadianceLevel() =>
+        new(Guid.Parse("b1000000-0000-0000-0000-000000000103"), LoyaltyConstants.Levels.Radiance, 3000, int.MaxValue, 3);
+
     // =========================================================================
     // EarnPoints
     // =========================================================================
@@ -77,36 +83,46 @@ public class LoyaltyCardTests
     }
 
     [Fact]
-    public void EarnPoints_ShouldUpgradeLevel_WhenThresholdIsCrossed()
+    public void ApplyCalculatedLevel_ShouldUpgradeLevel_WhenCalculatedLevelChanges()
     {
         var card = NewCard();
         var dt = MockClock();
 
-        card.EarnPoints(950, TransactionType.Purchase, Config, dt.Object);
         Assert.Equal(LoyaltyConstants.Levels.Mist, card.Level);
 
-        card.EarnPoints(100, TransactionType.Purchase, Config, dt.Object);
+        var changed = card.ApplyCalculatedLevel(GlowLevel(), dt.Object);
 
+        Assert.True(changed);
         Assert.Equal(LoyaltyConstants.Levels.Glow, card.Level);
-        Assert.Equal(1050, card.CurrentPoints);
     }
 
     [Fact]
-    public void EarnPoints_ShouldRaiseLevelUpgradedEvent_WhenLevelChanges()
+    public void EarnPoints_ShouldRaisePointsEventWithoutChangingLevel()
     {
         var card = NewCard();
         var dt = MockClock();
 
         card.EarnPoints(1100, TransactionType.Purchase, Config, dt.Object);
 
+        Assert.Equal(LoyaltyConstants.Levels.Mist, card.Level);
+        Assert.Empty(card.DomainEvents.OfType<LevelUpgradedEvent>());
+        var pointsEvent = Assert.Single(card.DomainEvents.OfType<PointsEarnedEvent>());
+        Assert.False(pointsEvent.LevelChanged);
+        Assert.Equal(1100, pointsEvent.PointsAdded);
+        Assert.Equal(1100, pointsEvent.NewTotal);
+    }
+
+    [Fact]
+    public void ApplyCalculatedLevel_ShouldRaiseLevelUpgradedEvent_WhenLevelChanges()
+    {
+        var card = NewCard();
+        var dt = MockClock();
+
+        card.ApplyCalculatedLevel(GlowLevel(), dt.Object);
+
         var upgradeEvent = Assert.Single(card.DomainEvents.OfType<LevelUpgradedEvent>());
         Assert.Equal(LoyaltyConstants.Levels.Mist, upgradeEvent.OldLevel);
         Assert.Equal(LoyaltyConstants.Levels.Glow, upgradeEvent.NewLevel);
-
-        var pointsEvent = Assert.Single(card.DomainEvents.OfType<PointsEarnedEvent>());
-        Assert.True(pointsEvent.LevelChanged);
-        Assert.Equal(1100, pointsEvent.PointsAdded);
-        Assert.Equal(1100, pointsEvent.NewTotal);
     }
 
     [Fact]
@@ -190,7 +206,7 @@ public class LoyaltyCardTests
     {
         var card = NewCard();
         var dt = MockClock();
-        card.EarnPoints(3000, TransactionType.Purchase, Config, dt.Object); // → Radiance
+        card.ApplyCalculatedLevel(RadianceLevel(), dt.Object); // -> Radiance
 
         // No avanzamos el reloj — sigue en "now"
         Assert.False(card.NeedsLevelRequalification(dt.Object));
@@ -204,7 +220,7 @@ public class LoyaltyCardTests
         // pública no permite simular "el reset anual" — eso lo hace un job externo.
         var card = NewCard();
         var dt = MockClock();
-        card.EarnPoints(3000, TransactionType.Purchase, Config, dt.Object);
+        card.ApplyCalculatedLevel(RadianceLevel(), dt.Object);
 
         SetPrivate(card, nameof(LoyaltyCard.LevelAchievedAt), Now.AddYears(-2));
         SetPrivate(card, nameof(LoyaltyCard.PointsEarnedThisYear), 100);
@@ -217,7 +233,7 @@ public class LoyaltyCardTests
     {
         var card = NewCard();
         var dt = MockClock();
-        card.EarnPoints(3000, TransactionType.Purchase, Config, dt.Object);
+        card.ApplyCalculatedLevel(RadianceLevel(), dt.Object);
 
         SetPrivate(card, nameof(LoyaltyCard.LevelAchievedAt), Now.AddYears(-2));
         SetPrivate(card, nameof(LoyaltyCard.PointsEarnedThisYear), 600);

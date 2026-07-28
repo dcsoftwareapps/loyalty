@@ -395,6 +395,10 @@ public sealed class TenantAdminAuthTests
                 var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
                 await db.Database.EnsureDeletedAsync();
                 await db.Database.MigrateAsync();
+                scope.ServiceProvider.GetRequiredService<IMutableTenantContext>()
+                    .SetTenant(TenantSeed.KBeautyTenantId, TenantSeed.KBeautySlug);
+                await IntegrationTestSeed.EnsureKBeautyPlatformRowsAsync(db);
+                await IntegrationTestSeed.EnsureDefaultTenantLevelsAsync(db);
                 var kbeautySubscription = await db.TenantSubscriptions.SingleAsync(s => s.TenantId == TenantSeed.KBeautyTenantId);
                 db.Entry(kbeautySubscription).Property(nameof(TenantSubscription.PaidThroughUtc)).CurrentValue = DateTime.UtcNow.AddDays(30);
                 await db.SaveChangesAsync();

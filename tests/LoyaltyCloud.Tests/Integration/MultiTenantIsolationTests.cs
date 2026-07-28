@@ -1090,6 +1090,10 @@ public sealed class MultiTenantIsolationTests
                 var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
                 await db.Database.EnsureDeletedAsync();
                 await db.Database.MigrateAsync();
+                scope.ServiceProvider.GetRequiredService<IMutableTenantContext>()
+                    .SetTenant(TenantSeed.KBeautyTenantId, TenantSeed.KBeautySlug);
+                await IntegrationTestSeed.EnsureKBeautyPlatformRowsAsync(db);
+                await IntegrationTestSeed.EnsureDefaultTenantLevelsAsync(db);
             }
 
             await SeedBellaPlatformRowsAsync();
@@ -1115,7 +1119,8 @@ public sealed class MultiTenantIsolationTests
                 db.TenantSubscriptions.Add(new TenantSubscription(
                     BellaTenantId,
                     TenantSubscriptionStatus.Active,
-                    "development"));
+                    "development",
+                    paidThroughUtc: DateTime.UtcNow.AddDays(30)));
                 await db.SaveChangesAsync();
             });
         }

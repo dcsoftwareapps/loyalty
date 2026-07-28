@@ -85,7 +85,10 @@ public sealed class ManualSubscriptionBillingTests
     public async Task Payment_months_calculate_with_add_months(int months)
     {
         await using var env = await BillingTestEnvironment.CreateAsync();
-        var tenantId = await env.AddTenantAsync("months-" + months, TenantSubscriptionStatus.Suspended);
+        var tenantId = await env.AddTenantAsync(
+            "months-" + months,
+            TenantSubscriptionStatus.Suspended,
+            suspensionReason: TenantSuspensionReason.PaymentPastDue);
 
         var result = await env.RecordPaymentAsync(tenantId, months);
 
@@ -122,7 +125,7 @@ public sealed class ManualSubscriptionBillingTests
 
     [Fact]
     [Trait("Category", "ManualSubscriptionBilling")]
-    public void Active_operational_depends_on_paid_through_with_legacy_null_exception()
+    public void Active_operational_depends_on_paid_through()
     {
         var current = new TenantSubscription(Guid.NewGuid(), TenantSubscriptionStatus.Active, "manual", paidThroughUtc: FixedNow.AddDays(1));
         var expired = new TenantSubscription(Guid.NewGuid(), TenantSubscriptionStatus.Active, "manual", paidThroughUtc: FixedNow);
@@ -130,7 +133,7 @@ public sealed class ManualSubscriptionBillingTests
 
         Assert.True(current.IsOperational(FixedNow));
         Assert.False(expired.IsOperational(FixedNow));
-        Assert.True(legacy.IsOperational(FixedNow));
+        Assert.False(legacy.IsOperational(FixedNow));
     }
 
     [Fact]
@@ -192,7 +195,10 @@ public sealed class ManualSubscriptionBillingTests
     public async Task Suspended_payment_sets_active()
     {
         await using var env = await BillingTestEnvironment.CreateAsync();
-        var tenantId = await env.AddTenantAsync("suspended-pay", TenantSubscriptionStatus.Suspended);
+        var tenantId = await env.AddTenantAsync(
+            "suspended-pay",
+            TenantSubscriptionStatus.Suspended,
+            suspensionReason: TenantSuspensionReason.PaymentPastDue);
 
         var result = await env.RecordPaymentAsync(tenantId, 1);
 
@@ -353,7 +359,8 @@ public sealed class ManualSubscriptionBillingTests
             TenantSubscriptionStatus status,
             DateTime? trialEnd = null,
             DateTime? paidThrough = null,
-            DateTime? graceEnd = null)
+            DateTime? graceEnd = null,
+            TenantSuspensionReason? suspensionReason = null)
         {
             using var scope = _services.CreateScope();
             var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
@@ -367,7 +374,8 @@ public sealed class ManualSubscriptionBillingTests
                 currentPeriodStart: FixedNow.AddDays(-14),
                 currentPeriodEnd: trialEnd,
                 paidThroughUtc: paidThrough,
-                gracePeriodEndsAt: graceEnd));
+                gracePeriodEndsAt: graceEnd,
+                suspensionReason: suspensionReason));
             await db.SaveChangesAsync();
             return tenantId;
         }

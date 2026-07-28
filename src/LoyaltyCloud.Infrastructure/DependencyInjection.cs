@@ -7,6 +7,7 @@ using LoyaltyCloud.Infrastructure.KeyVault;
 using LoyaltyCloud.Infrastructure.Persistence;
 using LoyaltyCloud.Infrastructure.Repositories;
 using LoyaltyCloud.Infrastructure.Services;
+using LoyaltyCloud.Infrastructure.Services.GoogleWallet;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -30,6 +31,7 @@ public static class DependencyInjection
         AddRepositories(services);
         AddCrossCuttingServices(services);
         AddWalletServices(services, configuration, environment);
+        AddGoogleWalletServices(services);
         AddStorageService(services);
 
         return services;
@@ -59,6 +61,7 @@ public static class DependencyInjection
         services.Configure<ApplePassOptions>(configuration.GetSection(ApplePassOptions.SectionName));
         services.Configure<AzureStorageOptions>(configuration.GetSection(AzureStorageOptions.SectionName));
         services.Configure<WalletOptions>(configuration.GetSection(WalletOptions.SectionName));
+        services.Configure<GoogleWalletOptions>(configuration.GetSection(GoogleWalletOptions.SectionName));
         services.Configure<ProvisioningOptions>(configuration.GetSection(ProvisioningOptions.SectionName));
         services.Configure<BillingOptions>(configuration.GetSection(BillingOptions.SectionName));
     }
@@ -74,6 +77,7 @@ public static class DependencyInjection
         services.AddScoped<IRewardCatalogRepository, RewardCatalogRepository>();
         services.AddScoped<IProgramConfigRepository, ProgramConfigRepository>();
         services.AddScoped<IDeviceRegistrationRepository, DeviceRegistrationRepository>();
+        services.AddScoped<IMemberDigitalWalletRepository, MemberDigitalWalletRepository>();
         services.AddScoped<ILoyaltyNotificationRepository, LoyaltyNotificationRepository>();
         services.AddScoped<ICustomNotificationCampaignRepository, CustomNotificationCampaignRepository>();
         services.AddScoped<ITenantRepository, TenantRepository>();
@@ -218,6 +222,16 @@ public static class DependencyInjection
                 client.DefaultVersionPolicy = HttpVersionPolicy.RequestVersionExact;
                 client.Timeout = TimeSpan.FromSeconds(10);
             });
+    }
+
+    private static void AddGoogleWalletServices(IServiceCollection services)
+    {
+        services.AddScoped<GoogleWalletIdGenerator>();
+        services.AddScoped<GoogleWalletObjectMapper>();
+        services.AddScoped<GoogleWalletJwtFactory>();
+        services.AddScoped<IGoogleWalletCredentialsProvider, GoogleWalletCredentialsProvider>();
+        services.AddScoped<IGoogleWalletService, GoogleWalletService>();
+        services.AddHttpClient<IGoogleWalletClient, GoogleWalletClient>();
     }
 
     private static void AddStorageService(IServiceCollection services)

@@ -184,6 +184,9 @@ public sealed class PublicJoinTenantRoutingTests : IClassFixture<CustomWebApplic
     private async Task EnsureBellaTenantAsync()
     {
         using var scope = _factory.Services.CreateScope();
+        scope.ServiceProvider
+            .GetRequiredService<IMutableTenantContext>()
+            .SetTenant(BellaTenantId, BellaSlug);
         var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
         if (!await db.Tenants.AnyAsync(t => t.Id == BellaTenantId))
         {
@@ -200,11 +203,14 @@ public sealed class PublicJoinTenantRoutingTests : IClassFixture<CustomWebApplic
             db.TenantSubscriptions.Add(new TenantSubscription(
                 BellaTenantId,
                 TenantSubscriptionStatus.Active,
-                "test"));
+                "test",
+                paidThroughUtc: DateTime.UtcNow.AddDays(30)));
             await db.SaveChangesAsync();
         }
 
         await SetBellaSubscriptionStatusAsync(TenantSubscriptionStatus.Active);
+        await IntegrationTestSeed.EnsureProgramConfigAsync(db, BellaTenantId);
+        await IntegrationTestSeed.EnsureDefaultTenantLevelsAsync(db, BellaTenantId);
     }
 
     private async Task SetBellaSubscriptionStatusAsync(TenantSubscriptionStatus status)
@@ -213,6 +219,8 @@ public sealed class PublicJoinTenantRoutingTests : IClassFixture<CustomWebApplic
         var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
         var subscription = await db.TenantSubscriptions.SingleAsync(s => s.TenantId == BellaTenantId);
         db.Entry(subscription).Property(nameof(TenantSubscription.Status)).CurrentValue = status;
+        if (status == TenantSubscriptionStatus.Active)
+            db.Entry(subscription).Property(nameof(TenantSubscription.PaidThroughUtc)).CurrentValue = DateTime.UtcNow.AddDays(30);
         await db.SaveChangesAsync();
     }
 
