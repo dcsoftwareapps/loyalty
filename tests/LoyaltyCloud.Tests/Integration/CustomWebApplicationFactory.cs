@@ -5,6 +5,7 @@ using LoyaltyCloud.Domain.Entities;
 using LoyaltyCloud.Domain.Enums;
 using LoyaltyCloud.Infrastructure.Persistence;
 using LoyaltyCloud.Infrastructure.Persistence.Seed;
+using LoyaltyCloud.Infrastructure.Services.GoogleWallet;
 using LoyaltyCloud.Tests.Integration.Fakes;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
@@ -29,6 +30,13 @@ public sealed class CustomWebApplicationFactory : WebApplicationFactory<Program>
     /// <summary>Fakes accesibles para que los tests verifiquen las llamadas.</summary>
     public FakeApnService Apn { get; } = new();
     public FakeStorageService Storage { get; } = new();
+    public FakeGoogleWalletClient GoogleWallet { get; } = new();
+
+    public CustomWebApplicationFactory()
+    {
+        Environment.SetEnvironmentVariable("Wallet__UseRealPassSigning", "false");
+        Environment.SetEnvironmentVariable("Wallet__UseRealApns", "false");
+    }
 
     protected override void ConfigureWebHost(IWebHostBuilder builder)
     {
@@ -43,7 +51,16 @@ public sealed class CustomWebApplicationFactory : WebApplicationFactory<Program>
                 ["Apple:PassTypeIdentifier"] = "pass.com.kbeautymx.loyalty",
                 ["Apple:TeamIdentifier"] = "TESTTEAM01",
                 ["Apple:WebServiceURL"] = "https://test.local",
-                ["AdminApi:SharedSecret"] = "test-admin-api-shared-secret-with-enough-length"
+                ["AdminApi:SharedSecret"] = "test-admin-api-shared-secret-with-enough-length",
+                ["Wallet:UseRealPassSigning"] = "false",
+                ["Wallet:UseRealApns"] = "false",
+                ["GoogleWallet:Enabled"] = "true",
+                ["GoogleWallet:IssuerId"] = "issuer-test",
+                ["GoogleWallet:ClassSuffix"] = "loyalty",
+                ["GoogleWallet:ObjectIdPrefix"] = "member",
+                ["GoogleWallet:ProgramName"] = "KBeauty Loyalty",
+                ["GoogleWallet:IssuerName"] = "KBeauty MX",
+                ["GoogleWallet:SaveUrlBase"] = "https://pay.google.com/gp/v/save"
             });
         });
 
@@ -58,10 +75,14 @@ public sealed class CustomWebApplicationFactory : WebApplicationFactory<Program>
             services.RemoveAll<IPassGeneratorService>();
             services.RemoveAll<IApnService>();
             services.RemoveAll<IStorageService>();
+            services.RemoveAll<IGoogleWalletClient>();
+            services.RemoveAll<IGoogleWalletCredentialsProvider>();
 
             services.AddSingleton<IPassGeneratorService, FakePassGeneratorService>();
             services.AddSingleton<IApnService>(Apn);
             services.AddSingleton<IStorageService>(Storage);
+            services.AddSingleton<IGoogleWalletClient>(GoogleWallet);
+            services.AddSingleton<IGoogleWalletCredentialsProvider, FakeGoogleWalletCredentialsProvider>();
         });
     }
 
@@ -74,75 +95,7 @@ public sealed class CustomWebApplicationFactory : WebApplicationFactory<Program>
             .SetTenant(TenantSeed.KBeautyTenantId, TenantSeed.KBeautySlug);
         var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
         await db.Database.EnsureCreatedAsync();
-        await SeedKBeautyPlatformRowsAsync(db);
-        await SeedDefaultTenantLevelsAsync(db);
-    }
-
-    private static async Task SeedKBeautyPlatformRowsAsync(AppDbContext db)
-    {
-        if (!await db.Tenants.IgnoreQueryFilters().AnyAsync(t => t.Id == TenantSeed.KBeautyTenantId))
-        {
-            var now = DateTime.UtcNow;
-            db.Tenants.Add(new Tenant(
-                TenantSeed.KBeautyTenantId,
-                TenantSeed.KBeautySlug,
-                "KBeauty",
-                "America/Tijuana",
-                now));
-            db.TenantBrandings.Add(new TenantBranding(
-                TenantSeed.KBeautyTenantId,
-                primaryColor: "#1C1C1C",
-                secondaryColor: "#E8668E"));
-            db.TenantSubscriptions.Add(new TenantSubscription(
-                TenantSeed.KBeautyTenantId,
-                TenantSubscriptionStatus.Active,
-                "internal",
-                paidThroughUtc: DateTime.UtcNow.AddDays(30)));
-
-            foreach (var row in TenantProvisioningDefaults.ProgramConfigRows)
-            {
-                db.ProgramConfigs.Add(new ProgramConfig(
-                    Guid.NewGuid(),
-                    TenantSeed.KBeautyTenantId,
-                    row.Key,
-                    row.Value,
-                    now,
-                    row.Description,
-                    TenantProvisioningDefaults.UpdatedBy));
-            }
-
-            await db.SaveChangesAsync();
-        }
-    }
-
-    private static async Task SeedDefaultTenantLevelsAsync(AppDbContext db)
-    {
-        if (await db.TenantLoyaltyLevels.AnyAsync(level => level.TenantId == TenantSeed.KBeautyTenantId))
-            return;
-
-        var now = DateTime.UtcNow;
-        db.TenantLoyaltyLevels.AddRange(
-            new TenantLoyaltyLevel(
-                Guid.Parse("b1000000-0000-0000-0000-000000000101"),
-                TenantSeed.KBeautyTenantId,
-                LoyaltyConstants.Levels.Mist,
-                LoyaltyConstants.Defaults.LevelMistMin,
-                1,
-                now),
-            new TenantLoyaltyLevel(
-                Guid.Parse("b1000000-0000-0000-0000-000000000102"),
-                TenantSeed.KBeautyTenantId,
-                LoyaltyConstants.Levels.Glow,
-                LoyaltyConstants.Defaults.LevelGlowMin,
-                2,
-                now),
-            new TenantLoyaltyLevel(
-                Guid.Parse("b1000000-0000-0000-0000-000000000103"),
-                TenantSeed.KBeautyTenantId,
-                LoyaltyConstants.Levels.Radiance,
-                LoyaltyConstants.Defaults.LevelRadianceMin,
-                3,
-                now));
-        await db.SaveChangesAsync();
+        await IntegrationTestSeed.EnsureKBeautyPlatformRowsAsync(db);
+        await IntegrationTestSeed.EnsureDefaultTenantLevelsAsync(db);
     }
 }

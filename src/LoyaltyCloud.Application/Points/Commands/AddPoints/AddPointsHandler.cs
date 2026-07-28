@@ -25,6 +25,7 @@ public sealed class AddPointsHandler : IRequestHandler<AddPointsCommand, Result<
     private readonly ITenantLoyaltyLevelReadService _tenantLevels;
     private readonly IPointCampaignSelector _campaignSelector;
     private readonly ILoyaltyNotificationService _notifications;
+    private readonly IGoogleWalletService _googleWallet;
     private readonly ITenantContext _tenantContext;
     private readonly IDateTimeProvider _dt;
     private readonly IUnitOfWork _uow;
@@ -40,6 +41,7 @@ public sealed class AddPointsHandler : IRequestHandler<AddPointsCommand, Result<
         ITenantLoyaltyLevelReadService tenantLevels,
         IPointCampaignSelector campaignSelector,
         ILoyaltyNotificationService notifications,
+        IGoogleWalletService googleWallet,
         ITenantContext tenantContext,
         IDateTimeProvider dt,
         IUnitOfWork uow,
@@ -54,6 +56,7 @@ public sealed class AddPointsHandler : IRequestHandler<AddPointsCommand, Result<
         _tenantLevels = tenantLevels;
         _campaignSelector = campaignSelector;
         _notifications = notifications;
+        _googleWallet = googleWallet;
         _tenantContext = tenantContext;
         _dt = dt;
         _uow = uow;
@@ -69,11 +72,12 @@ public sealed class AddPointsHandler : IRequestHandler<AddPointsCommand, Result<
         ILevelCalculationService levels,
         ITenantLoyaltyLevelReadService tenantLevels,
         ILoyaltyNotificationService notifications,
+        IGoogleWalletService googleWallet,
         ITenantContext tenantContext,
         IDateTimeProvider dt,
         IUnitOfWork uow,
         ILogger<AddPointsHandler> logger)
-        : this(cards, customers, transactions, pointLots, config, levels, tenantLevels, NullPointCampaignSelector.Instance, notifications, tenantContext, dt, uow, logger)
+        : this(cards, customers, transactions, pointLots, config, levels, tenantLevels, NullPointCampaignSelector.Instance, notifications, googleWallet, tenantContext, dt, uow, logger)
     {
     }
 
@@ -174,6 +178,8 @@ public sealed class AddPointsHandler : IRequestHandler<AddPointsCommand, Result<
                 command.PurchaseAmount,
                 ct);
         }
+
+        await _googleWallet.SynchronizeBySerialNumberIfExistsAsync(card.SerialNumber, ct);
 
         return Result.Ok(new AddPointsResponse(
             PointsAdded: finalPoints,

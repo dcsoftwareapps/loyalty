@@ -373,6 +373,83 @@ namespace LoyaltyCloud.Infrastructure.Persistence.Migrations
                     b.ToTable("LoyaltyNotifications", (string)null);
                 });
 
+            modelBuilder.Entity("LoyaltyCloud.Domain.Entities.MemberDigitalWallet", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2(3)");
+
+                    b.Property<Guid>("CustomerId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("ExternalClassId")
+                        .IsRequired()
+                        .HasMaxLength(128)
+                        .HasColumnType("nvarchar(128)");
+
+                    b.Property<string>("ExternalObjectId")
+                        .IsRequired()
+                        .HasMaxLength(128)
+                        .HasColumnType("nvarchar(128)");
+
+                    b.Property<DateTime?>("LastSaveLinkCreatedAt")
+                        .HasColumnType("datetime2(3)");
+
+                    b.Property<string>("LastSynchronizationError")
+                        .HasMaxLength(1000)
+                        .HasColumnType("nvarchar(1000)");
+
+                    b.Property<DateTime?>("LastSynchronizedAt")
+                        .HasColumnType("datetime2(3)");
+
+                    b.Property<Guid>("LoyaltyCardId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("MetadataJson")
+                        .HasMaxLength(4000)
+                        .HasColumnType("nvarchar(4000)");
+
+                    b.Property<string>("Provider")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
+
+                    b.Property<DateTime?>("RevokedAt")
+                        .HasColumnType("datetime2(3)");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
+
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("datetime2(3)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CustomerId");
+
+                    b.HasIndex("LoyaltyCardId");
+
+                    b.HasIndex("Provider", "ExternalObjectId")
+                        .IsUnique();
+
+                    b.HasIndex("TenantId", "CustomerId", "Provider");
+
+                    b.HasIndex("TenantId", "LoyaltyCardId", "Provider")
+                        .IsUnique();
+
+                    b.HasIndex("TenantId", "Provider", "Status");
+
+                    b.ToTable("MemberDigitalWallets", (string)null);
+                });
+
             modelBuilder.Entity("LoyaltyCloud.Domain.Entities.NotificationDelivery", b =>
                 {
                     b.Property<Guid>("Id")
@@ -1089,6 +1166,27 @@ namespace LoyaltyCloud.Infrastructure.Persistence.Migrations
                         .WithMany()
                         .HasForeignKey("TenantId", "LoyaltyCardId")
                         .HasPrincipalKey("TenantId", "Id")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("LoyaltyCloud.Domain.Entities.MemberDigitalWallet", b =>
+                {
+                    b.HasOne("LoyaltyCloud.Domain.Entities.Customer", null)
+                        .WithMany()
+                        .HasForeignKey("CustomerId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("LoyaltyCloud.Domain.Entities.LoyaltyCard", null)
+                        .WithMany()
+                        .HasForeignKey("LoyaltyCardId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("LoyaltyCloud.Domain.Entities.Tenant", null)
+                        .WithMany()
+                        .HasForeignKey("TenantId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
                 });

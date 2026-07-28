@@ -1,6 +1,6 @@
 # LoyaltyCloud
 
-LoyaltyCloud is a .NET 9 multi-tenant loyalty SaaS. It supports tenant provisioning, public customer registration, Apple Wallet passes, points, rewards, redemptions, dynamic tenant levels, campaigns, Wallet notifications, platform administration and tenant administration.
+LoyaltyCloud is a .NET 9 multi-tenant loyalty SaaS. It supports tenant provisioning, public customer registration, Apple Wallet passes, Google Wallet save links, points, rewards, redemptions, dynamic tenant levels, campaigns, Wallet notifications, platform administration and tenant administration.
 
 Current state: RC1 / real UAT starting.
 
@@ -29,7 +29,7 @@ LoyaltyCloud.API      LoyaltyCloud.Admin
        LoyaltyCloud.Infrastructure
                     |
                     v
- SQL Server / Azure Blob / Key Vault / Apple Wallet / APNs
+ SQL Server / Azure Blob / Key Vault / Apple Wallet / APNs / Google Wallet
 ```
 
 ## Projects
@@ -39,11 +39,33 @@ LoyaltyCloud.API      LoyaltyCloud.Admin
 | `LoyaltyCloud.Common` | Shared constants, results and primitives. |
 | `LoyaltyCloud.Domain` | Entities, enums, value objects, domain events and invariants. |
 | `LoyaltyCloud.Application` | CQRS/MediatR commands, queries, handlers, validators and interfaces. |
-| `LoyaltyCloud.Infrastructure` | EF Core, repositories, read services, Azure integrations, Wallet pass generation, APNs and tenant services. |
+| `LoyaltyCloud.Infrastructure` | EF Core, repositories, read services, Azure integrations, Wallet pass generation, APNs, Google Wallet REST/JWT services and tenant services. |
 | `LoyaltyCloud.API` | REST API, public join API, Apple Wallet web service, admin API HMAC middleware and background jobs. |
 | `LoyaltyCloud.Admin` | Blazor Server Platform Admin and Tenant Admin. |
 | `LoyaltyCloud.Tools` | Internal operational CLI tools. |
 | `LoyaltyCloud.Tests` | xUnit tests and guardrails. |
+
+## Wallet Integrations
+
+Apple Wallet is the production `.pkpass` path. In Development it can use either the unsigned `DevelopmentPassGeneratorService` or the real `PassGeneratorService` when local signing secrets are configured.
+
+Google Wallet is currently implemented as the first vertical slice for loyalty cards:
+
+```text
+API /api/customers/{serialNumber}/wallets/google/save-link
+  -> MediatR CreateGoogleWalletSaveLinkCommand
+  -> IGoogleWalletService
+  -> MemberDigitalWalletRepository
+  -> Google Wallet LoyaltyClass / LoyaltyObject REST API
+  -> signed Save to Google Wallet URL
+```
+
+Google Wallet is disabled by default with `GoogleWallet:Enabled=false`. When enabled, configuration must provide `GoogleWallet:IssuerId` and either `GoogleWallet:ServiceAccountJson` or `GoogleWallet:ServiceAccountJsonPath`. Object IDs include a tenant id prefix, so the same serial cannot collide across tenants under the same issuer.
+
+The Google Wallet save-link endpoint resolves the tenant from the loyalty card
+serial before entering Application, using the same tenant resolution pattern as
+Apple Wallet. This keeps `MemberDigitalWallet` writes tenant-scoped and prevents
+cross-tenant serial leakage.
 
 ## Local Development
 
@@ -117,13 +139,9 @@ Active production/UAT database:
 LoyaltyCloudFree
 ```
 
-The old Admin hostname no longer exists and must not be used:
-
-```text
-loyaltycloud-admin-894839.azurewebsites.net
-```
-
-The API hostname `loyaltycloud-api-894839.azurewebsites.net` is still correct.
+The previous Admin hostname was retired and must not be used. Use the current Admin
+deployment URL documented for the active environment. The API hostname
+`loyaltycloud-api-894839.azurewebsites.net` is still correct.
 
 ## Deployment Guardrail
 
@@ -148,11 +166,13 @@ Do not deploy API as `api.tar.gz` and do not use `--type static`.
 Run relevant tests for the area changed. Common final checks for implementation work:
 
 ```powershell
+dotnet restore .\LoyaltyCloud.sln
+dotnet build .\LoyaltyCloud.sln -v minimal
+dotnet test .\LoyaltyCloud.sln -v minimal --no-build
+
 dotnet ef migrations has-pending-model-changes `
   --project .\src\LoyaltyCloud.Infrastructure\LoyaltyCloud.Infrastructure.csproj `
   --startup-project .\src\LoyaltyCloud.API\LoyaltyCloud.API.csproj
-
-dotnet build .\LoyaltyCloud.sln
 ```
 
 Do not run `database update`, deploy, create migrations or commit unless explicitly requested.
@@ -163,5 +183,16 @@ Do not run `database update`, deploy, create migrations or commit unless explici
 - `docs/ROADMAP.md`: current RC1 roadmap.
 - `docs/AppleWallet.md`: Apple Wallet technical history and current behavior.
 - `docs/AppleWallet-Development.md`: local Wallet testing notes.
+- `docs/GoogleWallet.md`: Google Wallet vertical slice, configuration, endpoint and operational checklist.
+
+## Recent Development Improvements
+
+- Repaired the main rebase conflict after the Google Wallet branch diverged from RC1.
+- Ported the first Google Wallet vertical slice to the `LoyaltyCloud.*` project structure.
+- Added tenant-owned `MemberDigitalWallet` persistence and tenant-aware Google Wallet object IDs.
+- Added Google Wallet save-link sync on point updates.
+- Kept Apple Wallet and development pass generation paths intact.
+- Updated QR generation to expose an accessible registration label.
+- Validated `dotnet build .\LoyaltyCloud.sln -v minimal` and `dotnet test .\LoyaltyCloud.sln -v minimal --no-build`.
 
 Do not create `docs/DECISIONS.md`.

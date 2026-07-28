@@ -1,6 +1,7 @@
 using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
+using LoyaltyCloud.Application.Common.Interfaces;
 using LoyaltyCloud.Domain.Entities;
 using LoyaltyCloud.Infrastructure.Persistence;
 using LoyaltyCloud.Infrastructure.Persistence.Seed;
@@ -153,6 +154,8 @@ public sealed class AppleWalletWebServiceTests : IntegrationTestBase
     private async Task<TestPass> SeedRegisteredPassAsync(bool registerDevice = true)
     {
         using var scope = Factory.Services.CreateScope();
+        scope.ServiceProvider.GetRequiredService<IMutableTenantContext>()
+            .SetTenant(TenantSeed.KBeautyTenantId, TenantSeed.KBeautySlug);
         var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
 
         var now = DateTime.UtcNow;

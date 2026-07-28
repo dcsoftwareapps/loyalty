@@ -67,7 +67,7 @@ Configurar los secrets en el proyecto API:
 cd C:\repos\Loyalty\loyalty
 
 dotnet user-secrets set "Apple:PassCertificatePath" "C:\Secrets\KBeauty\kbeauty-wallet-pass.p12" --project src\LoyaltyCloud.API
-dotnet user-secrets set "Apple:PassCertificatePassword" "KBeautyWallet2026!" --project src\LoyaltyCloud.API
+dotnet user-secrets set "Apple:PassCertificatePassword" "<p12-password>" --project src\LoyaltyCloud.API
 dotnet user-secrets set "Apple:ApnPrivateKeyPath" "C:\Secrets\KBeauty\AuthKey_68Z2745848.p8" --project src\LoyaltyCloud.API
 dotnet user-secrets set "Apple:ApnKeyId" "68Z2745848" --project src\LoyaltyCloud.API
 dotnet user-secrets set "Apple:TeamIdentifier" "HS2XCFGQ75" --project src\LoyaltyCloud.API

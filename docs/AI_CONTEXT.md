@@ -79,13 +79,10 @@ Official API:
 https://loyaltycloud-api-894839.azurewebsites.net
 ```
 
-Do not use the removed Admin hostname:
-
-```text
-loyaltycloud-admin-894839.azurewebsites.net
-```
-
-There is a test guardrail to prevent this old Admin hostname from returning in product code/config. Do not accidentally rename the API hostname; `loyaltycloud-api-894839` is still correct.
+Do not use the removed Admin hostname. There is a test guardrail to prevent
+that retired Admin hostname from returning in product code/config. Do not
+accidentally rename the API hostname; `loyaltycloud-api-894839` is still
+correct.
 
 ## Azure Production Resources
 
@@ -710,7 +707,7 @@ Must fix before GA or before broad multi-tenant scale:
 
 1. API Linux: create ZIP with `tar -a`; do not use `Compress-Archive`; do not deploy `api.tar.gz`; do not use `--type static`.
 2. Admin Windows: use `Compress-Archive`.
-3. Old Admin hostname `loyaltycloud-admin-894839` does not exist.
+3. The retired Admin hostname does not exist and must not be reintroduced.
 4. Key Vault references can be cached by App Service; rewrite the reference and restart if a new secret version is not picked up.
 5. Do not manually persist Data Protection to `HOME/data-protection-keys`.
 6. `/platform/*` must be tenant-context-free.

@@ -45,7 +45,7 @@ La base activa de produccion/UAT es `LoyaltyCloudFree`.
 - Processor de notificaciones cada 12 horas para control de costo Azure SQL Free.
 - Quick Help `/quick-help`.
 - QR imprimible de registro con QRCoder.
-- Guardrail contra hostname Admin antiguo `loyaltycloud-admin-894839`.
+- Guardrail contra el hostname Admin retirado.
 - Branding tenant-aware en Admin.
 - Logo por tenant para Apple Wallet.
 - Fallback grafico neutral de Wallet sin texto `LC`.

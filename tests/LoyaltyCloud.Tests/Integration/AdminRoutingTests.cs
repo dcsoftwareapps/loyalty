@@ -789,7 +789,7 @@ public sealed class AdminRoutingTests : IClassFixture<AdminRoutingTests.AdminWeb
     [Trait("Category", "AdminConfigurationCleanup")]
     public void Legacy_reward_program_config_values_are_preserved_but_not_operational_ui()
     {
-        var seed = File.ReadAllText(Path.Combine(GetRepositoryRoot(), "src", "LoyaltyCloud.Infrastructure", "Persistence", "Seed", "ProgramConfigSeed.cs"));
+        var seed = File.ReadAllText(Path.Combine(GetRepositoryRoot(), "src", "LoyaltyCloud.Application", "Provisioning", "TenantProvisioningDefaults.cs"));
         var snapshot = File.ReadAllText(Path.Combine(GetRepositoryRoot(), "src", "LoyaltyCloud.Domain", "ValueObjects", "ProgramConfigSnapshot.cs"));
 
         Assert.Contains("LoyaltyConstants.ConfigKeys.RewardMiniProductPoints", seed);

@@ -154,6 +154,13 @@ public sealed class SuperAdminTests
     public async Task Reactivate_sets_suspended_tenant_to_active()
     {
         await using var env = await SuperAdminTestEnvironment.CreateAsync();
+        await env.WithScopeAsync(async sp =>
+        {
+            var db = sp.GetRequiredService<AppDbContext>();
+            var subscription = await db.TenantSubscriptions.SingleAsync(s => s.TenantId == BellaTenantId);
+            db.Entry(subscription).Property(nameof(TenantSubscription.PaidThroughUtc)).CurrentValue = DateTime.UtcNow.AddDays(30);
+            await db.SaveChangesAsync();
+        });
         await env.WithScopeAsync(sp => sp.GetRequiredService<ISender>().Send(new SuspendTenantCommand(BellaTenantId)));
 
         var result = await env.WithScopeAsync(sp => sp.GetRequiredService<ISender>().Send(new ReactivateTenantCommand(BellaTenantId)));
@@ -390,6 +397,10 @@ public sealed class SuperAdminTests
                 var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
                 await db.Database.EnsureDeletedAsync();
                 await db.Database.MigrateAsync();
+                scope.ServiceProvider.GetRequiredService<IMutableTenantContext>()
+                    .SetTenant(TenantSeed.KBeautyTenantId, TenantSeed.KBeautySlug);
+                await IntegrationTestSeed.EnsureKBeautyPlatformRowsAsync(db);
+                await IntegrationTestSeed.EnsureDefaultTenantLevelsAsync(db);
             }
 
             await SeedBellaTenantAsync();
