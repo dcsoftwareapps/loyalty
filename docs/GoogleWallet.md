@@ -84,6 +84,38 @@ Response:
 
 The JWT is not stored in the database and is not logged.
 
+## Public Join Flow
+
+`/{tenantSlug}/join` is the customer-facing entry point. The page first creates
+or reuses the membership through the existing public join endpoint, then chooses
+the wallet path using the returned `SerialNumber`.
+
+```text
+Blazor Join page
+  -> POST /api/public/{tenantSlug}/join
+  -> PublicJoinResponse.SerialNumber
+  -> WalletPlatformDetector
+      -> Apple: navigate to PassDownloadUrl
+      -> Google: POST /api/customers/{serialNumber}/wallets/google/save-link
+      -> Unknown/Desktop: show manual choice
+```
+
+Important behavior:
+
+- the join form creates or reuses the customer once;
+- Apple Wallet continues to use the existing `.pkpass` `PassDownloadUrl`;
+- Android uses the Google save-link endpoint and then redirects to `saveUrl`;
+- desktop and unknown browsers show manual Add to Apple Wallet / Add to Google Wallet buttons;
+- when `GoogleWallet:Enabled=false`, the public join response marks Google as unavailable and the UI hides the Google option;
+- the browser never receives service account credentials, private keys or configuration internals;
+- the full Google Save JWT must not be logged.
+
+Platform detection is intentionally conservative. It reads browser `userAgent`,
+`platform`, vendor and touch-point hints through `wwwroot/js/wallet-platform.js`,
+then classifies in testable C# code. iPhone, iPad, iPod and iPadOS desktop-mode
+Safari with touch are Apple. Android is Google. Everything else is unknown and
+falls back to manual choice.
+
 ## Update Flow
 
 The first implemented business update is `AddPoints`.
@@ -158,6 +190,7 @@ Sensitive values must come from user-secrets, environment variables or Azure Key
 | --- | --- | --- |
 | `GoogleWallet:ServiceAccountJson` | yes | Full Google service account JSON. |
 | `GoogleWallet:ServiceAccountJsonPath` | yes-ish | Local path outside the repo to the service account JSON. |
+| `GoogleWallet:LogoUri` | no | Public HTTPS logo used as `programLogo`; required by Google when creating the `LoyaltyClass`. |
 
 When `GoogleWallet:Enabled=true`, startup validates:
 
@@ -169,6 +202,11 @@ When `GoogleWallet:Enabled=true`, startup validates:
 - service account JSON or path
 - `HexBackgroundColor` format when provided
 
+Google Wallet also rejects real `LoyaltyClass` creation when `programLogo` is
+missing. Set `GoogleWallet:LogoUri` to a publicly reachable HTTPS PNG/JPG before
+the first real save-link test. Localhost, private files and Azurite development
+URLs are not valid because Google must fetch the image from its backend.
+
 ## Local Development
 
 Keep Google Wallet disabled until real issuer data exists:
@@ -176,10 +214,21 @@ Keep Google Wallet disabled until real issuer data exists:
 ```powershell
 dotnet user-secrets set "GoogleWallet:Enabled" "true" --project .\src\LoyaltyCloud.API\LoyaltyCloud.API.csproj
 dotnet user-secrets set "GoogleWallet:IssuerId" "<issuer-id>" --project .\src\LoyaltyCloud.API\LoyaltyCloud.API.csproj
+dotnet user-secrets set "GoogleWallet:LogoUri" "https://<public-api-host>/api/wallet-assets/apple/logo@3x.png" --project .\src\LoyaltyCloud.API\LoyaltyCloud.API.csproj
 dotnet user-secrets set "GoogleWallet:ServiceAccountJsonPath" "C:\secure\google-wallet-service-account.json" --project .\src\LoyaltyCloud.API\LoyaltyCloud.API.csproj
 ```
 
 Use a path outside the repository. Do not commit the JSON key.
+
+The API serves the existing bundled Apple Wallet logo through:
+
+```text
+GET /api/wallet-assets/apple/logo@3x.png
+```
+
+Use the public HTTPS API host, for example the current ngrok host, when setting
+`GoogleWallet:LogoUri`. Do not point Google Wallet at local files, `localhost` or
+Azurite development URLs.
 
 ## Azure Key Vault
 
@@ -274,6 +323,17 @@ GoogleWallet:IssuerId es requerido.
 ```
 
 Fix: obtain the Issuer ID from Google Pay & Wallet Console and configure it securely.
+
+### Missing Loyalty Class Logo
+
+Symptom:
+
+```text
+LoyaltyClass cannot be created without a program logo.
+```
+
+Fix: configure `GoogleWallet:LogoUri` with a public HTTPS image URL reachable by
+Google, then retry the save-link endpoint.
 
 ### Save Link Works in Tests But Not Android
 

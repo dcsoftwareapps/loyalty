@@ -60,12 +60,51 @@ API /api/customers/{serialNumber}/wallets/google/save-link
   -> signed Save to Google Wallet URL
 ```
 
-Google Wallet is disabled by default with `GoogleWallet:Enabled=false`. When enabled, configuration must provide `GoogleWallet:IssuerId` and either `GoogleWallet:ServiceAccountJson` or `GoogleWallet:ServiceAccountJsonPath`. Object IDs include a tenant id prefix, so the same serial cannot collide across tenants under the same issuer.
+Google Wallet is disabled by default with `GoogleWallet:Enabled=false`. When enabled, configuration must provide `GoogleWallet:IssuerId`, a public HTTPS `GoogleWallet:LogoUri`, and either `GoogleWallet:ServiceAccountJson` or `GoogleWallet:ServiceAccountJsonPath`. Object IDs include a tenant id prefix, so the same serial cannot collide across tenants under the same issuer.
 
 The Google Wallet save-link endpoint resolves the tenant from the loyalty card
 serial before entering Application, using the same tenant resolution pattern as
 Apple Wallet. This keeps `MemberDigitalWallet` writes tenant-scoped and prevents
 cross-tenant serial leakage.
+
+The public join page at `/{tenantSlug}/join` now separates membership creation
+from wallet selection:
+
+```text
+Join form
+  -> POST /api/public/{tenantSlug}/join
+  -> receive one CustomerId + SerialNumber
+  -> detect browser platform
+  -> iOS/iPadOS: open existing Apple Wallet pass URL
+  -> Android: POST /api/customers/{serialNumber}/wallets/google/save-link
+  -> desktop/unknown: show Add to Apple Wallet and, when enabled, Add to Google Wallet
+```
+
+The join form is submitted once. Manual wallet buttons reuse the same
+`SerialNumber`; they do not create another customer. Platform detection uses a
+small browser signal (`userAgent`, `platform`, vendor and touch points) and a
+testable C# classifier. Unknown or desktop browsers intentionally fall back to
+manual choice instead of assuming a wallet provider. When `GoogleWallet:Enabled`
+is false, the join response hides Google Wallet and Android users fall back to
+the available Apple Wallet option with a friendly message.
+
+For local real Google Wallet testing, keep the service account JSON outside the
+repository and point user-secrets at it:
+
+```powershell
+dotnet user-secrets set "GoogleWallet:Enabled" "true" --project .\src\LoyaltyCloud.API\LoyaltyCloud.API.csproj
+dotnet user-secrets set "GoogleWallet:IssuerId" "<issuer-id>" --project .\src\LoyaltyCloud.API\LoyaltyCloud.API.csproj
+dotnet user-secrets set "GoogleWallet:LogoUri" "https://<public-api-host>/api/wallet-assets/apple/logo@3x.png" --project .\src\LoyaltyCloud.API\LoyaltyCloud.API.csproj
+dotnet user-secrets set "GoogleWallet:ServiceAccountJsonPath" "<absolute-json-path>" --project .\src\LoyaltyCloud.API\LoyaltyCloud.API.csproj
+```
+
+Do not store service account JSON in `appsettings*.json`, do not copy it to the
+repo, and do not print JWTs or private key material in logs. The logo URL must
+be reachable by Google over public HTTPS; `localhost`, local Azurite URLs and
+private development files are not valid for creating a real Google
+`LoyaltyClass`. The API exposes the existing bundled Apple Wallet logo at
+`/api/wallet-assets/apple/logo@3x.png` so Google Wallet can reuse the same
+branding through the public API/ngrok host without adding duplicate image files.
 
 ## Local Development
 
@@ -191,6 +230,11 @@ Do not run `database update`, deploy, create migrations or commit unless explici
 - Ported the first Google Wallet vertical slice to the `LoyaltyCloud.*` project structure.
 - Added tenant-owned `MemberDigitalWallet` persistence and tenant-aware Google Wallet object IDs.
 - Added Google Wallet save-link sync on point updates.
+- Documented real local Google Wallet setup through `GoogleWallet:ServiceAccountJsonPath`.
+- Captured the real Google Wallet class-creation requirement for a public HTTPS `GoogleWallet:LogoUri`.
+- Added a public read-only wallet asset endpoint so Google Wallet can reuse the bundled Apple Wallet logo.
+- Integrated Google Wallet into the public join flow with iOS/Android/desktop wallet selection.
+- Clarified the Admin configuration label for `PointsPerPesoUnit` as pesos per point.
 - Kept Apple Wallet and development pass generation paths intact.
 - Updated QR generation to expose an accessible registration label.
 - Validated `dotnet build .\LoyaltyCloud.sln -v minimal` and `dotnet test .\LoyaltyCloud.sln -v minimal --no-build`.

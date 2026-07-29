@@ -18,19 +18,22 @@ public sealed class PublicJoinController : ControllerBase
     private readonly IMutableTenantContext _tenantContext;
     private readonly IWebHostEnvironment _environment;
     private readonly ApplePassOptions _options;
+    private readonly GoogleWalletOptions _googleWalletOptions;
 
     public PublicJoinController(
         ISender sender,
         IPublicTenantResolver tenantResolver,
         IMutableTenantContext tenantContext,
         IWebHostEnvironment environment,
-        IOptions<ApplePassOptions> options)
+        IOptions<ApplePassOptions> options,
+        IOptions<GoogleWalletOptions> googleWalletOptions)
     {
         _sender = sender;
         _tenantResolver = tenantResolver;
         _tenantContext = tenantContext;
         _environment = environment;
         _options = options.Value;
+        _googleWalletOptions = googleWalletOptions.Value;
     }
 
     [HttpPost("{tenantSlug}/join")]
@@ -123,7 +126,8 @@ public sealed class PublicJoinController : ControllerBase
             value.Phone,
             value.AlreadyExists,
             BuildMessage(value.AlreadyExists, tenant.DisplayName),
-            BuildPassDownloadUrl(value.SerialNumber));
+            BuildPassDownloadUrl(value.SerialNumber),
+            _googleWalletOptions.Enabled);
 
     private static string BuildMessage(bool alreadyExists, string displayName) =>
         alreadyExists
@@ -155,7 +159,8 @@ public sealed class PublicJoinController : ControllerBase
         string Phone,
         bool AlreadyExists,
         string Message,
-        string PassDownloadUrl);
+        string PassDownloadUrl,
+        bool GoogleWalletEnabled);
 
     public sealed record PublicBirthdayRequest(int Day, int Month);
 

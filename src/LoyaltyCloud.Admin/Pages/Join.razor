@@ -5,6 +5,7 @@
 
 @using System.Net.Http.Json
 @using System.Text.RegularExpressions
+@using LoyaltyCloud.Admin.Services
 @using LoyaltyCloud.Application.Common.Interfaces
 @using Microsoft.AspNetCore.Mvc
 @inject IHttpClientFactory HttpClientFactory
@@ -12,6 +13,7 @@
 @inject IMutableTenantContext TenantContext
 @inject NavigationManager Navigation
 @inject ILogger<Join> Logger
+@inject IJSRuntime JS
 
 <PageTitle>@PageTitleText</PageTitle>
 
@@ -38,7 +40,7 @@
                 }
             </div>
             <h1>Únete a nuestro programa de lealtad</h1>
-            <p class="kb-muted">Agrega tu tarjeta a Apple Wallet y acumula puntos en cada compra.</p>
+            <p class="kb-muted">Agrega tu tarjeta a tu wallet y acumula puntos en cada compra.</p>
 
             @if (!string.IsNullOrWhiteSpace(tenant.InstagramUrl) || !string.IsNullOrWhiteSpace(tenant.WhatsAppUrl))
             {
@@ -59,6 +61,11 @@
                 <div class="kb-form-error">@errorMsg</div>
             }
 
+            @if (processingStatus is not null)
+            {
+                <div class="kb-muted">@processingStatus</div>
+            }
+
             @if (joinResult is null)
             {
                 <div class="kb-form-row">
@@ -75,7 +82,7 @@
                         <input id="phone" type="tel" inputmode="tel" autocomplete="tel" @bind="form.Phone" />
                     </div>
                     <button class="kb-btn kb-btn--primary kb-btn--block kb-btn--large" @onclick="JoinAsync" disabled="@busy">
-                        @(busy ? "Preparando..." : "Agregar a Apple Wallet")
+                        @(busy ? "Creating your membership..." : "Join")
                     </button>
                 </div>
             }
@@ -83,9 +90,33 @@
             {
                 <div class="kb-form-success">@joinResult.Message</div>
                 <h2>Tu tarjeta de lealtad @tenant.DisplayName está lista.</h2>
-                <a class="kb-btn kb-btn--primary kb-btn--block kb-btn--large" href="@joinResult.PassDownloadUrl">
-                    Agregar a Apple Wallet
-                </a>
+                @if (showWalletChoice)
+                {
+                    <div class="kb-join-birthday">
+                        <h2>Choose your wallet</h2>
+                        @if (!string.IsNullOrWhiteSpace(walletChoiceMessage))
+                        {
+                            <p class="kb-muted">@walletChoiceMessage</p>
+                        }
+                        <div class="kb-actions-inline" style="width:100%;">
+                            <button class="kb-btn kb-btn--primary" @onclick="OpenAppleWalletAsync" disabled="@busy">
+                                Add to Apple Wallet
+                            </button>
+                            @if (joinResult.GoogleWalletEnabled)
+                            {
+                                <button class="kb-btn kb-btn--ghost" @onclick="OpenGoogleWalletAsync" disabled="@busy">
+                                    Add to Google Wallet
+                                </button>
+                            }
+                        </div>
+                    </div>
+                }
+                else
+                {
+                    <button class="kb-btn kb-btn--primary kb-btn--block kb-btn--large" @onclick="OpenAppleWalletAsync" disabled="@busy">
+                        Add to Apple Wallet
+                    </button>
+                }
 
                 @if (!birthdaySaved && !birthdaySkipped)
                 {
@@ -141,10 +172,13 @@
     private PublicJoinResponse? joinResult;
     private string? errorMsg;
     private string? tenantError;
+    private string? processingStatus;
+    private string? walletChoiceMessage;
     private bool loadingTenant = true;
     private bool busy;
     private bool birthdaySaved;
     private bool birthdaySkipped;
+    private bool showWalletChoice;
 
     private HttpClient Api => HttpClientFactory.CreateClient("LoyaltyCloudApi");
 
@@ -177,6 +211,9 @@
         tenantError = null;
         errorMsg = null;
         joinResult = null;
+        processingStatus = null;
+        walletChoiceMessage = null;
+        showWalletChoice = false;
         birthdaySaved = false;
         birthdaySkipped = false;
 
@@ -215,10 +252,11 @@
 
     private async Task JoinAsync()
     {
-        if (tenant is null)
+        if (tenant is null || busy)
             return;
 
         errorMsg = null;
+        processingStatus = null;
         if (string.IsNullOrWhiteSpace(form.FirstName)
             || string.IsNullOrWhiteSpace(form.LastName)
             || string.IsNullOrWhiteSpace(form.Phone))
@@ -228,6 +266,7 @@
         }
 
         busy = true;
+        processingStatus = "Creating your membership...";
         try
         {
             using var response = await Api.PostAsJsonAsync($"api/public/{tenant.Slug}/join", new PublicJoinRequest(
@@ -243,10 +282,140 @@
 
             joinResult = await response.Content.ReadFromJsonAsync<PublicJoinResponse>();
             if (joinResult is null)
+            {
                 errorMsg = "No pudimos preparar tu tarjeta. Intenta de nuevo.";
+                return;
+            }
+
+            if (string.IsNullOrWhiteSpace(joinResult.SerialNumber))
+            {
+                errorMsg = "No pudimos identificar tu tarjeta. Intenta de nuevo.";
+                return;
+            }
+
+            await ContinueWalletFlowAsync();
         }
         finally
         {
+            processingStatus = null;
+            busy = false;
+        }
+    }
+
+    private async Task ContinueWalletFlowAsync()
+    {
+        var platform = await DetectWalletPlatformAsync();
+        Logger.LogInformation(
+            "Public join wallet platform detected. TenantSlug={TenantSlug}, Platform={Platform}, GoogleWalletEnabled={GoogleWalletEnabled}.",
+            tenant?.Slug,
+            platform,
+            joinResult?.GoogleWalletEnabled);
+
+        if (platform == WalletPlatform.Apple)
+        {
+            await OpenAppleWalletAsync();
+            return;
+        }
+
+        if (platform == WalletPlatform.Google)
+        {
+            if (joinResult?.GoogleWalletEnabled == true)
+            {
+                await OpenGoogleWalletAsync();
+                return;
+            }
+
+            walletChoiceMessage = "Google Wallet is not available for this program right now. You can still add your card to Apple Wallet.";
+            showWalletChoice = true;
+            return;
+        }
+
+        walletChoiceMessage = joinResult?.GoogleWalletEnabled == true
+            ? "We could not identify your device automatically. Choose the wallet you want to use."
+            : "We could not identify your device automatically. Apple Wallet is available for this program.";
+        showWalletChoice = true;
+    }
+
+    private async Task<WalletPlatform> DetectWalletPlatformAsync()
+    {
+        try
+        {
+            var signal = await JS.InvokeAsync<BrowserWalletSignal>("loyaltyCloudWallet.getPlatformSignal");
+            return WalletPlatformDetector.Detect(signal);
+        }
+        catch (JSException ex)
+        {
+            Logger.LogWarning(ex, "Could not read browser wallet platform signal.");
+            return WalletPlatform.Unknown;
+        }
+        catch (InvalidOperationException ex)
+        {
+            Logger.LogWarning(ex, "Browser wallet platform signal is not available during the current render phase.");
+            return WalletPlatform.Unknown;
+        }
+    }
+
+    private Task OpenAppleWalletAsync()
+    {
+        if (joinResult is null || (busy && showWalletChoice))
+            return Task.CompletedTask;
+
+        errorMsg = null;
+        if (string.IsNullOrWhiteSpace(joinResult.PassDownloadUrl))
+        {
+            errorMsg = "No pudimos preparar Apple Wallet. Intenta de nuevo.";
+            return Task.CompletedTask;
+        }
+
+        processingStatus = "Preparing your wallet pass...";
+        Navigation.NavigateTo(joinResult.PassDownloadUrl, forceLoad: true);
+        return Task.CompletedTask;
+    }
+
+    private async Task OpenGoogleWalletAsync()
+    {
+        if (joinResult is null || tenant is null || (busy && showWalletChoice))
+            return;
+
+        errorMsg = null;
+        if (!joinResult.GoogleWalletEnabled)
+        {
+            errorMsg = "Google Wallet is not available for this program right now.";
+            return;
+        }
+
+        if (string.IsNullOrWhiteSpace(joinResult.SerialNumber))
+        {
+            errorMsg = "No pudimos identificar tu tarjeta. Intenta de nuevo.";
+            return;
+        }
+
+        busy = true;
+        processingStatus = "Preparing your wallet pass...";
+        try
+        {
+            using var response = await Api.PostAsync(
+                $"api/customers/{Uri.EscapeDataString(joinResult.SerialNumber)}/wallets/google/save-link",
+                content: null);
+
+            if (!response.IsSuccessStatusCode)
+            {
+                errorMsg = await ReadApiErrorAsync(response);
+                return;
+            }
+
+            var saveLink = await response.Content.ReadFromJsonAsync<GoogleWalletSaveLinkResponse>();
+            if (string.IsNullOrWhiteSpace(saveLink?.SaveUrl))
+            {
+                errorMsg = "No pudimos preparar Google Wallet. Intenta de nuevo.";
+                return;
+            }
+
+            Navigation.NavigateTo(saveLink.SaveUrl, forceLoad: true);
+        }
+        finally
+        {
+            processingStatus = null;
             busy = false;
         }
     }
@@ -353,7 +522,14 @@
         string Phone,
         bool AlreadyExists,
         string Message,
-        string PassDownloadUrl);
+        string PassDownloadUrl,
+        bool GoogleWalletEnabled);
 
     private sealed record PublicBirthdayRequest(int Day, int Month);
+
+    private sealed record GoogleWalletSaveLinkResponse(
+        string SaveUrl,
+        string ObjectId,
+        string ClassId,
+        DateTime? LastSynchronizedAt);
 }

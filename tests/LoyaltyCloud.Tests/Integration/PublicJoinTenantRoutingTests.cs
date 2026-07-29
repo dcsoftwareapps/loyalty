@@ -114,6 +114,36 @@ public sealed class PublicJoinTenantRoutingTests : IClassFixture<CustomWebApplic
 
     [Fact]
     [Trait("Category", "PublicJoin")]
+    public async Task Rejoining_same_phone_reuses_customer_and_exposes_google_wallet_availability()
+    {
+        var phone = UniquePhone();
+
+        var firstResponse = await JoinAsync("kbeauty", "Wallet", "Choice", phone);
+        var secondResponse = await JoinAsync("kbeauty", "Wallet", "Choice", phone);
+
+        Assert.Equal(HttpStatusCode.OK, firstResponse.StatusCode);
+        Assert.Equal(HttpStatusCode.OK, secondResponse.StatusCode);
+
+        var first = await firstResponse.Content.ReadFromJsonAsync<PublicJoinResponse>();
+        var second = await secondResponse.Content.ReadFromJsonAsync<PublicJoinResponse>();
+
+        Assert.NotNull(first);
+        Assert.NotNull(second);
+        Assert.Equal(first!.CustomerId, second!.CustomerId);
+        Assert.Equal(first.SerialNumber, second.SerialNumber);
+        Assert.False(first.AlreadyExists);
+        Assert.True(second.AlreadyExists);
+        Assert.True(first.GoogleWalletEnabled);
+
+        using var scope = _factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        Assert.Equal(1, await db.Customers
+            .IgnoreQueryFilters()
+            .CountAsync(c => c.TenantId == TenantSeed.KBeautyTenantId && c.NormalizedPhone == phone));
+    }
+
+    [Fact]
+    [Trait("Category", "PublicJoin")]
     [Trait("Category", "NoDefaultTenant")]
     public void Root_join_route_is_not_declared()
     {
@@ -131,8 +161,36 @@ public sealed class PublicJoinTenantRoutingTests : IClassFixture<CustomWebApplic
 
         Assert.DoesNotContain("@page \"/join\"", source);
         Assert.Contains("@page \"/{TenantSlug}/join\"", source);
-        Assert.DoesNotContain("Navigation.NavigateTo", source);
         Assert.DoesNotContain("Legacy" + "Default" + "Tenant" + "Slug", source);
+    }
+
+    [Fact]
+    [Trait("Category", "PublicJoin")]
+    public void Join_page_contains_wallet_selection_and_error_guardrails()
+    {
+        var root = GetRepositoryRoot();
+        var source = File.ReadAllText(Path.Combine(root, "src", "LoyaltyCloud.Admin", "Pages", "Join.razor"));
+        var detector = File.ReadAllText(Path.Combine(root, "src", "LoyaltyCloud.Admin", "Services", "WalletPlatformDetector.cs"));
+        var script = File.ReadAllText(Path.Combine(root, "src", "LoyaltyCloud.Admin", "wwwroot", "js", "wallet-platform.js"));
+
+        Assert.Contains("WalletPlatformDetector.Detect", source);
+        Assert.Contains("loyaltyCloudWallet.getPlatformSignal", source);
+        Assert.Contains("Choose your wallet", source);
+        Assert.Contains("Add to Apple Wallet", source);
+        Assert.Contains("Add to Google Wallet", source);
+        Assert.Contains("Google Wallet is not available", source);
+        Assert.Contains("No pudimos preparar Apple Wallet", source);
+        Assert.Contains("No pudimos preparar Google Wallet", source);
+        Assert.Contains("No pudimos identificar tu tarjeta", source);
+        Assert.Contains("api/customers/{Uri.EscapeDataString(joinResult.SerialNumber)}/wallets/google/save-link", source);
+        Assert.Contains("GoogleWalletEnabled", source);
+
+        Assert.Contains("MaxTouchPoints", detector);
+        Assert.Contains("Android", detector);
+        Assert.Contains("iPhone", detector);
+        Assert.Contains("iPad", detector);
+        Assert.Contains("Mac", detector);
+        Assert.Contains("navigator.maxTouchPoints", script);
     }
 
     [Fact]
@@ -225,4 +283,23 @@ public sealed class PublicJoinTenantRoutingTests : IClassFixture<CustomWebApplic
     }
 
     private static string UniquePhone() => "646" + Random.Shared.Next(1000000, 9999999).ToString();
+
+    private static string GetRepositoryRoot()
+    {
+        var dir = new DirectoryInfo(AppContext.BaseDirectory);
+        while (dir is not null && !File.Exists(Path.Combine(dir.FullName, "LoyaltyCloud.sln")))
+            dir = dir.Parent;
+
+        return dir?.FullName ?? throw new InvalidOperationException("Repository root not found.");
+    }
+
+    private sealed record PublicJoinResponse(
+        Guid CustomerId,
+        string SerialNumber,
+        string FullName,
+        string Phone,
+        bool AlreadyExists,
+        string Message,
+        string PassDownloadUrl,
+        bool GoogleWalletEnabled);
 }

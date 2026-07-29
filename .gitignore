@@ -48,6 +48,9 @@ appsettings.*.local.json
 appsettings.Production.json
 appsettings.Local.json
 secrets.json
+secrets/
+*.service-account.json
+google-wallet-credentials.json
 *.p12
 *.pfx
 *.pem
