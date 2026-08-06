@@ -118,6 +118,82 @@ Storage:
 stloyaltycloud894839
 ```
 
+## Azure Staging Infrastructure Baseline
+
+The active RC1/UAT staging infrastructure path is PowerShell + Azure CLI under
+`infra/`.
+
+- `infra/create-stg.ps1`: dry-run-by-default script that creates STAGING Azure
+  infrastructure only when `-Execute` is passed.
+- `infra/configure-stg-secrets.ps1`: loads manual STAGING secrets into STAGING
+  Key Vault.
+- `infra/README.md`: operational instructions.
+
+The Bicep files under `infra/` are experimental and not the active deployment
+path. Do not deploy them unless a separate infrastructure review approves Bicep.
+
+Staging target:
+
+```text
+Resource Group: rg-loyaltycloud-stg
+API: loyaltycloud-api-stg-<uniqueSuffix>
+Admin: loyaltycloud-admin-stg-<uniqueSuffix>
+SQL Server: sql-loyaltycloud-stg-<uniqueSuffix>
+Database: LoyaltyCloudStg
+Key Vault: kv-loyaltycloud-stg-<uniqueSuffix>
+Storage: stloyaltycloudstg<uniqueSuffix>
+```
+
+Staging must be isolated from production. Do not point staging at production SQL,
+production Storage, or production Key Vault.
+
+Current app configuration contracts reflected by the staging scripts:
+
+- API and Admin both require `ConnectionStrings:DefaultConnection`.
+- API and Admin both load Azure Key Vault through `Azure:KeyVaultUri`.
+- API and Admin both register Infrastructure; outside Development the current
+  code registers real Apple Wallet signing and `ApnService`.
+- Admin also requires `Admin:ApiBaseUrl`.
+- Admin/API HMAC requires `AdminApi:SharedSecret`.
+- Tenant Admin sessions use `Admin:Auth:SessionHours`; RC1 target is 168 hours.
+- Super Admin sessions use `SuperAdmin:SessionHours`; RC1 target remains 8 hours.
+- SQL-light background defaults are `LoyaltyMaintenance:IntervalHours=12` and
+  `LoyaltyNotifications:PollIntervalSeconds=43200`.
+- Azure Blob Storage uses `Azure:BlobStorage:ConnectionString` and
+  `Azure:BlobStorage:PassContainer=passes`.
+- Tenant logos and Wallet assets are stored under tenant-scoped blob paths inside
+  the `passes` container.
+
+Key Vault secret names currently expected:
+
+```text
+loyaltycloud-sql-connection-string
+loyaltycloud-storage-connection-string
+loyaltycloud-admin-api-shared-secret
+loyaltycloud-superadmin-username
+loyaltycloud-superadmin-password-hash
+kbeauty-pass-certificate
+kbeauty-pass-certificate-password
+kbeauty-wwdr-certificate
+kbeauty-apn-private-key
+kbeauty-apn-key-id
+kbeauty-apn-team-id
+loyaltycloud-google-wallet-service-account-json
+```
+
+The `kbeauty-*` Apple secret names are legacy provider names and must not be
+renamed in configuration until `KeyVaultAppleWalletSecretsProvider` is changed.
+
+Wallet environment guidance:
+
+- `Apple:WebServiceURL` must be environment-specific because it is embedded in
+  passes and used by Apple Wallet web service refresh.
+- Apple Pass Type ID and Apple Team ID can be shared temporarily for RC1/UAT.
+- Apple `.p12`, `.p12` password, APNs `.p8`, Google service account JSON and
+  any signing/private material should be separated per environment long-term.
+- Existing production Apple Wallet passes will keep calling production because
+  their embedded `webServiceURL` points to production.
+
 App Services:
 
 - API: `loyaltycloud-api-894839`, Linux.
