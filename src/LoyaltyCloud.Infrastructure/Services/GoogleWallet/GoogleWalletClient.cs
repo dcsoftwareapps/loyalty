@@ -154,9 +154,6 @@ internal sealed class GoogleWalletClient : IGoogleWalletClient
         CancellationToken ct)
     {
         var body = await response.Content.ReadAsStringAsync(ct);
-        if (body.Length > 500)
-            body = body[..500];
-
         return new InvalidOperationException(
             $"Error al {operation}. Status={(int)response.StatusCode} {response.ReasonPhrase}. Body={body}");
     }

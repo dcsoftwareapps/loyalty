@@ -66,16 +66,34 @@ Para permitir conexiones desde servicios Azure:
 .\infra\create-stg.ps1 -Suffix 01 -AllowAzureServices -Execute
 ```
 
-Para configurar secretos:
+Para configurar secretos manuales, ejecutar solo el bloque que corresponda.
+
+Admin API:
 
 ```powershell
-.\infra\configure-stg-secrets.ps1 -Suffix 01 -ConfigureSuperAdmin -ConfigureAppleWallet -Execute
+.\infra\configure-stg-secrets.ps1 -Suffix 01 -ConfigureAdminApi -Execute
 ```
 
-Si se habilita Google Wallet:
+SuperAdmin:
 
 ```powershell
-.\infra\configure-stg-secrets.ps1 -Suffix 01 -ConfigureGoogleWallet -GoogleWalletServiceAccountJsonPath C:\secure\google-wallet-stg.json -Execute
+.\infra\configure-stg-secrets.ps1 -Suffix 01 -ConfigureSuperAdmin -Execute
+```
+
+Apple Wallet:
+
+```powershell
+.\infra\configure-stg-secrets.ps1 -Suffix 01 -ConfigureAppleWallet -Execute
+```
+
+Google Wallet:
+
+```powershell
+.\infra\configure-stg-secrets.ps1 `
+  -Suffix 01 `
+  -ConfigureGoogleWallet `
+  -GoogleWalletServiceAccountJsonPath "C:\secure\google-wallet-stg.json" `
+  -Execute
 ```
 
 Los comandos efectivos finales que ejecuta el script de infraestructura son:
@@ -282,13 +300,65 @@ kv-loyaltycloud-stg-01
 | `loyaltycloud-superadmin-password-hash` | Hash de password de Platform Admin |
 | `kbeauty-pass-certificate` | Certificado Apple Wallet `.p12` codificado en Base64 |
 | `kbeauty-pass-certificate-password` | Password del certificado `.p12` |
-| `kbeauty-wwdr-certificate` | Certificado WWDR codificado en Base64, si se configura externamente |
+| `kbeauty-wwdr-certificate` | Certificado WWDR codificado en Base64, opcional; la implementacion actual primero usa el WWDR incluido en el `.p12` o el certificado bundleado `Certificates/AppleWWDRCAG4.cer` |
 | `kbeauty-apn-private-key` | Contenido PEM de la llave APNs `.p8` |
 | `kbeauty-apn-key-id` | Key ID de APNs |
 | `kbeauty-apn-team-id` | Team ID de APNs |
 | `loyaltycloud-google-wallet-service-account-json` | JSON de service account de Google Wallet, solo si se habilita Google Wallet |
 
 Los secretos no se guardan en el repositorio. Las Web Apps los consumen mediante Key Vault references y Managed Identity.
+
+## Copiar secretos Apple Wallet desde PROD hacia STG
+
+Para STG se puede copiar exclusivamente la allowlist de secretos Apple Wallet desde PROD hacia STG con:
+
+```powershell
+.\infra\copy-apple-wallet-secrets-to-stg.ps1
+```
+
+Ese comando es dry-run. No lee valores sensibles y no modifica Azure. Solo valida Key Vaults, revisa que los secretos existan y muestra que copiaria o actualizaria.
+
+Para ejecutar la copia real:
+
+```powershell
+.\infra\copy-apple-wallet-secrets-to-stg.ps1 -Execute
+```
+
+La ejecucion pide confirmacion exacta:
+
+```text
+COPY APPLE WALLET SECRETS TO STG
+```
+
+Secretos obligatorios incluidos:
+
+- `kbeauty-pass-certificate`
+- `kbeauty-pass-certificate-password`
+- `kbeauty-apn-private-key`
+- `kbeauty-apn-key-id`
+- `kbeauty-apn-team-id`
+
+Secretos opcionales:
+
+- `kbeauty-wwdr-certificate`
+
+`kbeauty-wwdr-certificate` no existe actualmente en `kv-loyaltycloud-894839` y PROD firma Apple Wallet passes correctamente sin ese secreto. En el codigo actual, `PassGeneratorService` busca el certificado WWDR G4 en este orden:
+
+1. Dentro del `.p12`.
+2. En el bundle de la aplicacion: `Certificates/AppleWWDRCAG4.cer`.
+3. En `IAppleWalletSecretsProvider.GetWwdrCertificateBytesAsync`.
+
+Por eso el script lo trata como opcional: solo lo copia si existe en origen y no aborta si falta.
+
+El script no copia secretos SQL, Storage, SuperAdmin ni Admin API.
+
+Advertencia:
+
+STG reutiliza temporalmente los mismos certificados/APNs de PROD. `Apple__WebServiceURL` sigue apuntando al API STG:
+
+```text
+https://loyaltycloud-api-stg-01.azurewebsites.net
+```
 
 ## 6. SQL
 

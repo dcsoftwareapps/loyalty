@@ -1,0 +1,97 @@
+[
+  {
+    "name": "ASPNETCORE_ENVIRONMENT",
+    "value": "Staging",
+    "slotSetting": false
+  },
+  {
+    "name": "Azure__KeyVaultUri",
+    "value": "https://kv-loyaltycloud-stg-01.vault.azure.net/",
+    "slotSetting": false
+  },
+  {
+    "name": "Azure__BlobStorage__PassContainer",
+    "value": "passes",
+    "slotSetting": false
+  },
+  {
+    "name": "Admin__ApiBaseUrl",
+    "value": "https://loyaltycloud-api-stg-01.azurewebsites.net",
+    "slotSetting": false
+  },
+  {
+    "name": "Admin__Auth__SessionHours",
+    "value": "168",
+    "slotSetting": false
+  },
+  {
+    "name": "SuperAdmin__SessionHours",
+    "value": "8",
+    "slotSetting": false
+  },
+  {
+    "name": "Billing__GracePeriodDays",
+    "value": "7",
+    "slotSetting": false
+  },
+  {
+    "name": "Provisioning__TrialDays",
+    "value": "14",
+    "slotSetting": false
+  },
+  {
+    "name": "SuperAdmin__Username",
+    "value": "LoyaltyCloudAdmin",
+    "slotSetting": false
+  },
+  {
+    "name": "Apple__PassTypeIdentifier",
+    "value": "pass.com.kbeautymx.loyalty",
+    "slotSetting": false
+  },
+  {
+    "name": "Apple__TeamIdentifier",
+    "value": "HS2XCFGQ75",
+    "slotSetting": false
+  },
+  {
+    "name": "Apple__WebServiceURL",
+    "value": "https://loyaltycloud-api-stg-01.azurewebsites.net",
+    "slotSetting": false
+  },
+  {
+    "name": "Apple__OrganizationName",
+    "value": "KBeauty MX",
+    "slotSetting": false
+  },
+  {
+    "name": "Apple__ApnHost",
+    "value": "https://api.push.apple.com",
+    "slotSetting": false
+  },
+  {
+    "name": "WEBSITE_LOAD_USER_PROFILE",
+    "value": "1",
+    "slotSetting": false
+  },
+  {
+    "name": "Logging__LogLevel__Microsoft.AspNetCore.Authentication",
+    "value": "Debug",
+    "slotSetting": false
+  },
+  {
+    "name": "Logging__LogLevel__Microsoft.AspNetCore.DataProtection",
+    "value": "Debug",
+    "slotSetting": false
+  },
+  {
+    "name": "Azure__BlobStorage__ConnectionString",
+    "value": "@Microsoft.KeyVault(VaultName=kv-loyaltycloud-stg-01;SecretName=loyaltycloud-storage-connection-string)",
+    "slotSetting": false
+  },
+  {
+    "name": "SuperAdmin__PasswordHash",
+    "value": "@Microsoft.KeyVault(VaultName=kv-loyaltycloud-stg-01;SecretName=loyaltycloud-superadmin-password-hash)",
+    "slotSetting": false
+  }
+]

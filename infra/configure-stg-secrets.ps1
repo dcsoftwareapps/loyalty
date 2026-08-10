@@ -16,6 +16,8 @@ param(
 
     [string]$SubscriptionId,
 
+    [switch]$ConfigureAdminApi,
+
     [switch]$ConfigureAppleWallet,
 
     [switch]$ConfigureGoogleWallet,
@@ -223,6 +225,11 @@ function Configure-SuperAdminSecrets {
 }
 
 function Configure-AdminApiSecret {
+    if (-not $ConfigureAdminApi) {
+        Write-Step "SKIP" "Admin API secret not requested."
+        return
+    }
+
     $sharedSecret = Read-SecretPlainText "Admin API shared secret"
     Set-KeyVaultSecret -Name "loyaltycloud-admin-api-shared-secret" -Value $sharedSecret
     $sharedSecret = $null
@@ -270,7 +277,9 @@ try {
     Confirm-Execution
 
     if (-not $Execute) {
-        Write-Step "PLAN" "Would configure: loyaltycloud-admin-api-shared-secret"
+        if ($ConfigureAdminApi) {
+            Write-Step "PLAN" "Would configure: loyaltycloud-admin-api-shared-secret"
+        }
         if ($ConfigureSuperAdmin) {
             Write-Step "PLAN" "Would configure: loyaltycloud-superadmin-username, loyaltycloud-superadmin-password-hash"
         }

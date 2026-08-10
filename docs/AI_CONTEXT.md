@@ -1,820 +1,636 @@
-# LoyaltyCloud - AI Development Context
+# LoyaltyCloud - AI Context
 
-Last updated: 2026-07-27
+Last updated: 2026-08-10
 
-Purpose:
-This document is the canonical technical handoff for continuing development of LoyaltyCloud with ChatGPT/Codex.
+Purpose: permanent technical context for continuing LoyaltyCloud with ChatGPT/Codex without losing important repository, infrastructure and product memory between chats.
 
-IMPORTANT:
-Read this file before proposing commands, migrations, deployments or architecture changes.
+Do not create `docs/DECISIONS.md`. This repository intentionally uses `docs/AI_CONTEXT.md`, `docs/AI_HANDOFF.md`, `docs/ROADMAP.md` and focused feature docs instead.
 
-Do not create or maintain `docs/DECISIONS.md`. This project intentionally does not use it.
+## Product Objective
 
-## Product Status
+LoyaltyCloud is a multi-tenant loyalty SaaS originally evolved from KBeauty Loyalty.
 
-Product: LoyaltyCloud.
+It lets each business tenant run a customer loyalty program with:
 
-Current state: RC1 / real UAT starting.
+- public customer registration;
+- Apple Wallet pass generation and refresh;
+- Google Wallet save-link support;
+- points from purchases;
+- birthday and campaign multipliers;
+- FIFO point lots and expiration;
+- catalog reward redemptions;
+- direct monetary discount redemptions;
+- dynamic tenant loyalty levels;
+- customer audit/detail;
+- custom and automatic Wallet notifications;
+- platform admin tenant management;
+- tenant admin cashier/admin workflows.
 
-LoyaltyCloud is a multi-tenant loyalty SaaS for customer points, rewards, redemptions, campaigns, Apple Wallet passes, APNs wallet refreshes, platform tenant management, and tenant admin operations.
+KBeauty is now a tenant/UAT business, not a product-level special case. Some Apple identifiers and secret names still include KBeauty for certificate compatibility and must not be casually renamed.
 
-Architecture:
+## Solution Architecture
 
-- .NET 9.
-- Clean Architecture.
-- EF Core 9.
-- SQL Server / Azure SQL.
-- Blazor Server / Interactive Server Admin.
-- Azure App Service.
-- Azure Blob Storage.
-- Azure Key Vault.
-- Apple Wallet / PassKit.
-- APNs.
+Solution: `LoyaltyCloud.sln`.
 
 Projects:
 
-- `LoyaltyCloud.Common`: shared constants, `Result<T>`, pagination and cross-cutting primitives.
-- `LoyaltyCloud.Domain`: entities, domain events, enums, invariants and repository contracts.
-- `LoyaltyCloud.Application`: CQRS/MediatR commands, queries, handlers, validators and service interfaces.
-- `LoyaltyCloud.Infrastructure`: EF Core, repositories, read services, Key Vault, Blob Storage, Apple Wallet pass generation, APNs, notification processors, tenant services.
-- `LoyaltyCloud.API`: REST API, Apple Wallet web service endpoints, public join API, admin API HMAC middleware, background jobs.
-- `LoyaltyCloud.Admin`: Blazor Server tenant admin and platform admin.
-- `LoyaltyCloud.Tools`: internal operational CLI tools.
-- `LoyaltyCloud.Tests`: xUnit tests and guardrails.
+| Project | Purpose |
+| --- | --- |
+| `LoyaltyCloud.Common` | Shared constants, result types, pagination, utility extensions, Admin API HMAC signature helper. |
+| `LoyaltyCloud.Domain` | Entities, enums, value objects, domain events, invariants and repository contracts. |
+| `LoyaltyCloud.Application` | CQRS commands, queries, handlers, validators, application interfaces and read/write orchestration. |
+| `LoyaltyCloud.Infrastructure` | EF Core, repositories, read services, tenant services, Blob Storage, Key Vault, Apple Wallet, APNs, Google Wallet and cross-cutting adapters. |
+| `LoyaltyCloud.API` | REST API, Admin API HMAC middleware, public join API, Apple PassKit web service, Wallet endpoints and hosted workers. |
+| `LoyaltyCloud.Admin` | Blazor Server / Interactive Server tenant admin and platform admin. |
+| `LoyaltyCloud.Tools` | Internal operational CLI commands and wallet diagnostics. |
+| `LoyaltyCloud.Tests` | xUnit integration, application, infrastructure and guardrail tests. |
 
-## Multi-Tenancy Guardrails
+Main technologies:
 
-LoyaltyCloud is multi-tenant. KBeauty is no longer special product behavior.
+- .NET 9.
+- C#.
+- ASP.NET Core.
+- Blazor Server / Interactive Server.
+- MediatR.
+- EF Core 9 with SQL Server provider and retrying execution strategy.
+- Azure SQL.
+- Azure App Service Linux for API.
+- Azure App Service Windows for Admin.
+- Azure Key Vault.
+- Azure Blob Storage.
+- Apple Wallet / PassKit.
+- APNs HTTP/2.
+- Google Wallet Objects API through REST and RS256 JWTs.
+- PowerShell/Azure CLI infra scripts.
 
-Rules:
+## Domain Model
 
-- There is no production KBeauty seed.
-- A new database can validly have 0 tenants.
-- Tenants are created from Platform Admin.
-- Platform Admin operates without `TenantContext`.
-- Tenant Admin operates with `TenantContext`.
-- `/platform/*` must never restore or carry business tenant context.
-- `/{tenantSlug}/*` is tenant-aware.
+Main entities:
+
+| Entity | Purpose |
+| --- | --- |
+| `Tenant` | Platform tenant/business. Slug identifies tenant routes. |
+| `TenantBranding` | Branding, colors, support links and logo blob reference. |
+| `TenantSubscription` | Trial/active/past-due/suspended/cancelled subscription state and billing dates. |
+| `TenantAdminUser` | Tenant admin/cashier login user. Passwords use `IPasswordHashingService`. |
+| `TenantLoyaltyLevel` | Dynamic loyalty level per tenant: name, normalized name, threshold, sort order, active flag. |
+| `Customer` | Tenant customer/member. Phone is normalized for lookup/deduplication. |
+| `LoyaltyCard` | Central loyalty card aggregate: serial, current balance, lifetime points, level, auth token, last activity. |
+| `PointTransaction` | Point ledger movement. Includes transaction type, points, campaign and tenant context. |
+| `PointLot` | FIFO lot created by positive earn transactions, with expiry and remaining amount. |
+| `PointLotConsumption` | FIFO consumption record linked to lot, consuming transaction and redemption when applicable. |
+| `Redemption` | Reward or monetary discount redemption, status, consumed points and monetary snapshot. |
+| `RewardCatalogItem` | Redeemable catalog item, monthly product support, validity dates and minimum level. |
+| `ProgramConfig` | Tenant program key/value configuration such as earning rate, expiration, birthday multiplier and monetary conversion. |
+| `PointCampaign` | Time-bound point multiplier campaign with optional minimum purchase and level eligibility. |
+| `CustomNotificationCampaign` | Admin-created Wallet message campaign with audience, schedule and display window. |
+| `LoyaltyNotification` | Notification/event unit. Used by Wallet visible event mechanism and deliveries. |
+| `NotificationDelivery` | Delivery attempt/status for a notification/channel. |
+| `DeviceRegistration` | Apple Wallet device registration and push token by pass serial. |
+| `MemberDigitalWallet` | Provider link/sync state for external wallets such as Google Wallet. |
+
+Important enums include `TransactionType`, `RedemptionType`, `RedemptionStatus`, `NotificationType`, `NotificationChannel`, `NotificationStatus`, `NotificationDeliveryStatus`, `DigitalWalletProvider`, `DigitalWalletStatus`, `CustomNotificationCampaignStatus`, `CampaignLevelEligibility`, `TenantSubscriptionStatus`, `TenantSuspensionReason` and `PassUpdateReason`.
+
+## Multi-Tenancy Rules
+
+Current architecture:
+
+- Shared database.
+- Each business is a `Tenant`.
+- Tenant routes use `/{tenantSlug}/...`.
+- Platform routes use `/platform/...`.
+- No production default tenant.
+- No production KBeauty seed.
+- Platform Admin must operate without business `TenantContext`.
+- Tenant Admin must operate with `TenantContext`.
+- TenantContext is scoped and stored in `TenantContext` implementing `ITenantContext` and `IMutableTenantContext`.
+- Most business entities are tenant-owned and filtered/guarded by EF tenant context.
+- Admin-to-API calls send a tenant slug in signed HMAC headers; they do not send a free-form TenantId.
+
+Guardrails:
+
 - Do not hardcode `kbeauty`.
 - Do not restore `Tenancy:DefaultTenantSlug`.
-- Do not accept free-form `TenantId` from tenant-facing UI.
-
-Known corrected bug:
-
-Blazor Interactive Server circuits could restore `loyaltycloud.admin.auth` during `/platform/*` and contaminate `TenantContext`. The fix is in `AdminTenantContextInitializer`: platform routes clear/exclude tenant context. This is an architectural guardrail and must not be reverted.
-
-Tenant-owned data uses `TenantId`, EF query filters, tenant-aware FKs and guards in `AppDbContext`. Platform services that need cross-tenant work use explicit platform paths and must not rely on a tenant fallback.
-
-## Production URLs
-
-Official Admin:
-
-```text
-https://loyaltycloud-admin.azurewebsites.net
-```
-
-Official API:
-
-```text
-https://loyaltycloud-api-894839.azurewebsites.net
-```
-
-Do not use the removed Admin hostname. There is a test guardrail to prevent
-that retired Admin hostname from returning in product code/config. Do not
-accidentally rename the API hostname; `loyaltycloud-api-894839` is still
-correct.
-
-## Azure Production Resources
-
-Resource Group:
-
-```text
-rg-loyaltycloud-prod
-```
-
-Azure SQL Server:
-
-```text
-sql-loyaltycloud-894839
-```
-
-Current active database:
-
-```text
-LoyaltyCloudFree
-```
-
-The previous `LoyaltyCloud` database is not the active RC1/UAT database.
-
-Key Vault:
-
-```text
-kv-loyaltycloud-894839
-```
-
-Storage:
-
-```text
-stloyaltycloud894839
-```
-
-## Azure Staging Infrastructure Baseline
-
-The active RC1/UAT staging infrastructure path is PowerShell + Azure CLI under
-`infra/`.
-
-- `infra/create-stg.ps1`: dry-run-by-default script that creates STAGING Azure
-  infrastructure only when `-Execute` is passed.
-- `infra/configure-stg-secrets.ps1`: loads manual STAGING secrets into STAGING
-  Key Vault.
-- `infra/README.md`: operational instructions.
-
-The Bicep files under `infra/` are experimental and not the active deployment
-path. Do not deploy them unless a separate infrastructure review approves Bicep.
-
-Staging target:
-
-```text
-Resource Group: rg-loyaltycloud-stg
-API: loyaltycloud-api-stg-<uniqueSuffix>
-Admin: loyaltycloud-admin-stg-<uniqueSuffix>
-SQL Server: sql-loyaltycloud-stg-<uniqueSuffix>
-Database: LoyaltyCloudStg
-Key Vault: kv-loyaltycloud-stg-<uniqueSuffix>
-Storage: stloyaltycloudstg<uniqueSuffix>
-```
-
-Staging must be isolated from production. Do not point staging at production SQL,
-production Storage, or production Key Vault.
-
-Current app configuration contracts reflected by the staging scripts:
-
-- API and Admin both require `ConnectionStrings:DefaultConnection`.
-- API and Admin both load Azure Key Vault through `Azure:KeyVaultUri`.
-- API and Admin both register Infrastructure; outside Development the current
-  code registers real Apple Wallet signing and `ApnService`.
-- Admin also requires `Admin:ApiBaseUrl`.
-- Admin/API HMAC requires `AdminApi:SharedSecret`.
-- Tenant Admin sessions use `Admin:Auth:SessionHours`; RC1 target is 168 hours.
-- Super Admin sessions use `SuperAdmin:SessionHours`; RC1 target remains 8 hours.
-- SQL-light background defaults are `LoyaltyMaintenance:IntervalHours=12` and
-  `LoyaltyNotifications:PollIntervalSeconds=43200`.
-- Azure Blob Storage uses `Azure:BlobStorage:ConnectionString` and
-  `Azure:BlobStorage:PassContainer=passes`.
-- Tenant logos and Wallet assets are stored under tenant-scoped blob paths inside
-  the `passes` container.
-
-Key Vault secret names currently expected:
-
-```text
-loyaltycloud-sql-connection-string
-loyaltycloud-storage-connection-string
-loyaltycloud-admin-api-shared-secret
-loyaltycloud-superadmin-username
-loyaltycloud-superadmin-password-hash
-kbeauty-pass-certificate
-kbeauty-pass-certificate-password
-kbeauty-wwdr-certificate
-kbeauty-apn-private-key
-kbeauty-apn-key-id
-kbeauty-apn-team-id
-loyaltycloud-google-wallet-service-account-json
-```
-
-The `kbeauty-*` Apple secret names are legacy provider names and must not be
-renamed in configuration until `KeyVaultAppleWalletSecretsProvider` is changed.
-
-Wallet environment guidance:
-
-- `Apple:WebServiceURL` must be environment-specific because it is embedded in
-  passes and used by Apple Wallet web service refresh.
-- Apple Pass Type ID and Apple Team ID can be shared temporarily for RC1/UAT.
-- Apple `.p12`, `.p12` password, APNs `.p8`, Google service account JSON and
-  any signing/private material should be separated per environment long-term.
-- Existing production Apple Wallet passes will keep calling production because
-  their embedded `webServiceURL` points to production.
-
-App Services:
-
-- API: `loyaltycloud-api-894839`, Linux.
-- Admin: `loyaltycloud-admin`, Windows.
-
-Do not document or print secrets.
-
-## Connection String / Key Vault
-
-API and Admin use `ConnectionStrings:DefaultConnection`.
-
-Production uses Key Vault references. The SQL connection string secret is expected to be:
-
-```text
-loyaltycloud-sql-connection-string
-```
-
-For RC1/UAT it must point to:
-
-```text
-Initial Catalog=LoyaltyCloudFree
-```
-
-Resolved incident:
-
-After updating the Key Vault secret, App Service kept using a cached version. Symptom: SQL login failures even though the credentials worked from SSMS.
-
-Procedure that worked:
-
-1. Update the secret in Key Vault.
-2. Rewrite the same Key Vault reference in both App Services with `az webapp config connection-string set`.
-3. Restart both App Services.
-
-Do not assume the SQL password is wrong when SSMS works. First verify App Service is not using a cached Key Vault reference.
-
-## DEPLOYMENT - DO NOT FORGET
-
-There are two different App Service types.
-
-### API - Linux
-
-App:
-
-```text
-loyaltycloud-api-894839
-```
-
-Publish:
-
-```powershell
-dotnet publish .\src\LoyaltyCloud.API\LoyaltyCloud.API.csproj -c Release -o .\artifacts\api
-```
-
-IMPORTANT:
-
-Do not use `Compress-Archive` to create the API Linux ZIP. It caused deployment/runtime problems.
-
-Create the ZIP with `tar` from Windows:
-
-```powershell
-tar -a -c -f .\artifacts\api.zip -C .\artifacts\api .
-```
-
-Deploy from Azure Cloud Shell:
-
-```bash
-az webapp deploy \
-  -g rg-loyaltycloud-prod \
-  -n loyaltycloud-api-894839 \
-  --src-path ./api.zip \
-  --type zip
-```
-
-### Admin - Windows
-
-App:
-
-```text
-loyaltycloud-admin
-```
-
-Publish:
-
-```powershell
-dotnet publish .\src\LoyaltyCloud.Admin\LoyaltyCloud.Admin.csproj -c Release -o .\artifacts\admin
-```
-
-Create ZIP:
-
-```powershell
-Compress-Archive -Path .\artifacts\admin\* -DestinationPath .\artifacts\admin.zip -Force
-```
-
-Deploy from Azure Cloud Shell:
-
-```bash
-az webapp deploy \
-  -g rg-loyaltycloud-prod \
-  -n loyaltycloud-admin \
-  --src-path ./admin.zip \
-  --type zip
-```
-
-After deploy:
-
-```bash
-az webapp restart -g rg-loyaltycloud-prod -n loyaltycloud-api-894839
-az webapp restart -g rg-loyaltycloud-prod -n loyaltycloud-admin
-```
-
-Do not recommend `api.tar.gz` or `--type static`. That procedure failed.
-
-## Migrations / Database
-
-Migrations are created/applied from Windows local.
-
-Current production/UAT DB target:
-
-```text
-LoyaltyCloudFree
-```
-
-Before any `database update`, always verify the effective connection string contains:
-
-```text
-Initial Catalog=LoyaltyCloudFree
-```
-
-Do not run migrations automatically during deploy.
-
-Recent RC1 migrations:
-
-- `20260724135525_AddTenantLoyaltyLevels`
-- `20260726044226_RemoveKBeautySeed`
-- `20260726055027_AddTenantBrandingLogoBlobName`
-
-The `RemoveKBeautySeed` migration removes the old KBeauty production seed and associated KBeauty tenant data for the fixed seed tenant id. Development demo seeding is separate and only runs in Development if the KBeauty tenant already exists.
-
-The `AddTenantBrandingLogoBlobName` migration adds nullable `TenantBrandings.LogoBlobName` with max length 500.
-
-## Platform Admin
-
-Routes:
-
-- `/platform/login`
-- `/platform/tenants`
-- `/platform/tenants/{tenantId}`
-
-Capabilities:
-
-- Create tenant.
-- View tenant detail.
-- Suspend tenant.
-- Reactivate tenant.
-- Cancel tenant.
-- Extend trial.
-- Update grace period.
-- Record manual subscription payment.
-- Hard delete tenant.
-- Upload/change/remove tenant logo.
-- View branding/subscription information.
-- Create tenant admin during tenant provisioning.
-
-Delete tenant:
-
-- Hard delete.
-- Requires typing exact slug.
-- Transactional.
-- Platform Admin only.
-- Deletes tenant-scoped operational data and then tenant records.
-
-Platform routes must remain free of `TenantContext`.
-
-## Tenant Admin
-
-Login route:
-
-```text
-/{tenantSlug}/login
-```
-
-Root `/` redirects to `/platform/login`.
-
-Tenant Admin session:
-
-- Cookie: `loyaltycloud.admin.auth`.
-- `Admin:Auth:SessionHours = 168` by default.
-- 168 hours = 7 days.
-- `SlidingExpiration = true`.
-- Persistent sign-in is used by the login service.
-
-Super Admin session:
-
-- Cookie: `loyaltycloud.platform.auth`.
-- `SuperAdmin:SessionHours = 8`.
-- Keep separate from Tenant Admin.
-
-Data Protection incident:
-
-A manual Data Protection override to `HOME/data-protection-keys` was reverted. Do not re-add:
-
-```csharp
-PersistKeysToFileSystem(Path.Combine(homePath, "data-protection-keys"))
-```
-
-unless there is a new, validated reason.
-
-Azure App Service has a standard key ring path:
-
-```text
-D:\home\ASP.NET\DataProtection-Keys
-```
-
-The manual override created a separate ring:
-
-```text
-D:\home\data-protection-keys
-```
-
-and caused auth/cookie confusion. Do not repeat.
-
-## Tenant Admin Menu
-
-Current menu from `MainLayout.razor`:
-
-- Dashboard
-- Puntos
-  - Sumar puntos
-  - Canjear puntos
-- Clientes
-  - Clientes
-  - Canjes
-- Programa de lealtad
-  - Recompensas
-  - Campanas
-- Comunicacion
-  - Mensajes
-- Administracion
-  - Niveles
-  - Configuracion
-- Ayuda rapida
-
-`/notifications` exists historically/API-wise but is not in the visible tenant admin menu.
-
-## Quick Help
-
-Tenant Admin route:
-
-```text
-/quick-help
-```
-
-Includes:
-
-- Public registration instructions.
-- Sumar puntos.
-- Canjear puntos.
-- Search/scan guidance.
-- Common problems.
-- Public registration QR.
-- Copy link.
-- Open link.
-- Print QR poster.
-
-Public join:
-
-```text
-/{tenantSlug}/join
-```
-
-Examples:
-
-```text
-/kbeauty/join
-/bitcafe/join
-```
-
-API:
-
-```text
-POST /api/public/{tenantSlug}/join
-PUT /api/public/{tenantSlug}/join/{serialNumber}/birthday
-```
-
-The Quick Help QR uses:
-
-```csharp
-new Uri(new Uri(Navigation.BaseUri), $"{tenantSlug}/join")
-```
-
-QR implementation:
-
-- QRCoder.
-- Local SVG generation.
-- No external API.
-- Error correction level Q.
-- Standard quiet zone.
-- Round-trip tests with ZXing.
-
-Do not reintroduce a hand-rolled QR encoder. A previous custom generator looked valid visually but was not reliably scannable.
-
-## API Endpoints Overview
-
-Main API controllers and route groups:
-
-- `CustomersController`: `POST /api/customers`, `GET /api/customers/{serialNumber}`, `GET /api/customers/{serialNumber}/transactions`.
-- `PointsController`: `POST /api/points`.
-- `RedemptionsController`: `POST /api/redemptions`, `PUT /api/redemptions/{id}/confirm`, `PUT /api/redemptions/{id}/cancel`, `GET /api/redemptions/catalog/{serialNumber}`. `POST /api/redemptions` supports both catalog rewards and monetary discount redemptions.
-- `RewardsController`: `GET /api/rewards`, `GET /api/rewards/{id}`, `POST /api/rewards`, `PUT /api/rewards/{id}`, `PUT /api/rewards/{id}/activate`, `PUT /api/rewards/{id}/deactivate`.
-- `CampaignsController`: `GET /api/campaigns`, `GET /api/campaigns/{id}`, `POST /api/campaigns`, `PUT /api/campaigns/{id}`, `PUT /api/campaigns/{id}/activate`, `PUT /api/campaigns/{id}/deactivate`.
-- `LevelsController`: `GET /api/levels`, `PUT /api/levels`.
-- `CustomNotificationCampaignsController`: preview/list/get/create/send/cancel custom campaigns.
-- `NotificationsController`: list/metrics/get/create/process/retry/cancel notifications.
-- `ConfigController`: `GET /api/config`, `PUT /api/config`.
-- `AdminController`: dashboard, expiration, level recalculation, notification candidate diagnostics.
-- `PublicJoinController`: public tenant join.
-- `PassesController`: Apple Wallet web service and pass download routes.
-
-Do not invent endpoints. Inspect controllers/routing before proposing API calls.
-
-## Apple Wallet
-
-Public pass download:
-
-```text
-GET /api/passes/{serialNumber}
-```
-
-Content-Type:
-
-```text
-application/vnd.apple.pkpass
-```
-
-This route does not include tenant slug. Tenant is resolved from `LoyaltyCard.SerialNumber`.
-
-Apple web service routes:
-
-- `GET /v1/passes/{passTypeIdentifier}/{serialNumber}`
-- `POST /v1/devices/{deviceLibraryIdentifier}/registrations/{passTypeIdentifier}/{serialNumber}`
-- `DELETE /v1/devices/{deviceLibraryIdentifier}/registrations/{passTypeIdentifier}/{serialNumber}`
-- `GET /v1/devices/{deviceLibraryIdentifier}/registrations/{passTypeIdentifier}`
-- `POST /v1/log`
-
-Serials currently still use the `KB-` prefix even for other tenants. This is known technical debt. Do not confuse it with tenant resolution. Do not change serial format without an Apple Wallet compatibility review.
-
-The Apple Pass Type ID may still be:
-
-```text
-pass.com.kbeautymx.loyalty
-```
-
-and secrets may still have `kbeauty-*` names. These are safe legacy names for Apple/certificate compatibility in RC1.
-
-## Wallet Branding
-
-Tenant branding now supports tenant-specific logos.
-
-SQL stores only:
-
-```text
-TenantBrandings.LogoBlobName
-```
-
-Logo bytes are stored in Azure Blob Storage, not SQL.
-
-Storage path:
-
-```text
-tenant-branding/{tenantId}/logo-original...
-tenant-branding/{tenantId}/wallet/logo.png
-tenant-branding/{tenantId}/wallet/logo@2x.png
-tenant-branding/{tenantId}/wallet/logo@3x.png
-tenant-branding/{tenantId}/wallet/icon.png
-tenant-branding/{tenantId}/wallet/icon@2x.png
-tenant-branding/{tenantId}/wallet/icon@3x.png
-```
-
-Upload accepts PNG/JPG, validates size and image content, and generates Apple Wallet raster assets automatically.
-
-`PassGeneratorService` requests assets by `TenantId`, not by slug, to avoid cross-tenant asset mixing.
-
-Fallback assets:
-
-- Bundled in `Assets/AppleWalletGeneric`.
-- Neutral graphic.
-- No `LC` text.
-
-Pass visual rules:
-
-- `logoText`: not used by production `PassGeneratorService`.
-- `backgroundColor`: white/light (`rgb(255,255,255)`).
-- `foregroundColor`: black (`rgb(0,0,0)`).
-- `labelColor`: tenant `PrimaryColor`.
-- Top of Wallet pass should show only the uploaded tenant logo, no extra text.
-
-PassKit `storeCard` does not provide a simple independent header color property. Do not implement visual hacks for a header band without a proper PassKit review.
-
-Changing a tenant logo affects the next generated pass immediately. RC1 does not currently trigger a tenant-wide APNs push solely for logo changes.
-
-## KBeauty RC1 UAT Configuration Example
-
-KBeauty is an example/UAT tenant, not product hardcode.
-
-Expected KBeauty UAT values:
-
-- Slug: `kbeauty`.
-- Time zone: `America/Tijuana`.
-- PrimaryColor: `#D98FA3`.
-- SecondaryColor: `#F7E8EC`.
-
-Expected levels:
-
-- Inicial: 0.
-- Preferente: 1000.
-- Premium: 3000.
-- Exclusivo: 5000.
-
-Levels are tenant configurable and calculated with a rolling 12-month window.
-
-Provisioning defaults in code are still legacy `Mist/Glow/Radiance`; customize tenant levels after provisioning when needed.
-
-## Points / Levels / Expiration
-
-Implemented:
-
-- Points from purchase amount through `AddPointsCommand`.
-- Birthday multiplier through ProgramConfig.
-- Point campaigns with multiplier and level eligibility.
-- FIFO point lots.
-- `PointLotConsumption`.
-- Expiration after configured number of months; default config is 12 months.
-- Redemption consumes points immediately.
-- Direct monetary redemption uses `ProgramConfig.points_per_peso_unit` as the server-side conversion rate. Formula: `monetaryAmount = pointsRedeemed / PointsPerPesoUnit`. Example: `10` means 10 points = $1.00 MXN, so 500 points = $50.00 MXN.
-- Monetary redemptions persist a historical snapshot on `Redemption`: type, monetary amount, currency and points-per-peso rate. Do not recalculate old monetary redemptions from current ProgramConfig.
-- Pending redemption can be confirmed or cancelled.
-- Cancellation restores exact consumed lots through reversal.
-- Dynamic tenant levels via `TenantLoyaltyLevel`.
-- Rolling level calculation over the last 12 months.
-- Customer Detail includes advanced audit data: balance, rolling progress, lots, FIFO consumption, point history and redemption history.
-
-Do not use `CurrentPoints` for level progress. Level progress is rolling points, not available balance.
-
-## Monetary Redemptions
-
-Admin `/redeem` supports two redemption modes after identifying the customer:
-
-- `Descuento en dinero` (default).
-- `Recompensa`.
-
-For `Descuento en dinero`, the cashier enters points to redeem. The UI shows an estimated monetary discount and a `Usar todos` action that rounds down to the nearest valid conversion unit. The browser calculation is UX only.
-
-Server authority:
-
-- Input authority: serial/customer and requested points.
-- The API recalculates the monetary amount from tenant `ProgramConfig`.
-- The browser never supplies a trusted monetary amount.
-- Tenant context selects the tenant-specific rate; do not accept TenantId from UI.
-
-Persistence:
-
-- `Redemption.Type = MonetaryDiscount`.
-- `RewardCatalogItemId = null`.
-- `PointsSpent` stores the redeemed points.
-- `MonetaryAmount`, `MonetaryCurrency` and `MonetaryPointsPerPesoUnit` store the historical snapshot.
-
-FIFO/cancellation:
-
-- Monetary redemptions consume `PointLot`s with the same FIFO mechanism as catalog reward redemptions.
-- `PointLotConsumption.RedemptionId` links the consumed lots.
-- Cancellation uses the existing cancellation flow and restores the exact consumed lots.
-
-POS:
-
-LoyaltyCloud calculates and records the discount. It does not apply the discount automatically in an external POS. The cashier must apply the shown amount manually in the store/POS before confirming the redemption.
-
-## Notifications / Wallet Visible Events
-
-Core entities:
-
-- `LoyaltyNotification`.
-- `NotificationDelivery`.
-
-Channels:
-
-- `AppleWallet` is implemented.
-
-Current notification types include:
-
-- `LevelChanged`.
-- `PointsExpiring`.
-- `MonthlyProductStarted`.
-- `BirthdayBenefitStarted`.
-- `PointCampaignStarted`.
-- `PointsAdded`.
-- `Custom`.
-
-Wallet visible event selection:
-
-- Uses recent delivered notifications with `DisplayUntilUtc`.
-- Recency wins first.
-- Priority is only a tie-breaker for same effective time.
-- LevelChanged should beat PointsAdded for the same purchase/level-up scenario.
-- `VisibleEventPriorityHours` default/configured value: 24.
-
-Important Wallet changeMessage rule:
-
+- Do not accept TenantId from tenant-facing UI.
+- Do not let `/platform/*` resolve a business tenant.
+- Do not weaken AppDbContext tenant guards.
+- Do not introduce cross-tenant joins without explicit review.
+
+Known corrected issue: Blazor Interactive Server has a different DI scope than SSR/request middleware. Tenant context for interactive circuits is restored from authenticated tenant claims through Admin-specific circuit/context services. Do not revert that pattern.
+
+## Admin Routes
+
+Blazor Admin pages:
+
+| Route | Page | Purpose |
+| --- | --- | --- |
+| `/` | mapped endpoint | Redirects to `/platform/login`. |
+| `/platform/login` | `PlatformLogin.razor` | Super Admin login. Public. |
+| `/platform` | `PlatformTenants.razor` | Platform tenant list. Super Admin only. |
+| `/platform/tenants` | `PlatformTenants.razor` | Platform tenant list/create. Super Admin only. |
+| `/platform/tenants/{tenantId}` | `PlatformTenantDetail.razor` | Tenant operations: billing, suspend/reactivate/cancel/delete/logo. |
+| `/{tenantSlug}/login` | `Login.razor` | Tenant Admin login. Public for the tenant slug. |
+| `/{tenantSlug}/join` | `Join.razor` | Public customer registration and wallet add flow. |
+| `/dashboard` | `Dashboard.razor` | Tenant dashboard. |
+| `/scan` | `Scan.razor` | Add points. Supports manual ID/serial and QR scanner. |
+| `/redeem` | `Redeem.razor` | Redeem points, including monetary discount and catalog rewards. Supports QR scanner. |
+| `/customers` | `Customers.razor` | Customer list/search. |
+| `/customers/{CustomerId:guid}` | `CustomerDetail.razor` | Customer detail/audit by ID. |
+| `/customers/{SerialNumber}` | `CustomerDetail.razor` | Customer detail/audit by serial. |
+| `/redemptions` | `Redemptions.razor` | Redemption history/operations. |
+| `/rewards` | `Rewards.razor` | Reward catalog and monthly product admin. |
+| `/campaigns` | `Campaigns.razor` | Point campaigns. |
+| `/levels` | `Levels.razor` | Dynamic tenant loyalty levels and recalculation. |
+| `/marketing-notifications` | `MarketingNotifications.razor` | Custom Wallet messages. |
+| `/notifications` | `Notifications.razor` | Historical/admin notification page. Exists but is hidden from main menu. |
+| `/config` | `Config.razor` | Program configuration. Some legacy settings are visually hidden. |
+| `/quick-help` | `QuickHelp.razor` | Quick cashier/admin help, registration QR and printable poster. |
+
+Visible Admin menu is grouped by operation, customers, loyalty program, communication and administration. Do not reintroduce the retired Admin hostname `loyaltycloud-admin-894839.azurewebsites.net`.
+
+## API Endpoints
+
+All normal Admin API calls are tenant-aware via HMAC middleware when their route matches `AdminApiAuthenticationMiddleware.RequiresAdminApiAuthentication`.
+
+### Admin and Maintenance
+
+| Method | Route | Purpose |
+| --- | --- | --- |
+| GET | `/api/admin/dashboard` | Dashboard aggregates. |
+| POST | `/api/admin/points/expire` | Execute FIFO point expiration. |
+| POST | `/api/admin/levels/recalculate` | Recalculate rolling levels. |
+| GET | `/api/admin/points/expiration-notification-candidates` | Preview expiring point notification candidates. |
+| GET | `/api/admin/rewards/monthly-product-notification-candidates` | Preview monthly product notification candidates. |
+| GET | `/api/admin/customers/birthday-notification-candidates` | Preview birthday benefit notification candidates. |
+| GET | `/api/admin/campaigns/notification-candidates` | Preview point campaign notification candidates. |
+
+### Customers
+
+| Method | Route | Purpose |
+| --- | --- | --- |
+| POST | `/api/customers` | Register customer and card through API. |
+| GET | `/api/customers/{serialNumber}` | Find customer/card by serial/ID. |
+| GET | `/api/customers/{serialNumber}/transactions` | Paginated point transaction history. |
+
+### Points
+
+| Method | Route | Purpose |
+| --- | --- | --- |
+| POST | `/api/points` | Add points from purchase amount. Executes existing multiplier/campaign/birthday/level/Wallet flow. |
+
+### Redemptions
+
+| Method | Route | Purpose |
+| --- | --- | --- |
+| POST | `/api/redemptions` | Create catalog reward redemption or monetary discount redemption. |
+| PUT | `/api/redemptions/{id}/confirm` | Confirm pending redemption. |
+| PUT | `/api/redemptions/{id}/cancel` | Cancel pending redemption and restore FIFO lots. |
+| GET | `/api/redemptions/catalog/{serialNumber}` | Catalog available to customer level/balance. |
+
+### Rewards
+
+| Method | Route | Purpose |
+| --- | --- | --- |
+| GET | `/api/rewards` | List reward catalog/admin items. |
+| GET | `/api/rewards/{id}` | Get reward by ID. |
+| POST | `/api/rewards` | Create reward or monthly product. |
+| PUT | `/api/rewards/{id}` | Update reward. |
+| PUT | `/api/rewards/{id}/activate` | Activate reward. |
+| PUT | `/api/rewards/{id}/deactivate` | Deactivate reward. |
+
+### Campaigns
+
+| Method | Route | Purpose |
+| --- | --- | --- |
+| GET | `/api/campaigns` | List point campaigns. |
+| GET | `/api/campaigns/{id}` | Get point campaign. |
+| POST | `/api/campaigns` | Create point campaign. Active/current campaigns trigger notifications. |
+| PUT | `/api/campaigns/{id}` | Update point campaign. Active/current campaigns trigger notifications. |
+| PUT | `/api/campaigns/{id}/activate` | Activate point campaign. |
+| PUT | `/api/campaigns/{id}/deactivate` | Deactivate point campaign. |
+
+### Config and Levels
+
+| Method | Route | Purpose |
+| --- | --- | --- |
+| GET | `/api/config` | Read tenant ProgramConfig entries. |
+| PUT | `/api/config` | Update ProgramConfig entries. |
+| GET | `/api/levels` | List dynamic tenant levels. |
+| PUT | `/api/levels` | Update tenant levels, rename dependent references and recalculate cards transactionally. |
+
+### Custom Notifications
+
+| Method | Route | Purpose |
+| --- | --- | --- |
+| POST | `/api/custom-notification-campaigns/preview` | Preview audience. |
+| GET | `/api/custom-notification-campaigns` | List custom notification campaigns. |
+| GET | `/api/custom-notification-campaigns/{id}` | Get custom notification campaign. |
+| POST | `/api/custom-notification-campaigns` | Create custom campaign. |
+| POST | `/api/custom-notification-campaigns/{id}/send` | Send/process campaign now. |
+| PUT | `/api/custom-notification-campaigns/{id}/cancel` | Cancel scheduled/unprocessed campaign. |
+
+### Notifications
+
+| Method | Route | Purpose |
+| --- | --- | --- |
+| GET | `/api/notifications` | List notifications. |
+| GET | `/api/notifications/metrics` | Notification metrics. |
+| GET | `/api/notifications/{id}` | Notification detail. |
+| POST | `/api/notifications` | Create notification. |
+| POST | `/api/notifications/{id}/process` | Process one notification. |
+| POST | `/api/notifications/{id}/retry` | Retry notification delivery. |
+| PUT | `/api/notifications/{id}/cancel` | Cancel notification. |
+
+### Public Join
+
+| Method | Route | Purpose |
+| --- | --- | --- |
+| POST | `/api/public/{tenantSlug}/join` | Public tenant-aware customer join. |
+| PUT | `/api/public/{tenantSlug}/join/{serialNumber}/birthday` | Public birthday update after join. |
+
+### Apple Wallet and PassKit
+
+| Method | Route | Purpose |
+| --- | --- | --- |
+| GET | `/api/passes/{serialNumber}` | Download production `.pkpass` for Safari/iPhone. |
+| GET | `/api/dev/passes/{serialNumber}` | Development pass download route. |
+| GET | `/v1/passes/{passTypeIdentifier}/{serialNumber}` | Apple Wallet pass refresh endpoint. |
+| POST | `/v1/devices/{deviceLibraryIdentifier}/registrations/{passTypeIdentifier}/{serialNumber}` | Register Apple Wallet device/push token. |
+| DELETE | `/v1/devices/{deviceLibraryIdentifier}/registrations/{passTypeIdentifier}/{serialNumber}` | Unregister Apple Wallet device. |
+| GET | `/v1/devices/{deviceLibraryIdentifier}/registrations/{passTypeIdentifier}` | Return updatable serials since `passesUpdatedSince`. |
+| POST | `/v1/log` | Apple Wallet log endpoint. |
+| GET | `/api/wallet-assets/apple/{assetName}` | Serve bundled Apple Wallet image assets. |
+
+`/api/passes/{serialNumber}` returns `application/vnd.apple.pkpass` and can be opened directly in Safari on iPhone. Tenant is resolved from `LoyaltyCard.SerialNumber`.
+
+### Google Wallet
+
+| Method | Route | Purpose |
+| --- | --- | --- |
+| POST | `/api/customers/{serialNumber}/wallets/google/save-link` | Create/update Google LoyaltyClass/LoyaltyObject and return Save to Google Wallet URL. |
+
+## Admin to API Authentication
+
+Admin uses `Admin:ApiBaseUrl` to configure named HttpClient `LoyaltyCloudApi`.
+
+Tenant Admin API calls use:
+
+- `AdminApi:SharedSecret`.
+- `X-LoyaltyCloud-TenantSlug`.
+- `X-LoyaltyCloud-OperatorId`.
+- `X-LoyaltyCloud-Timestamp`.
+- `X-LoyaltyCloud-Signature`.
+
+The API validates HMAC, resolves tenant by slug, verifies operational subscription state, sets `TenantContext`, then runs the controller/handler.
+
+Do not pass TenantId from browser/UI. Do not replace this with plain relative requests against Admin.
+
+## Apple Wallet Flow
+
+Customer iPhone flow:
+
+1. Customer opens `/{tenantSlug}/join`.
+2. Admin/public join page calls `POST /api/public/{tenantSlug}/join`.
+3. API resolves tenant from slug and creates/reuses customer/card.
+4. Response includes `PassDownloadUrl`.
+5. Safari opens `GET /api/passes/{serialNumber}`.
+6. `PassGeneratorService` resolves tenant by card serial, reads tenant branding and dynamic levels, builds `pass.json`, signs manifest with Apple certificate, returns `.pkpass`.
+7. iPhone installs pass and calls PassKit registration route.
+8. API stores `DeviceRegistration`.
+9. Later business events update `LoyaltyCard.LastActivityAt` and send APNs.
+10. iPhone calls `/v1/devices/.../registrations/...`.
+11. API returns updated serials.
+12. iPhone calls `/v1/passes/.../{serialNumber}`.
+13. API dynamically generates a fresh pass from SQL and returns it.
+
+Important implementation details:
+
+- `PassGeneratorService` generates dynamically from current SQL state, not from a cached `.pkpass` blob.
+- Permanent `points` field shows current available balance.
+- Rolling level progress uses rolling points, not `CurrentPoints`.
+- `LevelChanged`, `PointsAdded`, `PointsExpiring`, `MonthlyProductStarted`, `BirthdayBenefitStarted`, `PointCampaignStarted` and `Custom` can create visible events.
 - Apple Wallet `changeMessage` must contain `%@`.
-- For `PointsAdded`, do not put `changeMessage` on the permanent `points` field. The permanent points field value is total balance.
-- PointsAdded uses a temporary field like `points_added` with value like `10 puntos` and `changeMessage = "🎉 Sumaste %@"`.
+- For `PointsAdded`, the temporary field is used for points earned in the operation; permanent `points` remains total balance without changeMessage.
+- Tenant logos are read from Blob Storage through `TenantWalletAssetProvider`; fallback is neutral bundled assets.
+- Apple Pass Type ID may still be `pass.com.kbeautymx.loyalty`.
+- Apple Key Vault secret names may still be `kbeauty-*`.
+- WWDR secret is optional. Production works without `kbeauty-wwdr-certificate` because the implementation first uses the certificate chain in the `.p12` or bundled `Certificates/AppleWWDRCAG4.cer`, then Key Vault as fallback.
 
-Point campaign visible text currently uses:
+## Google Wallet Flow
 
-```text
-🎉 {CampaignName} · Gana puntos x{Multiplier}
-```
+Google Wallet is implemented as a separate provider from Apple Wallet.
 
-## Background Jobs
+Flow:
 
-API hosted services:
+1. Customer joins through `/{tenantSlug}/join`.
+2. Join UI uses platform detection.
+3. Android path calls `POST /api/customers/{serialNumber}/wallets/google/save-link`.
+4. `WalletsController` resolves and sets tenant by card serial through `IWalletTenantContextResolver`.
+5. `CreateGoogleWalletSaveLinkCommand` calls `IGoogleWalletService`.
+6. `GoogleWalletService` reads `MemberWalletData`, creates/updates `MemberDigitalWallet`, builds deterministic class/object IDs, ensures Google `LoyaltyClass`, creates/updates Google `LoyaltyObject`, stores sync status and returns a Google Save URL.
+7. Client opens `https://pay.google.com/gp/v/save/{jwt}`.
 
-### LoyaltyMaintenanceBackgroundService
+Update behavior:
 
-Config section: `LoyaltyMaintenance`.
+- `AddPointsHandler` calls Google Wallet synchronization best-effort after points are saved when a Google wallet link exists.
+- Google Wallet sync is disabled when `GoogleWallet:Enabled=false`.
+- There is no full outbox/retry worker for Google Wallet yet.
+- Current implementation is partial for production-scale use.
 
-Current defaults from `appsettings.json`:
+Google ID pattern:
 
-- `Enabled = true`.
-- `RunOnStartup = false`.
-- `IntervalHours = 12`.
-- `RunAtLocalTime = "02:00"` is present in config, but the current service uses `IntervalHours`.
-- `TimeZoneId = "America/Tijuana"`.
+- Class ID: `{issuerId}.{classSuffix}`.
+- Object ID: `{issuerId}.{objectIdPrefix}-{normalized-serial}`.
 
-Runs:
+Known Google Wallet STG status:
 
-- Subscription maintenance.
-- Point expiration.
-- Level recalculation.
-- Point expiration notifications.
-- Monthly product notifications.
-- Birthday benefit notifications.
-- Point campaign notifications.
+- STG Key Vault contains `loyaltycloud-google-wallet-service-account-json`.
+- `GoogleWallet__Enabled=true` was configured during debugging.
+- Issuer ID used in STG: `3388000000023165331`.
+- Save-link previously reached working state.
+- Issuer remains in Demo mode and must be moved/published for the test-pass warning to disappear.
 
-It runs per operational tenant through `ITenantExecutionRunner`.
+Do not log service account JSON, private keys, access tokens or Save JWTs.
 
-### LoyaltyNotificationBackgroundService
+## Points, Redemptions, Levels and Notifications
 
-Config section: `LoyaltyNotifications`.
+Points:
 
-Current defaults:
+- `POST /api/points` accepts purchase amount and card serial.
+- Business logic calculates points using ProgramConfig, birthday multiplier and active point campaigns.
+- It writes `PointTransaction`, `PointLot`, updates `LoyaltyCard`, recalculates levels and triggers Wallet update/notifications where applicable.
 
-- `Enabled = true`.
-- `RunOnStartup = false`.
-- `PollIntervalSeconds = 43200` (12 hours).
-- Minimum poll interval in code: 15 seconds.
-- `BatchSize = 25`.
-- `MaxAttempts = 3`.
-- `VisibleEventPriorityHours = 24`.
+FIFO and expiration:
 
-Runs:
+- Positive earn transactions create `PointLot`s.
+- Redemptions consume lots through `PointLotConsumption`.
+- Expiration consumes/removes expired availability and writes expiration transactions.
+- Reversal/cancellation restores exact consumed lot amounts.
 
-- Due custom notification campaigns.
-- Pending notification deliveries / retries.
+Redemptions:
 
-RC1 cost-control decision: this worker intentionally runs every 12 hours to let Azure SQL Free/Serverless reach `AutoPauseDelay = 60` minutes and minimize vCore-seconds. Due custom campaigns, pending notification deliveries, Wallet delivery retries and background notification processing can take up to approximately 12 hours. Immediate user-triggered flows still create/process notifications through their foreground handlers when explicitly wired.
+- Catalog redemption uses `RewardCatalogItemId`.
+- Monetary redemption uses requested points and tenant `ProgramConfig` conversion.
+- Browser monetary estimate is UX only; API is authoritative.
+- Monetary redemption persists snapshot fields on `Redemption`.
 
-## Known RC1 Issues / Technical Debt
+Levels:
 
-Safe legacy names:
+- Dynamic per tenant through `TenantLoyaltyLevel`.
+- Rolling 12-month calculation.
+- Do not use `CurrentPoints` to calculate level progress.
+- Level update flow renames references in cards/rewards/campaigns/custom audiences and recalculates cards transactionally.
+- APNs after level update remains best-effort outside SQL transaction.
 
-- `KB-` serial prefix.
-- Apple Pass Type ID may still include `kbeautymx`.
-- Key Vault secret names may include `kbeauty-*`.
-- JavaScript QR scanner may still be named `kbeautyQrScanner`.
-- Some ProgramConfig legacy reward cost keys still exist for compatibility.
+Notifications:
 
-Must fix before GA or before broad multi-tenant scale:
+- `LoyaltyNotification` plus `NotificationDelivery`.
+- Apple Wallet channel implemented.
+- Visible event selection is recency-first; priority is a tie-breaker.
+- `LevelChanged` must beat `PointsAdded` when they happen for the same effective operation.
 
-- Decide neutral/configurable serial prefix strategy.
-- Decide long-term Apple Pass Type ID/certificate strategy.
-- Add/confirm tenant-wide Wallet refresh for branding-only changes if required.
-- Review and remove remaining temporary diagnostic logs if any are too noisy for production.
-- Provisioning defaults still create `Mist/Glow/Radiance`; update defaults or make template configurable before generic onboarding.
-- Ensure production CORS/App Settings reference official Admin host only.
+## Background Services
 
-## Operational Lessons / Do Not Repeat
+Only API registers hosted services.
 
-1. API Linux: create ZIP with `tar -a`; do not use `Compress-Archive`; do not deploy `api.tar.gz`; do not use `--type static`.
-2. Admin Windows: use `Compress-Archive`.
-3. The retired Admin hostname does not exist and must not be reintroduced.
-4. Key Vault references can be cached by App Service; rewrite the reference and restart if a new secret version is not picked up.
-5. Do not manually persist Data Protection to `HOME/data-protection-keys`.
-6. `/platform/*` must be tenant-context-free.
-7. Do not implement QR encoding by hand.
-8. Do not recreate a production KBeauty seed.
-9. Do not invent endpoints; inspect controllers.
-10. Before `database update`, verify target DB is `LoyaltyCloudFree`.
-11. RC1 cost control: maintenance worker and notification worker are 12h. Do not reduce notification polling to minutes without evaluating Azure SQL Free/Serverless autopause and vCore-second impact.
+`LoyaltyMaintenanceBackgroundService`:
 
-## Working Rules
+- Config section: `LoyaltyMaintenance`.
+- Default: enabled, no startup run, every 12 hours.
+- Runs subscription maintenance, point expiration, level recalculation, expiring point notifications, monthly product notifications, birthday benefit notifications and point campaign notifications.
+- Runs per operational tenant.
 
-- Make small, scoped changes.
-- Avoid large refactors unless explicitly requested.
-- Keep Clean Architecture boundaries.
-- Do not change API/Wallet/APNs/routing accidentally.
-- Do not create migrations unless model changes require them.
-- Do not run `database update`, deploy, or commit unless explicitly requested.
-- Run relevant tests for the changed area.
-- Run `dotnet ef migrations has-pending-model-changes` after model work.
-- Run `dotnet build .\LoyaltyCloud.sln` before closing implementation tasks.
-- Update documentation at important checkpoints.
-- Do not use `docs/DECISIONS.md`.
+`LoyaltyNotificationBackgroundService`:
 
-## Current Docs
+- Config section: `LoyaltyNotifications`.
+- Default: enabled, no startup run, `PollIntervalSeconds=43200`.
+- Runs due custom notification campaigns and pending notification deliveries/retries.
 
-Existing docs:
+Cost-control decision for Azure SQL Free/UAT: no background loop should touch SQL every minute. Immediate foreground flows should process their own business notifications when explicitly wired.
 
-- `README.md`: human-facing setup and project overview.
-- `docs/AppleWallet.md`: Wallet/pass technical documentation.
-- `docs/AppleWallet-Development.md`: local Wallet development notes.
-- `docs/ROADMAP.md`: current roadmap.
-- `docs/AI_CONTEXT.md`: this canonical handoff.
+## Configuration
 
-Keep README concise. Put detailed operational/handoff context here.
+Connection strings:
+
+- `ConnectionStrings:DefaultConnection`.
+- Azure App Service form: `ConnectionStrings__DefaultConnection`.
+
+Important App Settings:
+
+| Setting | Applies to | Purpose |
+| --- | --- | --- |
+| `ASPNETCORE_ENVIRONMENT` | API/Admin | Runtime environment. |
+| `DOTNET_ENVIRONMENT` | API/Admin | Generic host environment. |
+| `ConnectionStrings:DefaultConnection` | API/Admin/Tools | SQL Server connection string. |
+| `Azure:KeyVaultUri` | API/Admin/Tools | Adds Azure Key Vault to configuration and registers `SecretClient`. |
+| `Azure:BlobStorage:ConnectionString` | API/Admin | Blob Storage connection string. |
+| `Azure:BlobStorage:PassContainer` | API/Admin | Blob container, normally `passes`. |
+| `Azure:BlobStorage:SasExpirationMinutes` | API/Admin | SAS URL duration for logo assets. |
+| `Admin:ApiBaseUrl` | Admin | Base URL of API backend. Required at Admin startup. |
+| `Admin:Auth:SessionHours` | Admin | Tenant Admin cookie duration. RC1 target 168. |
+| `AdminApi:SharedSecret` | API/Admin | HMAC secret for Admin to API calls. Must match on both. |
+| `SuperAdmin:Username` | Admin | Platform Admin username. |
+| `SuperAdmin:PasswordHash` | Admin | Platform Admin password hash. |
+| `SuperAdmin:SessionHours` | Admin | Platform Admin cookie duration, default 8. |
+| `Apple:PassTypeIdentifier` | API/Admin | Apple pass type identifier. Legacy KBeauty value is still expected. |
+| `Apple:TeamIdentifier` | API/Admin | Apple Team ID. |
+| `Apple:WebServiceURL` | API/Admin | Public API base embedded in passes and public join response. Must be environment-specific. |
+| `Apple:OrganizationName` | API/Admin | Apple pass organization. Legacy KBeauty value may remain. |
+| `Apple:ApnHost` | API/Admin | APNs host, normally `https://api.push.apple.com`. |
+| `Apple:ApnPrivateKeyPath` | Development | Local APNs `.p8` path when real APNs is enabled locally. |
+| `Wallet:UseRealPassSigning` | Development mainly | Chooses real vs development pass generator in Development. Non-Development always uses real signing. |
+| `Wallet:UseRealApns` | Development mainly | Chooses ApnService vs NoOp locally. Non-Development uses ApnService. |
+| `Cors:AllowedOrigins` | API | Allowed Admin/front-end origins. |
+| `LoyaltyMaintenance:*` | API | Maintenance worker configuration. |
+| `LoyaltyNotifications:*` | API | Notification worker and visible event config. |
+| `CustomNotificationCampaigns:BatchSize` | API | Due custom campaign batch size. |
+| `Provisioning:TrialDays` | API/Admin/Tools | Default tenant trial days. |
+| `Billing:GracePeriodDays` | API/Admin | Subscription grace behavior. |
+| `GoogleWallet:*` | API/Admin | Google Wallet provider settings. |
+
+Key Vault secret names in current implementation/scripts:
+
+| Secret | Purpose |
+| --- | --- |
+| `loyaltycloud-sql-connection-string` | SQL connection string. |
+| `loyaltycloud-storage-connection-string` | Storage connection string. |
+| `loyaltycloud-admin-api-shared-secret` | Admin/API HMAC secret. |
+| `loyaltycloud-superadmin-username` | Platform Admin username. |
+| `loyaltycloud-superadmin-password-hash` | Platform Admin password hash. |
+| `kbeauty-pass-certificate` | Apple Wallet signing `.p12` as Base64. |
+| `kbeauty-pass-certificate-password` | Apple Wallet `.p12` password. |
+| `kbeauty-wwdr-certificate` | Optional WWDR cert as Base64. |
+| `kbeauty-apn-private-key` | APNs `.p8` PEM content. |
+| `kbeauty-apn-key-id` | APNs key ID. |
+| `kbeauty-apn-team-id` | APNs team ID. |
+| `loyaltycloud-google-wallet-service-account-json` | Google Wallet service account JSON. |
+
+Never store secret values, tokens, private keys, connection strings or passwords in docs or source.
+
+## Azure PROD
+
+Production/UAT resources currently referenced:
+
+| Resource | Name |
+| --- | --- |
+| Resource Group | `rg-loyaltycloud-prod` |
+| API App Service | `loyaltycloud-api-894839` |
+| API URL | `https://loyaltycloud-api-894839.azurewebsites.net` |
+| Admin App Service | `loyaltycloud-admin` |
+| Admin URL | `https://loyaltycloud-admin.azurewebsites.net` |
+| SQL Server | `sql-loyaltycloud-894839` |
+| Active DB | `LoyaltyCloudFree` |
+| Storage | `stloyaltycloud894839` |
+| Key Vault | `kv-loyaltycloud-894839` |
+
+The old Admin host `loyaltycloud-admin-894839.azurewebsites.net` no longer exists and must not be used.
+
+## Azure STG
+
+See `docs/STAGING_SETUP.md` for the full real procedure.
+
+Current STG resources:
+
+| Resource | Name |
+| --- | --- |
+| Resource Group | `rg-loyaltycloud-stg` |
+| API App Service Plan Linux | `asp-loyaltycloud-api-stg-01` |
+| API App Service | `loyaltycloud-api-stg-01` |
+| API URL | `https://loyaltycloud-api-stg-01.azurewebsites.net` |
+| Admin App Service Plan Windows | `asp-loyaltycloud-admin-stg-01` |
+| Admin App Service | `loyaltycloud-admin-stg-01` |
+| Admin URL | `https://loyaltycloud-admin-stg-01.azurewebsites.net` |
+| SQL Server | `sql-loyaltycloud-stg-01` |
+| Database | `LoyaltyCloudStg` |
+| Storage | `stloyaltycloudstg01` |
+| Blob container | `passes` |
+| Key Vault | `kv-loyaltycloud-stg-01` |
+| Managed Identity | system-assigned identities on API and Admin |
+| RBAC | `Key Vault Secrets User` for API/Admin identities on STG Key Vault |
+
+Critical STG incident:
+
+- STG App Services were recreated.
+- API and Admin lost App Settings and connection strings.
+- API STG settings were restored.
+- Admin STG initially failed with HTTP 500.30 because it still tried to access `kbeauty-kv.vault.azure.net`.
+- Correct `Azure__KeyVaultUri` for API and Admin STG is `https://kv-loyaltycloud-stg-01.vault.azure.net/`.
+- `DefaultConnection` for API and Admin STG uses Key Vault secret `loyaltycloud-sql-connection-string`.
+- Correct Key Vault reference is `@Microsoft.KeyVault(VaultName=kv-loyaltycloud-stg-01;SecretName=loyaltycloud-sql-connection-string)`.
+- PowerShell/Azure CLI had quoting issues with the final parenthesis of Key Vault references; reliable method was JSON files passed to `az webapp config connection-string set`.
+- Admin STG also needed `AdminApi__SharedSecret` restored to match API STG.
+- Admin STG also needed `ConnectionStrings__DefaultConnection`.
+- Current status after recovery: Admin STG starts and SuperAdmin login works; API STG starts and responds.
+
+## Local Configuration
+
+Local development typically uses:
+
+- `src/LoyaltyCloud.API/appsettings.Development.json`.
+- `src/LoyaltyCloud.Admin/appsettings.Development.json`.
+- user-secrets for local passwords, connection strings and Apple/Google secrets.
+- LocalDB or configured SQL Server.
+
+Do not put certificate files, `.p8`, `.p12`, service account JSON or connection strings in the repo.
+
+For local real Apple Wallet:
+
+- `Wallet:UseRealPassSigning=true`.
+- `Wallet:UseRealApns=true` only when APNs credentials are present.
+- Local provider reads local Apple secrets/config paths.
+
+For Google Wallet:
+
+- Keep disabled unless real issuer/service account data exists.
+- Prefer `GoogleWallet:ServiceAccountJsonPath` in local user-secrets.
+
+## Infrastructure Scripts
+
+Important scripts:
+
+| Script | Purpose |
+| --- | --- |
+| `infra/create-stg.ps1` | Dry-run by default; creates STG Azure resources only with `-Execute`. Compatible with Windows PowerShell 5.1. |
+| `infra/configure-stg-secrets.ps1` | Configures selected STG secrets. Switches: `-ConfigureAdminApi`, `-ConfigureSuperAdmin`, `-ConfigureAppleWallet`, `-ConfigureGoogleWallet`. |
+| `infra/copy-apple-wallet-secrets-to-stg.ps1` | Copies allowlisted Apple Wallet secrets from PROD Key Vault to STG Key Vault. Dry-run by default. |
+
+Lessons embedded in scripts:
+
+- Azure CLI warnings can appear on stderr with exit code 0. Only nonzero exit code is fatal.
+- Resource-not-found during dry-run/show should be treated as planned creation where appropriate.
+- Windows Web App creation must not reuse Linux runtime arguments.
+- Windows PowerShell 5.1 does not support `ProcessStartInfo.ArgumentList`.
+- SQL password prompt should only happen when creating SQL Server.
+
+## Deployment Notes
+
+API is Linux:
+
+- Publish with `dotnet publish`.
+- Create deployment ZIP using `tar -a -c -f`.
+- Do not use `Compress-Archive` for API Linux ZIP; it caused deployment/runtime issues.
+
+Admin is Windows:
+
+- Publish with `dotnet publish`.
+- Create ZIP with `Compress-Archive`.
+
+Do not deploy, run database update or commit unless the user explicitly asks.
+
+## Roadmap Status
+
+Current state: RC1 / UAT real.
+
+Done:
+
+- Apple Wallet signed pass and PassKit web service.
+- APNs refresh and Device Registration.
+- Public tenant join.
+- Admin tenant login and Platform Admin.
+- Multi-tenant foundation, tenantized root/dependent entities, filters and tenant guards.
+- Tenant provisioning from Platform Admin.
+- Hard delete tenant.
+- Tenant dynamic levels and tenant-level recalculation.
+- Customer detail audit.
+- QR add-points and redemption flows.
+- Direct monetary discount redemption.
+- Reward catalog/monthly product.
+- Point campaigns.
+- Custom Wallet messages.
+- Automatic Wallet visible notifications.
+- Tenant branding/logo for Admin and Apple Wallet.
+- Quick Help registration QR/poster.
+- Google Wallet first vertical slice.
+- STG infrastructure scripts and STG setup documentation.
+
+Active/UAT focus:
+
+- Stabilize STG and PROD/UAT configuration.
+- Validate KBeauty real flows.
+- Validate Google Wallet in STG and move issuer from Demo to Production when ready.
+
+Known current/pending:
+
+- Google Wallet issuer is still in Demo mode.
+- Google Wallet does not yet have a robust outbox/retry model.
+- Google Wallet sync is currently limited mainly to add-points sync once a member is linked.
+- Some committed default display values still say KBeauty for Apple/Google compatibility or provisional defaults.
+- Provisioning defaults may still be legacy `Mist/Glow/Radiance`; update defaults/templates before generic onboarding if not already handled.
+- Serial format still uses `KB-`; do not change without a PassKit/Wallet migration plan.
+- Review diagnostic logs before GA.
+
+## Working Conventions
+
+- Inspect before changing.
+- Keep changes scoped.
+- No large refactors unless explicitly requested.
+- No functional code changes for documentation-only tasks.
+- No migrations unless model changes require them and the user approves.
+- No `database update`, deploy or commit unless explicitly requested.
+- Do not run build/tests if the user forbids them.
+- For implementation tasks, run relevant tests and `dotnet build .\LoyaltyCloud.sln` only when requested/appropriate.
+- Use `rg` for search.
+- Use `apply_patch` for manual file edits.
+- Never print secrets.
+- Keep Apple Wallet/APNs/PassKit endpoints stable.
+- Keep public routes stable: `/api/*`, `/v1/*`, `/{tenantSlug}/join`, `/{tenantSlug}/login`, `/platform/login`, `/scan`, `/redeem`.

@@ -8,6 +8,7 @@ using LoyaltyCloud.Domain.Repositories;
 using LoyaltyCloud.Infrastructure.Configuration;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
+using System.Text.Json;
 
 namespace LoyaltyCloud.Infrastructure.Services.GoogleWallet;
 
@@ -84,7 +85,29 @@ internal sealed class GoogleWalletService : IGoogleWalletService
         }
         catch (Exception ex)
         {
-            _logger.LogWarning(ex, "Google Wallet save link generation failed for serial {Serial}", serialNumber);
+            var googleApiDetails = TryExtractGoogleApiExceptionDetails(ex);
+            if (googleApiDetails is not null)
+            {
+                _logger.LogError(
+                    ex,
+                    "Google Wallet save link generation failed for serial {Serial}. Exception={Exception}. GoogleApiStatus={GoogleApiStatus}. GoogleApiErrorCode={GoogleApiErrorCode}. GoogleApiErrorMessage={GoogleApiErrorMessage}. GoogleApiErrors={GoogleApiErrors}. GoogleApiResponseBody={GoogleApiResponseBody}",
+                    serialNumber,
+                    ex.ToString(),
+                    googleApiDetails.Status,
+                    googleApiDetails.ErrorCode,
+                    googleApiDetails.ErrorMessage,
+                    googleApiDetails.Errors,
+                    googleApiDetails.ResponseBody);
+            }
+            else
+            {
+                _logger.LogError(
+                    ex,
+                    "Google Wallet save link generation failed for serial {Serial}. Exception={Exception}",
+                    serialNumber,
+                    ex.ToString());
+            }
+
             return Result.Fail<GoogleWalletSaveLinkResponse>(
                 "No se pudo generar el enlace de Google Wallet. Revise configuracion, credenciales y logs.");
         }
@@ -176,6 +199,39 @@ internal sealed class GoogleWalletService : IGoogleWalletService
         var message = ex.Message;
         return message.Length <= 500 ? message : message[..500];
     }
+
+    private static GoogleApiExceptionDetails? TryExtractGoogleApiExceptionDetails(Exception exception)
+    {
+        for (var current = exception; current is not null; current = current.InnerException)
+        {
+            if (!string.Equals(current.GetType().FullName, "Google.GoogleApiException", StringComparison.Ordinal))
+                continue;
+
+            var error = current.GetType().GetProperty("Error")?.GetValue(current);
+            var status = current.GetType().GetProperty("HttpStatusCode")?.GetValue(current)?.ToString()
+                ?? current.GetType().GetProperty("StatusCode")?.GetValue(current)?.ToString();
+            var responseBody = current.GetType().GetProperty("ResponseBody")?.GetValue(current)?.ToString();
+            var errorCode = error?.GetType().GetProperty("Code")?.GetValue(error)?.ToString();
+            var errorMessage = error?.GetType().GetProperty("Message")?.GetValue(error)?.ToString();
+            var errors = error?.GetType().GetProperty("Errors")?.GetValue(error);
+
+            return new GoogleApiExceptionDetails(
+                status,
+                errorCode,
+                errorMessage,
+                errors is null ? null : JsonSerializer.Serialize(errors),
+                responseBody);
+        }
+
+        return null;
+    }
+
+    private sealed record GoogleApiExceptionDetails(
+        string? Status,
+        string? ErrorCode,
+        string? ErrorMessage,
+        string? Errors,
+        string? ResponseBody);
 
     private sealed record GoogleWalletSyncState(MemberDigitalWallet Wallet, GoogleWalletObjectData ObjectData)
     {

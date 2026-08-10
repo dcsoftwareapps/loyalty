@@ -1,0 +1,6 @@
+{
+  "name": "DefaultConnection",
+  "value": "@Microsoft.KeyVault(VaultName=kv-loyaltycloud-stg-01;SecretName=loyaltycloud-sql-connection-string)",
+  "type": "SQLAzure",
+  "slotSetting": false
+}
