@@ -85,5 +85,24 @@ public sealed class GoogleWalletObjectMapperTests
         Assert.False(payload.ContainsKey("heroImage"));
         Assert.True(payload.ContainsKey("classTemplateInfo"));
     }
+
+    [Fact]
+    public void ToClassPayload_ShouldUseUnderReviewAndNeverApproved()
+    {
+        var mapper = new GoogleWalletObjectMapper();
+        var options = new GoogleWalletOptions
+        {
+            ProgramName = "KBeauty Loyalty",
+            IssuerName = "KBeauty MX",
+            LogoUri = "https://assets.example/logo.png",
+            HexBackgroundColor = "#FFFFFF"
+        };
+
+        var data = mapper.ToClassData("issuer.loyalty", options);
+        var payload = mapper.ToClassPayload(data);
+
+        Assert.Equal("UNDER_REVIEW", payload["reviewStatus"]);
+        Assert.DoesNotContain(payload, item => Equals(item.Value, "APPROVED"));
+    }
 }
 

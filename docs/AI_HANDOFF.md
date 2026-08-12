@@ -1,6 +1,6 @@
 # LoyaltyCloud - AI Handoff
 
-Last updated: 2026-08-10
+Last updated: 2026-08-11
 
 Branch: `main`
 
@@ -28,7 +28,7 @@ Active product status:
 - PROD/UAT active database: `LoyaltyCloudFree`.
 - STG exists separately with `loyaltycloud-api-stg-01` and `loyaltycloud-admin-stg-01`.
 - Apple Wallet works in production/UAT.
-- Google Wallet save-link reached working state in STG previously, but Google issuer remains in Demo mode.
+- Google Wallet is approved for production and STG generates Save Links correctly.
 
 ## Recent Infrastructure and Configuration Work
 
@@ -210,6 +210,45 @@ Fix:
 - If a `Google.GoogleApiException` is ever present, logging tries to capture status, error code, message, errors and response body without exposing secrets.
 - `GoogleWalletClient.CreateExceptionAsync` now preserves full Google REST response body in thrown exception.
 
+### 2026-08-11 - Google Wallet production-approved LoyaltyClass PATCH
+
+Incident:
+
+- After the Google Wallet Issuer was approved for production, Save Link generation started failing in STG with HTTP 400.
+
+Error:
+
+```text
+Invalid review status "APPROVED". Use "UNDER_REVIEW" instead.
+```
+
+- The error occurred during the `PATCH` of `LoyaltyClass` in `GoogleWalletClient.EnsureLoyaltyClassAsync()`.
+
+Root cause:
+
+- `GoogleWalletClient.EnsureLoyaltyClassAsync()` sent a `PATCH` payload for `LoyaltyClass` that ended up including `reviewStatus = APPROVED`.
+- Google Wallet does not allow clients to set `APPROVED` through the API.
+- `APPROVED` is assigned only by Google.
+
+Solution:
+
+- `GoogleWalletClient` was updated so the `PATCH` of `LoyaltyClass` uses `reviewStatus = UNDER_REVIEW` again.
+- No changes were made to `LoyaltyObject` generation or update logic.
+
+Validation:
+
+- `dotnet test .\tests\LoyaltyCloud.Tests\LoyaltyCloud.Tests.csproj --filter FullyQualifiedName~GoogleWalletObjectMapperTests`
+- 3 tests passed.
+- `dotnet build .\LoyaltyCloud.sln`
+- Build succeeded with 0 warnings and 0 errors.
+
+STG post-deploy validation:
+
+- `POST /api/customers/{serial}/wallets/google/save-link` generated `saveUrl` correctly again.
+- Google Wallet is now production approved.
+- Google Wallet is no longer in Demo mode.
+- STG generates Save Links correctly.
+
 Do not change endpoint contract unless explicitly requested.
 
 ### PowerShell 5.1 incompatibilities in infra scripts
@@ -246,7 +285,7 @@ Do not re-investigate these without new evidence:
 - Admin STG HTTP 500.30 from wrong Key Vault URI was resolved by restoring correct STG settings.
 - Admin STG SuperAdmin login works after restoring `DefaultConnection`.
 - API STG starts and responds after settings restoration.
-- Google Wallet save-link reached working state previously in STG, subject to Google issuer Demo status.
+- Google Wallet is production approved and STG Save Link generation works after the LoyaltyClass `reviewStatus` PATCH fix.
 
 ## What Still Needs Testing
 
@@ -262,14 +301,14 @@ Priority:
    - QR scan/add points.
    - Redeem monetary discount.
 
-2. Google Wallet STG:
+2. Google Wallet STG regression smoke:
    - Confirm `GoogleWallet__Enabled=true` only in intended environment.
    - Confirm `GoogleWallet__IssuerId`.
    - Confirm `GoogleWallet__LogoUri` is public HTTPS and reachable by Google.
    - Confirm `loyaltycloud-google-wallet-service-account-json` resolves from STG Key Vault.
    - Call `POST /api/customers/{serialNumber}/wallets/google/save-link`.
    - Open returned Save URL on Android.
-   - Move/publish Google issuer out of Demo mode to remove test-pass warning.
+   - Confirm no Demo/test-pass warning appears for production-approved issuer.
 
 3. Review production/STG settings drift:
    - Admin official host remains `https://loyaltycloud-admin.azurewebsites.net`.
@@ -283,7 +322,7 @@ For the next technical session:
 1. Read `docs/AI_CONTEXT.md`.
 2. Read this handoff.
 3. If working on STG, verify current App Settings and connection strings from Azure before changing code.
-4. For Google Wallet STG, tail API logs and retry save-link with a known customer serial after confirming Google issuer/LogoUri/service account setup.
+4. For Google Wallet STG, keep `reviewStatus = UNDER_REVIEW` in LoyaltyClass PATCH payloads and retry save-link with a known customer serial if a regression appears.
 
 Recommended first command for local orientation:
 

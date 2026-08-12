@@ -320,6 +320,8 @@ Important implementation details:
 
 Google Wallet is implemented as a separate provider from Apple Wallet.
 
+Current status: Production Approved.
+
 Flow:
 
 1. Customer joins through `/{tenantSlug}/join`.
@@ -335,7 +337,11 @@ Update behavior:
 - `AddPointsHandler` calls Google Wallet synchronization best-effort after points are saved when a Google wallet link exists.
 - Google Wallet sync is disabled when `GoogleWallet:Enabled=false`.
 - There is no full outbox/retry worker for Google Wallet yet.
-- Current implementation is partial for production-scale use.
+- Issuer is approved for production.
+- `LoyaltyClass` is synchronized through PATCH.
+- `LoyaltyObject` is created/updated automatically.
+- Save Link generation works correctly in STG and is compatible with production-approved Google Wallet setup.
+- Current implementation still does not include a robust outbox/retry model.
 
 Google ID pattern:
 
@@ -347,8 +353,16 @@ Known Google Wallet STG status:
 - STG Key Vault contains `loyaltycloud-google-wallet-service-account-json`.
 - `GoogleWallet__Enabled=true` was configured during debugging.
 - Issuer ID used in STG: `3388000000023165331`.
-- Save-link previously reached working state.
-- Issuer remains in Demo mode and must be moved/published for the test-pass warning to disappear.
+- Issuer is Production Approved.
+- Save Link generation works correctly.
+- STG is no longer in Demo mode.
+
+Important review status rule:
+
+- Do not set `reviewStatus = APPROVED` from code.
+- Google assigns `APPROVED` automatically.
+- The API should send `UNDER_REVIEW` when synchronizing `LoyaltyClass`.
+- `APPROVED` in a PATCH payload causes Google Wallet to reject the request with HTTP 400.
 
 Do not log service account JSON, private keys, access tokens or Save JWTs.
 
@@ -607,11 +621,11 @@ Active/UAT focus:
 
 - Stabilize STG and PROD/UAT configuration.
 - Validate KBeauty real flows.
-- Validate Google Wallet in STG and move issuer from Demo to Production when ready.
+- Continue Google Wallet STG/production smoke testing after deploys.
 
 Known current/pending:
 
-- Google Wallet issuer is still in Demo mode.
+- Google Wallet issuer is Production Approved.
 - Google Wallet does not yet have a robust outbox/retry model.
 - Google Wallet sync is currently limited mainly to add-points sync once a member is linked.
 - Some committed default display values still say KBeauty for Apple/Google compatibility or provisional defaults.

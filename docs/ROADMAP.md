@@ -50,6 +50,8 @@ La base activa de produccion/UAT es `LoyaltyCloudFree`.
 - Logo por tenant para Apple Wallet.
 - Fallback grafico neutral de Wallet sin texto `LC`.
 - Wallet pass con fondo claro, valores negros y labels en PrimaryColor.
+- Google Wallet aprobado para produccion.
+- Google Wallet Save Link validado en STG.
 
 ## RC1 / UAT
 
