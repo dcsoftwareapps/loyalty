@@ -4,7 +4,7 @@ Last updated: 2026-08-12
 
 Branch: `main`
 
-Last task worked: update AI context/handoff with current Azure, Google Wallet and SQL state after today's configuration changes.
+Last task worked: document successful Azure SQL STG migration from General Purpose Serverless to Basic DTU.
 
 ## Current State
 
@@ -32,10 +32,11 @@ Active product status:
 - PROD has `GoogleWallet__*` App Settings configured.
 - PROD Key Vault contains `loyaltycloud-google-wallet-service-account-json`.
 - PROD `GoogleWallet__ServiceAccountJson` references `loyaltycloud-google-wallet-service-account-json` through Key Vault.
-- PROD and STG SQL are currently General Purpose Serverless `GP_S_Gen5_2`, `minCapacity=0.5`, `autoPauseDelay=60`.
+- PROD SQL is currently General Purpose Serverless `GP_S_Gen5_2`, `minCapacity=0.5`, `autoPauseDelay=60`.
+- STG SQL `LoyaltyCloudStg` was migrated successfully to Basic DTU with 2 GB max size.
 - PROD and STG API/Admin App Service Plans are currently F1 Free.
-- Basic DTU for SQL is under evaluation to eliminate cold start.
-- Pending: finish validation of today's final STG changes before deploying to PROD.
+- Basic DTU for PROD remains under evaluation to eliminate cold start, but PROD was not modified.
+- API STG, Admin STG and Wallet were manually validated after the STG SQL migration.
 - Pending decision: `GoogleWallet__ProgramName` is currently `KBeauty Loyalty`; changing it to `KBeauty` is under consideration, then making it configurable by tenant later.
 
 ## Recent Infrastructure and Configuration Work
@@ -84,9 +85,10 @@ PROD Google Wallet configuration state:
 
 Current SQL/App Service cost posture:
 
-- PROD SQL and STG SQL currently use Azure SQL General Purpose Serverless `GP_S_Gen5_2`.
-- Both environments currently use `minCapacity=0.5` and `autoPauseDelay=60`.
-- Both environments are evaluating Basic DTU to remove cold-start behavior.
+- PROD SQL currently uses Azure SQL General Purpose Serverless `GP_S_Gen5_2`, `minCapacity=0.5`, `autoPauseDelay=60`.
+- STG SQL `LoyaltyCloudStg` now uses Basic DTU with 2 GB max size.
+- STG no longer depends on Serverless auto-pause, so the cold start caused by waking SQL Serverless is removed for STG.
+- PROD is still under evaluation for a possible future move to Basic DTU.
 - API and Admin App Service Plans in both PROD and STG are currently F1 Free.
 
 Important PowerShell/Azure CLI lesson:
@@ -274,6 +276,140 @@ STG post-deploy validation:
 
 Do not change endpoint contract unless explicitly requested.
 
+### 2026-08-12 - Azure SQL STG migrated from Serverless to Basic DTU
+
+Incident/objective:
+
+- STG SQL was causing cold start because `LoyaltyCloudStg` was running as General Purpose Serverless with auto-pause.
+- The goal was to migrate only STG to Basic DTU before considering any PROD change.
+
+Infrastructure:
+
+- Resource Group: `rg-loyaltycloud-stg`.
+- SQL Server: `sql-loyaltycloud-stg-01`.
+- Database: `LoyaltyCloudStg`.
+- Azure Monitor region reported: `westus3`.
+
+Initial state:
+
+- Service objective: `GP_S_Gen5_2`.
+- Tier: `GeneralPurpose`.
+- Model: Serverless.
+- `minCapacity=0.5`.
+- `autoPauseDelay=60`.
+- `maxSizeBytes=34359738368` (32 GB).
+- `useFreeLimit=true`.
+
+Troubleshooting:
+
+1. Direct Serverless to Basic change failed.
+   - Cause: the database had 32 GB max size and Basic supports a much smaller max size.
+   - Decision: do not reduce size arbitrarily until real storage usage was verified.
+
+2. Direct SQL query with `sqlcmd -G` failed.
+   - Cause: Azure/Entra `ActiveDirectoryIntegrated` authentication failed.
+   - Decision: stop spending time on `sqlcmd` and use Azure Monitor for actual storage usage.
+
+3. First Azure Monitor attempt failed because of PowerShell argument handling.
+   - Error: `argument --resource: expected one argument`.
+   - Fix: get the database Resource ID first and store it in `$dbId`.
+   - Resource ID used:
+
+```text
+/subscriptions/90f061a5-f51e-4ed9-95d7-6f9ed3ca3995/resourceGroups/rg-loyaltycloud-stg/providers/Microsoft.Sql/servers/sql-loyaltycloud-stg-01/databases/LoyaltyCloudStg
+```
+
+4. Basic change was blocked after reducing max size.
+   - Command attempted:
+
+```powershell
+az sql db update --resource-group rg-loyaltycloud-stg --server sql-loyaltycloud-stg-01 --name LoyaltyCloudStg --service-objective Basic
+```
+
+   - Azure error:
+
+```text
+(ProvisioningDisabled) Provisioning of free limit database is not supported for provided service level objective or region
+```
+
+   - Root cause: the database still had `useFreeLimit=true`.
+   - Fix: remove Free Limit before changing service objective.
+
+Commands that worked:
+
+Get Resource ID:
+
+```powershell
+$dbId = az sql db show `
+  --resource-group rg-loyaltycloud-stg `
+  --server sql-loyaltycloud-stg-01 `
+  --name LoyaltyCloudStg `
+  --query id `
+  -o tsv
+```
+
+Query storage through Azure Monitor:
+
+```powershell
+az monitor metrics list --resource $dbId --metric storage --interval PT1H --aggregation Average -o json
+```
+
+Result:
+
+- Azure Monitor reported `28246016 bytes`.
+- Approximate usage: 26.9 MiB.
+- This was around 1.3% of 2 GB, so reducing max size from 32 GB to 2 GB was safe for current STG state.
+
+Reduce max size to 2 GB:
+
+- Verification after max-size reduction:
+
+```json
+{
+  "currentServiceObjectiveName": "GP_S_Gen5_2",
+  "maxSizeBytes": 2147483648,
+  "sku": "GP_S_Gen5",
+  "tier": "GeneralPurpose"
+}
+```
+
+Remove Free Limit:
+
+- `useFreeLimit=true` was removed before the Basic migration.
+
+Final migration to Basic:
+
+- After Free Limit was removed and `max-size=2GB`, migration to Basic succeeded.
+- Final verification:
+
+```json
+{
+  "maxSizeBytes": 2147483648,
+  "sku": "Basic",
+  "tier": "Basic",
+  "useFreeLimit": null
+}
+```
+
+Final validated state:
+
+- Database: `LoyaltyCloudStg`.
+- Tier: Basic.
+- SKU: Basic.
+- Max size: 2 GB.
+- No longer General Purpose Serverless.
+- No longer depends on auto-pause.
+- Serverless cold start is removed for STG.
+- Storage observed during migration: approximately 26.9 MiB.
+- API STG, Admin STG and Wallet were manually validated after the migration.
+
+PROD:
+
+- PROD was not modified.
+- This change applies only to STG.
+- Do not assume PROD should move to Basic.
+- The PROD decision will be made later after observing STG behavior, costs and limitations.
+
 ### PowerShell 5.1 incompatibilities in infra scripts
 
 Problems:
@@ -310,6 +446,8 @@ Do not re-investigate these without new evidence:
 - API STG starts and responds after settings restoration.
 - Google Wallet is production approved and STG Save Link generation works after the LoyaltyClass `reviewStatus` PATCH fix.
 - PROD Google Wallet settings exist and point `GoogleWallet__ServiceAccountJson` to Key Vault secret `loyaltycloud-google-wallet-service-account-json`.
+- Azure SQL STG `LoyaltyCloudStg` was migrated successfully to Basic DTU.
+- API STG, Admin STG and Wallet were manually validated after the STG SQL migration.
 
 ## What Still Needs Testing
 
@@ -333,7 +471,7 @@ Priority:
    - Call `POST /api/customers/{serialNumber}/wallets/google/save-link`.
    - Open returned Save URL on Android.
    - Confirm no Demo/test-pass warning appears for production-approved issuer.
-   - Validate today's final STG changes before promoting to PROD.
+   - Validate today's final STG changes before promoting to PROD if additional non-SQL changes are made.
 
 3. Review production/STG settings drift:
    - Admin official host remains `https://loyaltycloud-admin.azurewebsites.net`.
@@ -342,8 +480,9 @@ Priority:
    - PROD and STG `GoogleWallet__ProgramName` are intentionally still `KBeauty Loyalty` until the naming decision is made.
 
 4. SQL hosting decision:
-   - Evaluate whether to migrate PROD and STG from General Purpose Serverless `GP_S_Gen5_2` to Basic DTU.
-   - Goal: eliminate Azure SQL cold start if Basic DTU cost/performance is acceptable.
+   - Observe STG on Basic DTU for behavior, costs and limitations.
+   - Evaluate later whether PROD should remain General Purpose Serverless `GP_S_Gen5_2` or move to Basic DTU.
+   - PROD was not modified by the STG migration.
 
 ## Next Recommended Step
 
