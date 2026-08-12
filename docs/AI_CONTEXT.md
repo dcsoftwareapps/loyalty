@@ -146,7 +146,7 @@ Blazor Admin pages:
 | `/config` | `Config.razor` | Program configuration. Some legacy settings are visually hidden. |
 | `/quick-help` | `QuickHelp.razor` | Quick cashier/admin help, registration QR and printable poster. |
 
-Visible Admin menu is grouped by operation, customers, loyalty program, communication and administration. Do not reintroduce the retired Admin hostname `loyaltycloud-admin-894839.azurewebsites.net`.
+Visible Admin menu is grouped by operation, customers, loyalty program, communication and administration. Do not reintroduce any retired Admin hostname.
 
 ## API Endpoints
 
@@ -483,7 +483,7 @@ Production/UAT resources currently referenced:
 | Storage | `stloyaltycloud894839` |
 | Key Vault | `kv-loyaltycloud-894839` |
 
-The old Admin host `loyaltycloud-admin-894839.azurewebsites.net` no longer exists and must not be used.
+The old Admin host no longer exists and must not be used.
 
 ## Azure STG
 

@@ -48,22 +48,34 @@ internal sealed class GoogleWalletClient : IGoogleWalletClient
     {
         var existing = await SendAsync(HttpMethod.Get, $"loyaltyClass/{Uri.EscapeDataString(walletClass.Id)}", null, ct);
         if (existing.StatusCode == HttpStatusCode.OK)
-            return;
-
-        if (existing.StatusCode != HttpStatusCode.NotFound)
-            throw await CreateExceptionAsync("consultar LoyaltyClass", existing, ct);
-
-        var created = await SendAsync(HttpMethod.Post, "loyaltyClass", _mapper.ToClassPayload(walletClass), ct);
-        if (created.StatusCode is HttpStatusCode.OK or HttpStatusCode.Created)
-            return;
-
-        if (created.StatusCode == HttpStatusCode.Conflict)
         {
-            _logger.LogInformation("Google Wallet LoyaltyClass {ClassId} already exists after create conflict.", walletClass.Id);
-            return;
+            var patched = await SendAsync(
+                new HttpMethod("PATCH"),
+                $"loyaltyClass/{Uri.EscapeDataString(walletClass.Id)}",
+                _mapper.ToClassPayload(walletClass, includeReviewStatus: false),
+                ct);
+            if (patched.StatusCode == HttpStatusCode.OK)
+                return;
+
+            throw await CreateExceptionAsync("actualizar LoyaltyClass", patched, ct);
         }
 
-        throw await CreateExceptionAsync("crear LoyaltyClass", created, ct);
+        if (existing.StatusCode == HttpStatusCode.NotFound)
+        {
+            var created = await SendAsync(HttpMethod.Post, "loyaltyClass", _mapper.ToClassPayload(walletClass), ct);
+            if (created.StatusCode is HttpStatusCode.OK or HttpStatusCode.Created)
+                return;
+
+            if (created.StatusCode == HttpStatusCode.Conflict)
+            {
+                _logger.LogInformation("Google Wallet LoyaltyClass {ClassId} already exists after create conflict.", walletClass.Id);
+                return;
+            }
+
+            throw await CreateExceptionAsync("crear LoyaltyClass", created, ct);
+        }
+
+        throw await CreateExceptionAsync("consultar LoyaltyClass", existing, ct);
     }
 
     public async Task CreateOrUpdateObjectAsync(GoogleWalletObjectData walletObject, CancellationToken ct = default)

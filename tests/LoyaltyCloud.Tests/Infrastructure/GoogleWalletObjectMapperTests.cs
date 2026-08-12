@@ -25,7 +25,13 @@ public sealed class GoogleWalletObjectMapperTests
             LevelAchievedAt: new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc),
             LastActivityAt: new DateTime(2026, 7, 15, 12, 30, 0, DateTimeKind.Utc),
             IsActive: true,
-            BarcodeValue: "KB-123");
+            BarcodeValue: "KB-123",
+            DisplayName: "Ana",
+            PointsText: "250 pts",
+            LevelText: "Glow \u2728",
+            NextLevelText: "Radiance",
+            RemainingPointsText: "2750 pts",
+            BarcodeAlternateText: "Presenta este c\u00f3digo en caja");
 
         var data = mapper.ToObjectData("issuer.member-kb-123", "issuer.loyalty", member);
         var payload = mapper.ToObjectPayload(data);
@@ -33,19 +39,26 @@ public sealed class GoogleWalletObjectMapperTests
         Assert.Equal("issuer.member-kb-123", payload["id"]);
         Assert.Equal("issuer.loyalty", payload["classId"]);
         Assert.Equal("ACTIVE", payload["state"]);
-        Assert.Equal("Ana Lopez", payload["accountName"]);
+        Assert.Equal("Ana", payload["accountName"]);
         Assert.Equal("KB-123", payload["accountId"]);
 
         var points = Assert.IsType<Dictionary<string, object?>>(payload["loyaltyPoints"]);
+        Assert.Equal("PUNTOS", points["label"]);
         var balance = Assert.IsType<Dictionary<string, object?>>(points["balance"]);
         Assert.Equal(250, balance["int"]);
 
         var barcode = Assert.IsType<Dictionary<string, object?>>(payload["barcode"]);
         Assert.Equal("QR_CODE", barcode["type"]);
         Assert.Equal("KB-123", barcode["value"]);
+        Assert.Equal("Presenta este c\u00f3digo en caja", barcode["alternateText"]);
 
         var textModules = Assert.IsType<Dictionary<string, object?>[]>(payload["textModulesData"]);
-        Assert.Contains(textModules, module => Equals(module["body"], "Glow"));
+        Assert.Contains(textModules, module => Equals(module["id"], "member-name") && Equals(module["body"], "Ana"));
+        Assert.Contains(textModules, module => Equals(module["id"], "points") && Equals(module["body"], "250 pts"));
+        Assert.Contains(textModules, module => Equals(module["id"], "level") && Equals(module["body"], "Glow \u2728"));
+        Assert.Contains(textModules, module => Equals(module["id"], "next-level") && Equals(module["body"], "Radiance"));
+        Assert.Contains(textModules, module => Equals(module["id"], "remaining-points") && Equals(module["body"], "2750 pts"));
+        Assert.Contains(textModules, module => Equals(module["id"], "barcode-caption") && Equals(module["body"], "Presenta este c\u00f3digo en caja"));
         Assert.Contains(textModules, module => Equals(module["body"], "2026-07-15 12:30 UTC"));
     }
 
@@ -70,6 +83,7 @@ public sealed class GoogleWalletObjectMapperTests
         Assert.Equal("#FFFFFF", payload["hexBackgroundColor"]);
         Assert.True(payload.ContainsKey("programLogo"));
         Assert.False(payload.ContainsKey("heroImage"));
+        Assert.True(payload.ContainsKey("classTemplateInfo"));
     }
 }
 

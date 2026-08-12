@@ -81,7 +81,10 @@ public sealed class GoogleWalletIntegrationTests : IntegrationTestBase
 
         Assert.Contains(Factory.GoogleWallet.Objects, o =>
             o.Id == saveLink.ObjectId &&
-            o.PointsBalance == WelcomeBonusPoints + 20);
+            o.PointsBalance == WelcomeBonusPoints + 20 &&
+            o.PointsText == "70 pts" &&
+            o.NextLevelText == "Glow" &&
+            o.RemainingPointsText == "930 pts");
     }
 
     private static HttpRequestMessage CreateSignedRequest(

@@ -32,7 +32,12 @@ public sealed class GoogleWalletJwtFactoryTests
             "Mist",
             "KB-1",
             true,
-            new DateTime(2026, 7, 15, 0, 0, 0, DateTimeKind.Utc));
+            new DateTime(2026, 7, 15, 0, 0, 0, DateTimeKind.Utc),
+            "100 pts",
+            "Mist \u2728",
+            "Glow",
+            "900 pts",
+            "Presenta este c\u00f3digo en caja");
 
         var saveUrl = factory.CreateSaveUrl(
             credentials,

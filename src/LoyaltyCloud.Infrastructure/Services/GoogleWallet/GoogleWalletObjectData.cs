@@ -9,5 +9,10 @@ public sealed record GoogleWalletObjectData(
     string MembershipTier,
     string BarcodeValue,
     bool IsActive,
-    DateTime UpdatedAtUtc);
+    DateTime UpdatedAtUtc,
+    string PointsText,
+    string LevelText,
+    string NextLevelText,
+    string RemainingPointsText,
+    string BarcodeAlternateText);
 

@@ -31,11 +31,21 @@ public sealed class MemberWalletDataServiceTests
         cards.Setup(r => r.GetBySerialNumberAsync("KB-TEST001", It.IsAny<CancellationToken>()))
             .ReturnsAsync(card);
 
+        var transactions = new Mock<IPointTransactionRepository>();
+        transactions.Setup(r => r.GetEligibleLevelPointsAsync(
+                card.Id,
+                It.IsAny<DateTime>(),
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync(125);
+
         var services = new ServiceCollection();
         services.AddApplication();
         services.AddSingleton(customers.Object);
         services.AddSingleton(cards.Object);
+        services.AddSingleton(transactions.Object);
+        services.AddSingleton(TenantLevels().Object);
         services.AddSingleton(TenantContext().Object);
+        services.AddSingleton(Clock().Object);
 
         var provider = services.BuildServiceProvider();
         var service = provider.GetRequiredService<IMemberWalletDataService>();
@@ -50,5 +60,11 @@ public sealed class MemberWalletDataServiceTests
         Assert.Equal(125, result.Value.CurrentPoints);
         Assert.Equal(LoyaltyConstants.Levels.Mist, result.Value.Level);
         Assert.Equal(card.SerialNumber, result.Value.BarcodeValue);
+        Assert.Equal("Ana", result.Value.DisplayName);
+        Assert.Equal("125 pts", result.Value.PointsText);
+        Assert.Equal("Mist \u2728", result.Value.LevelText);
+        Assert.Equal(LoyaltyConstants.Levels.Glow, result.Value.NextLevelText);
+        Assert.Equal("875 pts", result.Value.RemainingPointsText);
+        Assert.Equal("Presenta este c\u00f3digo en caja", result.Value.BarcodeAlternateText);
     }
 }

@@ -18,5 +18,11 @@ public sealed record MemberWalletData(
     DateTime LevelAchievedAt,
     DateTime LastActivityAt,
     bool IsActive,
-    string BarcodeValue);
+    string BarcodeValue,
+    string DisplayName,
+    string PointsText,
+    string LevelText,
+    string NextLevelText,
+    string RemainingPointsText,
+    string BarcodeAlternateText);
 

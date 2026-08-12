@@ -254,13 +254,18 @@ internal sealed class GoogleWalletService : IGoogleWalletService
                 new GoogleWalletObjectData(
                     objectId,
                     classId,
-                    data.FullName,
+                    data.DisplayName,
                     data.SerialNumber,
                     data.CurrentPoints,
                     data.Level,
                     data.BarcodeValue,
                     data.IsActive,
-                    data.LastActivityAt));
+                    data.LastActivityAt,
+                    data.PointsText,
+                    data.LevelText,
+                    data.NextLevelText,
+                    data.RemainingPointsText,
+                    data.BarcodeAlternateText));
         }
     }
 }

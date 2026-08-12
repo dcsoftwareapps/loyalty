@@ -106,6 +106,16 @@ private development files are not valid for creating a real Google
 `/api/wallet-assets/apple/logo@3x.png` so Google Wallet can reuse the same
 branding through the public API/ngrok host without adding duplicate image files.
 
+Google Wallet object rendering intentionally mirrors the Apple Wallet card as
+closely as Google Wallet allows. The object payload uses the same member serial
+for the QR value, the same checkout caption, the member's display first name,
+and dynamic wallet fields for `PUNTOS`, `NIVEL`, `PROXIMO` and `FALTAN`. Google
+Wallet card templates support at most three items per row, so the class template
+renders `PUNTOS` and `NIVEL` as separate blocks and combines
+`PROXIMO`/`FALTAN` in the third block. Existing LoyaltyClasses are patched
+idempotently so the visual template can evolve without creating duplicate
+classes, objects or `MemberDigitalWallet` rows.
+
 ## Local Development
 
 Typical local services:
@@ -234,6 +244,7 @@ Do not run `database update`, deploy, create migrations or commit unless explici
 - Captured the real Google Wallet class-creation requirement for a public HTTPS `GoogleWallet:LogoUri`.
 - Added a public read-only wallet asset endpoint so Google Wallet can reuse the bundled Apple Wallet logo.
 - Integrated Google Wallet into the public join flow with iOS/Android/desktop wallet selection.
+- Updated the Google Wallet class/object template to mirror the Apple Wallet member card fields.
 - Clarified the Admin configuration label for `PointsPerPesoUnit` as pesos per point.
 - Kept Apple Wallet and development pass generation paths intact.
 - Updated QR generation to expose an accessible registration label.
