@@ -1,6 +1,6 @@
 # LoyaltyCloud - AI Context
 
-Last updated: 2026-08-10
+Last updated: 2026-08-12
 
 Purpose: permanent technical context for continuing LoyaltyCloud with ChatGPT/Codex without losing important repository, infrastructure and product memory between chats.
 
@@ -341,6 +341,9 @@ Update behavior:
 - `LoyaltyClass` is synchronized through PATCH.
 - `LoyaltyObject` is created/updated automatically.
 - Save Link generation works correctly in STG and is compatible with production-approved Google Wallet setup.
+- PROD has `GoogleWallet__*` App Settings configured.
+- PROD Key Vault contains `loyaltycloud-google-wallet-service-account-json`.
+- `GoogleWallet__ServiceAccountJson` in PROD references `loyaltycloud-google-wallet-service-account-json` through Key Vault.
 - Current implementation still does not include a robust outbox/retry model.
 
 Google ID pattern:
@@ -356,6 +359,14 @@ Known Google Wallet STG status:
 - Issuer is Production Approved.
 - Save Link generation works correctly.
 - STG is no longer in Demo mode.
+
+Known Google Wallet PROD status:
+
+- Google Wallet is approved for production.
+- PROD has `GoogleWallet__*` configured.
+- `GoogleWallet__ServiceAccountJson` is a Key Vault reference to `loyaltycloud-google-wallet-service-account-json`.
+- Do not document or print the service account JSON, private key, tokens or any related secret values.
+- Pending decision: `GoogleWallet__ProgramName` is currently `KBeauty Loyalty`; the current option under consideration is changing it to `KBeauty`, then later making the program name configurable per tenant.
 
 Important review status rule:
 
@@ -497,6 +508,13 @@ Production/UAT resources currently referenced:
 | Storage | `stloyaltycloud894839` |
 | Key Vault | `kv-loyaltycloud-894839` |
 
+Current PROD compute/cost state:
+
+- API App Service Plan is currently F1 Free.
+- Admin App Service Plan is currently F1 Free.
+- Azure SQL is currently General Purpose Serverless `GP_S_Gen5_2`, `minCapacity=0.5`, `autoPauseDelay=60`.
+- Basic DTU is under evaluation to eliminate Azure SQL cold start.
+
 The old Admin host no longer exists and must not be used.
 
 ## Azure STG
@@ -521,6 +539,13 @@ Current STG resources:
 | Key Vault | `kv-loyaltycloud-stg-01` |
 | Managed Identity | system-assigned identities on API and Admin |
 | RBAC | `Key Vault Secrets User` for API/Admin identities on STG Key Vault |
+
+Current STG compute/cost state:
+
+- API App Service Plan is currently F1 Free.
+- Admin App Service Plan is currently F1 Free.
+- Azure SQL is currently General Purpose Serverless `GP_S_Gen5_2`, `minCapacity=0.5`, `autoPauseDelay=60`.
+- Basic DTU is under evaluation to eliminate Azure SQL cold start.
 
 Critical STG incident:
 
@@ -622,12 +647,15 @@ Active/UAT focus:
 - Stabilize STG and PROD/UAT configuration.
 - Validate KBeauty real flows.
 - Continue Google Wallet STG/production smoke testing after deploys.
+- Finish validation of today's final STG changes before deploying to PROD.
 
 Known current/pending:
 
 - Google Wallet issuer is Production Approved.
 - Google Wallet does not yet have a robust outbox/retry model.
 - Google Wallet sync is currently limited mainly to add-points sync once a member is linked.
+- Pending decision: `GoogleWallet__ProgramName` is currently `KBeauty Loyalty`; consider `KBeauty` now and tenant-configurable naming later.
+- PROD/STG SQL are currently serverless with 60-minute autopause; Basic DTU is being evaluated to avoid cold starts.
 - Some committed default display values still say KBeauty for Apple/Google compatibility or provisional defaults.
 - Provisioning defaults may still be legacy `Mist/Glow/Radiance`; update defaults/templates before generic onboarding if not already handled.
 - Serial format still uses `KB-`; do not change without a PassKit/Wallet migration plan.

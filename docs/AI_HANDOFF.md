@@ -1,10 +1,10 @@
 # LoyaltyCloud - AI Handoff
 
-Last updated: 2026-08-11
+Last updated: 2026-08-12
 
 Branch: `main`
 
-Last task worked: establish permanent AI context by updating `docs/AI_CONTEXT.md` and creating `docs/AI_HANDOFF.md`.
+Last task worked: update AI context/handoff with current Azure, Google Wallet and SQL state after today's configuration changes.
 
 ## Current State
 
@@ -29,6 +29,14 @@ Active product status:
 - STG exists separately with `loyaltycloud-api-stg-01` and `loyaltycloud-admin-stg-01`.
 - Apple Wallet works in production/UAT.
 - Google Wallet is approved for production and STG generates Save Links correctly.
+- PROD has `GoogleWallet__*` App Settings configured.
+- PROD Key Vault contains `loyaltycloud-google-wallet-service-account-json`.
+- PROD `GoogleWallet__ServiceAccountJson` references `loyaltycloud-google-wallet-service-account-json` through Key Vault.
+- PROD and STG SQL are currently General Purpose Serverless `GP_S_Gen5_2`, `minCapacity=0.5`, `autoPauseDelay=60`.
+- PROD and STG API/Admin App Service Plans are currently F1 Free.
+- Basic DTU for SQL is under evaluation to eliminate cold start.
+- Pending: finish validation of today's final STG changes before deploying to PROD.
+- Pending decision: `GoogleWallet__ProgramName` is currently `KBeauty Loyalty`; changing it to `KBeauty` is under consideration, then making it configurable by tenant later.
 
 ## Recent Infrastructure and Configuration Work
 
@@ -65,6 +73,21 @@ Critical STG settings:
 - `Admin__ApiBaseUrl` on Admin STG must point to `https://loyaltycloud-api-stg-01.azurewebsites.net`.
 - `AdminApi__SharedSecret` must match between API STG and Admin STG.
 - Google Wallet STG secret name is `loyaltycloud-google-wallet-service-account-json`.
+
+PROD Google Wallet configuration state:
+
+- Google Wallet is approved for production.
+- PROD has `GoogleWallet__*` settings configured.
+- `GoogleWallet__ServiceAccountJson` is configured through a Key Vault reference.
+- Key Vault PROD contains the secret `loyaltycloud-google-wallet-service-account-json`.
+- Never document or print the service account JSON, private key, passwords, tokens, shared secrets or connection strings.
+
+Current SQL/App Service cost posture:
+
+- PROD SQL and STG SQL currently use Azure SQL General Purpose Serverless `GP_S_Gen5_2`.
+- Both environments currently use `minCapacity=0.5` and `autoPauseDelay=60`.
+- Both environments are evaluating Basic DTU to remove cold-start behavior.
+- API and Admin App Service Plans in both PROD and STG are currently F1 Free.
 
 Important PowerShell/Azure CLI lesson:
 
@@ -286,6 +309,7 @@ Do not re-investigate these without new evidence:
 - Admin STG SuperAdmin login works after restoring `DefaultConnection`.
 - API STG starts and responds after settings restoration.
 - Google Wallet is production approved and STG Save Link generation works after the LoyaltyClass `reviewStatus` PATCH fix.
+- PROD Google Wallet settings exist and point `GoogleWallet__ServiceAccountJson` to Key Vault secret `loyaltycloud-google-wallet-service-account-json`.
 
 ## What Still Needs Testing
 
@@ -309,11 +333,17 @@ Priority:
    - Call `POST /api/customers/{serialNumber}/wallets/google/save-link`.
    - Open returned Save URL on Android.
    - Confirm no Demo/test-pass warning appears for production-approved issuer.
+   - Validate today's final STG changes before promoting to PROD.
 
 3. Review production/STG settings drift:
    - Admin official host remains `https://loyaltycloud-admin.azurewebsites.net`.
    - API production host remains `https://loyaltycloud-api-894839.azurewebsites.net`.
    - STG does not point to PROD SQL/Storage/Key Vault.
+   - PROD and STG `GoogleWallet__ProgramName` are intentionally still `KBeauty Loyalty` until the naming decision is made.
+
+4. SQL hosting decision:
+   - Evaluate whether to migrate PROD and STG from General Purpose Serverless `GP_S_Gen5_2` to Basic DTU.
+   - Goal: eliminate Azure SQL cold start if Basic DTU cost/performance is acceptable.
 
 ## Next Recommended Step
 
@@ -323,6 +353,7 @@ For the next technical session:
 2. Read this handoff.
 3. If working on STG, verify current App Settings and connection strings from Azure before changing code.
 4. For Google Wallet STG, keep `reviewStatus = UNDER_REVIEW` in LoyaltyClass PATCH payloads and retry save-link with a known customer serial if a regression appears.
+5. Finish validating today's STG changes before any PROD deploy.
 
 Recommended first command for local orientation:
 
