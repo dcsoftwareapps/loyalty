@@ -512,9 +512,10 @@ Current PROD compute/cost state:
 
 - API App Service Plan is currently F1 Free.
 - Admin App Service Plan is currently F1 Free.
-- Azure SQL is currently General Purpose Serverless `GP_S_Gen5_2`, `minCapacity=0.5`, `autoPauseDelay=60`.
-- PROD was not modified during the STG Basic DTU migration.
-- Basic DTU for PROD is only under evaluation and must not be assumed. The decision will be made later after observing STG behavior, costs and limitations.
+- Azure SQL `LoyaltyCloudFree` was migrated successfully from General Purpose Serverless `GP_S_Gen5_2` to Basic DTU after validating the same procedure in STG.
+- Final PROD SQL state: status `Online`, tier `Basic`, SKU `Basic`, service objective `Basic`, `maxSizeBytes=2147483648` (2 GB), `useFreeLimit=null`.
+- PROD SQL no longer uses Serverless auto-pause, so the cold start caused by waking the database is removed for PROD.
+- API PROD, Admin PROD and Wallet PROD were manually validated after the migration.
 
 The old Admin host no longer exists and must not be used.
 
@@ -550,7 +551,6 @@ Current STG compute/cost state:
 - STG SQL no longer uses Serverless auto-pause, so the cold start caused by waking the database is removed for STG.
 - Storage observed through Azure Monitor during migration was approximately 26.9 MiB, around 1.3% of 2 GB.
 - API STG, Admin STG and Wallet were manually validated after the migration.
-- PROD was not modified.
 
 Critical STG incident:
 
@@ -652,7 +652,7 @@ Active/UAT focus:
 - Stabilize STG and PROD/UAT configuration.
 - Validate KBeauty real flows.
 - Continue Google Wallet STG/production smoke testing after deploys.
-- Observe STG behavior, costs and limitations after the Basic DTU migration before deciding whether to change PROD.
+- Observe both Basic DTU environments for behavior, costs and limits.
 
 Known current/pending:
 
@@ -660,7 +660,7 @@ Known current/pending:
 - Google Wallet does not yet have a robust outbox/retry model.
 - Google Wallet sync is currently limited mainly to add-points sync once a member is linked.
 - Pending decision: `GoogleWallet__ProgramName` is currently `KBeauty Loyalty`; consider `KBeauty` now and tenant-configurable naming later.
-- STG SQL is now Basic DTU and validated; PROD SQL remains General Purpose Serverless with 60-minute autopause while the team evaluates whether Basic DTU is appropriate for PROD.
+- STG and PROD SQL are now Basic DTU and validated; Azure SQL Serverless cold start is no longer a known active issue for these environments.
 - Some committed default display values still say KBeauty for Apple/Google compatibility or provisional defaults.
 - Provisioning defaults may still be legacy `Mist/Glow/Radiance`; update defaults/templates before generic onboarding if not already handled.
 - Serial format still uses `KB-`; do not change without a PassKit/Wallet migration plan.

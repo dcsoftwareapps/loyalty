@@ -4,7 +4,7 @@ Last updated: 2026-08-12
 
 Branch: `main`
 
-Last task worked: document successful Azure SQL STG migration from General Purpose Serverless to Basic DTU.
+Last task worked: document successful Azure SQL PROD migration from General Purpose Serverless to Basic DTU after prior STG validation.
 
 ## Current State
 
@@ -32,10 +32,11 @@ Active product status:
 - PROD has `GoogleWallet__*` App Settings configured.
 - PROD Key Vault contains `loyaltycloud-google-wallet-service-account-json`.
 - PROD `GoogleWallet__ServiceAccountJson` references `loyaltycloud-google-wallet-service-account-json` through Key Vault.
-- PROD SQL is currently General Purpose Serverless `GP_S_Gen5_2`, `minCapacity=0.5`, `autoPauseDelay=60`.
+- PROD SQL `LoyaltyCloudFree` was migrated successfully to Basic DTU with 2 GB max size.
 - STG SQL `LoyaltyCloudStg` was migrated successfully to Basic DTU with 2 GB max size.
 - PROD and STG API/Admin App Service Plans are currently F1 Free.
-- Basic DTU for PROD remains under evaluation to eliminate cold start, but PROD was not modified.
+- PROD and STG no longer depend on Azure SQL Serverless auto-pause, so SQL cold start from waking a paused database is removed for both environments.
+- API PROD, Admin PROD and Wallet PROD were manually validated after the PROD SQL migration.
 - API STG, Admin STG and Wallet were manually validated after the STG SQL migration.
 - Pending decision: `GoogleWallet__ProgramName` is currently `KBeauty Loyalty`; changing it to `KBeauty` is under consideration, then making it configurable by tenant later.
 
@@ -85,10 +86,9 @@ PROD Google Wallet configuration state:
 
 Current SQL/App Service cost posture:
 
-- PROD SQL currently uses Azure SQL General Purpose Serverless `GP_S_Gen5_2`, `minCapacity=0.5`, `autoPauseDelay=60`.
+- PROD SQL `LoyaltyCloudFree` now uses Basic DTU with 2 GB max size.
 - STG SQL `LoyaltyCloudStg` now uses Basic DTU with 2 GB max size.
-- STG no longer depends on Serverless auto-pause, so the cold start caused by waking SQL Serverless is removed for STG.
-- PROD is still under evaluation for a possible future move to Basic DTU.
+- Neither PROD nor STG depends on Serverless auto-pause now, so the cold start caused by waking SQL Serverless is removed for both.
 - API and Admin App Service Plans in both PROD and STG are currently F1 Free.
 
 Important PowerShell/Azure CLI lesson:
@@ -405,10 +405,239 @@ Final validated state:
 
 PROD:
 
-- PROD was not modified.
-- This change applies only to STG.
-- Do not assume PROD should move to Basic.
-- The PROD decision will be made later after observing STG behavior, costs and limitations.
+- At the time of the STG migration, PROD was not modified.
+- PROD was migrated later only after STG validated the same procedure successfully.
+
+### 2026-08-12 - Azure SQL PROD migrated from Serverless to Basic DTU
+
+Incident/objective:
+
+- PROD SQL `LoyaltyCloudFree` was still running on General Purpose Serverless and could cold start when waking from auto-pause.
+- STG had already been migrated to Basic DTU and validated successfully.
+- The goal was to apply the same controlled procedure to PROD to remove the Serverless auto-pause cold start.
+
+Infrastructure:
+
+- Resource Group: `rg-loyaltycloud-prod`.
+- SQL Server: `sql-loyaltycloud-894839`.
+- Database: `LoyaltyCloudFree`.
+- Region: `westus3`.
+
+Initial PROD state:
+
+- Database: `LoyaltyCloudFree`.
+- Initial observed status: `Paused`.
+- SKU: `GP_S_Gen5`.
+- Tier: `GeneralPurpose`.
+- Model: Serverless.
+- `maxSizeBytes=34359738368` (32 GB).
+- `useFreeLimit=true`.
+
+Discovery:
+
+1. Listing databases without specifying server failed.
+
+```powershell
+az sql db list --resource-group rg-loyaltycloud-prod -o table
+```
+
+Azure responded:
+
+```text
+(--server | --ids) are required
+```
+
+2. The PROD SQL Server was identified correctly:
+
+```powershell
+az sql server list `
+  --resource-group rg-loyaltycloud-prod `
+  --query "[].{name:name,location:location,state:state}" `
+  -o table
+```
+
+Relevant result:
+
+```text
+sql-loyaltycloud-894839  westus3  Ready
+```
+
+3. Databases were listed correctly after specifying the server:
+
+```powershell
+az sql db list `
+  --resource-group rg-loyaltycloud-prod `
+  --server sql-loyaltycloud-894839 `
+  --query "[].{name:name,status:status,sku:sku.name,tier:sku.tier,maxSizeBytes:maxSizeBytes}" `
+  -o table
+```
+
+Result:
+
+```text
+master            Online    GP_SYSTEM  System          107374182400
+LoyaltyCloudFree  Paused    GP_S_Gen5  GeneralPurpose  34359738368
+```
+
+Resource ID:
+
+```powershell
+$dbIdProd = az sql db show `
+  --resource-group rg-loyaltycloud-prod `
+  --server sql-loyaltycloud-894839 `
+  --name LoyaltyCloudFree `
+  --query id `
+  -o tsv
+```
+
+Returned:
+
+```text
+/subscriptions/90f061a5-f51e-4ed9-95d7-6f9ed3ca3995/resourceGroups/rg-loyaltycloud-prod/providers/Microsoft.Sql/servers/sql-loyaltycloud-894839/databases/LoyaltyCloudFree
+```
+
+Storage measurement attempt:
+
+```powershell
+az monitor metrics list `
+  --resource $dbIdProd `
+  --metric storage `
+  --interval PT1H `
+  --aggregation Average `
+  -o json
+```
+
+The Azure Monitor metric call worked technically, but the returned data point did not contain an `average` value because the database was paused.
+
+Returned metric shape:
+
+```json
+{
+  "name": {
+    "localizedValue": "Data space used",
+    "value": "storage"
+  },
+  "timeseries": [
+    {
+      "data": [
+        {
+          "timeStamp": "2026-08-12T20:10:00Z"
+        }
+      ]
+    }
+  ],
+  "unit": "Bytes"
+}
+```
+
+Decision:
+
+- Because the database was paused, Azure Monitor did not provide a usable storage `average` for that window.
+- The user decided to proceed directly with the resize because PROD was small and STG had already validated the same procedure satisfactorily.
+
+Reduce max size to 2 GB:
+
+- PROD max size was reduced from 32 GB to 2 GB.
+- Verification:
+
+```powershell
+az sql db show `
+  --resource-group rg-loyaltycloud-prod `
+  --server sql-loyaltycloud-894839 `
+  --name LoyaltyCloudFree `
+  --query "{status:status,sku:sku.name,tier:sku.tier,maxSizeBytes:maxSizeBytes,useFreeLimit:useFreeLimit}" `
+  -o json
+```
+
+Result:
+
+```json
+{
+  "maxSizeBytes": 2147483648,
+  "sku": "GP_S_Gen5",
+  "status": "Online",
+  "tier": "GeneralPurpose",
+  "useFreeLimit": true
+}
+```
+
+This confirmed:
+
+- max size was 2 GB;
+- database was `Online`;
+- database was still Serverless;
+- `useFreeLimit=true` was still active.
+
+Disable Free Limit:
+
+- Free Limit was removed before changing tier.
+- Verification:
+
+```json
+{
+  "maxSizeBytes": 2147483648,
+  "sku": "GP_S_Gen5",
+  "status": "Online",
+  "tier": "GeneralPurpose",
+  "useFreeLimit": false
+}
+```
+
+Final migration to Basic:
+
+```powershell
+az sql db update `
+  --resource-group rg-loyaltycloud-prod `
+  --server sql-loyaltycloud-894839 `
+  --name LoyaltyCloudFree `
+  --service-objective Basic
+```
+
+Final verification:
+
+```powershell
+az sql db show `
+  --resource-group rg-loyaltycloud-prod `
+  --server sql-loyaltycloud-894839 `
+  --name LoyaltyCloudFree `
+  --query "{status:status,sku:sku.name,tier:sku.tier,currentServiceObjectiveName:currentServiceObjectiveName,maxSizeBytes:maxSizeBytes,useFreeLimit:useFreeLimit}" `
+  -o json
+```
+
+Result:
+
+```json
+{
+  "currentServiceObjectiveName": "Basic",
+  "maxSizeBytes": 2147483648,
+  "sku": "Basic",
+  "status": "Online",
+  "tier": "Basic",
+  "useFreeLimit": null
+}
+```
+
+Final validated PROD state:
+
+- Resource Group: `rg-loyaltycloud-prod`.
+- SQL Server: `sql-loyaltycloud-894839`.
+- Database: `LoyaltyCloudFree`.
+- Tier: Basic.
+- SKU: Basic.
+- Service objective: Basic.
+- Status: Online.
+- Max size: 2 GB.
+- `useFreeLimit=null`.
+- No longer General Purpose Serverless.
+- No longer depends on auto-pause.
+- Serverless cold start is removed for PROD.
+- API PROD, Admin PROD and Wallet PROD were manually validated after the migration.
+
+STG:
+
+- STG remains Basic DTU with 2 GB max size.
+- STG API/Admin/Wallet were already validated after its migration.
+- Current final state: STG and PROD are both Basic DTU.
 
 ### PowerShell 5.1 incompatibilities in infra scripts
 
@@ -448,6 +677,8 @@ Do not re-investigate these without new evidence:
 - PROD Google Wallet settings exist and point `GoogleWallet__ServiceAccountJson` to Key Vault secret `loyaltycloud-google-wallet-service-account-json`.
 - Azure SQL STG `LoyaltyCloudStg` was migrated successfully to Basic DTU.
 - API STG, Admin STG and Wallet were manually validated after the STG SQL migration.
+- Azure SQL PROD `LoyaltyCloudFree` was migrated successfully to Basic DTU.
+- API PROD, Admin PROD and Wallet PROD were manually validated after the PROD SQL migration.
 
 ## What Still Needs Testing
 
@@ -479,10 +710,9 @@ Priority:
    - STG does not point to PROD SQL/Storage/Key Vault.
    - PROD and STG `GoogleWallet__ProgramName` are intentionally still `KBeauty Loyalty` until the naming decision is made.
 
-4. SQL hosting decision:
-   - Observe STG on Basic DTU for behavior, costs and limitations.
-   - Evaluate later whether PROD should remain General Purpose Serverless `GP_S_Gen5_2` or move to Basic DTU.
-   - PROD was not modified by the STG migration.
+4. SQL hosting follow-up:
+   - Observe both STG and PROD on Basic DTU for behavior, costs and limits.
+   - Serverless cold start is no longer active for STG or PROD.
 
 ## Next Recommended Step
 
@@ -492,7 +722,7 @@ For the next technical session:
 2. Read this handoff.
 3. If working on STG, verify current App Settings and connection strings from Azure before changing code.
 4. For Google Wallet STG, keep `reviewStatus = UNDER_REVIEW` in LoyaltyClass PATCH payloads and retry save-link with a known customer serial if a regression appears.
-5. Finish validating today's STG changes before any PROD deploy.
+5. Observe both Basic DTU databases after the migration and only revisit SQL tier if cost or limits require it.
 
 Recommended first command for local orientation:
 
