@@ -62,6 +62,12 @@ API /api/customers/{serialNumber}/wallets/google/save-link
 
 Google Wallet is disabled by default with `GoogleWallet:Enabled=false`. When enabled, configuration must provide `GoogleWallet:IssuerId`, a public HTTPS `GoogleWallet:LogoUri`, and either `GoogleWallet:ServiceAccountJson` or `GoogleWallet:ServiceAccountJsonPath`. Object IDs include a tenant id prefix, so the same serial cannot collide across tenants under the same issuer.
 
+Both LoyaltyClass creation and patch payloads send `reviewStatus=UNDER_REVIEW`.
+The integration never sends `APPROVED`: Google assigns that state after review,
+and its API requires clients to continue sending `UNDER_REVIEW` when updating an
+already approved class. Issuer publishing access and Demo Mode are independent
+from this per-class review state.
+
 The Google Wallet save-link endpoint resolves the tenant from the loyalty card
 serial before entering Application, using the same tenant resolution pattern as
 Apple Wallet. This keeps `MemberDigitalWallet` writes tenant-scoped and prevents

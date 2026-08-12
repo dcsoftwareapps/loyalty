@@ -262,6 +262,14 @@ Object ID: {issuerId}.{objectIdPrefix}-{serialNumber}
 
 Values are normalized to avoid spaces and unsupported characters. Object IDs are based on the loyalty serial, not customer name or email.
 
+## LoyaltyClass review status
+
+Creation and patch payloads always send `reviewStatus=UNDER_REVIEW`. The API does
+not attempt to assign `APPROVED`; Google owns that transition. If Google returns
+an existing class as approved, subsequent patches still send `UNDER_REVIEW`, as
+required by the Google Wallet API. This class state is separate from issuer
+publishing access and issuer Demo Mode.
+
 ## Testing
 
 Automated tests do not call Google Wallet.

@@ -45,18 +45,15 @@ public sealed class GoogleWalletObjectMapper
 
     public Dictionary<string, object?> ToClassPayload(
         GoogleWalletClassData data,
-        bool includeReviewStatus = true,
         bool includeProgramLogo = true)
     {
         var payload = new Dictionary<string, object?>
         {
             ["id"] = data.Id,
             ["issuerName"] = data.IssuerName,
-            ["programName"] = data.ProgramName
+            ["programName"] = data.ProgramName,
+            ["reviewStatus"] = "UNDER_REVIEW"
         };
-
-        if (includeReviewStatus)
-            payload["reviewStatus"] = "UNDER_REVIEW";
 
         if (!string.IsNullOrWhiteSpace(data.HexBackgroundColor))
             payload["hexBackgroundColor"] = data.HexBackgroundColor;

@@ -54,7 +54,6 @@ internal sealed class GoogleWalletClient : IGoogleWalletClient
                 $"loyaltyClass/{Uri.EscapeDataString(walletClass.Id)}",
                 _mapper.ToClassPayload(
                     walletClass,
-                    includeReviewStatus: false,
                     includeProgramLogo: string.IsNullOrWhiteSpace(walletClass.WideLogoUri)),
                 ct);
             if (patched.StatusCode == HttpStatusCode.OK)

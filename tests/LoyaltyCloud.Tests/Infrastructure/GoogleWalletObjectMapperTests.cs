@@ -113,7 +113,7 @@ public sealed class GoogleWalletObjectMapperTests
     }
 
     [Fact]
-    public void ToClassPayload_ForPatchShouldSendOnlyWideLogoWhenAvailable()
+    public void ToClassPayload_ForPatchShouldUseUnderReviewAndOnlyWideLogoWhenAvailable()
     {
         var mapper = new GoogleWalletObjectMapper();
         var options = new GoogleWalletOptions
@@ -127,12 +127,12 @@ public sealed class GoogleWalletObjectMapperTests
         var data = mapper.ToClassData("issuer.loyalty", options);
         var payload = mapper.ToClassPayload(
             data,
-            includeReviewStatus: false,
             includeProgramLogo: false);
 
         Assert.False(payload.ContainsKey("programLogo"));
         Assert.True(payload.ContainsKey("wideProgramLogo"));
-        Assert.False(payload.ContainsKey("reviewStatus"));
+        Assert.Equal("UNDER_REVIEW", payload["reviewStatus"]);
+        Assert.DoesNotContain(payload, item => Equals(item.Value, "APPROVED"));
     }
 
     [Fact]
