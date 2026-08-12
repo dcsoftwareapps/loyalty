@@ -52,7 +52,10 @@ internal sealed class GoogleWalletClient : IGoogleWalletClient
             var patched = await SendAsync(
                 new HttpMethod("PATCH"),
                 $"loyaltyClass/{Uri.EscapeDataString(walletClass.Id)}",
-                _mapper.ToClassPayload(walletClass),
+                _mapper.ToClassPayload(
+                    walletClass,
+                    includeReviewStatus: false,
+                    includeProgramLogo: string.IsNullOrWhiteSpace(walletClass.WideLogoUri)),
                 ct);
             if (patched.StatusCode == HttpStatusCode.OK)
                 return;

@@ -177,6 +177,7 @@ Google Wallet is disabled by default in all committed appsettings files.
     "ProgramName": "KBeauty Loyalty",
     "IssuerName": "KBeauty MX",
     "LogoUri": "",
+    "WideLogoUri": "",
     "HeroImageUri": "",
     "HexBackgroundColor": "#FFFFFF",
     "Origins": []
@@ -191,6 +192,7 @@ Sensitive values must come from user-secrets, environment variables or Azure Key
 | `GoogleWallet:ServiceAccountJson` | yes | Full Google service account JSON. |
 | `GoogleWallet:ServiceAccountJsonPath` | yes-ish | Local path outside the repo to the service account JSON. |
 | `GoogleWallet:LogoUri` | no | Public HTTPS logo used as `programLogo`; required by Google when creating the `LoyaltyClass`. |
+| `GoogleWallet:WideLogoUri` | no | Optional public HTTPS logo used as `wideProgramLogo`; when omitted, the mapper reuses `LogoUri`. |
 
 When `GoogleWallet:Enabled=true`, startup validates:
 
@@ -242,6 +244,7 @@ GoogleWallet--ObjectIdPrefix
 GoogleWallet--ProgramName
 GoogleWallet--IssuerName
 GoogleWallet--LogoUri
+GoogleWallet--WideLogoUri
 GoogleWallet--HeroImageUri
 GoogleWallet--HexBackgroundColor
 ```

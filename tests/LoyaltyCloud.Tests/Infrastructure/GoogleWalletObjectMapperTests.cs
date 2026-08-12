@@ -58,8 +58,9 @@ public sealed class GoogleWalletObjectMapperTests
         Assert.Contains(textModules, module => Equals(module["id"], "level") && Equals(module["body"], "Glow \u2728"));
         Assert.Contains(textModules, module => Equals(module["id"], "next-level") && Equals(module["body"], "Radiance"));
         Assert.Contains(textModules, module => Equals(module["id"], "remaining-points") && Equals(module["body"], "2750 pts"));
-        Assert.Contains(textModules, module => Equals(module["id"], "barcode-caption") && Equals(module["body"], "Presenta este c\u00f3digo en caja"));
-        Assert.Contains(textModules, module => Equals(module["body"], "2026-07-15 12:30 UTC"));
+        Assert.DoesNotContain(textModules, module => Equals(module["id"], "barcode-caption"));
+        Assert.DoesNotContain(textModules, module => Equals(module["id"], "last-updated"));
+        Assert.Equal(5, textModules.Length);
     }
 
     [Fact]
@@ -82,8 +83,56 @@ public sealed class GoogleWalletObjectMapperTests
         Assert.Equal("KBeauty MX", payload["issuerName"]);
         Assert.Equal("#FFFFFF", payload["hexBackgroundColor"]);
         Assert.True(payload.ContainsKey("programLogo"));
+        Assert.True(payload.ContainsKey("wideProgramLogo"));
         Assert.False(payload.ContainsKey("heroImage"));
         Assert.True(payload.ContainsKey("classTemplateInfo"));
+        Assert.False(payload.ContainsKey("cardBarcodeSectionDetails"));
+
+        var classTemplateInfo = Assert.IsType<Dictionary<string, object?>>(payload["classTemplateInfo"]);
+        Assert.False(classTemplateInfo.ContainsKey("detailsTemplateOverride"));
+    }
+
+    [Fact]
+    public void ToClassPayload_ShouldPreferConfiguredWideLogo()
+    {
+        var mapper = new GoogleWalletObjectMapper();
+        var options = new GoogleWalletOptions
+        {
+            ProgramName = "KBeauty Loyalty",
+            IssuerName = "KBeauty MX",
+            LogoUri = "https://assets.example/logo.png",
+            WideLogoUri = "https://assets.example/wide-logo.png"
+        };
+
+        var data = mapper.ToClassData("issuer.loyalty", options);
+        var payload = mapper.ToClassPayload(data);
+
+        var wideLogo = Assert.IsType<Dictionary<string, object?>>(payload["wideProgramLogo"]);
+        var sourceUri = Assert.IsType<Dictionary<string, object?>>(wideLogo["sourceUri"]);
+        Assert.Equal("https://assets.example/wide-logo.png", sourceUri["uri"]);
+    }
+
+    [Fact]
+    public void ToClassPayload_ForPatchShouldSendOnlyWideLogoWhenAvailable()
+    {
+        var mapper = new GoogleWalletObjectMapper();
+        var options = new GoogleWalletOptions
+        {
+            ProgramName = "KBeauty Loyalty",
+            IssuerName = "KBeauty MX",
+            LogoUri = "https://assets.example/logo.png",
+            WideLogoUri = "https://assets.example/logo.png"
+        };
+
+        var data = mapper.ToClassData("issuer.loyalty", options);
+        var payload = mapper.ToClassPayload(
+            data,
+            includeReviewStatus: false,
+            includeProgramLogo: false);
+
+        Assert.False(payload.ContainsKey("programLogo"));
+        Assert.True(payload.ContainsKey("wideProgramLogo"));
+        Assert.False(payload.ContainsKey("reviewStatus"));
     }
 
     [Fact]

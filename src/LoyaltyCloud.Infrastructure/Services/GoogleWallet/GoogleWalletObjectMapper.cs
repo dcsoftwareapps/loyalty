@@ -14,6 +14,7 @@ public sealed class GoogleWalletObjectMapper
             ProgramName: options.ProgramName,
             IssuerName: options.IssuerName,
             LogoUri: string.IsNullOrWhiteSpace(options.LogoUri) ? null : options.LogoUri.Trim(),
+            WideLogoUri: NormalizeWideLogoUri(options),
             HeroImageUri: string.IsNullOrWhiteSpace(options.HeroImageUri) ? null : options.HeroImageUri.Trim(),
             HexBackgroundColor: string.IsNullOrWhiteSpace(options.HexBackgroundColor) ? null : options.HexBackgroundColor.Trim());
     }
@@ -44,7 +45,8 @@ public sealed class GoogleWalletObjectMapper
 
     public Dictionary<string, object?> ToClassPayload(
         GoogleWalletClassData data,
-        bool includeReviewStatus = true)
+        bool includeReviewStatus = true,
+        bool includeProgramLogo = true)
     {
         var payload = new Dictionary<string, object?>
         {
@@ -59,9 +61,14 @@ public sealed class GoogleWalletObjectMapper
         if (!string.IsNullOrWhiteSpace(data.HexBackgroundColor))
             payload["hexBackgroundColor"] = data.HexBackgroundColor;
 
-        if (!string.IsNullOrWhiteSpace(data.LogoUri))
+        if (includeProgramLogo && !string.IsNullOrWhiteSpace(data.LogoUri))
         {
             payload["programLogo"] = ImageModule(data.LogoUri, $"{data.ProgramName} logo");
+        }
+
+        if (!string.IsNullOrWhiteSpace(data.WideLogoUri))
+        {
+            payload["wideProgramLogo"] = ImageModule(data.WideLogoUri, $"{data.ProgramName} wide logo");
         }
 
         if (!string.IsNullOrWhiteSpace(data.HeroImageUri))
@@ -128,18 +135,6 @@ public sealed class GoogleWalletObjectMapper
                     ["id"] = "remaining-points",
                     ["header"] = "FALTAN",
                     ["body"] = data.RemainingPointsText
-                },
-                new Dictionary<string, object?>
-                {
-                    ["id"] = "barcode-caption",
-                    ["header"] = string.Empty,
-                    ["body"] = data.BarcodeAlternateText
-                },
-                new Dictionary<string, object?>
-                {
-                    ["id"] = "last-updated",
-                    ["header"] = "\u00daLTIMA ACTUALIZACI\u00d3N",
-                    ["body"] = data.UpdatedAtUtc.ToString("yyyy-MM-dd HH:mm 'UTC'")
                 }
             }
         };
@@ -161,39 +156,33 @@ public sealed class GoogleWalletObjectMapper
                     },
                     new Dictionary<string, object?>
                     {
-                        ["threeItems"] = new Dictionary<string, object?>
+                        ["twoItems"] = new Dictionary<string, object?>
                         {
                             ["startItem"] = TemplateItem("object.textModulesData['points']"),
-                            ["middleItem"] = TemplateItem("object.textModulesData['level']"),
-                            ["endItem"] = TemplateItem(
-                                "object.textModulesData['next-level']",
-                                "object.textModulesData['remaining-points']")
+                            ["endItem"] = TemplateItem("object.textModulesData['level']")
                         }
-                    }
-                }
-            },
-            ["cardBarcodeSectionDetails"] = new Dictionary<string, object?>
-            {
-                ["firstBottomDetail"] = new Dictionary<string, object?>
-                {
-                    ["fieldSelector"] = FieldSelector("object.textModulesData['barcode-caption']")
-                }
-            },
-            ["detailsTemplateOverride"] = new Dictionary<string, object?>
-            {
-                ["detailsItemInfos"] = new object[]
-                {
-                    new Dictionary<string, object?>
-                    {
-                        ["item"] = TemplateItem("object.textModulesData['remaining-points']")
                     },
                     new Dictionary<string, object?>
                     {
-                        ["item"] = TemplateItem("object.textModulesData['last-updated']")
+                        ["twoItems"] = new Dictionary<string, object?>
+                        {
+                            ["startItem"] = TemplateItem("object.textModulesData['next-level']"),
+                            ["endItem"] = TemplateItem("object.textModulesData['remaining-points']")
+                        }
                     }
                 }
             }
         };
+
+    private static string? NormalizeWideLogoUri(GoogleWalletOptions options)
+    {
+        if (!string.IsNullOrWhiteSpace(options.WideLogoUri))
+            return options.WideLogoUri.Trim();
+
+        return string.IsNullOrWhiteSpace(options.LogoUri)
+            ? null
+            : options.LogoUri.Trim();
+    }
 
     private static Dictionary<string, object?> TemplateItem(string firstFieldPath, string? secondFieldPath = null)
     {

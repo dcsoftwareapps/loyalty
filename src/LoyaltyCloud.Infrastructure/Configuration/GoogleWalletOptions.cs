@@ -13,6 +13,7 @@ public sealed partial class GoogleWalletOptions
     public string ProgramName { get; init; } = "KBeauty Loyalty";
     public string IssuerName { get; init; } = "KBeauty MX";
     public string? LogoUri { get; init; }
+    public string? WideLogoUri { get; init; }
     public string? HeroImageUri { get; init; }
     public string? HexBackgroundColor { get; init; } = "#FFFFFF";
     public string[] Origins { get; init; } = Array.Empty<string>();

@@ -5,6 +5,7 @@ public sealed record GoogleWalletClassData(
     string ProgramName,
     string IssuerName,
     string? LogoUri,
+    string? WideLogoUri,
     string? HeroImageUri,
     string? HexBackgroundColor);
 

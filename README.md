@@ -107,14 +107,32 @@ private development files are not valid for creating a real Google
 branding through the public API/ngrok host without adding duplicate image files.
 
 Google Wallet object rendering intentionally mirrors the Apple Wallet card as
-closely as Google Wallet allows. The object payload uses the same member serial
-for the QR value, the same checkout caption, the member's display first name,
-and dynamic wallet fields for `PUNTOS`, `NIVEL`, `PROXIMO` and `FALTAN`. Google
-Wallet card templates support at most three items per row, so the class template
-renders `PUNTOS` and `NIVEL` as separate blocks and combines
-`PROXIMO`/`FALTAN` in the third block. Existing LoyaltyClasses are patched
-idempotently so the visual template can evolve without creating duplicate
-classes, objects or `MemberDigitalWallet` rows.
+closely as Google Wallet allows. The class payload sends the same Apple Wallet
+`logo@3x.png` URL as `wideProgramLogo` for the visible Android header. Google
+requires `programLogo` for LoyaltyClass creation, so creation payloads keep it
+as the same Apple Wallet logo; class update payloads omit `programLogo` when
+`wideProgramLogo` is available. On Android, Google's wide-logo title replaces
+the default small logo plus issuer header, so only the wide KBeauty logo should
+be visible. `issuerName` and `programName` remain required Google Wallet fields,
+but their position is controlled by Google and cannot be moved through field
+references.
+
+The object payload uses the same member serial for the QR value, keeps the
+checkout caption only in `barcode.alternateText`, uses the member's display
+first name, and sends dynamic wallet fields for `PUNTOS`, `NIVEL`, `PROXIMO`
+and `FALTAN`. Google Wallet card templates support up to three rows, with each
+row containing one, two or three items, so the class template uses:
+
+```text
+row 1: DisplayName
+row 2: PUNTOS | NIVEL
+row 3: PROXIMO | FALTAN
+barcode: SerialNumber + "Presenta este codigo en caja"
+```
+
+Existing LoyaltyClasses are patched idempotently so the visual template can
+evolve without creating duplicate classes, objects or `MemberDigitalWallet`
+rows.
 
 ## Local Development
 
@@ -245,6 +263,7 @@ Do not run `database update`, deploy, create migrations or commit unless explici
 - Added a public read-only wallet asset endpoint so Google Wallet can reuse the bundled Apple Wallet logo.
 - Integrated Google Wallet into the public join flow with iOS/Android/desktop wallet selection.
 - Updated the Google Wallet class/object template to mirror the Apple Wallet member card fields.
+- Added Google Wallet wide-logo support and removed the duplicate checkout caption from the visible pass template.
 - Clarified the Admin configuration label for `PointsPerPesoUnit` as pesos per point.
 - Kept Apple Wallet and development pass generation paths intact.
 - Updated QR generation to expose an accessible registration label.

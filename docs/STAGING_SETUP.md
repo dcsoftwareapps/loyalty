@@ -231,6 +231,7 @@ App Settings configurados para `loyaltycloud-api-stg-01`:
 | `GoogleWallet__ProgramName` | `KBeauty Loyalty` |
 | `GoogleWallet__IssuerName` | `KBeauty MX` |
 | `GoogleWallet__LogoUri` | empty |
+| `GoogleWallet__WideLogoUri` | empty |
 | `GoogleWallet__HeroImageUri` | empty |
 | `GoogleWallet__HexBackgroundColor` | `#FFFFFF` |
 | `GoogleWallet__ServiceAccountJson` | Key Vault reference a `loyaltycloud-google-wallet-service-account-json` |
@@ -270,6 +271,7 @@ App Settings configurados para `loyaltycloud-admin-stg-01`:
 | `GoogleWallet__ProgramName` | `KBeauty Loyalty` |
 | `GoogleWallet__IssuerName` | `KBeauty MX` |
 | `GoogleWallet__LogoUri` | empty |
+| `GoogleWallet__WideLogoUri` | empty |
 | `GoogleWallet__HeroImageUri` | empty |
 | `GoogleWallet__HexBackgroundColor` | `#FFFFFF` |
 | `GoogleWallet__ServiceAccountJson` | Key Vault reference a `loyaltycloud-google-wallet-service-account-json` |
