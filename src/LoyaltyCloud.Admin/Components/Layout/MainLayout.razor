@@ -1,5 +1,6 @@
 @inherits LayoutComponentBase
 @inject LoyaltyCloud.Application.Common.Interfaces.ITenantBrandingReadService Branding
+@inject LoyaltyCloud.Application.Common.Interfaces.ITenantContext TenantContext
 
 <div class="kb-app" style="@TenantStyle">
     <nav class="kb-sidebar">
@@ -34,6 +35,7 @@
         <span class="kb-sidebar-section">Administración</span>
         <NavLink href="/levels">Niveles</NavLink>
         <NavLink href="/config">Configuración</NavLink>
+        <NavLink href="@($"/{TenantContext.TenantSlug}/billing")">Suscripción</NavLink>
 
         <div class="kb-sidebar-help">
             <NavLink href="/quick-help">Ayuda rápida</NavLink>

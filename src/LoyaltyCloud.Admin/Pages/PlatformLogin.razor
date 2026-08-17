@@ -3,6 +3,7 @@
 @attribute [AllowAnonymous]
 @using LoyaltyCloud.Admin.Auth
 @inject SuperAdminAuthService Auth
+@inject IWebHostEnvironment Environment
 
 <PageTitle>Platform Login - LoyaltyCloud</PageTitle>
 
@@ -34,6 +35,15 @@
                 </button>
             </div>
         </form>
+
+        @if (Environment.IsDevelopment())
+        {
+            <div class="kb-muted" style="margin: 20px 0 12px; text-align: center;">Development</div>
+            <form method="post" action="/platform/developer-login">
+                <AntiforgeryToken />
+                <button type="submit" class="kb-btn kb-btn--block">Developer Login</button>
+            </form>
+        }
     </div>
 </div>
 

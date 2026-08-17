@@ -1,0 +1,26 @@
+@page "/{TenantSlug}/billing"
+@layout LoyaltyCloud.Admin.Components.Layout.BillingLayout
+@attribute [Authorize]
+@rendermode InteractiveServer
+@using LoyaltyCloud.Application.Billing
+@using LoyaltyCloud.Application.Common.Interfaces
+@using LoyaltyCloud.Domain.Enums
+@inject IBillingService BillingService
+@inject ITenantContext TenantContext
+@inject NavigationManager Nav
+<PageTitle>Suscripción - LoyaltyCloud</PageTitle>
+<h1>Suscripción y pagos</h1>
+@if (error is not null){<div class="kb-form-error">@error</div>}
+@if (model is null){<p>Cargando…</p>}else{
+<section class="kb-grid"><div class="kb-card"><div class="kb-card-label">Negocio</div><div class="kb-card-value">@model.TenantName</div></div><div class="kb-card"><div class="kb-card-label">Estado</div><div class="kb-card-value">@model.SubscriptionStatus</div></div><div class="kb-card"><div class="kb-card-label">Pagado hasta</div><div class="kb-card-value">@(model.PaidThroughUtc?.ToLocalTime().ToString("dd/MM/yyyy")??"Sin vigencia")</div></div></section>
+<section class="kb-card" style="margin-top:24px"><h2>Renovar</h2><div class="kb-form-row kb-form-row--horizontal"><select @bind="planCode" @bind:after="LoadQuote">@foreach(var p in model.Plans){<option value="@p.Code">@p.Name</option>}</select><select @bind="months" @bind:after="LoadQuote"><option value="1">1 mes</option><option value="3">3 meses</option><option value="6">6 meses</option><option value="12">12 meses</option></select></div>
+@if(quote is not null){<div class="kb-card" style="margin-top:16px"><h3>CotizaciÃ³n</h3><p><strong>Subtotal:</strong> @quote.Subtotal.ToString("N2") @quote.Currency</p><p><strong>IVA:</strong> @quote.Tax.ToString("N2") @quote.Currency</p><p><strong>Total:</strong> @quote.Total.ToString("N2") @quote.Currency</p></div>}
+<div class="kb-form-row kb-form-row--horizontal" style="margin-top:16px">@if(model.Settings.CardPaymentsEnabled){<button class="kb-btn kb-btn--primary" @onclick="PayCard" disabled="@busy">Pagar con tarjeta</button>}@if(model.Settings.BankTransferEnabled){<button class="kb-btn kb-btn--ghost" @onclick="PayTransfer" disabled="@busy">Generar transferencia</button>}</div>
+@if(created is not null && created.PaymentMethod==BillingPaymentMethod.BankTransfer){<div class="kb-card" style="margin-top:20px"><h3>Datos para transferencia</h3><p><strong>Total:</strong> @created.Total.ToString("C") @created.Currency</p><p><strong>Banco:</strong> @model.Settings.BankName</p><p><strong>Beneficiario:</strong> @model.Settings.BeneficiaryName</p><p><strong>CLABE:</strong> @model.Settings.Clabe</p><p><strong>Referencia:</strong> @created.BankReference</p><p>@model.Settings.BankTransferInstructions</p><p class="kb-muted">La suscripción se extenderá cuando LoyaltyCloud confirme la transferencia.</p></div>}</section>
+<section class="kb-card" style="margin-top:24px"><h2>Historial</h2><table class="kb-table"><thead><tr><th>Fecha</th><th>Periodo</th><th>Total</th><th>Método</th><th>Estado</th></tr></thead><tbody>@foreach(var o in model.Orders){<tr><td>@o.CreatedAt.ToLocalTime().ToString("dd/MM/yyyy")</td><td>@o.Months mes(es)</td><td>@o.Total.ToString("C") @o.Currency</td><td>@o.PaymentMethod</td><td>@o.Status</td></tr>}</tbody></table></section>
+<form method="post" action="/logout" style="margin-top:20px"><AntiforgeryToken/><button class="kb-btn kb-btn--ghost">Cerrar sesión</button></form>}
+@code{[Parameter]public string TenantSlug{get;set;}=""; TenantBillingDto? model; BillingOrderDto? created; BillingQuoteDto? quote; string planCode="";int months=1;bool busy;string? error;
+protected override async Task OnInitializedAsync(){try{model=await BillingService.GetTenantBillingAsync(TenantContext.RequireTenantId());planCode=model.Plans.FirstOrDefault()?.Code??"";await LoadQuote();}catch(Exception ex){error=ex.Message;}}
+async Task LoadQuote(){quote=string.IsNullOrWhiteSpace(planCode)?null:await BillingService.QuoteAsync(TenantContext.RequireTenantId(),planCode,months);}
+async Task PayCard()=>await Create(BillingPaymentMethod.Card); async Task PayTransfer()=>await Create(BillingPaymentMethod.BankTransfer);
+async Task Create(BillingPaymentMethod method){try{busy=true;error=null;created=await BillingService.CreateOrderAsync(TenantContext.RequireTenantId(),planCode,months,method,Nav.BaseUri);if(created.CheckoutUrl is not null)Nav.NavigateTo(created.CheckoutUrl,true);else model=await BillingService.GetTenantBillingAsync(TenantContext.RequireTenantId());}catch(Exception ex){error=ex.Message;}finally{busy=false;}}}

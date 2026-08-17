@@ -1,0 +1,8 @@
+@page "/platform/billing-transfers"
+@layout PlatformLayout
+@attribute [Authorize(Roles = LoyaltyCloud.Admin.Auth.SuperAdminAuthDefaults.Role)]
+@rendermode InteractiveServer
+@using LoyaltyCloud.Application.Billing
+@inject IBillingService Billing
+<h1>Transferencias pendientes</h1>@if(error is not null){<div class="kb-form-error">@error</div>}<section class="kb-card"><table class="kb-table"><thead><tr><th>Fecha</th><th>Tenant</th><th>Referencia</th><th>Total</th><th>Acción</th></tr></thead><tbody>@foreach(var o in orders){<tr><td>@o.CreatedAt.ToLocalTime()</td><td>@o.TenantId</td><td>@o.BankReference</td><td>@o.Total.ToString("C") @o.Currency</td><td><button class="kb-btn kb-btn--primary" @onclick="()=>Approve(o.Id)">Aprobar</button> <button class="kb-btn kb-btn--ghost" @onclick="()=>Reject(o.Id)">Rechazar</button></td></tr>}</tbody></table></section>
+@code{IReadOnlyList<BillingOrderDto> orders=[];string? error;protected override async Task OnInitializedAsync()=>orders=await Billing.GetAwaitingTransfersAsync();async Task Approve(Guid id){try{await Billing.ApproveTransferAsync(id,"SuperAdmin");orders=await Billing.GetAwaitingTransfersAsync();}catch(Exception ex){error=ex.Message;}}async Task Reject(Guid id){try{await Billing.RejectTransferAsync(id,"SuperAdmin");orders=await Billing.GetAwaitingTransfersAsync();}catch(Exception ex){error=ex.Message;}}}

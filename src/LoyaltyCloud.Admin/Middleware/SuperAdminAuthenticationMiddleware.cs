@@ -18,7 +18,8 @@ public sealed class SuperAdminAuthenticationMiddleware
 
     public async Task InvokeAsync(HttpContext context)
     {
-        if (context.Request.Path.StartsWithSegments("/platform/login", StringComparison.OrdinalIgnoreCase))
+        if (context.Request.Path.StartsWithSegments("/platform/login", StringComparison.OrdinalIgnoreCase)
+            || context.Request.Path.Equals("/platform/developer-login", StringComparison.OrdinalIgnoreCase))
         {
             await _next(context);
             return;

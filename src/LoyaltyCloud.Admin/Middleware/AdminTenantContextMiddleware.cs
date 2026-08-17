@@ -27,8 +27,27 @@ public sealed class AdminTenantContextMiddleware
                 context.Response.Redirect(auth.GetLoginPathForCurrentPrincipal(context));
                 return;
             }
+
+            if (await auth.IsBillingOnlyAsync(context) && !IsBillingPath(context.Request.Path))
+            {
+                var slug = context.User.FindFirst(LoyaltyCloud.Admin.Auth.AdminClaimTypes.TenantSlug)?.Value;
+                context.Response.Redirect($"/{slug}/billing");
+                return;
+            }
         }
 
         await _next(context);
+    }
+
+    public static bool IsBillingPath(PathString path)
+    {
+        var segments = path.Value?.Split('/', StringSplitOptions.RemoveEmptyEntries) ?? [];
+        return segments.Length == 2 && string.Equals(segments[1], "billing", StringComparison.OrdinalIgnoreCase) ||
+            segments.Length == 4 &&
+            string.Equals(segments[1], "billing", StringComparison.OrdinalIgnoreCase) &&
+            string.Equals(segments[2], "payment", StringComparison.OrdinalIgnoreCase) &&
+            (string.Equals(segments[3], "success", StringComparison.OrdinalIgnoreCase) ||
+             string.Equals(segments[3], "cancelled", StringComparison.OrdinalIgnoreCase)) ||
+            path.StartsWithSegments("/logout", StringComparison.OrdinalIgnoreCase);
     }
 }

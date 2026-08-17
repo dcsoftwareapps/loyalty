@@ -1,0 +1,13 @@
+@page "/{TenantSlug}/billing/payment/success"
+@page "/{TenantSlug}/billing/payment/cancelled"
+@layout LoyaltyCloud.Admin.Components.Layout.BillingLayout
+@attribute [Authorize]
+@rendermode InteractiveServer
+@using LoyaltyCloud.Application.Billing
+@using LoyaltyCloud.Application.Common.Interfaces
+@using LoyaltyCloud.Domain.Enums
+@inject IBillingService Billing
+@inject ITenantContext TenantContext
+@inject NavigationManager Nav
+<h1>Estado del pago</h1><div class="kb-card"><p>@message</p><button class="kb-btn kb-btn--primary" @onclick="Back">Volver a pagos</button></div>
+@code{[Parameter]public string TenantSlug{get;set;}="";[SupplyParameterFromQuery]public Guid? OrderId{get;set;} string message="Consultando pago…";protected override async Task OnParametersSetAsync(){if(OrderId is null){message="No se recibió una orden.";return;}var o=await Billing.GetOrderAsync(TenantContext.RequireTenantId(),OrderId.Value);message=o?.Status switch{BillingOrderStatus.Paid=>"Pago confirmado. Tu suscripción ya fue actualizada.",BillingOrderStatus.Failed=>"El pago no pudo completarse.",_=>"El pago está siendo procesado. Actualiza esta página en unos momentos."};}void Back()=>Nav.NavigateTo($"/{TenantSlug}/billing");}

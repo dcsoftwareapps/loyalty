@@ -4,6 +4,7 @@ using LoyaltyCloud.Application.Common.Interfaces;
 using LoyaltyCloud.Common.Services;
 using LoyaltyCloud.Domain.Entities;
 using LoyaltyCloud.Domain.Repositories;
+using LoyaltyCloud.Domain.Enums;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.Extensions.Options;
@@ -59,7 +60,7 @@ public sealed class AdminAuthService
             return AdminLoginResult.TenantNotFound;
         }
 
-        if (!IsOperational(tenant))
+        if (!IsOperational(tenant) && !CanAccessBilling(tenant))
         {
             _logger.LogWarning("Admin login failed. TenantSlug={TenantSlug}, Reason={Reason}", tenant.Slug, "tenant_not_operational");
             return AdminLoginResult.TenantUnavailable;
@@ -128,7 +129,7 @@ public sealed class AdminAuthService
             return;
         }
 
-        if (!IsOperational(tenant))
+        if (!IsOperational(tenant) && !CanAccessBilling(tenant))
         {
             Reject(context, tenantId, adminUserId, "tenant_not_operational");
             return;
@@ -165,7 +166,7 @@ public sealed class AdminAuthService
         }
 
         var tenant = await _tenants.GetByIdAsync(tenantId, context.RequestAborted);
-        if (tenant is null || !string.Equals(tenant.Slug, tenantSlug, StringComparison.Ordinal) || !IsOperational(tenant))
+        if (tenant is null || !string.Equals(tenant.Slug, tenantSlug, StringComparison.Ordinal) || (!IsOperational(tenant) && !CanAccessBilling(tenant)))
         {
             _logger.LogWarning(
                 "Admin principal rejected. TenantId={TenantId}, AdminUserId={AdminUserId}, Reason={Reason}",
@@ -182,6 +183,13 @@ public sealed class AdminAuthService
 
     public async Task SignOutAsync(HttpContext context) =>
         await context.SignOutAsync(CookieAuthenticationDefaults.AuthenticationScheme);
+
+    public async Task<bool> IsBillingOnlyAsync(HttpContext context)
+    {
+        if (!Guid.TryParse(context.User.FindFirstValue(AdminClaimTypes.TenantId), out var tenantId)) return false;
+        var tenant = await _tenants.GetByIdAsync(tenantId, context.RequestAborted);
+        return tenant is not null && !IsOperational(tenant) && CanAccessBilling(tenant);
+    }
 
     public string GetLoginPathForCurrentPrincipal(HttpContext context)
     {
@@ -235,6 +243,10 @@ public sealed class AdminAuthService
         tenant.IsActive
         && tenant.Subscription is not null
         && tenant.Subscription.IsOperational(_clock.UtcNow);
+
+    private static bool CanAccessBilling(Tenant tenant) => tenant.IsActive && tenant.Subscription is not null &&
+        (tenant.Subscription.Status == TenantSubscriptionStatus.PastDue ||
+         tenant.Subscription.Status == TenantSubscriptionStatus.Suspended && tenant.Subscription.SuspensionReason is TenantSuspensionReason.PaymentPastDue or TenantSuspensionReason.TrialExpired);
 
     private void Reject(CookieValidatePrincipalContext context, object? tenantId, object? adminUserId, string reason)
     {

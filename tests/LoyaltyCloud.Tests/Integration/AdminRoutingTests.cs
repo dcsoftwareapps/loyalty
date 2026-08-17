@@ -3,6 +3,7 @@ extern alias AdminApp;
 using System.Net;
 using System.Text.RegularExpressions;
 using AdminApp::LoyaltyCloud.Admin.Auth;
+using AdminApp::LoyaltyCloud.Admin.Middleware;
 using LoyaltyCloud.Application.Common.Interfaces;
 using LoyaltyCloud.Application.Provisioning;
 using LoyaltyCloud.Domain.Entities;
@@ -41,6 +42,26 @@ public sealed class AdminRoutingTests : IClassFixture<AdminRoutingTests.AdminWeb
 
     public Task DisposeAsync() => Task.CompletedTask;
 
+    [Theory]
+    [Trait("Category", "AdminRouting")]
+    [InlineData("/tenant/billing")]
+    [InlineData("/tenant/billing/payment/success")]
+    [InlineData("/tenant/billing/payment/cancelled")]
+    [InlineData("/logout")]
+    public void Suspended_tenant_allowed_paths_are_limited_to_billing(string path)
+    {
+        Assert.True(AdminTenantContextMiddleware.IsBillingPath(path));
+    }
+
+    [Theory]
+    [Trait("Category", "AdminRouting")]
+    [InlineData("/tenant/dashboard")]
+    [InlineData("/tenant/custom/billing/report")]
+    [InlineData("/tenant/billing/settings")]
+    public void Suspended_tenant_operational_or_similar_paths_are_blocked(string path)
+    {
+        Assert.False(AdminTenantContextMiddleware.IsBillingPath(path));
+    }
     [Fact]
     [Trait("Category", "AdminRouting")]
     public async Task Root_redirects_to_platform_login_without_loop()
@@ -56,6 +77,38 @@ public sealed class AdminRoutingTests : IClassFixture<AdminRoutingTests.AdminWeb
         Assert.Equal("/platform/login", response.Headers.Location?.OriginalString);
     }
 
+    [Fact]
+    [Trait("Category", "AdminRouting")]
+    public async Task Development_developer_login_is_available_and_signs_in_as_super_admin()
+    {
+        using var client = _factory.CreateClient(new WebApplicationFactoryClientOptions
+        {
+            AllowAutoRedirect = false
+        });
+
+        using var getLogin = await client.GetAsync("/platform/login");
+        var loginHtml = await getLogin.Content.ReadAsStringAsync();
+        Assert.Contains("Developer Login", loginHtml);
+        Assert.Contains("action=\"/platform/developer-login\"", loginHtml);
+
+        var form = ExtractHiddenInputs(loginHtml);
+        using var post = new HttpRequestMessage(HttpMethod.Post, "/platform/developer-login")
+        {
+            Content = new FormUrlEncodedContent(form)
+        };
+        post.Headers.Add("Cookie", ExtractCookies(getLogin));
+
+        using var loginResponse = await client.SendAsync(post);
+
+        Assert.Equal(HttpStatusCode.Redirect, loginResponse.StatusCode);
+        Assert.Equal("/platform/tenants", loginResponse.Headers.Location?.OriginalString);
+        var platformCookie = ExtractCookie(loginResponse, "loyaltycloud.platform.auth");
+
+        using var protectedRequest = new HttpRequestMessage(HttpMethod.Get, "/platform/tenants");
+        protectedRequest.Headers.Add("Cookie", platformCookie);
+        using var protectedResponse = await client.SendAsync(protectedRequest);
+        Assert.Equal(HttpStatusCode.OK, protectedResponse.StatusCode);
+    }
     [Fact]
     [Trait("Category", "AdminRouting")]
     public async Task Platform_login_is_anonymous()

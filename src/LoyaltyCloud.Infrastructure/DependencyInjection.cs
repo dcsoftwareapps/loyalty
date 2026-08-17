@@ -1,5 +1,6 @@
 using System.Net;
 using LoyaltyCloud.Application.Common.Interfaces;
+using LoyaltyCloud.Application.Billing;
 using LoyaltyCloud.Common.Services;
 using LoyaltyCloud.Domain.Repositories;
 using LoyaltyCloud.Infrastructure.Configuration;
@@ -64,6 +65,7 @@ public static class DependencyInjection
         services.Configure<GoogleWalletOptions>(configuration.GetSection(GoogleWalletOptions.SectionName));
         services.Configure<ProvisioningOptions>(configuration.GetSection(ProvisioningOptions.SectionName));
         services.Configure<BillingOptions>(configuration.GetSection(BillingOptions.SectionName));
+        services.Configure<StripeOptions>(configuration.GetSection(StripeOptions.SectionName));
     }
 
     private static void AddRepositories(IServiceCollection services)
@@ -117,6 +119,8 @@ public static class DependencyInjection
         services.AddScoped<ISuperAdminTenantReadService, SuperAdminTenantReadService>();
         services.AddScoped<ISuperAdminTenantManagementService, SuperAdminTenantManagementService>();
         services.AddScoped<ISubscriptionMaintenanceService, SubscriptionMaintenanceService>();
+        services.AddScoped<IBillingService, BillingService>();
+        services.AddScoped<IPaymentGateway, StripePaymentGateway>();
         services.AddScoped<IPublicTenantResolver, PublicTenantResolver>();
         services.AddScoped<IPointsExpirationNotificationReadService, PointsExpirationNotificationReadService>();
         services.AddScoped<IMonthlyProductNotificationReadService, MonthlyProductNotificationReadService>();
