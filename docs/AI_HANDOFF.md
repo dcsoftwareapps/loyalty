@@ -1,10 +1,10 @@
 # LoyaltyCloud - AI Handoff
 
-Last updated: 2026-08-12
+Last updated: 2026-08-16
 
 Branch: `main`
 
-Last task worked: document successful Azure SQL PROD migration from General Purpose Serverless to Basic DTU after prior STG validation.
+Last task worked: document current PROD Linux Admin/domain transition, Quick Help QR public base URL and PROD SQL/App Service state.
 
 ## Current State
 
@@ -12,8 +12,9 @@ LoyaltyCloud is in RC1/UAT.
 
 Current codebase state at the end of this handoff task:
 
-- Documentation-only changes were made.
-- No functional code was changed.
+- Quick Help now builds public registration links and QR/poster URLs from configurable `Admin:PublicBaseUrl`, falling back to the current Admin base URI when unset.
+- Minimal Admin appsettings/test/docs changes were made.
+- This handoff update only changed documentation.
 - No build was executed.
 - No tests were executed.
 - No EF migrations were created or applied.
@@ -23,8 +24,12 @@ Current codebase state at the end of this handoff task:
 
 Active product status:
 
-- PROD/UAT Admin official host: `https://loyaltycloud-admin.azurewebsites.net`.
-- PROD/UAT API host: `https://loyaltycloud-api-894839.azurewebsites.net`.
+- PROD/UAT Admin public host for new links/QR: `https://admin.loyaltycloud.net`.
+- New PROD Admin Linux App Service: `loyaltycloud-admin-prod-01`.
+- Legacy PROD/UAT Admin Windows host remains online during transition: `https://loyaltycloud-admin.azurewebsites.net`.
+- PROD/UAT API custom domain: `https://api.loyaltycloud.net`.
+- PROD/UAT API Linux App Service: `loyaltycloud-api-894839`.
+- Legacy PROD/UAT API host remains available: `https://loyaltycloud-api-894839.azurewebsites.net`.
 - PROD/UAT active database: `LoyaltyCloudFree`.
 - STG exists separately with `loyaltycloud-api-stg-01` and `loyaltycloud-admin-stg-01`.
 - Apple Wallet works in production/UAT.
@@ -34,10 +39,17 @@ Active product status:
 - PROD `GoogleWallet__ServiceAccountJson` references `loyaltycloud-google-wallet-service-account-json` through Key Vault.
 - PROD SQL `LoyaltyCloudFree` was migrated successfully to Basic DTU with 2 GB max size.
 - STG SQL `LoyaltyCloudStg` was migrated successfully to Basic DTU with 2 GB max size.
-- PROD and STG API/Admin App Service Plans are currently F1 Free.
+- PROD API and new PROD Admin Linux share App Service Plan `asp-loyaltycloud-api-free`, now SKU `B1`, tier `Basic`, capacity `1`, West US 3.
+- The plan name still contains `free`, but it is no longer F1. Do not recreate/rename only because of the legacy name.
+- Legacy PROD Admin Windows remains on its previous Windows plan during the transition.
+- STG plans can remain F1 for now.
 - PROD and STG no longer depend on Azure SQL Serverless auto-pause, so SQL cold start from waking a paused database is removed for both environments.
 - API PROD, Admin PROD and Wallet PROD were manually validated after the PROD SQL migration.
 - API STG, Admin STG and Wallet were manually validated after the STG SQL migration.
+- Quick Help registration QR/poster now uses `Admin:PublicBaseUrl` when configured; PROD should use `https://admin.loyaltycloud.net`.
+- `Admin__PublicBaseUrl=https://admin.loyaltycloud.net` was also configured intentionally on the legacy PROD Admin Windows app so newly printed Quick Help QR posters point to the new Admin domain during transition.
+- New PROD Admin Linux `Admin__ApiBaseUrl` uses `https://api.loyaltycloud.net`.
+- Do not change `Apple__WebServiceURL` yet; Apple Wallet hostname migration needs a separate impact review.
 - Pending decision: `GoogleWallet__ProgramName` is currently `KBeauty Loyalty`; changing it to `KBeauty` is under consideration, then making it configurable by tenant later.
 
 ## Recent Infrastructure and Configuration Work
@@ -59,6 +71,7 @@ STG resource names:
 | Admin App Service Plan Windows | `asp-loyaltycloud-admin-stg-01` |
 | Admin App Service | `loyaltycloud-admin-stg-01` |
 | Admin URL | `https://loyaltycloud-admin-stg-01.azurewebsites.net` |
+| Admin Linux test App Service | `loyaltycloud-admin-linux-stg-01` |
 | SQL Server | `sql-loyaltycloud-stg-01` |
 | SQL Database | `LoyaltyCloudStg` |
 | Storage | `stloyaltycloudstg01` |
@@ -76,6 +89,54 @@ Critical STG settings:
 - `AdminApi__SharedSecret` must match between API STG and Admin STG.
 - Google Wallet STG secret name is `loyaltycloud-google-wallet-service-account-json`.
 
+PROD Linux Admin/domain transition state:
+
+| Resource | Name / value |
+| --- | --- |
+| Resource Group | `rg-loyaltycloud-prod` |
+| API App Service | `loyaltycloud-api-894839` |
+| API OS/runtime | Linux, .NET 9 |
+| API custom domain | `https://api.loyaltycloud.net` |
+| New Admin App Service | `loyaltycloud-admin-prod-01` |
+| New Admin OS/runtime | Linux, .NET 9 |
+| New Admin custom domain | `https://admin.loyaltycloud.net` |
+| Shared Linux App Service Plan | `asp-loyaltycloud-api-free` |
+| Plan actual SKU/tier | `B1` / `Basic`, capacity `1`, West US 3 |
+| Legacy Admin Windows App Service | `loyaltycloud-admin` |
+| Legacy Admin Windows URL | `https://loyaltycloud-admin.azurewebsites.net` |
+| SQL Server | `sql-loyaltycloud-894839` |
+| Active DB | `LoyaltyCloudFree` |
+| Key Vault | `kv-loyaltycloud-894839` |
+
+PROD domain/DNS state:
+
+- Domain purchased: `loyaltycloud.net`.
+- DNS is managed in Cloudflare.
+- `api.loyaltycloud.net` points to `loyaltycloud-api-894839.azurewebsites.net`.
+- `admin.loyaltycloud.net` points to `loyaltycloud-admin-prod-01.azurewebsites.net`.
+- Initial Cloudflare CNAMEs were left as DNS-only.
+- TXT records `asuid.api` and `asuid.admin` were added for Azure custom-domain verification.
+- Both custom domains appear Verified/Secured in Azure.
+- Both use Azure App Service managed certificates.
+- `GET /` on API returning 404 is expected because the API has no root GET endpoint; it confirmed HTTPS/TLS.
+
+New PROD Admin Linux Key Vault/identity state:
+
+- The new Admin Linux App Service has System Assigned Managed Identity enabled.
+- Current Principal ID: `28e04e72-b2e1-4a77-9ab3-30430b81d8b0`.
+- It was granted `Key Vault Secrets User` on `kv-loyaltycloud-894839`.
+- Its `DefaultConnection` uses Key Vault reference `@Microsoft.KeyVault(VaultName=kv-loyaltycloud-894839;SecretName=loyaltycloud-sql-connection-string)`.
+- This connection string reference is validated and working.
+- Reliable method for setting the connection string was JSON plus `az rest` against the App Service `/config/connectionstrings` resource because PowerShell/Azure CLI repeatedly truncated `@Microsoft.KeyVault(...)` references, especially the final `)`.
+
+New PROD Admin Linux validation:
+
+- `https://admin.loyaltycloud.net` HTTPS/TLS is configured and validated.
+- Login and navigation were manually tested.
+- `/platform/tenants` was tested and loads real PROD data.
+- `Admin__ApiBaseUrl` on new Admin Linux was changed from `https://loyaltycloud-api-894839.azurewebsites.net` to `https://api.loyaltycloud.net` and validated.
+- Legacy Admin Windows `https://loyaltycloud-admin.azurewebsites.net` still exists and works as fallback.
+
 PROD Google Wallet configuration state:
 
 - Google Wallet is approved for production.
@@ -89,7 +150,9 @@ Current SQL/App Service cost posture:
 - PROD SQL `LoyaltyCloudFree` now uses Basic DTU with 2 GB max size.
 - STG SQL `LoyaltyCloudStg` now uses Basic DTU with 2 GB max size.
 - Neither PROD nor STG depends on Serverless auto-pause now, so the cold start caused by waking SQL Serverless is removed for both.
-- API and Admin App Service Plans in both PROD and STG are currently F1 Free.
+- PROD API and new Admin Linux share `asp-loyaltycloud-api-free`, currently SKU `B1`, tier `Basic`, capacity `1`.
+- Legacy PROD Admin Windows remains online on its prior Windows plan during transition.
+- STG plans can remain F1 for now.
 
 Important PowerShell/Azure CLI lesson:
 
@@ -126,6 +189,31 @@ Copy allowlisted Apple Wallet secrets from PROD to STG:
 .\infra\copy-apple-wallet-secrets-to-stg.ps1
 .\infra\copy-apple-wallet-secrets-to-stg.ps1 -Execute
 ```
+
+Canonical PROD Admin Linux publish/deploy flow:
+
+```powershell
+cd C:\repos\Loyalty\loyalty
+
+Remove-Item .\artifacts\admin-prod -Recurse -Force -ErrorAction SilentlyContinue
+Remove-Item .\artifacts\admin-prod.zip -Force -ErrorAction SilentlyContinue
+
+dotnet publish `
+  .\src\LoyaltyCloud.Admin\LoyaltyCloud.Admin.csproj `
+  -c Release `
+  -o .\artifacts\admin-prod
+
+tar -a -c -f .\artifacts\admin-prod.zip `
+  -C .\artifacts\admin-prod .
+
+az webapp deploy `
+  --resource-group rg-loyaltycloud-prod `
+  --name loyaltycloud-admin-prod-01 `
+  --src-path .\artifacts\admin-prod.zip `
+  --type zip
+```
+
+The last Admin Linux deploy finished with `RuntimeSuccessful`: 1 successful instance, 0 failed instances.
 
 Common validation commands used during RC1 work:
 
@@ -173,6 +261,7 @@ Do not reinvestigate WebSockets, Blazor interactivity or SQL availability for th
 Problem:
 
 - Azure CLI commands from PowerShell could mishandle the final `)` in Key Vault references.
+- This happened again while configuring the new PROD Admin Linux `DefaultConnection`.
 
 Root cause:
 
@@ -182,6 +271,34 @@ Reliable method:
 
 - Use JSON files for `az webapp config connection-string set`.
 - Do not hand-type long Key Vault reference values directly when a JSON file is safer.
+- For the new PROD Admin Linux connection strings, the robust method that worked was creating JSON and using `az rest` against the App Service `/config/connectionstrings` resource.
+
+### Admin Linux deployment ZIP created with Windows paths
+
+Problem:
+
+- The legacy Admin Windows packaging used `Compress-Archive`.
+- Reusing `Compress-Archive` for the new Linux Admin deployment produced paths containing Windows `\` separators inside the ZIP.
+- Kudu failed during Linux deployment/`rsync`.
+
+Root cause:
+
+- Linux App Service ZIP deployment expects portable archive paths. `Compress-Archive` output from Windows was not safe for the Linux Kudu/rsync path in this case.
+
+Solution:
+
+- For Linux App Services, use `tar -a -c -f` from the publish output directory.
+- The validated Admin Linux package command is:
+
+```powershell
+tar -a -c -f .\artifacts\admin-prod.zip `
+  -C .\artifacts\admin-prod .
+```
+
+Validation:
+
+- Deployment to `loyaltycloud-admin-prod-01` completed with `RuntimeSuccessful`.
+- 1 instance succeeded, 0 failed.
 
 ### `configure-stg-secrets.ps1` prompted for unrelated secrets
 
@@ -639,6 +756,45 @@ STG:
 - STG API/Admin/Wallet were already validated after its migration.
 - Current final state: STG and PROD are both Basic DTU.
 
+### 2026-08-15/16 - Quick Help registration QR moved to new Admin public domain
+
+Objective:
+
+- Begin the controlled transition from legacy Admin Windows to the new Admin Linux custom domain.
+- Keep the legacy Admin Windows app online as fallback.
+- Ensure newly displayed/printed public registration QR codes point users to the new Admin domain.
+
+Code/config state:
+
+- QR source page: `src/LoyaltyCloud.Admin/Pages/QuickHelp.razor`.
+- Public registration route remains `/{tenantSlug}/join`.
+- Example PROD KBeauty URL: `https://admin.loyaltycloud.net/kbeauty/join`.
+- Previous Quick Help behavior built the URL from `Navigation.BaseUri`.
+- Current Quick Help behavior uses `Admin:PublicBaseUrl` when configured and falls back to `Navigation.BaseUri` when empty.
+- Azure App Setting name: `Admin__PublicBaseUrl`.
+- PROD value: `https://admin.loyaltycloud.net`.
+- STG should use its own STG Admin host while it has no custom domain; do not point STG QR to PROD.
+- The visible QR and printable poster use the same `registrationUrl`/`registrationQrDataUri`.
+- Manual validation confirmed the new QR works.
+
+Important operational detail:
+
+- `Admin__PublicBaseUrl=https://admin.loyaltycloud.net` was also configured intentionally on the legacy PROD Admin Windows app.
+- This means employees who temporarily keep using the old Admin will print new QR posters pointing to the new Admin domain.
+
+Explicitly not changed:
+
+- `Apple__WebServiceURL`.
+- Apple PassKit `/v1/*` routes.
+- Apple Wallet pass internal QR/barcode.
+- APNs.
+- Google Wallet pass QR/object content.
+
+Do not confuse:
+
+- Quick Help public registration QR: `https://admin.loyaltycloud.net/{tenantSlug}/join`.
+- Apple/Google Wallet pass QR/barcode: separate Wallet content, not part of this change.
+
 ### PowerShell 5.1 incompatibilities in infra scripts
 
 Problems:
@@ -679,6 +835,11 @@ Do not re-investigate these without new evidence:
 - API STG, Admin STG and Wallet were manually validated after the STG SQL migration.
 - Azure SQL PROD `LoyaltyCloudFree` was migrated successfully to Basic DTU.
 - API PROD, Admin PROD and Wallet PROD were manually validated after the PROD SQL migration.
+- API custom domain `https://api.loyaltycloud.net` is configured with HTTPS/TLS and works; `GET /` returning 404 is expected for this API.
+- New Admin Linux custom domain `https://admin.loyaltycloud.net` is configured with HTTPS/TLS and works.
+- New Admin Linux login/navigation and `/platform/tenants` were manually validated against real PROD data.
+- New Admin Linux can consume the API through `Admin__ApiBaseUrl=https://api.loyaltycloud.net`.
+- Quick Help registration QR/poster uses the same generated URL/data source and works with `Admin__PublicBaseUrl=https://admin.loyaltycloud.net`.
 
 ## What Still Needs Testing
 
@@ -705,14 +866,26 @@ Priority:
    - Validate today's final STG changes before promoting to PROD if additional non-SQL changes are made.
 
 3. Review production/STG settings drift:
-   - Admin official host remains `https://loyaltycloud-admin.azurewebsites.net`.
-   - API production host remains `https://loyaltycloud-api-894839.azurewebsites.net`.
+   - New Admin public host for links/QR is `https://admin.loyaltycloud.net`.
+   - Legacy Admin Windows host `https://loyaltycloud-admin.azurewebsites.net` remains online during transition.
+   - API production custom domain is `https://api.loyaltycloud.net`.
+   - Legacy API host `https://loyaltycloud-api-894839.azurewebsites.net` remains available.
+   - PROD Admin should set `Admin__PublicBaseUrl=https://admin.loyaltycloud.net`.
+   - STG Admin should set `Admin__PublicBaseUrl` to its own STG Admin public URL, not PROD.
+   - New PROD Admin Linux should keep `Admin__ApiBaseUrl=https://api.loyaltycloud.net`.
+   - Do not remove `loyaltycloud-admin` yet.
    - STG does not point to PROD SQL/Storage/Key Vault.
    - PROD and STG `GoogleWallet__ProgramName` are intentionally still `KBeauty Loyalty` until the naming decision is made.
 
 4. SQL hosting follow-up:
    - Observe both STG and PROD on Basic DTU for behavior, costs and limits.
    - Serverless cold start is no longer active for STG or PROD.
+
+5. Apple/Google Wallet hostname review:
+   - Analyze strategy before changing `Apple__WebServiceURL` to `https://api.loyaltycloud.net`.
+   - Determine impact on already installed Apple Wallet passes, `/v1/devices/*`, `/v1/passes/*`, device registrations and push/update compatibility.
+   - Review whether Google Wallet has URLs/base URLs that should migrate to custom domains.
+   - Keep `azurewebsites.net` hostnames compatible during transition.
 
 ## Next Recommended Step
 
@@ -722,7 +895,9 @@ For the next technical session:
 2. Read this handoff.
 3. If working on STG, verify current App Settings and connection strings from Azure before changing code.
 4. For Google Wallet STG, keep `reviewStatus = UNDER_REVIEW` in LoyaltyClass PATCH payloads and retry save-link with a known customer serial if a regression appears.
-5. Observe both Basic DTU databases after the migration and only revisit SQL tier if cost or limits require it.
+5. For Admin domain transition, keep legacy Admin Windows online until the new Linux Admin has been fully validated by users.
+6. Before any Apple hostname work, inspect `Apple__WebServiceURL` impact on existing installed passes and design a safe migration plan.
+7. Observe both Basic DTU databases after the migration and only revisit SQL tier if cost or limits require it.
 
 Recommended first command for local orientation:
 

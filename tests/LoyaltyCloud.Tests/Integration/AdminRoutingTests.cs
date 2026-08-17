@@ -379,7 +379,7 @@ public sealed class AdminRoutingTests : IClassFixture<AdminRoutingTests.AdminWeb
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         Assert.Contains("Ayuda rápida", html);
         Assert.Contains("Las tareas más comunes para atender clientes.", html);
-        Assert.Contains("/kbeauty/join", html);
+        Assert.Contains("https://admin.loyaltycloud.net/kbeauty/join", html);
         Assert.Contains("QR de registro", html);
         Assert.Contains("Escanea para registrarte", html);
         Assert.Contains("Imprimir QR", html);
@@ -398,6 +398,8 @@ public sealed class AdminRoutingTests : IClassFixture<AdminRoutingTests.AdminWeb
         Assert.Contains("href=\"/redeem\"", source);
         Assert.Contains("ID del cliente", source);
         Assert.Contains("nombre, email o ID del cliente", source);
+        Assert.Contains("Configuration[\"Admin:PublicBaseUrl\"]", source);
+        Assert.Contains("GetPublicAdminBaseUri()", source);
         Assert.Contains("{tenantSlug.Trim().ToLowerInvariant()}/join", source);
         Assert.Contains("QrCodeSvgGenerator.GenerateDataUri(registrationUrl", source);
         Assert.Contains("PrintQrAsync", source);
@@ -414,7 +416,7 @@ public sealed class AdminRoutingTests : IClassFixture<AdminRoutingTests.AdminWeb
     public void Quick_help_qr_generator_encodes_registration_url_as_local_svg()
     {
         var dataUri = AdminApp::LoyaltyCloud.Admin.Services.QrCodeSvgGenerator.GenerateDataUri(
-            "https://loyaltycloud-admin.azurewebsites.net/bitcafe/join");
+            "https://admin.loyaltycloud.net/bitcafe/join");
 
         Assert.StartsWith("data:image/svg+xml;utf8,", dataUri, StringComparison.Ordinal);
         Assert.Contains("svg", Uri.UnescapeDataString(dataUri), StringComparison.OrdinalIgnoreCase);
@@ -1013,6 +1015,7 @@ public sealed class AdminRoutingTests : IClassFixture<AdminRoutingTests.AdminWeb
                 {
                     ["ConnectionStrings:DefaultConnection"] = "Server=(test);Database=Test;",
                     ["Admin:ApiBaseUrl"] = "https://api.test/",
+                    ["Admin:PublicBaseUrl"] = "https://admin.loyaltycloud.net",
                     ["AdminApi:SharedSecret"] = "test-admin-api-shared-secret-with-enough-length",
                     ["Azure:KeyVaultUri"] = "",
                     ["Azure:BlobStorage:ConnectionString"] = "",

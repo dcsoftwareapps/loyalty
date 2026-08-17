@@ -6,8 +6,10 @@
 @using LoyaltyCloud.Admin.Auth
 @using LoyaltyCloud.Admin.Services
 @using LoyaltyCloud.Application.Common.Interfaces
+@using Microsoft.Extensions.Configuration
 @inject AuthenticationStateProvider AuthenticationStateProvider
 @inject ITenantBrandingReadService Branding
+@inject IConfiguration Configuration
 @inject IJSRuntime JS
 @inject NavigationManager Navigation
 
@@ -183,7 +185,7 @@
 
         if (!string.IsNullOrWhiteSpace(tenantSlug))
         {
-            registrationUrl = new Uri(new Uri(Navigation.BaseUri), $"{tenantSlug.Trim().ToLowerInvariant()}/join").ToString();
+            registrationUrl = new Uri(GetPublicAdminBaseUri(), $"{tenantSlug.Trim().ToLowerInvariant()}/join").ToString();
             registrationQrDataUri = QrCodeSvgGenerator.GenerateDataUri(registrationUrl, scale: 7);
             branding = await Branding.GetCurrentAsync();
         }
@@ -206,6 +208,24 @@
     }
 
     private async Task PrintQrAsync() => await JS.InvokeVoidAsync("window.print");
+
+    private Uri GetPublicAdminBaseUri()
+    {
+        var configuredBaseUrl = Configuration["Admin:PublicBaseUrl"];
+        if (!string.IsNullOrWhiteSpace(configuredBaseUrl)
+            && Uri.TryCreate(EnsureTrailingSlash(configuredBaseUrl), UriKind.Absolute, out var configuredUri))
+        {
+            return configuredUri;
+        }
+
+        return new Uri(Navigation.BaseUri);
+    }
+
+    private static string EnsureTrailingSlash(string value)
+    {
+        var trimmed = value.Trim();
+        return trimmed.EndsWith('/') ? trimmed : trimmed + "/";
+    }
 
     private static string CssColorOrFallback(string? value, string fallback)
     {
