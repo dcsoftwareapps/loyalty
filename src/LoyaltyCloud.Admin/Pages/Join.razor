@@ -118,6 +118,10 @@
                     </button>
                 }
 
+                @if (!string.IsNullOrWhiteSpace(googleWalletFallbackUrl))
+                {
+                    <a class="kb-btn kb-btn--ghost kb-btn--block" href="@googleWalletFallbackUrl" target="_top" rel="noopener">Abrir Google Wallet</a>
+                }
                 @if (!birthdaySaved && !birthdaySkipped)
                 {
                     <div class="kb-join-birthday">
@@ -174,6 +178,7 @@
     private string? tenantError;
     private string? processingStatus;
     private string? walletChoiceMessage;
+    private string? googleWalletFallbackUrl;
     private bool loadingTenant = true;
     private bool busy;
     private bool birthdaySaved;
@@ -213,6 +218,7 @@
         joinResult = null;
         processingStatus = null;
         walletChoiceMessage = null;
+        googleWalletFallbackUrl = null;
         showWalletChoice = false;
         birthdaySaved = false;
         birthdaySkipped = false;
@@ -411,7 +417,15 @@
                 return;
             }
 
-            Navigation.NavigateTo(saveLink.SaveUrl, forceLoad: true);
+            if (!TryValidateGoogleWalletUrl(saveLink.SaveUrl, out var validatedSaveUrl))
+            {
+                Logger.LogWarning("Google Wallet returned an invalid save URL. TenantSlug={TenantSlug}.", tenant.Slug);
+                errorMsg = "No pudimos preparar Google Wallet. Intenta de nuevo.";
+                return;
+            }
+
+            googleWalletFallbackUrl = validatedSaveUrl;
+            await JS.InvokeVoidAsync("loyaltyCloudWallet.navigateToGoogleWallet", validatedSaveUrl);
         }
         finally
         {
@@ -472,6 +486,21 @@
         return string.IsNullOrWhiteSpace(content)
             ? "Ocurrió un problema. Intenta de nuevo."
             : content;
+    }
+
+    private static bool TryValidateGoogleWalletUrl(string value, out string validatedUrl)
+    {
+        validatedUrl = string.Empty;
+        if (!Uri.TryCreate(value, UriKind.Absolute, out var uri)
+            || uri.Scheme != Uri.UriSchemeHttps
+            || !string.Equals(uri.Host, "pay.google.com", StringComparison.OrdinalIgnoreCase)
+            || !uri.AbsolutePath.StartsWith("/gp/v/save/", StringComparison.Ordinal))
+        {
+            return false;
+        }
+
+        validatedUrl = uri.AbsoluteUri;
+        return true;
     }
 
     private static string MonthName(int month) => month switch

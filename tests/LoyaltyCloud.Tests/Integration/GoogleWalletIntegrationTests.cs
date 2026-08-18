@@ -38,10 +38,17 @@ public sealed class GoogleWalletIntegrationTests : IntegrationTestBase
             $"/api/customers/{serial}/wallets/google/save-link",
             content: null);
         Assert.Equal(HttpStatusCode.OK, saveLinkResponse.StatusCode);
+        Assert.Equal("application/json", saveLinkResponse.Content.Headers.ContentType?.MediaType);
 
         var saveLink = await saveLinkResponse.Content.ReadFromJsonAsync<GoogleWalletSaveLinkResponse>();
         Assert.NotNull(saveLink);
         Assert.StartsWith("https://pay.google.com/gp/v/save/", saveLink!.SaveUrl);
+        Assert.True(Uri.TryCreate(saveLink.SaveUrl, UriKind.Absolute, out var saveUri));
+        Assert.Equal(Uri.UriSchemeHttps, saveUri.Scheme);
+        Assert.Equal("pay.google.com", saveUri.Host);
+        Assert.StartsWith("/gp/v/save/", saveUri.AbsolutePath);
+        Assert.DoesNotContain(' ', saveLink.SaveUrl);
+        Assert.True(saveLink.SaveUrl.Length < 1800);
         Assert.StartsWith("issuer-test.", saveLink.ObjectId);
         Assert.Equal("issuer-test.loyalty", saveLink.ClassId);
 
@@ -131,4 +138,3 @@ public sealed class GoogleWalletIntegrationTests : IntegrationTestBase
         string Message,
         string PassDownloadUrl);
 }
-

@@ -14,12 +14,10 @@ public sealed class GoogleWalletJwtFactory
     };
 
     private readonly GoogleWalletOptions _options;
-    private readonly GoogleWalletObjectMapper _mapper;
 
-    public GoogleWalletJwtFactory(IOptions<GoogleWalletOptions> options, GoogleWalletObjectMapper mapper)
+    public GoogleWalletJwtFactory(IOptions<GoogleWalletOptions> options)
     {
         _options = options.Value;
-        _mapper = mapper;
     }
 
     public string CreateSaveUrl(
@@ -39,7 +37,14 @@ public sealed class GoogleWalletJwtFactory
             ["origins"] = _options.Origins,
             ["payload"] = new Dictionary<string, object?>
             {
-                ["loyaltyObjects"] = new[] { _mapper.ToObjectPayload(walletObject) }
+                ["loyaltyObjects"] = new[]
+                {
+                    new Dictionary<string, object?>
+                    {
+                        ["id"] = walletObject.Id,
+                        ["classId"] = walletObject.ClassId
+                    }
+                }
             }
         };
 
@@ -96,4 +101,3 @@ public sealed class GoogleWalletJwtFactory
             .Replace('+', '-')
             .Replace('/', '_');
 }
-
