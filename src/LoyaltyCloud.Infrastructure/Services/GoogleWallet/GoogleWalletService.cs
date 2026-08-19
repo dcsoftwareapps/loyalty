@@ -73,6 +73,13 @@ internal sealed class GoogleWalletService : IGoogleWalletService
             var credentials = await _credentialsProvider.GetAsync(ct);
             var saveUrl = _jwtFactory.CreateSaveUrl(credentials, sync.ObjectData, _dt.UtcNow);
 
+            var saveUri = new Uri(saveUrl, UriKind.Absolute);
+            _logger.LogInformation(
+                "Google Wallet save link prepared. Host={Host}, Path={Path}, Length={Length}, NavigationMode=TopLevelRedirect.",
+                saveUri.Host,
+                "/gp/v/save/[REDACTED]",
+                saveUrl.Length);
+
             sync.Wallet.RecordSaveLinkCreated(_dt.UtcNow);
             _wallets.Update(sync.Wallet);
             await _uow.SaveChangesAsync(ct);
@@ -269,4 +276,3 @@ internal sealed class GoogleWalletService : IGoogleWalletService
         }
     }
 }
-

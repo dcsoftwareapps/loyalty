@@ -184,6 +184,8 @@ public sealed class PublicJoinTenantRoutingTests : IClassFixture<CustomWebApplic
         Assert.Contains("No pudimos identificar tu tarjeta", source);
         Assert.Contains("api/customers/{Uri.EscapeDataString(joinResult.SerialNumber)}/wallets/google/save-link", source);
         Assert.Contains("GoogleWalletEnabled", source);
+        Assert.Contains("loyaltyCloudWallet.navigateToGoogleWallet", source);
+        Assert.Contains("Navigation.NavigateTo(joinResult.PassDownloadUrl, forceLoad: true)", source);
 
         Assert.Contains("MaxTouchPoints", detector);
         Assert.Contains("Android", detector);
@@ -191,6 +193,9 @@ public sealed class PublicJoinTenantRoutingTests : IClassFixture<CustomWebApplic
         Assert.Contains("iPad", detector);
         Assert.Contains("Mac", detector);
         Assert.Contains("navigator.maxTouchPoints", script);
+        Assert.Contains("window.location.assign", script);
+        Assert.DoesNotContain("Blob", script);
+        Assert.DoesNotContain("download", script, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]

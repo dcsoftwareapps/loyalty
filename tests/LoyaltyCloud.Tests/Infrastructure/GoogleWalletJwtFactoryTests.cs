@@ -1,4 +1,6 @@
 using System.Security.Cryptography;
+using System.Text;
+using System.Text.Json;
 using LoyaltyCloud.Infrastructure.Configuration;
 using LoyaltyCloud.Infrastructure.Services.GoogleWallet;
 using Microsoft.Extensions.Options;
@@ -21,8 +23,7 @@ public sealed class GoogleWalletJwtFactoryTests
             SaveUrlBase = "https://pay.google.com/gp/v/save",
             Origins = new[] { "https://admin.test.local" }
         });
-        var mapper = new GoogleWalletObjectMapper();
-        var factory = new GoogleWalletJwtFactory(options, mapper);
+        var factory = new GoogleWalletJwtFactory(options);
         var walletObject = new GoogleWalletObjectData(
             "issuer.member-kb-1",
             "issuer.loyalty",
@@ -48,6 +49,19 @@ public sealed class GoogleWalletJwtFactoryTests
         var jwt = saveUrl.Split('/').Last();
         Assert.Equal(3, jwt.Split('.').Length);
         Assert.DoesNotContain("PRIVATE KEY", saveUrl);
+        Assert.True(saveUrl.Length < 1800);
+
+        using var payload = JsonDocument.Parse(DecodeBase64Url(jwt.Split('.')[1]));
+        var walletReference = payload.RootElement.GetProperty("payload").GetProperty("loyaltyObjects")[0];
+        Assert.Equal(walletObject.Id, walletReference.GetProperty("id").GetString());
+        Assert.Equal(walletObject.ClassId, walletReference.GetProperty("classId").GetString());
+        Assert.Equal(2, walletReference.EnumerateObject().Count());
+    }
+
+    private static string DecodeBase64Url(string value)
+    {
+        var padded = value.Replace('-', '+').Replace('_', '/');
+        padded = padded.PadRight(padded.Length + ((4 - padded.Length % 4) % 4), '=');
+        return Encoding.UTF8.GetString(Convert.FromBase64String(padded));
     }
 }
-
