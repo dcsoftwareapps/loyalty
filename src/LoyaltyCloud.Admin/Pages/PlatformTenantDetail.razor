@@ -118,7 +118,7 @@ else
                 <div class="kb-form-row">
                     <label for="tenant-logo-update">Cambiar logo</label>
                     <InputFile id="tenant-logo-update" OnChange="UploadLogoAsync" accept="image/png,image/jpeg" disabled="@busy" />
-                    <p class="kb-muted">PNG o JPG, maximo 2 MB.</p>
+                    <p class="kb-muted">PNG o JPG, máximo 2 MB.</p>
                     <button class="kb-btn kb-btn--ghost" @onclick="RemoveLogoAsync" disabled="@(tenant.Branding.LogoBlobName is null || busy)">
                         Eliminar logo
                     </button>
@@ -154,7 +154,7 @@ else
     <section class="kb-card kb-danger-zone" style="margin-top:24px;">
         <h2>Eliminar tenant</h2>
         <p class="kb-muted">
-            Esta acciÃ³n eliminarÃ¡ permanentemente el tenant y todos sus datos.
+            Esta acción eliminará permanentemente el tenant y todos sus datos.
         </p>
         <p><strong>Nombre:</strong> @tenant.DisplayName</p>
         <p><strong>Slug:</strong> <code>@tenant.Slug</code></p>
@@ -341,7 +341,7 @@ else
     {
         if (tenant is null || !CanDeleteTenant)
         {
-            error = "Escribe el slug exacto para confirmar la eliminaciÃ³n.";
+            error = "Escribe el slug exacto para confirmar la eliminación.";
             return;
         }
 
@@ -375,7 +375,7 @@ else
             var file = args.File;
             if (file.Size <= 0 || file.Size > MaxLogoBytes)
             {
-                error = "El logo debe pesar maximo 2 MB.";
+                error = "El logo debe pesar máximo 2 MB.";
                 return;
             }
 

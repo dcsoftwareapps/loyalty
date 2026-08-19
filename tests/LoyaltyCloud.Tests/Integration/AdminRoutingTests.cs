@@ -397,7 +397,7 @@ public sealed class AdminRoutingTests : IClassFixture<AdminRoutingTests.AdminWeb
         Assert.Contains("href=\"/scan\"", source);
         Assert.Contains("href=\"/redeem\"", source);
         Assert.Contains("ID del cliente", source);
-        Assert.Contains("nombre, email o ID del cliente", source);
+        Assert.Contains("nombre o ID del cliente", source);
         Assert.Contains("Configuration[\"Admin:PublicBaseUrl\"]", source);
         Assert.Contains("GetPublicAdminBaseUri()", source);
         Assert.Contains("{tenantSlug.Trim().ToLowerInvariant()}/join", source);
@@ -405,10 +405,50 @@ public sealed class AdminRoutingTests : IClassFixture<AdminRoutingTests.AdminWeb
         Assert.Contains("PrintQrAsync", source);
         Assert.Contains("window.print", source);
         Assert.Contains("BusinessName", source);
+        Assert.Contains("branding?.LogoUrl", source);
+        Assert.Contains("kb-poster-logo", source);
+        Assert.DoesNotContain("nombre, email o ID del cliente", source, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("Serial", source, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("kbeauty", source, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("bitcafe", source, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("loyaltycloud-admin-894839", source, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    [Trait("Category", "AdminRouting")]
+    public void Customer_ui_does_not_render_customer_email_without_renaming_customer_contracts()
+    {
+        var root = GetRepositoryRoot();
+        var customersSource = File.ReadAllText(Path.Combine(root, "src", "LoyaltyCloud.Admin", "Pages", "Customers.razor"));
+        var detailSource = File.ReadAllText(Path.Combine(root, "src", "LoyaltyCloud.Admin", "Pages", "CustomerDetail.razor"));
+        var cardSource = File.ReadAllText(Path.Combine(root, "src", "LoyaltyCloud.Admin", "Components", "CustomerCard.razor"));
+
+        Assert.DoesNotContain("CustomerEmailDisplay", customersSource, StringComparison.Ordinal);
+        Assert.DoesNotContain("CustomerEmailDisplay", detailSource, StringComparison.Ordinal);
+        Assert.DoesNotContain("CustomerEmailDisplay", cardSource, StringComparison.Ordinal);
+        Assert.DoesNotContain("<th>Email</th>", customersSource, StringComparison.Ordinal);
+        Assert.DoesNotContain("@c.Email", customersSource, StringComparison.Ordinal);
+        Assert.DoesNotContain("Label=\"Email\"", detailSource, StringComparison.Ordinal);
+        Assert.DoesNotContain("@detail.Summary.Email", detailSource, StringComparison.Ordinal);
+        Assert.DoesNotContain("@Customer.Email", cardSource, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    [Trait("Category", "AdminRouting")]
+    public void Platform_tenant_create_form_exposes_synchronized_color_picker_and_hex_fields()
+    {
+        var source = File.ReadAllText(Path.Combine(GetRepositoryRoot(), "src", "LoyaltyCloud.Admin", "Pages", "PlatformTenants.razor"));
+
+        Assert.Contains("type=\"color\"", source);
+        Assert.Contains("Selector de color primario", source);
+        Assert.Contains("Selector de color secundario", source);
+        Assert.Contains("@bind=\"form.PrimaryColor\"", source);
+        Assert.Contains("@bind=\"form.SecondaryColor\"", source);
+        Assert.Contains("@bind:event=\"oninput\"", source);
+        Assert.Contains("SetPrimaryColor", source);
+        Assert.Contains("SetSecondaryColor", source);
+        Assert.Contains("NormalizePrimaryColor", source);
+        Assert.Contains("NormalizeSecondaryColor", source);
     }
 
     [Fact]

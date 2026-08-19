@@ -1,6 +1,6 @@
 # LoyaltyCloud - AI Context
 
-Last updated: 2026-08-16
+Last updated: 2026-08-17
 
 Purpose: permanent technical context for continuing LoyaltyCloud with ChatGPT/Codex without losing important repository, infrastructure and product memory between chats.
 
@@ -147,6 +147,8 @@ Blazor Admin pages:
 | `/quick-help` | `QuickHelp.razor` | Quick cashier/admin help, registration QR and printable poster. |
 
 Visible Admin menu is grouped by operation, customers, loyalty program, communication and administration. Do not reintroduce any retired Admin hostname.
+
+Admin customer screens intentionally ignore `Customer.Email` as visible customer data. The field still exists for legacy/domain/API compatibility, but tenant Admin UI should show name, phone, customer ID/serial and operational data instead. Platform tenant creation has synchronized color picker and hex fields for tenant branding colors. Quick Help registration QR/poster must continue using the same tenant join URL source (`Admin:PublicBaseUrl` when configured, otherwise current Admin base URI). The poster top uses `TenantBrandingInfo.LogoUrl` when available and falls back to tenant display name.
 
 ## API Endpoints
 

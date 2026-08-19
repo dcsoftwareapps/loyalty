@@ -71,11 +71,35 @@
         <div class="kb-form-row kb-form-row--horizontal">
             <div style="flex:1;min-width:180px;">
                 <label for="tenant-primary">Color primario</label>
-                <input id="tenant-primary" type="text" @bind="form.PrimaryColor" placeholder="#111827" />
+                <div class="kb-color-input-group">
+                    <input class="kb-color-picker"
+                           type="color"
+                           aria-label="Selector de color primario"
+                           value='@ColorPickerValue(form.PrimaryColor, "#111827")'
+                           @oninput="SetPrimaryColor" />
+                    <input id="tenant-primary"
+                           type="text"
+                           @bind="form.PrimaryColor"
+                           @bind:event="oninput"
+                           @onblur="NormalizePrimaryColor"
+                           placeholder="#111827" />
+                </div>
             </div>
             <div style="flex:1;min-width:180px;">
                 <label for="tenant-secondary">Color secundario</label>
-                <input id="tenant-secondary" type="text" @bind="form.SecondaryColor" placeholder="#F3F4F6" />
+                <div class="kb-color-input-group">
+                    <input class="kb-color-picker"
+                           type="color"
+                           aria-label="Selector de color secundario"
+                           value='@ColorPickerValue(form.SecondaryColor, "#F3F4F6")'
+                           @oninput="SetSecondaryColor" />
+                    <input id="tenant-secondary"
+                           type="text"
+                           @bind="form.SecondaryColor"
+                           @bind:event="oninput"
+                           @onblur="NormalizeSecondaryColor"
+                           placeholder="#F3F4F6" />
+                </div>
             </div>
             <div style="flex:1;min-width:180px;">
                 <label for="tenant-phone">Soporte</label>
@@ -108,7 +132,7 @@
                     <span>@selectedLogoName</span>
                 </div>
             }
-            <p class="kb-muted">PNG o JPG, maximo 2 MB. LoyaltyCloud genera automaticamente los assets de Apple Wallet.</p>
+            <p class="kb-muted">PNG o JPG, máximo 2 MB. LoyaltyCloud genera automáticamente los assets de Apple Wallet.</p>
         </div>
 
         <div class="kb-actions-inline">
@@ -319,10 +343,49 @@ else
         logoPreviewUrl = null;
     }
 
+    private static string ColorPickerValue(string? value, string fallback) =>
+        IsValidHexColor(value) ? value!.Trim().ToUpperInvariant() : fallback;
+
+    private void SetPrimaryColor(ChangeEventArgs args) =>
+        form.PrimaryColor = ColorPickerValue(args.Value?.ToString(), "#111827");
+
+    private void SetSecondaryColor(ChangeEventArgs args) =>
+        form.SecondaryColor = ColorPickerValue(args.Value?.ToString(), "#F3F4F6");
+
+    private void NormalizePrimaryColor()
+    {
+        if (IsValidHexColor(form.PrimaryColor))
+            form.PrimaryColor = form.PrimaryColor!.Trim().ToUpperInvariant();
+    }
+
+    private void NormalizeSecondaryColor()
+    {
+        if (IsValidHexColor(form.SecondaryColor))
+            form.SecondaryColor = form.SecondaryColor!.Trim().ToUpperInvariant();
+    }
+
+    private static bool IsValidHexColor(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+            return false;
+
+        var text = value.Trim();
+        if (text.Length != 7 || text[0] != '#')
+            return false;
+
+        for (var i = 1; i < text.Length; i++)
+        {
+            if (!Uri.IsHexDigit(text[i]))
+                return false;
+        }
+
+        return true;
+    }
+
     private static void ValidateLogoSelection(IBrowserFile file, List<string> errors)
     {
         if (file.Size <= 0 || file.Size > MaxLogoBytes)
-            errors.Add("El logo debe pesar maximo 2 MB.");
+            errors.Add("El logo debe pesar máximo 2 MB.");
         if (!file.ContentType.Equals("image/png", StringComparison.OrdinalIgnoreCase)
             && !file.ContentType.Equals("image/jpeg", StringComparison.OrdinalIgnoreCase)
             && !file.ContentType.Equals("image/jpg", StringComparison.OrdinalIgnoreCase))

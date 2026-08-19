@@ -71,7 +71,7 @@ internal sealed class TenantBrandingLogoService :
         if (tenantId == Guid.Empty)
             return Result.Fail<TenantBrandingLogoResult>("TenantId requerido.");
         if (contentLength <= 0 || contentLength > MaxLogoBytes)
-            return Result.Fail<TenantBrandingLogoResult>("El logo debe pesar maximo 2 MB.");
+            return Result.Fail<TenantBrandingLogoResult>("El logo debe pesar máximo 2 MB.");
         if (!AllowedContentTypes.Contains(contentType))
             return Result.Fail<TenantBrandingLogoResult>("El logo debe ser PNG o JPG.");
         if (_container is null)

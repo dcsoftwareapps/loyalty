@@ -172,7 +172,7 @@ public sealed class TenantBrandingTests
             Array.Empty<byte>());
 
         Assert.True(result.IsFailure);
-        Assert.Contains("El logo debe pesar maximo 2 MB.", result.Errors);
+        Assert.Contains("El logo debe pesar máximo 2 MB.", result.Errors);
     }
 
     private sealed class BrandingTestEnvironment : IAsyncDisposable

@@ -78,6 +78,27 @@ input:focus, select:focus, textarea:focus {
     box-shadow: 0 0 0 3px var(--kb-blush-soft);
 }
 
+.kb-color-input-group {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.kb-color-input-group input[type=text] {
+    flex: 1;
+}
+
+input[type=color].kb-color-picker {
+    width: 46px;
+    height: 46px;
+    flex: 0 0 46px;
+    padding: 4px;
+    border: 1px solid var(--kb-sand-100);
+    border-radius: var(--kb-radius-sm);
+    background: var(--kb-bg-card);
+    cursor: pointer;
+}
+
 /* ============================================================================
    Layout principal
    ============================================================================ */
@@ -391,6 +412,14 @@ input:focus, select:focus, textarea:focus {
     line-height: 1;
     font-weight: 700;
 }
+.kb-poster-logo {
+    display: block;
+    width: auto;
+    max-width: 220px;
+    max-height: 88px;
+    margin: 0 auto 10px;
+    object-fit: contain;
+}
 .kb-poster-kicker {
     margin: 8px 0 22px;
     color: var(--kb-ink-muted);
@@ -415,6 +444,15 @@ input:focus, select:focus, textarea:focus {
     padding: 12px;
     border-radius: var(--kb-radius);
     background: #fff;
+}
+.kb-registration-poster img.kb-poster-logo {
+    width: auto;
+    height: auto;
+    max-width: 220px;
+    max-height: 88px;
+    padding: 0;
+    border-radius: 0;
+    background: transparent;
 }
 .kb-registration-poster strong {
     display: block;
@@ -603,5 +641,11 @@ input:focus, select:focus, textarea:focus {
         width: 2.6in;
         height: 2.6in;
         margin: 0 auto;
+    }
+    body:has(.kb-registration-poster) .kb-registration-poster img.kb-poster-logo {
+        width: auto;
+        max-width: 2.4in;
+        height: auto;
+        max-height: 0.9in;
     }
 }

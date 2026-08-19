@@ -1,10 +1,10 @@
 # LoyaltyCloud - AI Handoff
 
-Last updated: 2026-08-16
+Last updated: 2026-08-17
 
 Branch: `main`
 
-Last task worked: document current PROD Linux Admin/domain transition, Quick Help QR public base URL and PROD SQL/App Service state.
+Last task worked: Admin UI cleanup for customer email visibility, tenant color inputs, Quick Help poster logo and Spanish encoding/accents.
 
 ## Current State
 
@@ -12,9 +12,13 @@ LoyaltyCloud is in RC1/UAT.
 
 Current codebase state at the end of this handoff task:
 
+- Admin customer UI intentionally does not render `Customer.Email`; LoyaltyCloud currently does not ask for email as visible customer data.
+- Platform tenant creation now has synchronized color picker + hex inputs for primary and secondary colors.
+- Quick Help printable registration poster uses tenant branding `LogoUrl` at the top when available, falling back to tenant display name.
+- Visible Admin Spanish mojibake/accent issues found in this cleanup were corrected.
+- Static Admin guardrail tests were updated/added for Quick Help text/logo, customer email omission and color picker markup.
 - Quick Help now builds public registration links and QR/poster URLs from configurable `Admin:PublicBaseUrl`, falling back to the current Admin base URI when unset.
-- Minimal Admin appsettings/test/docs changes were made.
-- This handoff update only changed documentation.
+- This task changed Admin UI, one visible shared validation message and tests/docs only.
 - No build was executed.
 - No tests were executed.
 - No EF migrations were created or applied.
