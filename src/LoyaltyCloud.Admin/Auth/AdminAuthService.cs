@@ -184,10 +184,25 @@ public sealed class AdminAuthService
     public async Task SignOutAsync(HttpContext context) =>
         await context.SignOutAsync(CookieAuthenticationDefaults.AuthenticationScheme);
 
-    public async Task<bool> IsBillingOnlyAsync(HttpContext context)
+    public Task<bool> IsBillingOnlyAsync(HttpContext context) =>
+        IsBillingOnlyAsync(context.User, context.RequestAborted);
+
+    public async Task<bool> IsBillingOnlyAsync(
+        ClaimsPrincipal principal,
+        CancellationToken ct = default)
     {
-        if (!Guid.TryParse(context.User.FindFirstValue(AdminClaimTypes.TenantId), out var tenantId)) return false;
-        var tenant = await _tenants.GetByIdAsync(tenantId, context.RequestAborted);
+        if (!Guid.TryParse(principal.FindFirstValue(AdminClaimTypes.TenantId), out var tenantId))
+            return false;
+
+        var tenant = await _tenants.GetByIdAsync(tenantId, ct);
+        return tenant is not null && !IsOperational(tenant) && CanAccessBilling(tenant);
+    }
+
+    public async Task<bool> IsBillingOnlyTenantAsync(
+        string tenantSlug,
+        CancellationToken ct = default)
+    {
+        var tenant = await ResolveTenantAsync(tenantSlug, ct);
         return tenant is not null && !IsOperational(tenant) && CanAccessBilling(tenant);
     }
 

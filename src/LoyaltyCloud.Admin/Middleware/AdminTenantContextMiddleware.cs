@@ -28,7 +28,9 @@ public sealed class AdminTenantContextMiddleware
                 return;
             }
 
-            if (await auth.IsBillingOnlyAsync(context) && !IsBillingPath(context.Request.Path))
+            if (await auth.IsBillingOnlyAsync(context)
+                && !IsBillingPath(context.Request.Path)
+                && !IsBillingInfrastructurePath(context.Request.Path))
             {
                 var slug = context.User.FindFirst(LoyaltyCloud.Admin.Auth.AdminClaimTypes.TenantSlug)?.Value;
                 context.Response.Redirect($"/{slug}/billing");
@@ -38,6 +40,10 @@ public sealed class AdminTenantContextMiddleware
 
         await _next(context);
     }
+
+    public static bool IsBillingInfrastructurePath(PathString path) =>
+        path.StartsWithSegments("/_blazor", StringComparison.OrdinalIgnoreCase) ||
+        path.StartsWithSegments("/_framework", StringComparison.OrdinalIgnoreCase);
 
     public static bool IsBillingPath(PathString path)
     {

@@ -25,9 +25,26 @@
 </head>
 <body>
     <Routes />
+    <div id="components-reconnect-modal" class="components-reconnect-hide" role="alert" aria-live="assertive">
+        <div class="kb-reconnect-card">
+            <strong>Se perdió la conexión.</strong>
+            <span>Reconectando con LoyaltyCloud…</span>
+            <button id="components-reconnect-button" type="button" class="kb-btn kb-btn--primary" onclick="Blazor.reconnect()">
+                Reintentar
+            </button>
+        </div>
+    </div>
     <script src="js/jsQR.js"></script>
     <script src="js/qr-scanner.js"></script>
     <script src="js/wallet-platform.js"></script>
-    <script src="_framework/blazor.web.js"></script>
+    <script src="/_framework/blazor.web.js" autostart="false"></script>
+    <script>
+        Blazor.start().catch(error => {
+            console.error("LoyaltyCloud interactive startup failed.", error);
+            const reconnectModal = document.getElementById("components-reconnect-modal");
+            reconnectModal?.classList.remove("components-reconnect-hide");
+            reconnectModal?.classList.add("components-reconnect-failed");
+        });
+    </script>
 </body>
 </html>

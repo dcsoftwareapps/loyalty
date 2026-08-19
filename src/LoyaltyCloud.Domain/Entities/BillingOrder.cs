@@ -38,6 +38,7 @@ public sealed class BillingOrder : Entity, ITenantOwned
     public void AttachCheckout(string id) => ExternalCheckoutId = id;
     public void AttachReceipt(string url) => ReceiptUrl = url;
     public bool MarkPaid(string? approvedBy, DateTime nowUtc) { if (Status == BillingOrderStatus.Paid) return false; Status = BillingOrderStatus.Paid; ApprovedBy = approvedBy; ApprovedAt = approvedBy is null ? null : nowUtc; return true; }
+    public bool MarkExpired() { if (Status != BillingOrderStatus.Pending) return false; Status = BillingOrderStatus.Expired; return true; }
     public void MarkFailed() { if (Status != BillingOrderStatus.Paid) Status = BillingOrderStatus.Failed; }
     public void Reject(string by, DateTime nowUtc) { if (Status != BillingOrderStatus.AwaitingTransfer) throw new InvalidOperationException(); Status = BillingOrderStatus.Rejected; ApprovedBy = by; ApprovedAt = nowUtc; }
 }

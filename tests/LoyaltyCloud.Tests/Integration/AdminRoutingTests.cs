@@ -275,6 +275,132 @@ public sealed class AdminRoutingTests : IClassFixture<AdminRoutingTests.AdminWeb
         Assert.Null(protectedResponse.Headers.Location);
     }
 
+    [Theory]
+    [InlineData(TenantSuspensionReason.PaymentPastDue)]
+    [InlineData(TenantSuspensionReason.TrialExpired)]
+    [Trait("Category", "AdminRouting")]
+    [Trait("Category", "TenantAdminAuth")]
+    public async Task Billing_suspended_tenant_can_login_and_is_limited_to_billing(TenantSuspensionReason reason)
+    {
+        await _factory.SetKBeautySubscriptionAsync(
+            TenantSubscriptionStatus.Suspended,
+            reason);
+
+        try
+        {
+            using var client = _factory.CreateClient(new WebApplicationFactoryClientOptions
+            {
+                AllowAutoRedirect = false
+            });
+
+            using var getLogin = await client.GetAsync("/kbeauty/login");
+            var loginHtml = await getLogin.Content.ReadAsStringAsync();
+            Assert.Equal(HttpStatusCode.OK, getLogin.StatusCode);
+            Assert.DoesNotContain("Este programa está suspendido temporalmente.", loginHtml);
+
+            using var post = new HttpRequestMessage(HttpMethod.Post, "/kbeauty/login")
+            {
+                Content = new FormUrlEncodedContent(BuildLoginForm(
+                    loginHtml,
+                    TenantAdminUsername,
+                    TenantAdminPassword))
+            };
+            post.Headers.Add("Cookie", ExtractCookies(getLogin));
+
+            using var loginResponse = await client.SendAsync(post);
+            Assert.Equal(HttpStatusCode.Redirect, loginResponse.StatusCode);
+            Assert.Equal("/kbeauty/billing", loginResponse.Headers.Location?.OriginalString);
+            var cookie = ExtractCookie(loginResponse, "loyaltycloud.admin.auth");
+
+            using var billingRequest = new HttpRequestMessage(HttpMethod.Get, "/kbeauty/billing");
+            billingRequest.Headers.Add("Cookie", cookie);
+            using var billingResponse = await client.SendAsync(billingRequest);
+            Assert.Equal(HttpStatusCode.OK, billingResponse.StatusCode);
+            var billingHtml = await billingResponse.Content.ReadAsStringAsync();
+            Assert.Contains("<!--Blazor:", billingHtml);
+
+            using var frameworkRequest = new HttpRequestMessage(HttpMethod.Get, "/_framework/blazor.web.js");
+            frameworkRequest.Headers.Add("Cookie", cookie);
+            using var frameworkResponse = await client.SendAsync(frameworkRequest);
+            Assert.Equal(HttpStatusCode.OK, frameworkResponse.StatusCode);
+            Assert.Null(frameworkResponse.Headers.Location);
+            Assert.Equal("text/javascript", frameworkResponse.Content.Headers.ContentType?.MediaType);
+
+            using var blazorRequest = new HttpRequestMessage(HttpMethod.Get, "/_blazor");
+            blazorRequest.Headers.Add("Cookie", cookie);
+            using var blazorResponse = await client.SendAsync(blazorRequest);
+            Assert.NotEqual(HttpStatusCode.Redirect, blazorResponse.StatusCode);
+            Assert.Null(blazorResponse.Headers.Location);
+
+            using var dashboardRequest = new HttpRequestMessage(HttpMethod.Get, "/dashboard");
+            dashboardRequest.Headers.Add("Cookie", cookie);
+            using var dashboardResponse = await client.SendAsync(dashboardRequest);
+            Assert.Equal(HttpStatusCode.Redirect, dashboardResponse.StatusCode);
+            Assert.Equal("/kbeauty/billing", dashboardResponse.Headers.Location?.OriginalString);
+
+            using var customersRequest = new HttpRequestMessage(HttpMethod.Get, "/customers");
+            customersRequest.Headers.Add("Cookie", cookie);
+            using var customersResponse = await client.SendAsync(customersRequest);
+            Assert.Equal(HttpStatusCode.Redirect, customersResponse.StatusCode);
+            Assert.Equal("/kbeauty/billing", customersResponse.Headers.Location?.OriginalString);
+        }
+        finally
+        {
+            await _factory.SetKBeautySubscriptionAsync(TenantSubscriptionStatus.Active, null);
+        }
+    }
+
+    [Fact]
+    [Trait("Category", "AdminRouting")]
+    [Trait("Category", "TenantAdminAuth")]
+    public async Task Payment_suspended_tenant_still_rejects_invalid_credentials()
+    {
+        await _factory.SetKBeautySubscriptionAsync(
+            TenantSubscriptionStatus.Suspended,
+            TenantSuspensionReason.PaymentPastDue);
+
+        try
+        {
+            using var client = _factory.CreateClient(new WebApplicationFactoryClientOptions
+            {
+                AllowAutoRedirect = false
+            });
+            using var getLogin = await client.GetAsync("/kbeauty/login");
+            var loginHtml = await getLogin.Content.ReadAsStringAsync();
+            using var post = new HttpRequestMessage(HttpMethod.Post, "/kbeauty/login")
+            {
+                Content = new FormUrlEncodedContent(BuildLoginForm(
+                    loginHtml,
+                    TenantAdminUsername,
+                    "wrong-password"))
+            };
+            post.Headers.Add("Cookie", ExtractCookies(getLogin));
+
+            using var response = await client.SendAsync(post);
+            var responseHtml = await response.Content.ReadAsStringAsync();
+            Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+            Assert.Contains("incorrectos.", responseHtml);
+            Assert.DoesNotContain(response.Headers, header =>
+                header.Key.Equals("Set-Cookie", StringComparison.OrdinalIgnoreCase) &&
+                header.Value.Any(value => value.StartsWith("loyaltycloud.admin.auth=", StringComparison.OrdinalIgnoreCase)));
+        }
+        finally
+        {
+            await _factory.SetKBeautySubscriptionAsync(TenantSubscriptionStatus.Active, null);
+        }
+    }
+
+    [Fact]
+    [Trait("Category", "AdminRouting")]
+    public void Billing_only_tenant_allows_Blazor_transport_and_framework_assets()
+    {
+        Assert.True(AdminTenantContextMiddleware.IsBillingInfrastructurePath("/_blazor"));
+        Assert.True(AdminTenantContextMiddleware.IsBillingInfrastructurePath("/_blazor/negotiate"));
+        Assert.True(AdminTenantContextMiddleware.IsBillingInfrastructurePath("/_framework"));
+        Assert.True(AdminTenantContextMiddleware.IsBillingInfrastructurePath("/_framework/blazor.web.js"));
+        Assert.False(AdminTenantContextMiddleware.IsBillingInfrastructurePath("/api/points"));
+        Assert.False(AdminTenantContextMiddleware.IsBillingInfrastructurePath("/customers"));
+    }
     [Fact]
     [Trait("Category", "AdminRouting")]
     public async Task Tenant_admin_authenticated_cannot_access_platform_tenants()
@@ -1159,6 +1285,23 @@ public sealed class AdminRoutingTests : IClassFixture<AdminRoutingTests.AdminWeb
             }
         }
 
+        public async Task SetKBeautySubscriptionAsync(
+            TenantSubscriptionStatus status,
+            TenantSuspensionReason? suspensionReason)
+        {
+            using var scope = Services.CreateScope();
+            var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+            var subscription = await db.TenantSubscriptions
+                .SingleAsync(row => row.TenantId == TenantSeed.KBeautyTenantId);
+            db.Entry(subscription).Property(nameof(TenantSubscription.Status)).CurrentValue = status;
+            db.Entry(subscription).Property(nameof(TenantSubscription.SuspensionReason)).CurrentValue = suspensionReason;
+            if (status == TenantSubscriptionStatus.Active)
+            {
+                db.Entry(subscription).Property(nameof(TenantSubscription.PaidThroughUtc)).CurrentValue =
+                    DateTime.UtcNow.AddDays(30);
+            }
+            await db.SaveChangesAsync();
+        }
         public async Task<string> CreateSuperAdminCookieAsync()
         {
             using var scope = Services.CreateScope();

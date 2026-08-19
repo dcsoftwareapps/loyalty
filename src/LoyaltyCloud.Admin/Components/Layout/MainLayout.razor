@@ -1,76 +1,97 @@
 @inherits LayoutComponentBase
 @inject LoyaltyCloud.Application.Common.Interfaces.ITenantBrandingReadService Branding
 @inject LoyaltyCloud.Application.Common.Interfaces.ITenantContext TenantContext
+@inject LoyaltyCloud.Admin.Auth.AdminAuthService Auth
+@inject AuthenticationStateProvider AuthenticationStateProvider
+@inject NavigationManager Navigation
 
-<div class="kb-app" style="@TenantStyle">
-    <nav class="kb-sidebar">
-        <div class="kb-sidebar-brand">
-            @if (!string.IsNullOrWhiteSpace(branding?.LogoUrl))
-            {
-                <img src="@branding.LogoUrl" alt="@branding.DisplayName" class="kb-brand-logo" />
-            }
-            else
-            {
-                <h1>@(branding?.DisplayName ?? "LoyaltyCloud")</h1>
-            }
-            <span>LoyaltyCloud</span>
-        </div>
-        <NavLink href="/dashboard" Match="NavLinkMatch.All">Dashboard</NavLink>
+@if (canRender)
+{
+    <div class="kb-app" style="@TenantStyle">
+        <nav class="kb-sidebar">
+            <div class="kb-sidebar-brand">
+                @if (!string.IsNullOrWhiteSpace(branding?.LogoUrl))
+                {
+                    <img src="@branding.LogoUrl" alt="@branding.DisplayName" class="kb-brand-logo" />
+                }
+                else
+                {
+                    <h1>@(branding?.DisplayName ?? "LoyaltyCloud")</h1>
+                }
+                <span>LoyaltyCloud</span>
+            </div>
+            <NavLink href="/dashboard" Match="NavLinkMatch.All">Dashboard</NavLink>
 
-        <span class="kb-sidebar-section">Puntos</span>
-        <NavLink href="/scan">Sumar puntos</NavLink>
-        <NavLink href="/redeem">Canjear puntos</NavLink>
+            <span class="kb-sidebar-section">Puntos</span>
+            <NavLink href="/scan">Sumar puntos</NavLink>
+            <NavLink href="/redeem">Canjear puntos</NavLink>
 
-        <span class="kb-sidebar-section">Clientes</span>
-        <NavLink href="/customers">Clientes</NavLink>
-        <NavLink href="/redemptions">Canjes</NavLink>
+            <span class="kb-sidebar-section">Clientes</span>
+            <NavLink href="/customers">Clientes</NavLink>
+            <NavLink href="/redemptions">Canjes</NavLink>
 
-        <span class="kb-sidebar-section">Programa de lealtad</span>
-        <NavLink href="/rewards">Recompensas</NavLink>
-        <NavLink href="/campaigns">Campañas</NavLink>
+            <span class="kb-sidebar-section">Programa de lealtad</span>
+            <NavLink href="/rewards">Recompensas</NavLink>
+            <NavLink href="/campaigns">Campañas</NavLink>
 
-        <span class="kb-sidebar-section">Comunicación</span>
-        <NavLink href="/marketing-notifications">Mensajes</NavLink>
+            <span class="kb-sidebar-section">Comunicación</span>
+            <NavLink href="/marketing-notifications">Mensajes</NavLink>
 
-        <span class="kb-sidebar-section">Administración</span>
-        <NavLink href="/levels">Niveles</NavLink>
-        <NavLink href="/config">Configuración</NavLink>
-        <NavLink href="@($"/{TenantContext.TenantSlug}/billing")">Suscripción</NavLink>
+            <span class="kb-sidebar-section">Administración</span>
+            <NavLink href="/levels">Niveles</NavLink>
+            <NavLink href="/config">Configuración</NavLink>
+            <NavLink href="@($"/{TenantContext.TenantSlug}/billing")">Suscripción</NavLink>
 
-        <div class="kb-sidebar-help">
-            <NavLink href="/quick-help">Ayuda rápida</NavLink>
-        </div>
+            <div class="kb-sidebar-help">
+                <NavLink href="/quick-help">Ayuda rápida</NavLink>
+            </div>
 
-        <form method="post" action="/logout" class="kb-signout">
-            <AntiforgeryToken />
-            <button type="submit" class="kb-btn kb-btn--ghost" style="width:100%;margin-top:8px;">
-                Cerrar sesión
-            </button>
-        </form>
-    </nav>
+            <form method="post" action="/logout" class="kb-signout">
+                <AntiforgeryToken />
+                <button type="submit" class="kb-btn kb-btn--ghost" style="width:100%;margin-top:8px;">
+                    Cerrar sesión
+                </button>
+            </form>
+        </nav>
 
-    <main class="kb-main">
-        @Body
-    </main>
-</div>
+        <main class="kb-main">
+            @Body
+        </main>
+    </div>
+}
 
 @code {
     private LoyaltyCloud.Application.Common.Interfaces.TenantBrandingInfo? branding;
+    private bool canRender;
 
     private string TenantStyle =>
         branding is null
             ? string.Empty
             : $"--kb-blush:{branding.PrimaryColor};--kb-sand-100:{branding.SecondaryColor};";
 
-    protected override async Task OnInitializedAsync()
+    protected override async Task OnParametersSetAsync()
     {
-        try
+        canRender = false;
+        var principal = (await AuthenticationStateProvider.GetAuthenticationStateAsync()).User;
+        if (await Auth.IsBillingOnlyAsync(principal))
         {
-            branding = await Branding.GetCurrentAsync();
+            var tenantSlug = principal.FindFirst(LoyaltyCloud.Admin.Auth.AdminClaimTypes.TenantSlug)?.Value;
+            Navigation.NavigateTo($"/{tenantSlug}/billing", forceLoad: true);
+            return;
         }
-        catch
+
+        if (branding is null)
         {
-            branding = null;
+            try
+            {
+                branding = await Branding.GetCurrentAsync();
+            }
+            catch
+            {
+                branding = null;
+            }
         }
+
+        canRender = true;
     }
 }
