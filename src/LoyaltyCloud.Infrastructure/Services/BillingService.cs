@@ -6,15 +6,16 @@ using LoyaltyCloud.Domain.Enums;
 using LoyaltyCloud.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
+using Microsoft.AspNetCore.DataProtection;
 
 namespace LoyaltyCloud.Infrastructure.Services;
 
 internal sealed class BillingService : IBillingService
 {
     private readonly AppDbContext _db; private readonly IDateTimeProvider _clock; private readonly IPaymentGateway _gateway;
-    private readonly IMutableTenantContext _tenantContext; private readonly ILogger<BillingService> _logger;
-    public BillingService(AppDbContext db, IDateTimeProvider clock, IPaymentGateway gateway, IMutableTenantContext tenantContext, ILogger<BillingService> logger)
-    { _db=db; _clock=clock; _gateway=gateway; _tenantContext=tenantContext; _logger=logger; }
+    private readonly IMutableTenantContext _tenantContext; private readonly ILogger<BillingService> _logger; private readonly IDataProtector _returnProtector;
+    public BillingService(AppDbContext db, IDateTimeProvider clock, IPaymentGateway gateway, IMutableTenantContext tenantContext, ILogger<BillingService> logger, IDataProtectionProvider dataProtection)
+    { _db=db; _clock=clock; _gateway=gateway; _tenantContext=tenantContext; _logger=logger; _returnProtector=dataProtection.CreateProtector("LoyaltyCloud.Billing.Return.v1"); }
 
     public async Task<BillingSettingsDto> GetSettingsAsync(CancellationToken ct=default) => Map(await Settings(ct));
     public async Task SaveSettingsAsync(BillingSettingsDto x, CancellationToken ct=default)
@@ -38,8 +39,22 @@ internal sealed class BillingService : IBillingService
     public async Task<TenantBillingDto> GetTenantBillingAsync(Guid tenantId,CancellationToken ct=default)
     { var t=await RequireTenant(tenantId,ct); _tenantContext.SetTenant(t.Id,t.Slug); await ReconcileExpiredCardOrdersAsync(tenantId,ct); var settings=await GetSettingsAsync(ct); var plans=await GetPlansAsync(true,ct); var orders=await _db.BillingOrders.IgnoreQueryFilters().Where(x=>x.TenantId==tenantId).OrderByDescending(x=>x.CreatedAt).Take(20).AsNoTracking().ToListAsync(ct); return new(t.Id,t.Slug,t.DisplayName,t.Subscription!.PlanCode,t.Subscription.Status.ToString(),t.Subscription.PaidThroughUtc,t.Subscription.GracePeriodEndsAt,settings,settings.CardPaymentsEnabled && _gateway.IsAvailable,plans,orders.Select(x=>Map(x)).ToList()); }
     public async Task<BillingOrderDto> CreateOrderAsync(Guid tenantId,string planCode,int months,BillingPaymentMethod method,string baseUrl,CancellationToken ct=default)
-    { var t=await RequireTenant(tenantId,ct); var s=await Settings(ct); if(method==BillingPaymentMethod.Card&&(!s.CardPaymentsEnabled||!_gateway.IsAvailable))throw new InvalidOperationException("Pago con tarjeta no disponible."); if(method==BillingPaymentMethod.BankTransfer&&!s.BankTransferEnabled)throw new InvalidOperationException("Transferencia no disponible."); var q=await QuoteAsync(tenantId,planCode,months,ct); var from=t.Subscription!.PaidThroughUtc>_clock.UtcNow?t.Subscription.PaidThroughUtc.Value:_clock.UtcNow; var o=new BillingOrder(Guid.NewGuid(),tenantId,planCode,months,q.Subtotal,q.Tax,q.Total,q.Currency,method,_clock.UtcNow,from,TenantSubscription.CalculateManualPaymentPaidThrough(from,months,_clock.UtcNow)); _tenantContext.SetTenant(t.Id,t.Slug);_db.Add(o);await _db.SaveChangesAsync(ct);string? url=null;if(method==BillingPaymentMethod.Card){var root=baseUrl.TrimEnd('/');var result=await _gateway.CreateCheckoutAsync(new(o.Id,tenantId,$"LoyaltyCloud {months} mes(es)",(long)Math.Round(o.Total*100m),o.Currency,$"{root}/{t.Slug}/billing/payment/success?orderId={o.Id}",$"{root}/{t.Slug}/billing/payment/cancelled?orderId={o.Id}"),ct);o.AttachCheckout(result.SessionId);await _db.SaveChangesAsync(ct);url=result.Url;}return Map(o,url); }
+    { var t=await RequireTenant(tenantId,ct); var s=await Settings(ct); if(method==BillingPaymentMethod.Card&&(!s.CardPaymentsEnabled||!_gateway.IsAvailable))throw new InvalidOperationException("Pago con tarjeta no disponible."); if(method==BillingPaymentMethod.BankTransfer&&!s.BankTransferEnabled)throw new InvalidOperationException("Transferencia no disponible."); var q=await QuoteAsync(tenantId,planCode,months,ct); var from=t.Subscription!.PaidThroughUtc>_clock.UtcNow?t.Subscription.PaidThroughUtc.Value:_clock.UtcNow; var o=new BillingOrder(Guid.NewGuid(),tenantId,planCode,months,q.Subtotal,q.Tax,q.Total,q.Currency,method,_clock.UtcNow,from,TenantSubscription.CalculateManualPaymentPaidThrough(from,months,_clock.UtcNow)); _tenantContext.SetTenant(t.Id,t.Slug);_db.Add(o);await _db.SaveChangesAsync(ct);string? url=null;if(method==BillingPaymentMethod.Card){var root=baseUrl.TrimEnd('/');var token=Uri.EscapeDataString(_returnProtector.Protect($"{tenantId:N}:{o.Id:N}"));var result=await _gateway.CreateCheckoutAsync(new(o.Id,tenantId,$"LoyaltyCloud {months} mes(es)",(long)Math.Round(o.Total*100m),o.Currency,$"{root}/{t.Slug}/billing/payment/success?token={token}",$"{root}/{t.Slug}/billing/payment/cancelled?token={token}"),ct);o.AttachCheckout(result.SessionId);await _db.SaveChangesAsync(ct);url=result.Url;}return Map(o,url); }
     public async Task<BillingOrderDto?> GetOrderAsync(Guid tenantId,Guid orderId,CancellationToken ct=default){var o=await _db.BillingOrders.IgnoreQueryFilters().AsNoTracking().SingleOrDefaultAsync(x=>x.Id==orderId&&x.TenantId==tenantId,ct);return o is null?null:Map(o);}
+    public async Task<BillingPaymentResultDto?> GetPaymentResultAsync(string tenantSlug,string token,CancellationToken ct=default)
+    {
+        Guid tenantId,orderId;
+        try
+        {
+            var parts=_returnProtector.Unprotect(token).Split(':');
+            if(parts.Length!=2||!Guid.TryParseExact(parts[0],"N",out tenantId)||!Guid.TryParseExact(parts[1],"N",out orderId))return null;
+        }
+        catch(System.Security.Cryptography.CryptographicException){return null;}
+        var tenant=await _db.Tenants.IgnoreQueryFilters().Include(x=>x.Subscription).AsNoTracking().SingleOrDefaultAsync(x=>x.Id==tenantId&&x.Slug==tenantSlug,ct);
+        if(tenant?.Subscription is null)return null;
+        var order=await _db.BillingOrders.IgnoreQueryFilters().AsNoTracking().SingleOrDefaultAsync(x=>x.Id==orderId&&x.TenantId==tenantId,ct);
+        return order is null?null:new BillingPaymentResultDto(order.Status,tenant.Subscription.PaidThroughUtc,tenant.Subscription.IsOperational(_clock.UtcNow));
+    }
     public async Task<IReadOnlyList<BillingOrderDto>> GetAwaitingTransfersAsync(CancellationToken ct=default)=>await _db.BillingOrders.IgnoreQueryFilters().Where(x=>x.Status==BillingOrderStatus.AwaitingTransfer).OrderBy(x=>x.CreatedAt).AsNoTracking().Select(x=>new BillingOrderDto(x.Id,x.TenantId,x.PlanCode,x.Months,x.Subtotal,x.Tax,x.Total,x.Currency,x.Status,x.PaymentMethod,x.CreatedAt,x.SubscriptionThroughUtc,null,x.BankReference,x.ReceiptUrl)).ToListAsync(ct);
     public Task ApproveTransferAsync(Guid orderId,string by,CancellationToken ct=default)=>Confirm(orderId,$"manual:{orderId}",by,ct);
     public async Task RejectTransferAsync(Guid orderId,string by,CancellationToken ct=default){var o=await Order(orderId,ct);var t=await RequireTenant(o.TenantId,ct);_tenantContext.SetTenant(t.Id,t.Slug);o.Reject(by,_clock.UtcNow);await _db.SaveChangesAsync(ct);}

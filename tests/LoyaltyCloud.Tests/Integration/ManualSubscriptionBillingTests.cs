@@ -258,6 +258,30 @@ public sealed class ManualSubscriptionBillingTests
         Assert.Equal("https://checkout.stripe.test/c/pay/cs_test_checkout", order.CheckoutUrl);
         Assert.Equal(1, gateway.CreateCalls);
         Assert.True(await env.BillingOrderExistsAsync(order.Id));
+        Assert.NotNull(gateway.LastRequest);
+        Assert.Contains("/billing/payment/success?token=", gateway.LastRequest!.SuccessUrl);
+        Assert.DoesNotContain("orderId=", gateway.LastRequest.SuccessUrl);
+    }
+
+    [Fact]
+    [Trait("Category", "ManualSubscriptionBilling")]
+    public async Task Protected_payment_result_cannot_be_read_through_another_tenant_slug()
+    {
+        var gateway = new CheckoutTestGateway();
+        await using var env = await BillingTestEnvironment.CreateAsync(paymentGateway: gateway);
+        var tenantId = await env.AddTenantAsync("result-owner", TenantSubscriptionStatus.Active,
+            paidThrough: FixedNow.AddDays(10));
+        await env.AddTenantAsync("result-other", TenantSubscriptionStatus.Active,
+            paidThrough: FixedNow.AddDays(10));
+        await env.CreatePayableCardOrderAsync(tenantId);
+        var token = ExtractReturnToken(gateway.LastRequest!.SuccessUrl);
+
+        var ownerResult = await env.GetPaymentResultAsync("result-owner", token);
+        var otherResult = await env.GetPaymentResultAsync("result-other", token);
+
+        Assert.NotNull(ownerResult);
+        Assert.Equal(BillingOrderStatus.Pending, ownerResult!.Status);
+        Assert.Null(otherResult);
     }
 
     [Fact]
@@ -607,6 +631,13 @@ public sealed class ManualSubscriptionBillingTests
                 .GetTenantBillingAsync(tenantId);
         }
 
+        public async Task<BillingPaymentResultDto?> GetPaymentResultAsync(string tenantSlug, string token)
+        {
+            using var scope = _services.CreateScope();
+            return await scope.ServiceProvider.GetRequiredService<IBillingService>()
+                .GetPaymentResultAsync(tenantSlug, token);
+        }
+
         public async Task MakeOrderPotentiallyExpiredAsync(Guid orderId)
         {
             using var scope = _services.CreateScope();
@@ -736,12 +767,14 @@ public sealed class ManualSubscriptionBillingTests
         private StripePaymentConfirmation? _confirmation;
         public bool IsAvailable => true;
         public int CreateCalls { get; private set; }
+        public CheckoutGatewayRequest? LastRequest { get; private set; }
         public int GetSessionCalls { get; private set; }
         public CheckoutSessionStatus CheckoutStatus { get; set; } = CheckoutSessionStatus.Open;
 
         public Task<CheckoutGatewayResult> CreateCheckoutAsync(CheckoutGatewayRequest request, CancellationToken ct = default)
         {
             CreateCalls++;
+            LastRequest = request;
             return Task.FromResult(new CheckoutGatewayResult(
                 "cs_test_checkout",
                 "https://checkout.stripe.test/c/pay/cs_test_checkout"));
@@ -765,6 +798,13 @@ public sealed class ManualSubscriptionBillingTests
 
         public StripePaymentConfirmation ParseWebhook(string payload, string signature) =>
             _confirmation ?? throw new InvalidOperationException("Test confirmation not configured.");
+    }
+
+    private static string ExtractReturnToken(string url)
+    {
+        var query = new Uri(url).Query.TrimStart('?').Split('&', StringSplitOptions.RemoveEmptyEntries);
+        var value = query.Single(x => x.StartsWith("token=", StringComparison.Ordinal)).Split('=', 2)[1];
+        return Uri.UnescapeDataString(value);
     }
 
     private sealed class TestHostEnvironment : IHostEnvironment

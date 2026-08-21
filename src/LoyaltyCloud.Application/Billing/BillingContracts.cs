@@ -14,6 +14,7 @@ public sealed record BillingOrderDto(Guid Id, Guid TenantId, string PlanCode, in
 public sealed record TenantBillingDto(Guid TenantId, string TenantSlug, string TenantName, string PlanCode,
     string SubscriptionStatus, DateTime? PaidThroughUtc, DateTime? GracePeriodEndsAt, BillingSettingsDto Settings,
     bool CardPaymentsAvailable, IReadOnlyList<SubscriptionPlanDto> Plans, IReadOnlyList<BillingOrderDto> Orders);
+public sealed record BillingPaymentResultDto(BillingOrderStatus Status, DateTime? PaidThroughUtc, bool TenantOperational);
 public sealed record CheckoutGatewayRequest(Guid OrderId, Guid TenantId, string Description, long AmountMinor,
     string Currency, string SuccessUrl, string CancelUrl);
 public sealed record CheckoutGatewayResult(string SessionId, string Url);
@@ -41,6 +42,7 @@ public interface IBillingService
     Task<BillingOrderDto> CreateOrderAsync(Guid tenantId, string planCode, int months, BillingPaymentMethod method,
         string baseUrl, CancellationToken ct = default);
     Task<BillingOrderDto?> GetOrderAsync(Guid tenantId, Guid orderId, CancellationToken ct = default);
+    Task<BillingPaymentResultDto?> GetPaymentResultAsync(string tenantSlug, string token, CancellationToken ct = default);
     Task<IReadOnlyList<BillingOrderDto>> GetAwaitingTransfersAsync(CancellationToken ct = default);
     Task ApproveTransferAsync(Guid orderId, string approvedBy, CancellationToken ct = default);
     Task RejectTransferAsync(Guid orderId, string rejectedBy, CancellationToken ct = default);

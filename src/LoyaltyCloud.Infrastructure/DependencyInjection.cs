@@ -10,6 +10,7 @@ using LoyaltyCloud.Infrastructure.Repositories;
 using LoyaltyCloud.Infrastructure.Services;
 using LoyaltyCloud.Infrastructure.Services.GoogleWallet;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.AspNetCore.DataProtection;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
@@ -27,6 +28,7 @@ public static class DependencyInjection
         IConfiguration configuration,
         IHostEnvironment? environment = null)
     {
+        services.AddDataProtection();
         AddPersistence(services, configuration);
         AddOptions(services, configuration);
         AddRepositories(services);

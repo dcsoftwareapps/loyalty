@@ -74,6 +74,34 @@ public sealed class BillingUxTests
     }
 
     [Fact]
+    public void Payment_result_has_pending_paid_authenticated_and_anonymous_states()
+    {
+        var page = Read("src", "LoyaltyCloud.Admin", "Pages", "BillingPaymentResult.razor");
+
+        Assert.Contains("Estamos confirmando tu pago", page);
+        Assert.Contains("Pago confirmado", page);
+        Assert.Contains("Tu suscripción está activa", page);
+        Assert.Contains("Continuar al panel", page);
+        Assert.Contains("Iniciar sesión", page);
+        Assert.Contains("result?.TenantOperational == true", page);
+        Assert.Contains("@attribute [AllowAnonymous]", page);
+    }
+
+    [Fact]
+    public void Payment_result_cancelled_and_polling_are_safe_and_bounded()
+    {
+        var page = Read("src", "LoyaltyCloud.Admin", "Pages", "BillingPaymentResult.razor");
+
+        Assert.Contains("Pago cancelado", page);
+        Assert.Contains("No se realizó ningún cargo", page);
+        Assert.Contains("PollAttempts = 15", page);
+        Assert.Contains("TimeSpan.FromSeconds(2)", page);
+        Assert.Contains("result?.Status == BillingOrderStatus.Pending", page);
+        Assert.Contains("pollingTimedOut = true", page);
+        Assert.Contains("Tu pago todavía se está procesando", page);
+    }
+
+    [Fact]
     public void Tenant_billing_offers_only_effectively_available_payment_methods()
     {
         var page = Read("src", "LoyaltyCloud.Admin", "Pages", "Billing.razor");
