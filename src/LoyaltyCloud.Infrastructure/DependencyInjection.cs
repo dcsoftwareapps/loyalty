@@ -1,5 +1,6 @@
 using System.Net;
 using LoyaltyCloud.Application.Common.Interfaces;
+using LoyaltyCloud.Application.Billing;
 using LoyaltyCloud.Common.Services;
 using LoyaltyCloud.Domain.Repositories;
 using LoyaltyCloud.Infrastructure.Configuration;
@@ -9,6 +10,7 @@ using LoyaltyCloud.Infrastructure.Repositories;
 using LoyaltyCloud.Infrastructure.Services;
 using LoyaltyCloud.Infrastructure.Services.GoogleWallet;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.AspNetCore.DataProtection;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
@@ -26,6 +28,7 @@ public static class DependencyInjection
         IConfiguration configuration,
         IHostEnvironment? environment = null)
     {
+        services.AddDataProtection();
         AddPersistence(services, configuration);
         AddOptions(services, configuration);
         AddRepositories(services);
@@ -64,6 +67,7 @@ public static class DependencyInjection
         services.Configure<GoogleWalletOptions>(configuration.GetSection(GoogleWalletOptions.SectionName));
         services.Configure<ProvisioningOptions>(configuration.GetSection(ProvisioningOptions.SectionName));
         services.Configure<BillingOptions>(configuration.GetSection(BillingOptions.SectionName));
+        services.Configure<StripeOptions>(configuration.GetSection(StripeOptions.SectionName));
     }
 
     private static void AddRepositories(IServiceCollection services)
@@ -117,6 +121,8 @@ public static class DependencyInjection
         services.AddScoped<ISuperAdminTenantReadService, SuperAdminTenantReadService>();
         services.AddScoped<ISuperAdminTenantManagementService, SuperAdminTenantManagementService>();
         services.AddScoped<ISubscriptionMaintenanceService, SubscriptionMaintenanceService>();
+        services.AddScoped<IBillingService, BillingService>();
+        services.AddScoped<IPaymentGateway, StripePaymentGateway>();
         services.AddScoped<IPublicTenantResolver, PublicTenantResolver>();
         services.AddScoped<IPointsExpirationNotificationReadService, PointsExpirationNotificationReadService>();
         services.AddScoped<IMonthlyProductNotificationReadService, MonthlyProductNotificationReadService>();

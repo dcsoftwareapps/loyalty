@@ -185,6 +185,17 @@ app.MapPost("/platform/logout", async (HttpContext ctx, SuperAdminAuthService au
     return Results.Redirect("/platform/login");
 });
 
+if (app.Environment.IsDevelopment())
+{
+    app.MapPost("/platform/developer-login", async (HttpContext ctx, SuperAdminAuthService auth) =>
+    {
+        var result = await auth.TryDeveloperSignInAsync(ctx);
+        return result == SuperAdminLoginResult.Success
+            ? Results.Redirect("/platform/tenants")
+            : Results.NotFound();
+    }).AllowAnonymous();
+}
+
 app.Run();
 
 static void LogConfigurationValueSource(ILogger logger, IConfiguration configuration, string key)

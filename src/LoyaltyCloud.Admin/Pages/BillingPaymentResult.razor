@@ -1,0 +1,161 @@
+@page "/{TenantSlug}/billing/payment/success"
+@page "/{TenantSlug}/billing/payment/cancelled"
+@layout LoyaltyCloud.Admin.Components.Layout.BillingLayout
+@attribute [AllowAnonymous]
+@rendermode InteractiveServer
+@implements IDisposable
+@using LoyaltyCloud.Application.Billing
+@using LoyaltyCloud.Domain.Enums
+@inject IBillingService Billing
+@inject AuthenticationStateProvider AuthenticationStateProvider
+@inject NavigationManager Nav
+
+<PageTitle>Resultado del pago - LoyaltyCloud</PageTitle>
+
+<section class="kb-payment-result" aria-live="polite">
+    <div class="kb-card kb-payment-result-card">
+        @if (result is null)
+        {
+            <div class="kb-payment-result-icon kb-payment-result-icon--error" aria-hidden="true">!</div>
+            <h1>No pudimos validar este pago</h1>
+            <p>El enlace no es válido o no corresponde a este programa.</p>
+            <a class="kb-btn kb-btn--primary" href="@LoginUrl">Iniciar sesión</a>
+        }
+        else if (isCancelled)
+        {
+            <div class="kb-payment-result-icon kb-payment-result-icon--muted" aria-hidden="true">×</div>
+            <h1>Pago cancelado</h1>
+            <p>No se realizó ningún cargo.</p>
+            @ResultNavigation()
+        }
+        else
+        {
+            @switch (result.Status)
+            {
+                case BillingOrderStatus.Paid:
+                    <div class="kb-payment-result-icon kb-payment-result-icon--success" aria-hidden="true">✓</div>
+                    <h1>Pago confirmado</h1>
+                    <p>Tu suscripción está activa.</p>
+                    @if (result.PaidThroughUtc.HasValue)
+                    {
+                        <p class="kb-payment-result-validity">Vigente hasta: <strong>@result.PaidThroughUtc.Value.ToLocalTime().ToString("dd/MM/yyyy")</strong></p>
+                    }
+                    @ResultNavigation()
+                    break;
+                case BillingOrderStatus.Expired:
+                    <div class="kb-payment-result-icon kb-payment-result-icon--error" aria-hidden="true">!</div>
+                    <h1>Este intento de pago ya expiró</h1>
+                    <p>Vuelve a Suscripción y pagos para iniciar un nuevo intento.</p>
+                    @ResultNavigation()
+                    break;
+                case BillingOrderStatus.Cancelled:
+                    <div class="kb-payment-result-icon kb-payment-result-icon--muted" aria-hidden="true">×</div>
+                    <h1>Pago cancelado</h1>
+                    <p>No se realizó ningún cargo.</p>
+                    @ResultNavigation()
+                    break;
+                case BillingOrderStatus.Failed:
+                case BillingOrderStatus.Rejected:
+                    <div class="kb-payment-result-icon kb-payment-result-icon--error" aria-hidden="true">!</div>
+                    <h1>No fue posible confirmar el pago</h1>
+                    <p>Intenta nuevamente o contacta a soporte.</p>
+                    @ResultNavigation()
+                    break;
+                default:
+                    <div class="kb-payment-result-icon kb-payment-result-icon--processing" aria-hidden="true"></div>
+                    <h1>Estamos confirmando tu pago</h1>
+                    <p>Esto normalmente tarda unos segundos.</p>
+                    @if (pollingTimedOut)
+                    {
+                        <p class="kb-muted">Tu pago todavía se está procesando. Puedes volver a revisar en unos momentos.</p>
+                    }
+                    @ResultNavigation()
+                    break;
+            }
+        }
+    </div>
+</section>
+
+@code {
+    private const int PollAttempts = 15;
+    private static readonly TimeSpan PollInterval = TimeSpan.FromSeconds(2);
+
+    [Parameter] public string TenantSlug { get; set; } = string.Empty;
+    [SupplyParameterFromQuery] public string? Token { get; set; }
+
+    private readonly CancellationTokenSource pollingCancellation = new();
+    private BillingPaymentResultDto? result;
+    private bool isAuthenticated;
+    private bool isCancelled;
+    private bool pollingTimedOut;
+
+    private string BillingUrl => $"/{Uri.EscapeDataString(TenantSlug)}/billing";
+    private string LoginUrl => $"/{Uri.EscapeDataString(TenantSlug)}/login?returnUrl={Uri.EscapeDataString(result?.TenantOperational == true ? "/dashboard" : BillingUrl)}";
+
+    protected override async Task OnInitializedAsync()
+    {
+        isCancelled = new Uri(Nav.Uri).AbsolutePath.EndsWith("/cancelled", StringComparison.OrdinalIgnoreCase);
+        isAuthenticated = (await AuthenticationStateProvider.GetAuthenticationStateAsync()).User.Identity?.IsAuthenticated == true;
+        await RefreshAsync(pollingCancellation.Token);
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender || isCancelled || result?.Status != BillingOrderStatus.Pending)
+            return;
+
+        for (var attempt = 0; attempt < PollAttempts && result?.Status == BillingOrderStatus.Pending; attempt++)
+        {
+            try
+            {
+                await Task.Delay(PollInterval, pollingCancellation.Token);
+                await RefreshAsync(pollingCancellation.Token);
+                await InvokeAsync(StateHasChanged);
+            }
+            catch (OperationCanceledException)
+            {
+                return;
+            }
+        }
+
+        if (result?.Status == BillingOrderStatus.Pending)
+        {
+            pollingTimedOut = true;
+            await InvokeAsync(StateHasChanged);
+        }
+    }
+
+    private async Task RefreshAsync(CancellationToken ct)
+    {
+        result = string.IsNullOrWhiteSpace(Token)
+            ? null
+            : await Billing.GetPaymentResultAsync(TenantSlug, Token, ct);
+    }
+
+    private RenderFragment ResultNavigation() => builder =>
+    {
+        var sequence = 0;
+        builder.OpenElement(sequence++, "div");
+        builder.AddAttribute(sequence++, "class", "kb-payment-result-actions");
+        builder.OpenElement(sequence++, "a");
+        builder.AddAttribute(sequence++, "class", "kb-btn kb-btn--primary");
+        builder.AddAttribute(sequence++, "href", isAuthenticated && result?.TenantOperational == true ? "/dashboard" : isAuthenticated ? BillingUrl : LoginUrl);
+        builder.AddContent(sequence++, isAuthenticated && result?.TenantOperational == true ? "Continuar al panel" : isAuthenticated ? "Volver a Suscripción y pagos" : "Iniciar sesión");
+        builder.CloseElement();
+        if (isAuthenticated && result?.TenantOperational == true)
+        {
+            builder.OpenElement(sequence++, "a");
+            builder.AddAttribute(sequence++, "class", "kb-billing-back");
+            builder.AddAttribute(sequence++, "href", BillingUrl);
+            builder.AddContent(sequence++, "Ver detalles de pago");
+            builder.CloseElement();
+        }
+        builder.CloseElement();
+    };
+
+    public void Dispose()
+    {
+        pollingCancellation.Cancel();
+        pollingCancellation.Dispose();
+    }
+}

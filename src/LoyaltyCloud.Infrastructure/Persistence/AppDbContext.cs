@@ -40,6 +40,11 @@ public class AppDbContext : DbContext, IUnitOfWork
     public DbSet<TenantSubscription> TenantSubscriptions => Set<TenantSubscription>();
     public DbSet<TenantAdminUser> TenantAdminUsers => Set<TenantAdminUser>();
     public DbSet<TenantLoyaltyLevel> TenantLoyaltyLevels => Set<TenantLoyaltyLevel>();
+    public DbSet<BillingSettings> BillingSettings => Set<BillingSettings>();
+    public DbSet<SubscriptionPlan> SubscriptionPlans => Set<SubscriptionPlan>();
+    public DbSet<BillingOrder> BillingOrders => Set<BillingOrder>();
+    public DbSet<PaymentTransaction> PaymentTransactions => Set<PaymentTransaction>();
+    public DbSet<PaymentWebhookEvent> PaymentWebhookEvents => Set<PaymentWebhookEvent>();
 
     public AppDbContext(DbContextOptions<AppDbContext> options) : base(options) { }
 
@@ -221,6 +226,8 @@ public class AppDbContext : DbContext, IUnitOfWork
         ApplyTenantQueryFilter<PointLotConsumption>(modelBuilder);
         ApplyTenantQueryFilter<NotificationDelivery>(modelBuilder);
         ApplyTenantQueryFilter<TenantLoyaltyLevel>(modelBuilder);
+        ApplyTenantQueryFilter<BillingOrder>(modelBuilder);
+        ApplyTenantQueryFilter<PaymentTransaction>(modelBuilder);
     }
 
     private void ApplyTenantQueryFilter<TEntity>(ModelBuilder modelBuilder)

@@ -37,6 +37,17 @@ public sealed class SuperAdminTests
 
     [Fact]
     [Trait("Category", "SuperAdmin")]
+    public async Task Production_developer_login_is_rejected_without_cookie()
+    {
+        await using var env = await SuperAdminTestEnvironment.CreateAsync(Environments.Production);
+
+        var result = await env.DeveloperSignInAsync();
+
+        Assert.Equal(SuperAdminLoginResult.InvalidCredentials, result.Result);
+        Assert.Null(result.SetCookieHeader);
+    }
+    [Fact]
+    [Trait("Category", "SuperAdmin")]
     public async Task Super_admin_valid_login_succeeds()
     {
         await using var env = await SuperAdminTestEnvironment.CreateAsync();
@@ -254,7 +265,7 @@ public sealed class SuperAdminTests
             _services = services;
         }
 
-        public static async Task<SuperAdminTestEnvironment> CreateAsync()
+        public static async Task<SuperAdminTestEnvironment> CreateAsync(string environmentName = "Development")
         {
             var dbName = "LoyaltyCloud_MT3F_" + Guid.NewGuid().ToString("N");
             var passwordHash = new PasswordHashingService().HashPassword(SuperPassword);
@@ -278,7 +289,9 @@ public sealed class SuperAdminTests
                 .Build();
 
             var services = new ServiceCollection();
+            var hostEnvironment = new TestHostEnvironment { EnvironmentName = environmentName };
             services.AddLogging();
+            services.AddSingleton<IHostEnvironment>(hostEnvironment);
             services.AddApplication();
             services.AddInfrastructure(configuration, new TestHostEnvironment());
             services.Configure<SuperAdminAuthOptions>(configuration.GetSection(SuperAdminAuthOptions.SectionName));
@@ -306,6 +319,14 @@ public sealed class SuperAdminTests
             }
         }
 
+        public async Task<(SuperAdminLoginResult Result, string? SetCookieHeader)> DeveloperSignInAsync()
+        {
+            using var scope = _services.CreateScope();
+            var context = CreateHttpContext(scope.ServiceProvider);
+            var result = await scope.ServiceProvider.GetRequiredService<SuperAdminAuthService>()
+                .TryDeveloperSignInAsync(context);
+            return (result, context.Response.Headers.SetCookie.FirstOrDefault());
+        }
         public async Task<(SuperAdminLoginResult Result, string? SetCookieHeader)> SignInAsync(string username, string password)
         {
             using var scope = _services.CreateScope();

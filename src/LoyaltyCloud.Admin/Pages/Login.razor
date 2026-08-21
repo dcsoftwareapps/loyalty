@@ -85,17 +85,13 @@
             return;
         }
 
-        if (!tenant.IsOperational)
-        {
-            HttpContext.Response.StatusCode = StatusCodes.Status403Forbidden;
-            error = "Este programa está suspendido temporalmente.";
-            return;
-        }
-
         if (HttpMethods.IsGet(HttpContext.Request.Method) &&
             HttpContext.User.Identity?.IsAuthenticated == true)
         {
-            HttpContext.Response.Redirect("/dashboard");
+            var destination = await Auth.IsBillingOnlyAsync(HttpContext)
+                ? $"/{tenant.Slug}/billing"
+                : "/dashboard";
+            HttpContext.Response.Redirect(destination);
             return;
         }
 
@@ -104,8 +100,11 @@
             var result = await Auth.TrySignInAsync(HttpContext, TenantSlug, Input.Username, Input.Password);
             if (result == AdminLoginResult.Success)
             {
-                var dest = IsLocalReturnUrl(ReturnUrl) ? ReturnUrl! : "/dashboard";
-                HttpContext.Response.Redirect(dest);
+                var billingOnly = await Auth.IsBillingOnlyTenantAsync(TenantSlug);
+                var destination = billingOnly
+                    ? $"/{tenant.Slug}/billing"
+                    : IsLocalReturnUrl(ReturnUrl) ? ReturnUrl! : "/dashboard";
+                HttpContext.Response.Redirect(destination);
             }
             else
             {

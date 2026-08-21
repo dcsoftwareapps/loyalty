@@ -1,4 +1,5 @@
 using LoyaltyCloud.Application;
+using LoyaltyCloud.Application.Billing;
 using LoyaltyCloud.Application.Common.Interfaces;
 using LoyaltyCloud.Application.Provisioning;
 using LoyaltyCloud.Application.SuperAdmin.Commands.RecordManualSubscriptionPayment;
@@ -208,6 +209,227 @@ public sealed class ManualSubscriptionBillingTests
 
     [Fact]
     [Trait("Category", "ManualSubscriptionBilling")]
+    public async Task Save_plan_persists_active_state_and_prices()
+    {
+        await using var env = await BillingTestEnvironment.CreateAsync();
+        var plan = new SubscriptionPlanDto(Guid.Empty, "standard", "Regular", "MXN", 250m, 700m, 1300m, 2400m, true);
+
+        var affected = await env.SavePlanAsync(plan);
+        var persisted = await env.GetPlanAsync("standard");
+
+        Assert.Equal(1, affected);
+        Assert.True(persisted.IsActive);
+        Assert.Equal(250m, persisted.OneMonthPrice);
+        Assert.Equal(700m, persisted.ThreeMonthPrice);
+        Assert.Equal(1300m, persisted.SixMonthPrice);
+        Assert.Equal(2400m, persisted.TwelveMonthPrice);
+    }
+
+    [Fact]
+    [Trait("Category", "ManualSubscriptionBilling")]
+    public async Task Reload_returns_persisted_plan_values()
+    {
+        await using var env = await BillingTestEnvironment.CreateAsync();
+        await env.SavePlanAsync(new SubscriptionPlanDto(Guid.Empty, "standard", "Regular", "MXN", 250m, 0m, 0m, 0m, false));
+        var original = await env.GetPlanAsync("standard");
+
+        await env.SavePlanAsync(original with { OneMonthPrice = 275m, ThreeMonthPrice = 750m, IsActive = true });
+        var reloaded = await env.GetPlanAsync("standard");
+
+        Assert.True(reloaded.IsActive);
+        Assert.Equal(275m, reloaded.OneMonthPrice);
+        Assert.Equal(750m, reloaded.ThreeMonthPrice);
+    }
+
+    [Fact]
+    [Trait("Category", "ManualSubscriptionBilling")]
+    public async Task Card_order_is_persisted_and_returns_checkout_url()
+    {
+        var gateway = new CheckoutTestGateway();
+        await using var env = await BillingTestEnvironment.CreateAsync(paymentGateway: gateway);
+        var tenantId = await env.AddTenantAsync("checkout-order", TenantSubscriptionStatus.Suspended);
+        await env.SavePlanAsync(new SubscriptionPlanDto(Guid.Empty, "standard", "Regular", "MXN", 250m, 0m, 0m, 0m, true));
+        await env.EnableCardPaymentsAsync();
+
+        var order = await env.CreateCardOrderAsync(tenantId, "standard", 1);
+
+        Assert.Equal(BillingPaymentMethod.Card, order.PaymentMethod);
+        Assert.Equal(BillingOrderStatus.Pending, order.Status);
+        Assert.Equal("https://checkout.stripe.test/c/pay/cs_test_checkout", order.CheckoutUrl);
+        Assert.Equal(1, gateway.CreateCalls);
+        Assert.True(await env.BillingOrderExistsAsync(order.Id));
+        Assert.NotNull(gateway.LastRequest);
+        Assert.Contains("/billing/payment/success?token=", gateway.LastRequest!.SuccessUrl);
+        Assert.DoesNotContain("orderId=", gateway.LastRequest.SuccessUrl);
+    }
+
+    [Fact]
+    [Trait("Category", "ManualSubscriptionBilling")]
+    public async Task Protected_payment_result_cannot_be_read_through_another_tenant_slug()
+    {
+        var gateway = new CheckoutTestGateway();
+        await using var env = await BillingTestEnvironment.CreateAsync(paymentGateway: gateway);
+        var tenantId = await env.AddTenantAsync("result-owner", TenantSubscriptionStatus.Active,
+            paidThrough: FixedNow.AddDays(10));
+        await env.AddTenantAsync("result-other", TenantSubscriptionStatus.Active,
+            paidThrough: FixedNow.AddDays(10));
+        await env.CreatePayableCardOrderAsync(tenantId);
+        var token = ExtractReturnToken(gateway.LastRequest!.SuccessUrl);
+
+        var ownerResult = await env.GetPaymentResultAsync("result-owner", token);
+        var otherResult = await env.GetPaymentResultAsync("result-other", token);
+
+        Assert.NotNull(ownerResult);
+        Assert.Equal(BillingOrderStatus.Pending, ownerResult!.Status);
+        Assert.Null(otherResult);
+    }
+
+    [Fact]
+    [Trait("Category", "ManualSubscriptionBilling")]
+    public async Task Stripe_webhook_reactivates_nonpayment_suspension()
+    {
+        var gateway = new CheckoutTestGateway();
+        await using var env = await BillingTestEnvironment.CreateAsync(paymentGateway: gateway);
+        var tenantId = await env.AddTenantAsync("webhook-suspended", TenantSubscriptionStatus.Suspended,
+            suspensionReason: TenantSuspensionReason.PaymentPastDue);
+        var order = await env.CreatePayableCardOrderAsync(tenantId);
+        gateway.SetPaidConfirmation(order.Id, tenantId, "evt_reactivate");
+
+        await env.ProcessStripeWebhookAsync();
+
+        var subscription = await env.GetSubscriptionAsync(tenantId);
+        Assert.Equal(TenantSubscriptionStatus.Active, subscription.Status);
+        Assert.Equal(FixedNow.AddMonths(1), subscription.PaidThroughUtc);
+        Assert.Null(subscription.SuspensionReason);
+        Assert.Equal(1, await env.PaymentTransactionCountAsync(order.Id));
+    }
+
+    [Fact]
+    [Trait("Category", "ManualSubscriptionBilling")]
+    public async Task Stripe_webhook_keeps_active_tenant_active()
+    {
+        var gateway = new CheckoutTestGateway();
+        await using var env = await BillingTestEnvironment.CreateAsync(paymentGateway: gateway);
+        var existingPaidThrough = FixedNow.AddDays(10);
+        var tenantId = await env.AddTenantAsync("webhook-active", TenantSubscriptionStatus.Active,
+            paidThrough: existingPaidThrough);
+        var order = await env.CreatePayableCardOrderAsync(tenantId);
+        gateway.SetPaidConfirmation(order.Id, tenantId, "evt_active");
+
+        await env.ProcessStripeWebhookAsync();
+
+        var subscription = await env.GetSubscriptionAsync(tenantId);
+        Assert.Equal(TenantSubscriptionStatus.Active, subscription.Status);
+        Assert.Equal(existingPaidThrough.AddMonths(1), subscription.PaidThroughUtc);
+    }
+
+    [Fact]
+    [Trait("Category", "ManualSubscriptionBilling")]
+    public async Task Duplicate_Stripe_webhook_does_not_extend_or_create_transaction_twice()
+    {
+        var gateway = new CheckoutTestGateway();
+        await using var env = await BillingTestEnvironment.CreateAsync(paymentGateway: gateway);
+        var tenantId = await env.AddTenantAsync("webhook-duplicate", TenantSubscriptionStatus.Suspended,
+            suspensionReason: TenantSuspensionReason.TrialExpired);
+        var order = await env.CreatePayableCardOrderAsync(tenantId);
+        gateway.SetPaidConfirmation(order.Id, tenantId, "evt_duplicate");
+
+        await env.ProcessStripeWebhookAsync();
+        var firstPaidThrough = (await env.GetSubscriptionAsync(tenantId)).PaidThroughUtc;
+        await env.ProcessStripeWebhookAsync();
+
+        Assert.Equal(firstPaidThrough, (await env.GetSubscriptionAsync(tenantId)).PaidThroughUtc);
+        Assert.Equal(1, await env.PaymentTransactionCountAsync(order.Id));
+        Assert.Equal(1, await env.WebhookEventCountAsync("evt_duplicate"));
+    }
+
+    [Fact]
+    [Trait("Category", "ManualSubscriptionBilling")]
+    public async Task Stripe_webhook_does_not_bypass_administrative_suspension()
+    {
+        var gateway = new CheckoutTestGateway();
+        await using var env = await BillingTestEnvironment.CreateAsync(paymentGateway: gateway);
+        var tenantId = await env.AddTenantAsync("webhook-administrative", TenantSubscriptionStatus.Suspended,
+            suspensionReason: TenantSuspensionReason.Administrative);
+        var order = await env.CreatePayableCardOrderAsync(tenantId);
+        gateway.SetPaidConfirmation(order.Id, tenantId, "evt_administrative");
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() => env.ProcessStripeWebhookAsync());
+
+        var subscription = await env.GetSubscriptionAsync(tenantId);
+        Assert.Equal(TenantSubscriptionStatus.Suspended, subscription.Status);
+        Assert.Equal(TenantSuspensionReason.Administrative, subscription.SuspensionReason);
+        Assert.Equal(0, await env.PaymentTransactionCountAsync(order.Id));
+    }
+
+    [Fact]
+    [Trait("Category", "ManualSubscriptionBilling")]
+    public async Task Expired_Stripe_webhook_marks_pending_order_without_extending_subscription()
+    {
+        var gateway = new CheckoutTestGateway();
+        await using var env = await BillingTestEnvironment.CreateAsync(paymentGateway: gateway);
+        var tenantId = await env.AddTenantAsync("webhook-expired", TenantSubscriptionStatus.Suspended,
+            suspensionReason: TenantSuspensionReason.PaymentPastDue);
+        var order = await env.CreatePayableCardOrderAsync(tenantId);
+        gateway.SetExpiredConfirmation(order.Id, tenantId, "evt_expired");
+
+        await env.ProcessStripeWebhookAsync();
+
+        Assert.Equal(BillingOrderStatus.Expired, await env.GetOrderStatusAsync(order.Id));
+        Assert.Equal(0, await env.PaymentTransactionCountAsync(order.Id));
+        var subscription = await env.GetSubscriptionAsync(tenantId);
+        Assert.Equal(TenantSubscriptionStatus.Suspended, subscription.Status);
+        Assert.Null(subscription.PaidThroughUtc);
+    }
+
+    [Fact]
+    [Trait("Category", "ManualSubscriptionBilling")]
+    public async Task Paid_order_never_returns_to_expired_and_expired_webhook_is_idempotent()
+    {
+        var gateway = new CheckoutTestGateway();
+        await using var env = await BillingTestEnvironment.CreateAsync(paymentGateway: gateway);
+        var tenantId = await env.AddTenantAsync("paid-not-expired", TenantSubscriptionStatus.Suspended,
+            suspensionReason: TenantSuspensionReason.TrialExpired);
+        var order = await env.CreatePayableCardOrderAsync(tenantId);
+        gateway.SetPaidConfirmation(order.Id, tenantId, "evt_paid_first");
+        await env.ProcessStripeWebhookAsync();
+        var paidThrough = (await env.GetSubscriptionAsync(tenantId)).PaidThroughUtc;
+
+        gateway.SetExpiredConfirmation(order.Id, tenantId, "evt_expired_after_paid");
+        await env.ProcessStripeWebhookAsync();
+        await env.ProcessStripeWebhookAsync();
+
+        Assert.Equal(BillingOrderStatus.Paid, await env.GetOrderStatusAsync(order.Id));
+        Assert.Equal(paidThrough, (await env.GetSubscriptionAsync(tenantId)).PaidThroughUtc);
+        Assert.Equal(1, await env.PaymentTransactionCountAsync(order.Id));
+        Assert.Equal(1, await env.WebhookEventCountAsync("evt_expired_after_paid"));
+    }
+
+    [Theory]
+    [InlineData(CheckoutSessionStatus.Expired, BillingOrderStatus.Expired)]
+    [InlineData(CheckoutSessionStatus.Open, BillingOrderStatus.Pending)]
+    [Trait("Category", "ManualSubscriptionBilling")]
+    public async Task Billing_history_reconciles_only_Stripe_expired_sessions(
+        CheckoutSessionStatus checkoutStatus,
+        BillingOrderStatus expectedOrderStatus)
+    {
+        var gateway = new CheckoutTestGateway();
+        await using var env = await BillingTestEnvironment.CreateAsync(paymentGateway: gateway);
+        var tenantId = await env.AddTenantAsync("reconcile-" + checkoutStatus.ToString().ToLowerInvariant(),
+            TenantSubscriptionStatus.Suspended, suspensionReason: TenantSuspensionReason.PaymentPastDue);
+        var order = await env.CreatePayableCardOrderAsync(tenantId);
+        await env.MakeOrderPotentiallyExpiredAsync(order.Id);
+        gateway.CheckoutStatus = checkoutStatus;
+
+        await env.GetTenantBillingAsync(tenantId);
+
+        Assert.Equal(expectedOrderStatus, await env.GetOrderStatusAsync(order.Id));
+        Assert.Equal(1, gateway.GetSessionCalls);
+        Assert.Equal(0, await env.PaymentTransactionCountAsync(order.Id));
+    }
+
+    [Fact]
+    [Trait("Category", "ManualSubscriptionBilling")]
     public async Task Cancelled_payment_is_rejected()
     {
         await using var env = await BillingTestEnvironment.CreateAsync();
@@ -279,7 +501,7 @@ public sealed class ManualSubscriptionBillingTests
             _services = services;
         }
 
-        public static async Task<BillingTestEnvironment> CreateAsync(int graceDays = 7)
+        public static async Task<BillingTestEnvironment> CreateAsync(int graceDays = 7, IPaymentGateway? paymentGateway = null)
         {
             var dbName = "LoyaltyCloud_MT3G_" + Guid.NewGuid().ToString("N");
             var configuration = new ConfigurationBuilder()
@@ -303,6 +525,11 @@ public sealed class ManualSubscriptionBillingTests
             services.AddLogging();
             services.AddApplication();
             services.AddInfrastructure(configuration, new TestHostEnvironment());
+            if (paymentGateway is not null)
+            {
+                services.RemoveAll<IPaymentGateway>();
+                services.AddSingleton(paymentGateway);
+            }
             services.RemoveAll<IDateTimeProvider>();
             services.AddSingleton<IDateTimeProvider>(new FixedClock(FixedNow));
 
@@ -352,6 +579,102 @@ public sealed class ManualSubscriptionBillingTests
         {
             using var scope = _services.CreateScope();
             return await scope.ServiceProvider.GetRequiredService<ISubscriptionMaintenanceService>().ProcessAsync();
+        }
+
+        public async Task<int> SavePlanAsync(SubscriptionPlanDto plan)
+        {
+            using var scope = _services.CreateScope();
+            return await scope.ServiceProvider.GetRequiredService<IBillingService>().SavePlanAsync(plan);
+        }
+
+        public async Task<SubscriptionPlanDto> GetPlanAsync(string code)
+        {
+            using var scope = _services.CreateScope();
+            var plans = await scope.ServiceProvider.GetRequiredService<IBillingService>().GetPlansAsync();
+            return plans.Single(x => x.Code == code);
+        }
+
+        public async Task EnableCardPaymentsAsync()
+        {
+            using var scope = _services.CreateScope();
+            var billing = scope.ServiceProvider.GetRequiredService<IBillingService>();
+            var settings = await billing.GetSettingsAsync();
+            await billing.SaveSettingsAsync(settings with { CardPaymentsEnabled = true });
+        }
+
+        public async Task<BillingOrderDto> CreateCardOrderAsync(Guid tenantId, string planCode, int months)
+        {
+            using var scope = _services.CreateScope();
+            return await scope.ServiceProvider.GetRequiredService<IBillingService>().CreateOrderAsync(
+                tenantId, planCode, months, BillingPaymentMethod.Card, "https://admin.test");
+        }
+
+        public async Task<BillingOrderDto> CreatePayableCardOrderAsync(Guid tenantId)
+        {
+            await SavePlanAsync(new SubscriptionPlanDto(
+                Guid.Empty, "standard", "Regular", "MXN", 250m, 0m, 0m, 0m, true));
+            await EnableCardPaymentsAsync();
+            return await CreateCardOrderAsync(tenantId, "standard", 1);
+        }
+
+        public async Task ProcessStripeWebhookAsync()
+        {
+            using var scope = _services.CreateScope();
+            await scope.ServiceProvider.GetRequiredService<IBillingService>()
+                .ProcessStripeWebhookAsync("test-payload", "test-signature");
+        }
+
+        public async Task<TenantBillingDto> GetTenantBillingAsync(Guid tenantId)
+        {
+            using var scope = _services.CreateScope();
+            return await scope.ServiceProvider.GetRequiredService<IBillingService>()
+                .GetTenantBillingAsync(tenantId);
+        }
+
+        public async Task<BillingPaymentResultDto?> GetPaymentResultAsync(string tenantSlug, string token)
+        {
+            using var scope = _services.CreateScope();
+            return await scope.ServiceProvider.GetRequiredService<IBillingService>()
+                .GetPaymentResultAsync(tenantSlug, token);
+        }
+
+        public async Task MakeOrderPotentiallyExpiredAsync(Guid orderId)
+        {
+            using var scope = _services.CreateScope();
+            var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+            var order = await db.BillingOrders.IgnoreQueryFilters().SingleAsync(x => x.Id == orderId);
+            var tenantSlug = await db.Tenants.Where(x => x.Id == order.TenantId).Select(x => x.Slug).SingleAsync();
+            scope.ServiceProvider.GetRequiredService<IMutableTenantContext>().SetTenant(order.TenantId, tenantSlug);
+            db.Entry(order).Property(nameof(BillingOrder.ExpiresAt)).CurrentValue = FixedNow.AddTicks(-1);
+            await db.SaveChangesAsync();
+        }
+
+        public async Task<BillingOrderStatus> GetOrderStatusAsync(Guid orderId)
+        {
+            using var scope = _services.CreateScope();
+            return await scope.ServiceProvider.GetRequiredService<AppDbContext>().BillingOrders
+                .IgnoreQueryFilters().Where(x => x.Id == orderId).Select(x => x.Status).SingleAsync();
+        }
+
+        public async Task<int> PaymentTransactionCountAsync(Guid orderId)
+        {
+            using var scope = _services.CreateScope();
+            return await scope.ServiceProvider.GetRequiredService<AppDbContext>().PaymentTransactions
+                .IgnoreQueryFilters().CountAsync(x => x.BillingOrderId == orderId);
+        }
+
+        public async Task<int> WebhookEventCountAsync(string eventId)
+        {
+            using var scope = _services.CreateScope();
+            return await scope.ServiceProvider.GetRequiredService<AppDbContext>().PaymentWebhookEvents
+                .CountAsync(x => x.ProviderEventId == eventId);
+        }
+
+        public async Task<bool> BillingOrderExistsAsync(Guid orderId)
+        {
+            using var scope = _services.CreateScope();
+            return await scope.ServiceProvider.GetRequiredService<AppDbContext>().BillingOrders
+                .IgnoreQueryFilters().AnyAsync(x => x.Id == orderId);
         }
 
         public async Task<Guid> AddTenantAsync(
@@ -437,6 +760,51 @@ public sealed class ManualSubscriptionBillingTests
 
         public DateTime UtcNow { get; }
         public DateTime Today { get; }
+    }
+
+    private sealed class CheckoutTestGateway : IPaymentGateway
+    {
+        private StripePaymentConfirmation? _confirmation;
+        public bool IsAvailable => true;
+        public int CreateCalls { get; private set; }
+        public CheckoutGatewayRequest? LastRequest { get; private set; }
+        public int GetSessionCalls { get; private set; }
+        public CheckoutSessionStatus CheckoutStatus { get; set; } = CheckoutSessionStatus.Open;
+
+        public Task<CheckoutGatewayResult> CreateCheckoutAsync(CheckoutGatewayRequest request, CancellationToken ct = default)
+        {
+            CreateCalls++;
+            LastRequest = request;
+            return Task.FromResult(new CheckoutGatewayResult(
+                "cs_test_checkout",
+                "https://checkout.stripe.test/c/pay/cs_test_checkout"));
+        }
+
+        public void SetPaidConfirmation(Guid orderId, Guid tenantId, string eventId) =>
+            _confirmation = new StripePaymentConfirmation(
+                eventId, "checkout.session.completed", "cs_test_checkout", "pi_test_payment",
+                orderId, tenantId, 29000, "mxn", true, null, null);
+
+        public void SetExpiredConfirmation(Guid orderId, Guid tenantId, string eventId) =>
+            _confirmation = new StripePaymentConfirmation(
+                eventId, "checkout.session.expired", "cs_test_checkout", string.Empty,
+                orderId, tenantId, 29000, "mxn", false, null, null);
+
+        public Task<CheckoutSessionSnapshot> GetCheckoutSessionAsync(string sessionId, CancellationToken ct = default)
+        {
+            GetSessionCalls++;
+            return Task.FromResult(new CheckoutSessionSnapshot(CheckoutStatus, "unpaid"));
+        }
+
+        public StripePaymentConfirmation ParseWebhook(string payload, string signature) =>
+            _confirmation ?? throw new InvalidOperationException("Test confirmation not configured.");
+    }
+
+    private static string ExtractReturnToken(string url)
+    {
+        var query = new Uri(url).Query.TrimStart('?').Split('&', StringSplitOptions.RemoveEmptyEntries);
+        var value = query.Single(x => x.StartsWith("token=", StringComparison.Ordinal)).Split('=', 2)[1];
+        return Uri.UnescapeDataString(value);
     }
 
     private sealed class TestHostEnvironment : IHostEnvironment

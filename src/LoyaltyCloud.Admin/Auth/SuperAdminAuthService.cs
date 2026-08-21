@@ -11,15 +11,18 @@ public sealed class SuperAdminAuthService
 {
     private readonly IPasswordHashingService _passwords;
     private readonly SuperAdminAuthOptions _options;
+    private readonly IHostEnvironment _environment;
     private readonly ILogger<SuperAdminAuthService> _logger;
 
     public SuperAdminAuthService(
         IPasswordHashingService passwords,
         IOptions<SuperAdminAuthOptions> options,
+        IHostEnvironment environment,
         ILogger<SuperAdminAuthService> logger)
     {
         _passwords = passwords;
         _options = options.Value;
+        _environment = environment;
         _logger = logger;
     }
 
@@ -40,12 +43,32 @@ public sealed class SuperAdminAuthService
             return SuperAdminLoginResult.InvalidCredentials;
         }
 
+        await SignInAsync(context, username.Trim());
+        return SuperAdminLoginResult.Success;
+    }
+
+    public async Task<SuperAdminLoginResult> TryDeveloperSignInAsync(HttpContext context)
+    {
+        if (!_environment.IsDevelopment() || string.IsNullOrWhiteSpace(_options.Username))
+        {
+            _logger.LogWarning(
+                "Developer platform login rejected. Environment={EnvironmentName}.",
+                _environment.EnvironmentName);
+            return SuperAdminLoginResult.InvalidCredentials;
+        }
+
+        await SignInAsync(context, _options.Username.Trim());
+        return SuperAdminLoginResult.Success;
+    }
+
+    private async Task SignInAsync(HttpContext context, string username)
+    {
         var authTime = DateTimeOffset.UtcNow.ToUnixTimeSeconds().ToString(CultureInfo.InvariantCulture);
         var claims = new List<Claim>
         {
             new("sub", "platform"),
             new(ClaimTypes.NameIdentifier, "platform"),
-            new(ClaimTypes.Name, username.Trim()),
+            new(ClaimTypes.Name, username),
             new(ClaimTypes.Role, SuperAdminAuthDefaults.Role),
             new("auth_time", authTime)
         };
@@ -77,7 +100,6 @@ public sealed class SuperAdminAuthService
             properties.ExpiresUtc);
 
         _logger.LogInformation("Platform admin logged in.");
-        return SuperAdminLoginResult.Success;
     }
 
     public async Task ValidatePrincipalAsync(CookieValidatePrincipalContext context)

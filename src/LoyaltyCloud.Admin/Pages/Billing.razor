@@ -1,0 +1,264 @@
+@page "/{TenantSlug}/billing"
+@layout LoyaltyCloud.Admin.Components.Layout.BillingLayout
+@attribute [Authorize]
+@rendermode InteractiveServer
+@using LoyaltyCloud.Application.Billing
+@using LoyaltyCloud.Application.Common.Interfaces
+@using LoyaltyCloud.Domain.Enums
+@inject IBillingService BillingService
+@inject ITenantContext TenantContext
+@inject NavigationManager Nav
+@inject ILogger<Billing> Logger
+
+<PageTitle>Suscripción - LoyaltyCloud</PageTitle>
+
+<header class="kb-billing-header">
+    <h1>Suscripción y pagos</h1>
+    @if (model?.SubscriptionStatus == nameof(TenantSubscriptionStatus.Active))
+    {
+        <a href="/dashboard" class="kb-billing-back">← Volver al panel</a>
+    }
+</header>
+
+@if (error is not null)
+{
+    <div class="kb-form-error" role="alert">@error</div>
+}
+
+@if (model is null)
+{
+    <p>Cargando…</p>
+}
+else
+{
+    <section class="kb-grid">
+        <div class="kb-card"><div class="kb-card-label">Negocio</div><div class="kb-card-value">@model.TenantName</div></div>
+        <div class="kb-card"><div class="kb-card-label">Estado</div><div class="kb-card-value">@model.SubscriptionStatus</div></div>
+        <div class="kb-card"><div class="kb-card-label">Pagado hasta</div><div class="kb-card-value">@(model.PaidThroughUtc?.ToLocalTime().ToString("dd/MM/yyyy") ?? "Sin vigencia")</div></div>
+    </section>
+
+    <section class="kb-card kb-billing-renewal">
+        <h2>Renovar</h2>
+        <div class="kb-billing-selectors">
+            <label>
+                <span>Plan</span>
+                <select @bind="planCode" @bind:after="LoadQuote" disabled="@busy">
+                    @foreach (var plan in model.Plans)
+                    {
+                        <option value="@plan.Code">@plan.Name</option>
+                    }
+                </select>
+            </label>
+            <label>
+                <span>Período</span>
+                <select @bind="months" @bind:after="LoadQuote" disabled="@busy">
+                    <option value="1">1 mes</option>
+                    <option value="3">3 meses</option>
+                    <option value="6">6 meses</option>
+                    <option value="12">12 meses</option>
+                </select>
+            </label>
+        </div>
+
+        @if (quote is not null)
+        {
+            <div class="kb-billing-quote">
+                <h3>Cotización</h3>
+                <dl>
+                    <div><dt>Subtotal</dt><dd>@FormatMoney(quote.Subtotal, quote.Currency)</dd></div>
+                    <div><dt>IVA</dt><dd>@FormatMoney(quote.Tax, quote.Currency)</dd></div>
+                    <div class="kb-billing-total"><dt>Total</dt><dd>@FormatMoney(quote.Total, quote.Currency)</dd></div>
+                </dl>
+
+                <div class="kb-billing-actions">
+                    @if (model.CardPaymentsAvailable)
+                    {
+                        <button type="button" class="kb-btn kb-btn--primary" @onclick="PayCard" disabled="@busy">
+                            @(busy ? "Procesando..." : "Pagar con tarjeta")
+                        </button>
+                    }
+                    @if (model.Settings.BankTransferEnabled)
+                    {
+                        <button type="button" class="kb-btn kb-btn--ghost" @onclick="PayTransfer" disabled="@busy">
+                            @(busy ? "Procesando..." : "Pagar por transferencia")
+                        </button>
+                    }
+                </div>
+
+                @if (!model.CardPaymentsAvailable && !model.Settings.BankTransferEnabled)
+                {
+                    <p class="kb-muted" role="status">No hay métodos de pago disponibles en este momento.</p>
+                }
+            </div>
+        }
+
+        @if (created is not null && created.PaymentMethod == BillingPaymentMethod.BankTransfer)
+        {
+            <div class="kb-card kb-billing-transfer" role="status">
+                <h3>Datos para transferencia</h3>
+                <p class="kb-billing-transfer-total"><strong>Monto:</strong> @FormatMoney(created.Total, created.Currency)</p>
+                <p><strong>Banco:</strong> @model.Settings.BankName</p>
+                <p><strong>Beneficiario:</strong> @model.Settings.BeneficiaryName</p>
+                <p><strong>CLABE:</strong> @model.Settings.Clabe</p>
+                <p><strong>Referencia:</strong> @created.BankReference</p>
+                <p>@model.Settings.BankTransferInstructions</p>
+                <p class="kb-muted">La suscripción se extenderá cuando LoyaltyCloud confirme la transferencia.</p>
+            </div>
+        }
+    </section>
+
+    <section class="kb-card" style="margin-top:24px">
+        <h2>Historial</h2>
+        <table class="kb-table">
+            <thead><tr><th>Fecha</th><th>Período</th><th>Total</th><th>Método</th><th>Estado</th></tr></thead>
+            <tbody>
+                @foreach (var order in model.Orders)
+                {
+                    <tr>
+                        <td>@order.CreatedAt.ToLocalTime().ToString("dd/MM/yyyy")</td>
+                        <td>@FormatPeriod(order.Months)</td>
+                        <td>@FormatMoney(order.Total, order.Currency)</td>
+                        <td>@PaymentMethodLabel(order.PaymentMethod)</td>
+                        <td><span class="@StatusBadgeClass(order.Status)">@StatusLabel(order.Status)</span></td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </section>
+
+    <form method="post" action="/logout" style="margin-top:20px">
+        <AntiforgeryToken />
+        <button class="kb-btn kb-btn--ghost">Cerrar sesión</button>
+    </form>
+}
+
+@code {
+    [Parameter] public string TenantSlug { get; set; } = "";
+
+    private TenantBillingDto? model;
+    private BillingOrderDto? created;
+    private BillingQuoteDto? quote;
+    private string planCode = "";
+    private int months = 1;
+    private bool busy;
+    private string? error;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            model = await BillingService.GetTenantBillingAsync(TenantContext.RequireTenantId());
+            planCode = model.Plans.FirstOrDefault()?.Code ?? "";
+            await LoadQuote();
+        }
+        catch (Exception ex)
+        {
+            error = FriendlyError(ex);
+        }
+    }
+
+    private async Task LoadQuote()
+    {
+        try
+        {
+            error = null;
+            quote = string.IsNullOrWhiteSpace(planCode)
+                ? null
+                : await BillingService.QuoteAsync(TenantContext.RequireTenantId(), planCode, months);
+        }
+        catch (Exception ex)
+        {
+            quote = null;
+            error = FriendlyError(ex);
+        }
+    }
+
+    private async Task PayCard()
+    {
+        Logger.LogInformation("Card payment clicked. QuotePresent={QuotePresent}, Busy={Busy}.", quote is not null, busy);
+        await Create(BillingPaymentMethod.Card);
+    }
+    private Task PayTransfer() => Create(BillingPaymentMethod.BankTransfer);
+
+    private async Task Create(BillingPaymentMethod method)
+    {
+        if (busy)
+        {
+            Logger.LogDebug("Payment click ignored because another payment is already being processed.");
+            return;
+        }
+
+        if (quote is null)
+        {
+            Logger.LogWarning("Payment click rejected because no quote is present. Method={PaymentMethod}.", method);
+            error = "No fue posible iniciar el pago. Intenta nuevamente.";
+            return;
+        }
+
+        try
+        {
+            busy = true;
+            error = null;
+            await InvokeAsync(StateHasChanged);
+            Logger.LogInformation("Creating billing order. Method={PaymentMethod}, PlanCode={PlanCode}, Months={Months}.", method, planCode, months);
+            created = await BillingService.CreateOrderAsync(
+                TenantContext.RequireTenantId(), planCode, months, method, Nav.BaseUri);
+            Logger.LogInformation("Billing order created. OrderId={OrderId}, Method={PaymentMethod}.", created.Id, created.PaymentMethod);
+
+            if (method == BillingPaymentMethod.Card)
+            {
+                var checkoutUrlPresent = !string.IsNullOrWhiteSpace(created.CheckoutUrl);
+                Logger.LogInformation("Checkout URL present. OrderId={OrderId}, Present={CheckoutUrlPresent}.", created.Id, checkoutUrlPresent);
+                if (!checkoutUrlPresent)
+                    throw new InvalidOperationException("Stripe Checkout no devolvió una URL de pago.");
+
+                Logger.LogInformation("Redirecting to Stripe Checkout. OrderId={OrderId}.", created.Id);
+                Nav.NavigateTo(created.CheckoutUrl!, forceLoad: true);
+                return;
+            }
+
+            model = await BillingService.GetTenantBillingAsync(TenantContext.RequireTenantId());
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Failed to start payment. Method={PaymentMethod}, PlanCode={PlanCode}, Months={Months}.", method, planCode, months);
+            error = "No fue posible iniciar el pago. Intenta nuevamente.";
+        }
+        finally
+        {
+            busy = false;
+        }
+    }
+
+    private static string FormatMoney(decimal amount, string currency) => $"${amount:N2} {currency}";
+    private static string FormatPeriod(int value) => value == 1 ? "1 mes" : $"{value} meses";
+    private static string PaymentMethodLabel(BillingPaymentMethod method) => method switch
+    {
+        BillingPaymentMethod.Card => "Tarjeta",
+        BillingPaymentMethod.BankTransfer => "Transferencia",
+        _ => method.ToString()
+    };
+    private static string StatusLabel(BillingOrderStatus status) => status switch
+    {
+        BillingOrderStatus.Paid => "Pagado",
+        BillingOrderStatus.Pending => "Pendiente",
+        BillingOrderStatus.Expired => "Expirado",
+        BillingOrderStatus.Cancelled => "Cancelado",
+        BillingOrderStatus.Failed => "Fallido",
+        BillingOrderStatus.AwaitingTransfer => "Esperando transferencia",
+        BillingOrderStatus.Processing => "Procesando",
+        BillingOrderStatus.Rejected => "Rechazado",
+        BillingOrderStatus.Refunded => "Reembolsado",
+        _ => status.ToString()
+    };
+    private static string StatusBadgeClass(BillingOrderStatus status) => status switch
+    {
+        BillingOrderStatus.Paid => "kb-badge kb-badge--success",
+        BillingOrderStatus.Pending or BillingOrderStatus.AwaitingTransfer or BillingOrderStatus.Processing => "kb-badge kb-badge--warning",
+        BillingOrderStatus.Failed or BillingOrderStatus.Rejected => "kb-badge kb-badge--danger",
+        _ => "kb-badge kb-badge--muted"
+    };
+    private static string FriendlyError(Exception ex) => string.IsNullOrWhiteSpace(ex.Message)
+        ? "No fue posible procesar el pago. Intenta de nuevo."
+        : ex.Message;
+}

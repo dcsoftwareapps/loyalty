@@ -33,7 +33,10 @@ internal sealed class SubscriptionMaintenanceService : ISubscriptionMaintenanceS
         _logger.LogInformation("Subscription maintenance started.");
 
         var now = _clock.UtcNow;
-        var gracePeriodDays = _options.ValidatedGracePeriodDays;
+        var gracePeriodDays = await _db.BillingSettings.AsNoTracking()
+            .Where(x => x.Code == LoyaltyCloud.Domain.Entities.BillingSettings.SingletonCode)
+            .Select(x => (int?)x.GracePeriodDays)
+            .SingleOrDefaultAsync(cancellationToken) ?? _options.ValidatedGracePeriodDays;
         var rows = await _db.Tenants
             .Include(t => t.Subscription)
             .Where(t => t.Subscription != null
