@@ -692,11 +692,70 @@ input[type=color].kb-color-picker {
 .kb-billing-back:hover { color: var(--kb-ink); text-decoration: underline; }
 .kb-billing-selectors {
     display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-columns: minmax(0, 1fr);
     gap: 16px;
     max-width: 720px;
 }
 .kb-billing-selectors label { display: grid; gap: 8px; font-weight: 700; }
+.kb-billing-periods {
+    display: grid;
+    gap: 10px;
+    max-width: 720px;
+    margin-top: 16px;
+}
+.kb-billing-period {
+    width: 100%;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 8px 18px;
+    padding: 14px 16px;
+    border: 1px solid var(--kb-sand-100);
+    border-radius: var(--kb-radius-sm);
+    background: #fff;
+    color: var(--kb-ink);
+    text-align: left;
+    cursor: pointer;
+    transition: border-color .15s ease, background .15s ease, box-shadow .15s ease;
+}
+.kb-billing-period:hover:not(:disabled) {
+    border-color: var(--kb-gold);
+    background: #fffaf2;
+}
+.kb-billing-period:focus-visible {
+    outline: 3px solid rgba(207, 161, 73, .28);
+    outline-offset: 2px;
+}
+.kb-billing-period:disabled {
+    cursor: not-allowed;
+    opacity: .72;
+}
+.kb-billing-period--selected {
+    border-color: var(--kb-gold);
+    background: #fff8ed;
+    box-shadow: 0 0 0 1px rgba(207, 161, 73, .28);
+}
+.kb-billing-period-main {
+    display: contents;
+}
+.kb-billing-period-label {
+    font-weight: 800;
+}
+.kb-billing-period-price {
+    font-size: 1.08rem;
+    font-weight: 800;
+    white-space: nowrap;
+}
+.kb-billing-period-benefit,
+.kb-billing-period-secondary {
+    grid-column: 1 / -1;
+    color: var(--kb-ink-muted);
+    font-size: .92rem;
+    font-weight: 700;
+}
+.kb-billing-period-benefit {
+    color: var(--kb-sage);
+}
 .kb-billing-quote {
     max-width: 720px;
     margin-top: 20px;
@@ -765,6 +824,20 @@ input[type=color].kb-color-picker {
 
 @media (max-width: 600px) {
     .kb-billing-selectors { grid-template-columns: 1fr; }
+    .kb-billing-period {
+        grid-template-columns: 1fr;
+        gap: 6px;
+    }
+    .kb-billing-period-main {
+        display: flex;
+        justify-content: space-between;
+        gap: 14px;
+        align-items: baseline;
+    }
+    .kb-billing-period-benefit,
+    .kb-billing-period-secondary {
+        grid-column: auto;
+    }
     .kb-billing-actions { flex-direction: column; }
     .kb-billing-actions .kb-btn { width: 100%; }
     .kb-toast { top: 12px; right: 16px; }
