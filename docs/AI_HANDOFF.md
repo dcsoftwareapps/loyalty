@@ -1,24 +1,24 @@
 # LoyaltyCloud - AI Handoff
 
-Last updated: 2026-08-17
+Last updated: 2026-08-24
 
 Branch: `main`
 
-Last task worked: Admin UI cleanup for customer email visibility, tenant color inputs, Quick Help poster logo and Spanish encoding/accents.
+Last task worked: Formalized PROD release process with immutable SemVer tags and documented current PROD `v1.0.0`.
 
 ## Current State
 
-LoyaltyCloud is in RC1/UAT.
+LoyaltyCloud is in RC1/UAT with Billing/Payments live in PROD.
 
 Current codebase state at the end of this handoff task:
 
-- Admin customer UI intentionally does not render `Customer.Email`; LoyaltyCloud currently does not ask for email as visible customer data.
-- Platform tenant creation now has synchronized color picker + hex inputs for primary and secondary colors.
-- Quick Help printable registration poster uses tenant branding `LogoUrl` at the top when available, falling back to tenant display name.
-- Visible Admin Spanish mojibake/accent issues found in this cleanup were corrected.
-- Static Admin guardrail tests were updated/added for Quick Help text/logo, customer email omission and color picker markup.
-- Quick Help now builds public registration links and QR/poster URLs from configurable `Admin:PublicBaseUrl`, falling back to the current Admin base URI when unset.
-- This task changed Admin UI, one visible shared validation message and tests/docs only.
+- `main` and `origin/main` point to `cfe607c6f2b8f92922c4c07a1ce94fd089401091`.
+- PROD was already deployed and validated from this SHA before the release tag was created.
+- Annotated tag `v1.0.0` was created at `cfe607c6f2b8f92922c4c07a1ce94fd089401091`.
+- Tag `v1.0.0` was pushed to `origin`.
+- `docs/RELEASE_PROCESS.md` was created to document the simple PROD release workflow.
+- `docs/AI_CONTEXT.md` and this handoff were updated to reference the new release policy.
+- Documentation changes are intentionally uncommitted so they can be reviewed first.
 - No build was executed.
 - No tests were executed.
 - No EF migrations were created or applied.
@@ -55,6 +55,12 @@ Active product status:
 - New PROD Admin Linux `Admin__ApiBaseUrl` uses `https://api.loyaltycloud.net`.
 - Do not change `Apple__WebServiceURL` yet; Apple Wallet hostname migration needs a separate impact review.
 - Pending decision: `GoogleWallet__ProgramName` is currently `KBeauty Loyalty`; changing it to `KBeauty` is under consideration, then making it configurable by tenant later.
+- Current PROD release: `v1.0.0`.
+- `v1.0.0` SHA: `cfe607c6f2b8f92922c4c07a1ce94fd089401091`.
+- Release policy: immutable SemVer tags documented in `docs/RELEASE_PROCESS.md`.
+- Release tags are created only after PROD deploy and smoke test succeed.
+- Rollback of code uses a known release tag; rollback of database is separate and must be reviewed explicitly.
+- Deployment slots are not available on the current B1 plan and the plan should not be upgraded only to obtain slots without explicit approval.
 
 ## Recent Infrastructure and Configuration Work
 
@@ -158,6 +164,16 @@ Current SQL/App Service cost posture:
 - Legacy PROD Admin Windows remains online on its prior Windows plan during transition.
 - STG plans can remain F1 for now.
 
+Current PROD Billing/Payments state:
+
+- Billing/Payments is live in PROD.
+- Migration `AddBillingPayments` is applied in PROD.
+- Stripe LIVE is configured.
+- PROD webhook is configured at `https://api.loyaltycloud.net/api/billing/webhooks/stripe`.
+- Tenant Billing UI with visual periods/savings is active and validated in PROD.
+- Founder plan prices are currently: 1 month `$249 MXN`, 3 months `$699 MXN`, 6 months `$1,299 MXN`, 12 months `$2,490 MXN`.
+- Billing UI savings currently show: 3 months `Ahorras $48`, 6 months `Ahorras $195`, 12 months `2 meses GRATIS` plus `Ahorras $498`.
+
 Important PowerShell/Azure CLI lesson:
 
 - Setting Key Vault references from PowerShell can break if the final `)` is swallowed or misquoted.
@@ -227,6 +243,15 @@ dotnet build .\LoyaltyCloud.sln
 ```
 
 No commands were run for this documentation task except repository inspection.
+
+Release commands used on 2026-08-24:
+
+```powershell
+git tag -a v1.0.0 cfe607c6f2b8f92922c4c07a1ce94fd089401091 -m "LoyaltyCloud PROD v1.0.0 - Billing/Payments, Stripe production and billing pricing UI"
+git push origin v1.0.0
+```
+
+The first push attempt from the sandbox failed because SSH/network access to GitHub was denied. The retry with elevated network permission succeeded and pushed only the tag.
 
 ## Recent Errors and Root Causes
 
@@ -844,6 +869,11 @@ Do not re-investigate these without new evidence:
 - New Admin Linux login/navigation and `/platform/tenants` were manually validated against real PROD data.
 - New Admin Linux can consume the API through `Admin__ApiBaseUrl=https://api.loyaltycloud.net`.
 - Quick Help registration QR/poster uses the same generated URL/data source and works with `Admin__PublicBaseUrl=https://admin.loyaltycloud.net`.
+- Billing/Payments is deployed and validated in PROD.
+- Stripe LIVE is configured.
+- Migration `AddBillingPayments` is applied in PROD.
+- Tenant Billing UI with visual period selector/savings is validated in PROD.
+- PROD stable release `v1.0.0` points to `cfe607c6f2b8f92922c4c07a1ce94fd089401091`.
 
 ## What Still Needs Testing
 
@@ -897,11 +927,12 @@ For the next technical session:
 
 1. Read `docs/AI_CONTEXT.md`.
 2. Read this handoff.
-3. If working on STG, verify current App Settings and connection strings from Azure before changing code.
-4. For Google Wallet STG, keep `reviewStatus = UNDER_REVIEW` in LoyaltyClass PATCH payloads and retry save-link with a known customer serial if a regression appears.
-5. For Admin domain transition, keep legacy Admin Windows online until the new Linux Admin has been fully validated by users.
-6. Before any Apple hostname work, inspect `Apple__WebServiceURL` impact on existing installed passes and design a safe migration plan.
-7. Observe both Basic DTU databases after the migration and only revisit SQL tier if cost or limits require it.
+3. Read `docs/RELEASE_PROCESS.md` before any PROD deploy/rollback work.
+4. If working on STG, verify current App Settings and connection strings from Azure before changing code.
+5. For Google Wallet STG, keep `reviewStatus = UNDER_REVIEW` in LoyaltyClass PATCH payloads and retry save-link with a known customer serial if a regression appears.
+6. For Admin domain transition, keep legacy Admin Windows online until the new Linux Admin has been fully validated by users.
+7. Before any Apple hostname work, inspect `Apple__WebServiceURL` impact on existing installed passes and design a safe migration plan.
+8. Observe both Basic DTU databases after the migration and only revisit SQL tier if cost or limits require it.
 
 Recommended first command for local orientation:
 

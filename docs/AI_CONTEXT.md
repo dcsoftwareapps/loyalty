@@ -1,10 +1,10 @@
 # LoyaltyCloud - AI Context
 
-Last updated: 2026-08-17
+Last updated: 2026-08-24
 
 Purpose: permanent technical context for continuing LoyaltyCloud with ChatGPT/Codex without losing important repository, infrastructure and product memory between chats.
 
-Do not create `docs/DECISIONS.md`. This repository intentionally uses `docs/AI_CONTEXT.md`, `docs/AI_HANDOFF.md`, `docs/ROADMAP.md` and focused feature docs instead.
+Do not create `docs/DECISIONS.md`. This repository intentionally uses `docs/AI_CONTEXT.md`, `docs/AI_HANDOFF.md`, `docs/ROADMAP.md`, `docs/RELEASE_PROCESS.md` and focused feature docs instead.
 
 ## Product Objective
 
@@ -530,6 +530,29 @@ Current PROD compute/cost state:
 - PROD SQL no longer uses Serverless auto-pause, so the cold start caused by waking the database is removed for PROD.
 - API PROD, Admin PROD and Wallet PROD were manually validated after the migration.
 
+Current PROD release state:
+
+- Current stable PROD release tag: `v1.0.0`.
+- Release SHA: `cfe607c6f2b8f92922c4c07a1ce94fd089401091`.
+- `main` remains the primary branch.
+- Formal release process is documented in `docs/RELEASE_PROCESS.md`.
+- STG validation remains required before PROD.
+- Release tags are created only after PROD deploy and smoke test succeed.
+- Code rollback uses a known immutable release tag.
+- Database rollback is a separate reviewed process and is not implied by checking out an older tag.
+- Deployment slots are not available on the current B1 App Service Plan, and the plan should not be upgraded only to obtain slots unless explicitly approved.
+- Existing historical checkpoint tag: `prod-2026-08-24-before-billing`.
+
+Current PROD Billing/Payments state:
+
+- Billing/Payments is deployed and validated in PROD.
+- Migration `AddBillingPayments` is already applied in PROD.
+- Stripe LIVE is configured.
+- PROD Stripe webhook endpoint: `https://api.loyaltycloud.net/api/billing/webhooks/stripe`.
+- Tenant Billing UI is active and validated in PROD.
+- Current Founder plan prices: 1 month `$249 MXN`, 3 months `$699 MXN`, 6 months `$1,299 MXN`, 12 months `$2,490 MXN`.
+- Billing UI displays 3 months `Ahorras $48`, 6 months `Ahorras $195`, and 12 months `2 meses GRATIS` plus `Ahorras $498`.
+
 Quick Help/public registration QR should use `Admin:PublicBaseUrl=https://admin.loyaltycloud.net` in PROD. Do not change Apple Wallet `Apple:WebServiceURL` as part of Admin-domain QR work unless explicitly requested.
 
 Current PROD domain state:
@@ -650,6 +673,14 @@ Lessons embedded in scripts:
 - SQL password prompt should only happen when creating SQL Server.
 
 ## Deployment Notes
+
+Release procedure:
+
+- Use immutable SemVer tags for PROD releases.
+- Current PROD release: `v1.0.0` at `cfe607c6f2b8f92922c4c07a1ce94fd089401091`.
+- Do not use floating tags such as `latest` for rollback.
+- Create release tags only after PROD smoke testing confirms the deploy is healthy.
+- See `docs/RELEASE_PROCESS.md` for the full procedure.
 
 API is Linux:
 
