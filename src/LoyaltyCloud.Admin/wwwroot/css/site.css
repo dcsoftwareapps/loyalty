@@ -326,6 +326,44 @@ input[type=color].kb-color-picker {
     font-size: 0.86rem;
     font-weight: 700;
 }
+.kb-wallet-config {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 260px;
+    gap: 24px;
+    align-items: start;
+}
+.kb-wallet-form {
+    min-width: 0;
+}
+.kb-wallet-preview {
+    min-height: 164px;
+    border-radius: var(--kb-radius);
+    padding: 18px;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    box-shadow: var(--kb-shadow-lg);
+}
+.kb-wallet-preview img {
+    width: 150px;
+    height: 48px;
+    object-fit: contain;
+    object-position: left center;
+}
+.kb-wallet-preview-fields {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 2px 18px;
+}
+.kb-wallet-preview-fields span {
+    font-size: 0.7rem;
+    font-weight: 700;
+    opacity: 0.72;
+}
+.kb-wallet-preview-fields strong {
+    font-size: 1.35rem;
+    line-height: 1.1;
+}
 .kb-help-qr {
     display: flex;
     flex-direction: column;
@@ -624,6 +662,8 @@ input[type=color].kb-color-picker {
     .kb-card-value { font-size: 2rem; }
     h1 { font-size: 1.85rem; }
     .kb-help-registration-layout { grid-template-columns: 1fr; }
+    .kb-wallet-config { grid-template-columns: 1fr; }
+    .kb-wallet-preview { max-width: 320px; }
     .kb-help-qr { max-width: 220px; }
     .kb-registration-poster-inner { padding: 28px 20px; }
 }

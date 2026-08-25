@@ -1,10 +1,10 @@
 # LoyaltyCloud - AI Handoff
 
-Last updated: 2026-08-24
+Last updated: 2026-08-25
 
-Branch: `main`
+Branch: `feature/wallet-card-branding`
 
-Last task worked: Documented the permanent branch-first development rule for new work.
+Last task worked: Phase 1 Wallet Card Branding for Apple Wallet.
 
 ## Current State
 
@@ -22,9 +22,10 @@ Current codebase state at the end of this handoff task:
 - Before implementing a new feature, verify the current branch. If currently on `main`, create a dedicated feature branch before modifying code.
 - Branch naming convention: `feature/<name>`, `bugfix/<name>`, `hotfix/<name>`.
 - Documentation changes are intentionally uncommitted so they can be reviewed first.
-- No build was executed.
-- No tests were executed.
-- No EF migrations were created or applied.
+- Wallet Card Branding changes are in progress on `feature/wallet-card-branding`.
+- EF migration `20260825052012_AddWalletCardBranding` adds `TenantBrandings.WalletBackgroundColor` and `TenantBrandings.WalletLogoBlobName`.
+- No migration was applied.
+- Build/tests should be reviewed in the latest task output before continuing.
 - No database update was executed.
 - No deploy was executed.
 - No commit was created.
@@ -54,6 +55,8 @@ Active product status:
 - API PROD, Admin PROD and Wallet PROD were manually validated after the PROD SQL migration.
 - API STG, Admin STG and Wallet were manually validated after the STG SQL migration.
 - Quick Help registration QR/poster now uses `Admin:PublicBaseUrl` when configured; PROD should use `https://admin.loyaltycloud.net`.
+- Tenant Admin `/config` now owns Apple Wallet card branding only: optional wallet background color, optional wallet-specific logo, contrast preview and fallback to main tenant logo/color.
+- Google Wallet tenant branding was intentionally not changed in this phase.
 - `Admin__PublicBaseUrl=https://admin.loyaltycloud.net` was also configured intentionally on the legacy PROD Admin Windows app so newly printed Quick Help QR posters point to the new Admin domain during transition.
 - New PROD Admin Linux `Admin__ApiBaseUrl` uses `https://api.loyaltycloud.net`.
 - Do not change `Apple__WebServiceURL` yet; Apple Wallet hostname migration needs a separate impact review.
@@ -61,9 +64,12 @@ Active product status:
 - Current PROD release: `v1.0.0`.
 - `v1.0.0` SHA: `cfe607c6f2b8f92922c4c07a1ce94fd089401091`.
 - Release policy: immutable SemVer tags documented in `docs/RELEASE_PROCESS.md`.
-- New work must begin from updated `main` on a dedicated branch; do not use `main` for everyday feature development.
-- Feature branches may be deployed to STG for integrated validation.
-- PROD must be deployed from integrated `main`, never directly from a feature branch.
+- Branch policy: `main` is PROD integration, `staging` is Azure STG integration/release-candidate validation, and `feature/*`/`bugfix/*`/`hotfix/*` are isolated development branches.
+- New work must begin from updated `main` on a dedicated branch; do not use `main` or `staging` for everyday feature development.
+- Feature branches should merge into `staging` by PR for integrated STG validation.
+- Azure STG should be deployed from `staging` when validating the next release candidate.
+- After STG approval, open a PR from `staging` into `main`.
+- PROD must be deployed from integrated `main`, never directly from `staging` or a feature branch.
 - Release tags are created only after PROD deploy and smoke test succeed.
 - Rollback of code uses a known release tag; rollback of database is separate and must be reviewed explicitly.
 - Deployment slots are not available on the current B1 plan and the plan should not be upgraded only to obtain slots without explicit approval.
@@ -258,6 +264,13 @@ git push origin v1.0.0
 ```
 
 The first push attempt from the sandbox failed because SSH/network access to GitHub was denied. The retry with elevated network permission succeeded and pushed only the tag.
+
+Staging branch initialization on 2026-08-25:
+
+- Local branch `staging` was created from `main` at `59c0340`.
+- `origin/staging` was pushed and configured as the upstream for local `staging`.
+- No feature branches were merged into `staging` during initialization.
+- Existing work in `feature/wallet-card-branding` remained uncommitted and was not merged.
 
 ## Recent Errors and Root Causes
 
@@ -934,7 +947,7 @@ For the next technical session:
 1. Read `docs/AI_CONTEXT.md`.
 2. Read this handoff.
 3. Read `docs/RELEASE_PROCESS.md` before any PROD deploy/rollback work.
-4. Before implementing a new feature, verify the current branch. If currently on `main`, create a dedicated feature branch before modifying code.
+4. Before implementing a new feature, verify the current branch. If currently on `main` or `staging`, create a dedicated feature branch before modifying functional code.
 5. If already on a related feature branch, continue there instead of creating another branch.
 6. If working on STG, verify current App Settings and connection strings from Azure before changing code.
 7. For Google Wallet STG, keep `reviewStatus = UNDER_REVIEW` in LoyaltyClass PATCH payloads and retry save-link with a known customer serial if a regression appears.

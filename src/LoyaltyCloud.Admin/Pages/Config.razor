@@ -4,8 +4,15 @@
 
 @using LoyaltyCloud.Application.Config.Commands.UpdateProgramConfig
 @using LoyaltyCloud.Application.Config.Queries.GetProgramConfig
+@using LoyaltyCloud.Application.Branding.Commands.RemoveTenantWalletLogo
+@using LoyaltyCloud.Application.Branding.Commands.UpdateWalletCardBranding
+@using LoyaltyCloud.Application.Branding.Commands.UploadTenantWalletLogo
+@using LoyaltyCloud.Application.Common.Branding
+@using LoyaltyCloud.Application.Common.Interfaces
 @using LoyaltyCloud.Common.Constants
+@using Microsoft.AspNetCore.Components.Forms
 @inject ISender Sender
+@inject ITenantBrandingReadService BrandingRead
 
 <PageTitle>Configuración · LoyaltyCloud</PageTitle>
 
@@ -24,6 +31,82 @@ else
 {
     @if (successMsg is not null) { <div class="kb-form-success">@successMsg</div> }
     @if (errorMsg is not null) { <div class="kb-form-error">@errorMsg</div> }
+
+    <section class="kb-card" style="max-width: 800px; margin-bottom: 24px;">
+        <h2>Tarjeta digital</h2>
+        <p class="kb-muted">Personaliza cómo se ve la tarjeta en Apple Wallet.</p>
+
+        <div class="kb-wallet-config">
+            <div class="kb-wallet-form">
+                <div class="kb-form-row">
+                    <label for="wallet-bg">Color de tarjeta</label>
+                    <div class="kb-color-input-group">
+                        <input id="wallet-bg-picker"
+                               class="kb-color-picker"
+                               type="color"
+                               value="@WalletPickerColor"
+                               @oninput="OnWalletColorChanged" />
+                        <input id="wallet-bg"
+                               type="text"
+                               value="@walletBackgroundColor"
+                               @oninput="OnWalletColorChanged"
+                               placeholder="#1C1C1C"
+                               maxlength="7" />
+                    </div>
+                    <p class="kb-muted">Opcional. Vacío usa el color principal del negocio.</p>
+                </div>
+
+                <div class="kb-form-row">
+                    <label for="wallet-logo">Logo de la tarjeta</label>
+                    <InputFile id="wallet-logo" OnChange="UploadWalletLogoAsync" accept="image/png,image/jpeg" disabled="@brandingBusy" />
+                    <p class="kb-muted">Opcional. Si no cargas uno, utilizaremos el logo principal de tu negocio.</p>
+                    @if (!string.IsNullOrWhiteSpace(branding?.WalletLogoUrl))
+                    {
+                        <div class="kb-logo-preview">
+                            <img src="@branding.WalletLogoUrl" alt="Logo de la tarjeta" />
+                            <span>@(branding.HasWalletLogo ? "Logo de la tarjeta" : "Usando logo principal")</span>
+                        </div>
+                    }
+                    <button class="kb-btn kb-btn--ghost kb-btn--small"
+                            @onclick="RemoveWalletLogoAsync"
+                            disabled="@(!CanRemoveWalletLogo || brandingBusy)">
+                        Eliminar logo de tarjeta
+                    </button>
+                </div>
+
+                <div class="kb-form-row kb-form-row--horizontal">
+                    <button class="kb-btn kb-btn--primary"
+                            @onclick="SaveWalletBrandingAsync"
+                            disabled="@brandingBusy">
+                        @(brandingBusy ? "Guardando…" : "Guardar tarjeta digital")
+                    </button>
+                    <button class="kb-btn kb-btn--ghost"
+                            @onclick="UsePrimaryColorAsync"
+                            disabled="@brandingBusy">
+                        Usar color principal
+                    </button>
+                </div>
+            </div>
+
+            <div class="kb-wallet-preview"
+                 style="background:@ResolvedWalletBackground; color:@ResolvedWalletText;">
+                @if (!string.IsNullOrWhiteSpace(branding?.WalletLogoUrl))
+                {
+                    <img src="@branding.WalletLogoUrl" alt="" />
+                }
+                else
+                {
+                    <strong>@(branding?.DisplayName ?? "LoyaltyCloud")</strong>
+                }
+                <div class="kb-wallet-preview-fields">
+                    <span>PUNTOS</span>
+                    <strong>1,250</strong>
+                    <span>NIVEL</span>
+                    <strong>Glow</strong>
+                </div>
+            </div>
+        </div>
+    </section>
 
     <table class="kb-table" style="max-width: 800px;">
         <thead>
@@ -73,6 +156,17 @@ else
     private string? successMsg;
     private string? errorMsg;
     private bool busy;
+    private TenantBrandingInfo? branding;
+    private string? walletBackgroundColor;
+    private bool brandingBusy;
+    private const long MaxLogoBytes = 2 * 1024 * 1024;
+
+    private bool CanRemoveWalletLogo => branding?.HasWalletLogo == true;
+    private string WalletPickerColor => WalletColorContrast.NormalizeHexOrDefault(walletBackgroundColor, branding?.PrimaryColor ?? WalletColorContrast.DefaultBackgroundHex);
+    private string ResolvedWalletBackground => WalletColorContrast.NormalizeHexOrDefault(
+        string.IsNullOrWhiteSpace(walletBackgroundColor) ? branding?.ResolvedWalletBackgroundColor : walletBackgroundColor,
+        WalletColorContrast.DefaultBackgroundHex);
+    private string ResolvedWalletText => WalletColorContrast.ResolveTextColors(ResolvedWalletBackground).ForegroundHex;
 
     protected override async Task OnInitializedAsync() => await LoadAsync();
 
@@ -86,6 +180,9 @@ else
                 .ToList();
             edited = entries.ToDictionary(e => e.Key, e => e.Value);
         }
+
+        branding = await BrandingRead.GetCurrentAsync();
+        walletBackgroundColor = branding.WalletBackgroundColor ?? string.Empty;
     }
 
     private async Task SaveAsync()
@@ -117,6 +214,112 @@ else
         else
         {
             errorMsg = result.Error;
+        }
+    }
+
+    private void OnWalletColorChanged(ChangeEventArgs args)
+    {
+        walletBackgroundColor = args.Value?.ToString()?.Trim() ?? string.Empty;
+    }
+
+    private async Task UsePrimaryColorAsync()
+    {
+        walletBackgroundColor = string.Empty;
+        await SaveWalletBrandingAsync();
+    }
+
+    private async Task SaveWalletBrandingAsync()
+    {
+        successMsg = errorMsg = null;
+        if (!string.IsNullOrWhiteSpace(walletBackgroundColor) && !WalletColorContrast.IsHexColor(walletBackgroundColor))
+        {
+            errorMsg = "El color de la tarjeta debe usar formato #RRGGBB.";
+            return;
+        }
+
+        brandingBusy = true;
+        try
+        {
+            var result = await Sender.Send(new UpdateWalletCardBrandingCommand(walletBackgroundColor));
+            if (result.IsSuccess)
+            {
+                branding = result.Value;
+                walletBackgroundColor = branding.WalletBackgroundColor ?? string.Empty;
+                successMsg = "Tarjeta digital actualizada.";
+            }
+            else
+            {
+                errorMsg = result.Error;
+            }
+        }
+        finally
+        {
+            brandingBusy = false;
+        }
+    }
+
+    private async Task UploadWalletLogoAsync(InputFileChangeEventArgs args)
+    {
+        successMsg = errorMsg = null;
+        var file = args.File;
+        if (file.Size <= 0 || file.Size > MaxLogoBytes)
+        {
+            errorMsg = "El logo debe pesar máximo 2 MB.";
+            return;
+        }
+
+        if (!file.ContentType.Equals("image/png", StringComparison.OrdinalIgnoreCase)
+            && !file.ContentType.Equals("image/jpeg", StringComparison.OrdinalIgnoreCase)
+            && !file.ContentType.Equals("image/jpg", StringComparison.OrdinalIgnoreCase))
+        {
+            errorMsg = "El logo debe ser PNG o JPG.";
+            return;
+        }
+
+        brandingBusy = true;
+        try
+        {
+            await using var stream = file.OpenReadStream(MaxLogoBytes);
+            var result = await Sender.Send(new UploadTenantWalletLogoCommand(
+                file.Name,
+                file.ContentType,
+                stream,
+                file.Size));
+
+            if (result.IsFailure)
+            {
+                errorMsg = string.Join(" ", result.Errors);
+                return;
+            }
+
+            branding = await BrandingRead.GetCurrentAsync();
+            successMsg = "Logo de tarjeta actualizado.";
+        }
+        finally
+        {
+            brandingBusy = false;
+        }
+    }
+
+    private async Task RemoveWalletLogoAsync()
+    {
+        successMsg = errorMsg = null;
+        brandingBusy = true;
+        try
+        {
+            var result = await Sender.Send(new RemoveTenantWalletLogoCommand());
+            if (result.IsFailure)
+            {
+                errorMsg = string.Join(" ", result.Errors);
+                return;
+            }
+
+            branding = await BrandingRead.GetCurrentAsync();
+            successMsg = "Logo de tarjeta eliminado.";
+        }
+        finally
+        {
+            brandingBusy = false;
         }
     }
 
