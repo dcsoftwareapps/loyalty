@@ -31,7 +31,7 @@ else
     @if (successMsg is not null) { <div class="kb-form-success">@successMsg</div> }
     @if (errorMsg is not null) { <div class="kb-form-error">@errorMsg</div> }
 
-    <section class="kb-card" style="max-width: 800px; margin-bottom: 24px;">
+    <section class="kb-card" style="max-width: 980px; margin-bottom: 24px;">
         <h2>Tarjeta digital</h2>
         <p class="kb-muted">Personaliza cómo se ve la tarjeta en Apple Wallet.</p>
 
@@ -104,32 +104,29 @@ else
 
                     <div class="kb-wallet-preview-name">Daniel</div>
 
-                    <div class="kb-wallet-preview-fields">
-                        <div>
-                            <span>PUNTOS</span>
-                            <strong>50 pts</strong>
-                        </div>
-                        <div>
-                            <span>NIVEL</span>
-                            <strong>Mist ✨</strong>
-                        </div>
-                        <div>
-                            <span>PRÓXIMO</span>
-                            <strong>Glow</strong>
-                        </div>
-                        <div>
-                            <span>FALTAN</span>
-                            <strong>950 pts</strong>
-                        </div>
+                    <div class="kb-wallet-preview-field-labels">
+                        <span>PUNTOS</span>
+                        <span>NIVEL</span>
+                        <span>PRÓXIMO</span>
+                        <span>FALTAN</span>
+                    </div>
+                    <div class="kb-wallet-preview-field-values">
+                        <strong>50 pts</strong>
+                        <strong>Mist ✨</strong>
+                        <strong>Glow</strong>
+                        <strong>950 pts</strong>
                     </div>
 
                     <div class="kb-wallet-preview-qr" aria-hidden="true">
-                        <span></span>
+                        <div class="kb-wallet-preview-qr-pattern">
+                            <span></span>
+                            <span></span>
+                            <span></span>
+                        </div>
                     </div>
-                    <p>Presenta este código en caja</p>
                 </div>
-                <p class="kb-muted kb-wallet-preview-note">
-                    Vista previa aproximada. La apariencia final puede variar ligeramente en Apple Wallet.
+                <p class="kb-wallet-preview-note">
+                    Vista previa aproximada.
                 </p>
             </div>
         </div>

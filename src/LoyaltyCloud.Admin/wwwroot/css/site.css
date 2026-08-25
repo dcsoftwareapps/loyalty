@@ -328,8 +328,8 @@ input[type=color].kb-color-picker {
 }
 .kb-wallet-config {
     display: grid;
-    grid-template-columns: minmax(0, 1fr) minmax(260px, 340px);
-    gap: 24px;
+    grid-template-columns: minmax(0, 1fr) minmax(340px, 420px);
+    gap: 28px;
     align-items: start;
 }
 .kb-wallet-form {
@@ -346,86 +346,122 @@ input[type=color].kb-color-picker {
 }
 .kb-wallet-preview {
     width: 100%;
-    min-height: 430px;
+    max-width: 420px;
+    min-height: 560px;
     border-radius: var(--kb-radius-lg);
-    padding: 22px 20px;
+    padding: 28px 24px 30px;
     display: flex;
     flex-direction: column;
-    gap: 18px;
+    gap: 20px;
     box-shadow: var(--kb-shadow-lg);
     overflow: hidden;
 }
 .kb-wallet-preview-logo {
-    min-height: 54px;
+    min-height: 70px;
     display: flex;
-    align-items: center;
+    align-items: flex-start;
 }
 .kb-wallet-preview-logo img {
-    width: 150px;
+    width: 180px;
     max-width: 100%;
     height: auto;
-    max-height: 54px;
+    max-height: 70px;
     object-fit: contain;
     object-position: left center;
 }
 .kb-wallet-preview-logo strong {
-    font-size: 1.05rem;
+    font-size: 1.16rem;
     line-height: 1.1;
 }
 .kb-wallet-preview-name {
     font-family: var(--font-display);
-    font-size: 2.25rem;
-    line-height: 1;
+    font-size: 4rem;
+    line-height: 0.95;
     font-weight: 600;
+    margin-top: 4px;
 }
-.kb-wallet-preview-fields {
+.kb-wallet-preview-field-labels,
+.kb-wallet-preview-field-values {
     display: grid;
     grid-template-columns: repeat(4, minmax(0, 1fr));
-    gap: 10px;
+    column-gap: 10px;
+    align-items: baseline;
 }
-.kb-wallet-preview-fields span {
+.kb-wallet-preview-field-labels {
+    margin-top: 6px;
+}
+.kb-wallet-preview-field-labels span {
     display: block;
-    margin-bottom: 4px;
-    font-size: 0.7rem;
+    font-size: 0.64rem;
     font-weight: 700;
+    letter-spacing: 0.06em;
     opacity: 0.72;
+    text-transform: uppercase;
+    white-space: nowrap;
 }
-.kb-wallet-preview-fields strong {
+.kb-wallet-preview-field-values {
+    margin-top: -14px;
+}
+.kb-wallet-preview-field-values strong {
     display: block;
-    font-size: 0.98rem;
+    font-size: 1rem;
     line-height: 1.1;
-    overflow-wrap: anywhere;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
 .kb-wallet-preview-qr {
     display: grid;
     place-items: center;
-    width: min(72%, 210px);
+    width: min(82%, 270px);
     aspect-ratio: 1;
     margin: auto auto 0;
     border-radius: var(--kb-radius-sm);
     background: #fff;
-    padding: 16px;
+    padding: 18px;
 }
-.kb-wallet-preview-qr span {
-    display: block;
+.kb-wallet-preview-qr-pattern {
+    position: relative;
     width: 100%;
     height: 100%;
     opacity: 0.88;
     background:
-        linear-gradient(90deg, #111 12px, transparent 12px) 0 0 / 34px 34px,
-        linear-gradient(#111 12px, transparent 12px) 0 0 / 34px 34px,
-        linear-gradient(90deg, transparent 10px, #111 10px 18px, transparent 18px) 9px 9px / 34px 34px,
+        linear-gradient(90deg, #111 10px, transparent 10px) 6px 6px / 30px 30px,
+        linear-gradient(#111 10px, transparent 10px) 6px 6px / 30px 30px,
+        linear-gradient(90deg, transparent 9px, #111 9px 16px, transparent 16px) 0 0 / 30px 30px,
         #fff;
 }
-.kb-wallet-preview p {
-    margin: 0;
-    text-align: center;
-    font-weight: 700;
-    opacity: 0.82;
+.kb-wallet-preview-qr-pattern span {
+    position: absolute;
+    width: 28%;
+    aspect-ratio: 1;
+    border: 10px solid #111;
+    background: #fff;
+}
+.kb-wallet-preview-qr-pattern span::after {
+    content: "";
+    position: absolute;
+    inset: 8px;
+    background: #111;
+}
+.kb-wallet-preview-qr-pattern span:nth-child(1) {
+    top: 0;
+    left: 0;
+}
+.kb-wallet-preview-qr-pattern span:nth-child(2) {
+    top: 0;
+    right: 0;
+}
+.kb-wallet-preview-qr-pattern span:nth-child(3) {
+    bottom: 0;
+    left: 0;
 }
 .kb-wallet-preview-note {
-    margin: 10px 0 0;
-    font-size: 0.84rem;
+    margin: 12px 0 0;
+    color: var(--kb-ink-muted);
+    font-size: 0.8rem;
+    font-style: italic;
+    line-height: 1.35;
 }
 .kb-help-qr {
     display: flex;
@@ -726,8 +762,11 @@ input[type=color].kb-color-picker {
     h1 { font-size: 1.85rem; }
     .kb-help-registration-layout { grid-template-columns: 1fr; }
     .kb-wallet-config { grid-template-columns: 1fr; }
-    .kb-wallet-preview { max-width: 340px; }
-    .kb-wallet-preview-fields { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .kb-wallet-preview { max-width: 420px; }
+    .kb-wallet-preview-field-labels { column-gap: 8px; }
+    .kb-wallet-preview-field-values { column-gap: 8px; }
+    .kb-wallet-preview-field-labels span { font-size: 0.58rem; }
+    .kb-wallet-preview-field-values strong { font-size: 0.9rem; }
     .kb-help-qr { max-width: 220px; }
     .kb-registration-poster-inner { padding: 28px 20px; }
 }
