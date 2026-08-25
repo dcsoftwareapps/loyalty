@@ -11,10 +11,28 @@ The current stable PROD release is:
 ## 1. Git Strategy
 
 - `main` remains the primary branch.
+- Never develop a new feature directly on `main`.
+- Every new feature, bugfix or hotfix must use a dedicated branch created from an updated `main`.
 - PROD releases are represented by immutable annotated tags.
 - Do not create a separate branch for every deploy.
+- Do not reuse old branches for new work.
 - Do not use floating tags like `latest` as the source of rollback.
 - Prefer versioned immutable tags such as `v1.0.0`, `v1.0.1`, `v1.1.0`.
+- Before implementing a new feature, verify the current branch. If currently on `main`, create a dedicated feature branch before modifying code.
+
+Branch naming convention:
+
+- `feature/<descriptive-name>`
+- `bugfix/<descriptive-name>`
+- `hotfix/<descriptive-name>`
+
+Examples:
+
+- `feature/customer-insights`
+- `feature/analytics-dashboard`
+- `feature/recurring-payments`
+- `bugfix/google-wallet-save-link`
+- `hotfix/billing-checkout`
 
 Existing historical checkpoint:
 
@@ -30,18 +48,41 @@ Use Semantic Versioning in a practical way:
 
 ## 3. Flow: Feature -> STG -> Main -> PROD -> Tag
 
-1. Develop feature or bugfix in a branch.
-2. Open PR into `main`.
-3. Validate in STG.
-4. Merge into `main`.
-5. Confirm local `main` is clean and updated with `origin/main`.
-6. Deploy PROD from the intended `main` SHA.
-7. Smoke test PROD.
-8. Only after PROD is confirmed healthy, create and push the release tag.
+1. Start on `main`.
+2. Update `main`.
+
+```powershell
+git checkout main
+git pull origin main
+```
+
+3. Confirm the working tree is clean.
+
+```powershell
+git status --short
+```
+
+4. Create a dedicated branch.
+
+```powershell
+git checkout -b feature/<descriptive-name>
+```
+
+5. Implement the feature only on that branch.
+6. Validate build/tests as appropriate.
+7. Deploy that branch to STG when integrated validation is needed.
+8. Validate manually in STG.
+9. After approval, commit/push the feature branch and open a PR into `main`.
+10. Merge the PR into `main`.
+11. Deploy PROD only from integrated `main`, never directly from a feature branch.
+12. Smoke test PROD.
+13. Only after PROD is confirmed healthy, create and push the release tag.
 
 Do not create a release tag before PROD has been validated.
 
 If the deploy fails before PROD is stable, do not create a new release tag. Redeploy the previous known release tag instead.
+
+If work starts while the local checkout is already on a related feature branch, continue there. Do not create nested or unnecessary branches.
 
 ## 4. Create a Release
 

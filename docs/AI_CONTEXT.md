@@ -536,7 +536,12 @@ Current PROD release state:
 - Release SHA: `cfe607c6f2b8f92922c4c07a1ce94fd089401091`.
 - `main` remains the primary branch.
 - Formal release process is documented in `docs/RELEASE_PROCESS.md`.
+- Never develop a new feature directly on `main`.
+- Before implementing a new feature, verify the current branch. If currently on `main`, create a dedicated feature branch before modifying code.
+- Use branch prefixes `feature/`, `bugfix/` and `hotfix/`.
 - STG validation remains required before PROD.
+- Feature branches may be deployed to STG for integrated validation.
+- PROD must be deployed from integrated `main`, never directly from a feature branch.
 - Release tags are created only after PROD deploy and smoke test succeed.
 - Code rollback uses a known immutable release tag.
 - Database rollback is a separate reviewed process and is not implied by checking out an older tag.
@@ -678,7 +683,10 @@ Release procedure:
 
 - Use immutable SemVer tags for PROD releases.
 - Current PROD release: `v1.0.0` at `cfe607c6f2b8f92922c4c07a1ce94fd089401091`.
+- Never develop features directly on `main`; create a dedicated `feature/`, `bugfix/` or `hotfix/` branch from updated `main` first.
 - Do not use floating tags such as `latest` for rollback.
+- Deploy feature branches to STG when integrated validation is needed.
+- Deploy PROD only from integrated `main`.
 - Create release tags only after PROD smoke testing confirms the deploy is healthy.
 - See `docs/RELEASE_PROCESS.md` for the full procedure.
 
@@ -763,6 +771,8 @@ Known current/pending:
 ## Working Conventions
 
 - Inspect before changing.
+- Before implementing a new feature, verify the current branch. If currently on `main`, create a dedicated feature branch before modifying code.
+- Do not use `main` for everyday feature development.
 - Keep changes scoped.
 - No large refactors unless explicitly requested.
 - No functional code changes for documentation-only tasks.
