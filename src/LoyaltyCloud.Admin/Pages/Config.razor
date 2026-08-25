@@ -80,7 +80,7 @@ else
                 </div>
 
                 <div class="kb-form-row kb-form-row--horizontal">
-                    <button class="kb-btn kb-btn--primary"
+                    <button class="kb-btn kb-btn--primary kb-config-save"
                             @onclick="SaveWalletBrandingAsync"
                             disabled="@brandingBusy">
                         @(brandingBusy ? "Guardando…" : "Guardar")
@@ -125,12 +125,9 @@ else
                         <strong>950 pts</strong>
                     </div>
 
-                    <div class="kb-wallet-preview-qr" aria-hidden="true">
-                        <div class="kb-wallet-preview-qr-pattern">
-                            <span></span>
-                            <span></span>
-                            <span></span>
-                        </div>
+                    <div class="kb-wallet-preview-qr">
+                        @* Preview-only QR; the real Wallet pass barcode payload is generated elsewhere. *@
+                        <img src="@PreviewQrDataUri" alt="" />
                     </div>
                 </div>
                 <p class="kb-wallet-preview-note">
@@ -180,7 +177,7 @@ else
             </tbody>
         </table>
 
-        <button class="kb-btn kb-btn--primary kb-btn--large kb-config-save"
+        <button class="kb-btn kb-btn--primary kb-config-save"
                 @onclick="SaveAsync" disabled="@busy">
             @(busy ? "Guardando…" : "Guardar")
         </button>
@@ -198,6 +195,8 @@ else
     private bool brandingBusy;
     private string? selectedWalletLogoFileName;
     private const long MaxLogoBytes = 2 * 1024 * 1024;
+    private const string PreviewQrUrl = "https://www.instagram.com/loyaltycloud.app/";
+    private static readonly string PreviewQrDataUri = QrCodeSvgGenerator.GenerateDataUri(PreviewQrUrl, scale: 7);
 
     private bool CanRemoveWalletLogo => branding?.HasWalletLogo == true;
     private bool CanUsePrimaryColor => !string.IsNullOrWhiteSpace(branding?.WalletBackgroundColor);

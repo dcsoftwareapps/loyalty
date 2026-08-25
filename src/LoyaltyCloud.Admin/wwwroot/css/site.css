@@ -328,7 +328,10 @@ input[type=color].kb-color-picker {
 }
 .kb-config-card {
     max-width: 980px;
-    margin-bottom: 24px;
+    margin-bottom: 0;
+}
+.kb-config-card + .kb-config-card {
+    margin-top: 28px;
 }
 .kb-config-card > .kb-muted {
     margin-top: -8px;
@@ -366,6 +369,10 @@ input[type=color].kb-color-picker {
 }
 .kb-config-save {
     margin-top: 24px;
+    min-width: 120px;
+    min-height: 46px;
+    padding: 12px 24px;
+    font-size: 1rem;
 }
 .kb-wallet-config {
     display: grid;
@@ -461,41 +468,11 @@ input[type=color].kb-color-picker {
     background: #fff;
     padding: 18px;
 }
-.kb-wallet-preview-qr-pattern {
-    position: relative;
+.kb-wallet-preview-qr img {
+    display: block;
     width: 100%;
     height: 100%;
-    opacity: 0.88;
-    background:
-        linear-gradient(90deg, #111 10px, transparent 10px) 6px 6px / 30px 30px,
-        linear-gradient(#111 10px, transparent 10px) 6px 6px / 30px 30px,
-        linear-gradient(90deg, transparent 9px, #111 9px 16px, transparent 16px) 0 0 / 30px 30px,
-        #fff;
-}
-.kb-wallet-preview-qr-pattern span {
-    position: absolute;
-    width: 28%;
-    aspect-ratio: 1;
-    border: 10px solid #111;
-    background: #fff;
-}
-.kb-wallet-preview-qr-pattern span::after {
-    content: "";
-    position: absolute;
-    inset: 8px;
-    background: #111;
-}
-.kb-wallet-preview-qr-pattern span:nth-child(1) {
-    top: 0;
-    left: 0;
-}
-.kb-wallet-preview-qr-pattern span:nth-child(2) {
-    top: 0;
-    right: 0;
-}
-.kb-wallet-preview-qr-pattern span:nth-child(3) {
-    bottom: 0;
-    left: 0;
+    object-fit: contain;
 }
 .kb-wallet-preview-note {
     margin: 12px 0 0;
