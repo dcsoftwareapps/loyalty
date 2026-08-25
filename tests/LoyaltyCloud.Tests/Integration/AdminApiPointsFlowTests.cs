@@ -187,6 +187,7 @@ public sealed class AdminApiPointsFlowTests : IClassFixture<CustomWebApplication
     [Trait("Category", "WalletProductionUpdate")]
     public async Task Signed_admin_wallet_branding_request_touches_only_tenant_cards_and_attempts_apple_wallet_push()
     {
+        _factory.Apn.NextResult = null;
         var kbeautySerial = "KB-BRAND1";
         var bellaSerial = "KB-BELLA1";
         var before = DateTime.UtcNow.AddHours(-2);
@@ -225,6 +226,39 @@ public sealed class AdminApiPointsFlowTests : IClassFixture<CustomWebApplication
             && call.Reason == PassUpdateReason.BrandingUpdated);
         Assert.DoesNotContain(_factory.Apn.Calls.Skip(initialApnCount), call =>
             call.Token == "bella-branding-token");
+
+        var since = new DateTimeOffset(before).ToUnixTimeSeconds();
+        using var registrations = await _client.GetAsync($"/v1/devices/kbeauty-branding-device/registrations/pass.com.kbeautymx.loyalty?passesUpdatedSince={since}");
+        Assert.Equal(HttpStatusCode.OK, registrations.StatusCode);
+        var payload = await registrations.Content.ReadAsStringAsync();
+        Assert.Contains(kbeautySerial, payload, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    [Trait("Category", "TenantBranding")]
+    [Trait("Category", "WalletProductionUpdate")]
+    public async Task Signed_admin_wallet_branding_request_keeps_branding_when_apns_is_rejected()
+    {
+        _factory.Apn.NextResult = ApnPushResult.Permanent(400, "BadDeviceToken");
+        var serial = "KB-BRAND2";
+        await SeedCardWithDeviceAsync(serial, "kbeauty-branding-device-2", "kbeauty-branding-token-2", DateTime.UtcNow.AddHours(-2));
+
+        using var request = CreateSignedRequest(
+            HttpMethod.Put,
+            "/api/config/wallet-branding",
+            new { walletBackgroundColor = "#222222" },
+            tenantSlug: TenantSeed.KBeautySlug);
+        using var response = await _client.SendAsync(request);
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        using var scope = _factory.Services.CreateScope();
+        var tenantContext = scope.ServiceProvider.GetRequiredService<IMutableTenantContext>();
+        tenantContext.SetTenant(TenantSeed.KBeautyTenantId, TenantSeed.KBeautySlug);
+        var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        var branding = await db.TenantBrandings.SingleAsync(b => b.TenantId == TenantSeed.KBeautyTenantId);
+        Assert.Equal("#222222", branding.WalletBackgroundColor);
+
+        _factory.Apn.NextResult = null;
     }
 
     private async Task EnsureTenantOperationalAsync()

@@ -47,51 +47,107 @@ internal sealed class ApnService : IApnService
     }
 
     /// <inheritdoc />
-    public async Task SendPassUpdateAsync(string pushToken, PassUpdateReason reason, CancellationToken ct = default)
+    public async Task<ApnPushResult> SendPassUpdateAsync(string pushToken, PassUpdateReason reason, CancellationToken ct = default)
     {
         if (string.IsNullOrWhiteSpace(pushToken))
             throw new ArgumentException("PushToken requerido.", nameof(pushToken));
 
-        var jwt = await GetJwtAsync(ct);
-        var url = $"{_options.ApnHost.TrimEnd('/')}/3/device/{pushToken}";
-
-        using var request = new HttpRequestMessage(HttpMethod.Post, url)
+        try
         {
-            Version = HttpVersion.Version20,
-            VersionPolicy = HttpVersionPolicy.RequestVersionExact,
-            Content = new StringContent("{}", Encoding.UTF8, "application/json")
-        };
-        request.Headers.Authorization = new AuthenticationHeaderValue("bearer", jwt);
-        request.Headers.TryAddWithoutValidation("apns-topic", _options.PassTypeIdentifier);
-        request.Headers.TryAddWithoutValidation("apns-push-type", "background");
-        request.Headers.TryAddWithoutValidation("apns-priority", "5");
+            var jwt = await GetJwtAsync(ct);
+            var url = $"{_options.ApnHost.TrimEnd('/')}/3/device/{pushToken}";
 
-        _logger.LogInformation(
-            "APNs request sending. reason={Reason}, host={Host}, topic={Topic}, pushType=background, priority=5, token={Token}.",
-            reason,
-            _options.ApnHost,
-            _options.PassTypeIdentifier,
-            SafePushToken(pushToken));
+            using var request = new HttpRequestMessage(HttpMethod.Post, url)
+            {
+                Version = HttpVersion.Version20,
+                VersionPolicy = HttpVersionPolicy.RequestVersionExact,
+                Content = new StringContent("{}", Encoding.UTF8, "application/json")
+            };
+            request.Headers.Authorization = new AuthenticationHeaderValue("bearer", jwt);
+            request.Headers.TryAddWithoutValidation("apns-topic", _options.PassTypeIdentifier);
+            request.Headers.TryAddWithoutValidation("apns-push-type", "background");
+            request.Headers.TryAddWithoutValidation("apns-priority", "5");
 
-        using var response = await _http.SendAsync(request, ct);
-        _logger.LogInformation(
-            "APNs response received. reason={Reason}, status={Status}, token={Token}.",
-            reason,
-            response.StatusCode,
-            SafePushToken(pushToken));
+            _logger.LogInformation(
+                "APNs request sending. reason={Reason}, host={Host}, topic={Topic}, pushType=background, priority=5, token={Token}.",
+                reason,
+                _options.ApnHost,
+                _options.PassTypeIdentifier,
+                SafePushToken(pushToken));
 
-        if (response.IsSuccessStatusCode)
-        {
-            _logger.LogDebug("APN push OK ({Reason}) → {Token:0.10}…", reason, pushToken);
-            return;
+            using var response = await _http.SendAsync(request, ct);
+            var body = response.IsSuccessStatusCode
+                ? null
+                : await response.Content.ReadAsStringAsync(ct);
+            var apnReason = TryReadApnReason(body);
+
+            _logger.LogInformation(
+                "APNs response received. reason={Reason}, status={Status}, apnsReason={ApnsReason}, token={Token}.",
+                reason,
+                response.StatusCode,
+                apnReason ?? "none",
+                SafePushToken(pushToken));
+
+            if (response.StatusCode == HttpStatusCode.OK)
+            {
+                _logger.LogDebug("APN push OK ({Reason}) → {Token:0.10}…", reason, pushToken);
+                return ApnPushResult.Accepted((int)response.StatusCode);
+            }
+
+            _logger.LogWarning(
+                "APN push rejected for token {Token}: status={Status}, apnsReason={ApnsReason}, body={Body}",
+                SafePushToken(pushToken),
+                response.StatusCode,
+                apnReason ?? "none",
+                body);
+
+            return IsTransient(response.StatusCode, apnReason)
+                ? ApnPushResult.Transient((int)response.StatusCode, apnReason ?? response.StatusCode.ToString())
+                : ApnPushResult.Permanent((int)response.StatusCode, apnReason ?? response.StatusCode.ToString());
         }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch (TaskCanceledException ex)
+        {
+            _logger.LogWarning(
+                ex,
+                "APNs transient failure. reason={Reason}, token={Token}.",
+                reason,
+                SafePushToken(pushToken));
+            return ApnPushResult.Transient(null, "Timeout");
+        }
+        catch (HttpRequestException ex)
+        {
+            _logger.LogWarning(
+                ex,
+                "APNs transient network failure. reason={Reason}, token={Token}.",
+                reason,
+                SafePushToken(pushToken));
+            return ApnPushResult.Transient(null, ex.GetType().Name);
+        }
+    }
 
-        var body = await response.Content.ReadAsStringAsync(ct);
-        _logger.LogWarning(
-            "APN push falló para token {Token:0.10}…: {Status} {Body}",
-            pushToken, response.StatusCode, body);
+    private static bool IsTransient(HttpStatusCode statusCode, string? apnReason) =>
+        statusCode == (HttpStatusCode)429 || (int)statusCode >= 500;
 
-        // No lanzamos — el caller (handler) trata el push como best-effort.
+    private static string? TryReadApnReason(string? body)
+    {
+        if (string.IsNullOrWhiteSpace(body))
+            return null;
+
+        try
+        {
+            using var doc = JsonDocument.Parse(body);
+            return doc.RootElement.TryGetProperty("reason", out var reason)
+                ? reason.GetString()
+                : null;
+        }
+        catch (JsonException)
+        {
+            return null;
+        }
     }
 
     private async Task<string> GetJwtAsync(CancellationToken ct)

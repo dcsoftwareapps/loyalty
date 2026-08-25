@@ -67,12 +67,35 @@ internal sealed class LoyaltyNotificationRepository : ILoyaltyNotificationReposi
 
     public async Task<IReadOnlyList<LoyaltyNotification>> GetPendingDueAsync(DateTime nowUtc, int take, int maxAttempts, CancellationToken ct = default)
     {
+        var retryAttempt1Before = nowUtc.AddMinutes(-1);
+        var retryAttempt2Before = nowUtc.AddMinutes(-5);
+        var stuckBefore = nowUtc.AddMinutes(-15);
+
         var rows = await _db.LoyaltyNotifications
             .Include(n => n.Deliveries)
             .Where(n => n.TenantId == _tenantContext.RequireTenantId()
-                     && n.Status == NotificationStatus.Pending
                      && (!n.ScheduledAtUtc.HasValue || n.ScheduledAtUtc <= nowUtc)
-                     && n.Deliveries.Any(d => d.Status == NotificationDeliveryStatus.Pending && d.AttemptCount < maxAttempts))
+                     && (
+                         (n.Status == NotificationStatus.Pending
+                          && n.Deliveries.Any(d =>
+                              d.Status == NotificationDeliveryStatus.Pending
+                              && d.AttemptCount < maxAttempts))
+                         || (n.Status == NotificationStatus.Failed
+                             && n.Deliveries.Any(d =>
+                                 d.Status == NotificationDeliveryStatus.Failed
+                                 && d.AttemptCount < maxAttempts
+                                 && d.FailureReason != null
+                                 && d.FailureReason.StartsWith(NotificationDeliveryFailureReasons.TransientApnsFailurePrefix)
+                                 && d.CompletedAt.HasValue
+                                 && ((d.AttemptCount == 1 && d.CompletedAt.Value <= retryAttempt1Before)
+                                     || (d.AttemptCount == 2 && d.CompletedAt.Value <= retryAttempt2Before)
+                                     || (d.AttemptCount >= 3 && d.CompletedAt.Value <= stuckBefore))))
+                         || (n.Status == NotificationStatus.Processing
+                             && n.ProcessingStartedAt.HasValue
+                             && n.ProcessingStartedAt.Value <= stuckBefore
+                             && n.Deliveries.Any(d =>
+                                 d.Status == NotificationDeliveryStatus.Processing
+                                 && d.AttemptCount < maxAttempts))))
             .OrderBy(n => n.ScheduledAtUtc ?? n.CreatedAt)
             .Take(Math.Clamp(take, 1, 500))
             .ToListAsync(ct);

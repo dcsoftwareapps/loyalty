@@ -306,6 +306,8 @@ Wallet card branding is tenant-aware:
 - `TenantBranding.WalletLogoBlobName` points to wallet-specific generated assets under `tenant-branding/{tenantId}/wallet-branding/...`.
 - If no wallet logo is set, Apple Wallet falls back to generated assets from the tenant's main `LogoBlobName`, then bundled generic LoyaltyCloud assets.
 - Changing wallet color or wallet logo marks installed Apple passes updated and sends APNs best-effort; no visible `changeMessage` is generated for visual branding changes.
+- Wallet branding refresh now uses the shared Apple Wallet pass refresh path: touch `LoyaltyCard.LastActivityAt`, save, inspect `DeviceRegistration`, send APNs, and log `NoRecipients`, `NoOp`/unsupported, accepted pushes and rejected pushes.
+- APNs responses are explicit results. HTTP 200 is success; HTTP 429/5xx and network/timeout failures are transient; APNs permanent reasons such as `BadDeviceToken`, `Unregistered` and `DeviceTokenNotForTopic` are permanent. Non-2xx APNs responses must never be counted as success.
 7. iPhone installs pass and calls PassKit registration route.
 8. API stores `DeviceRegistration`.
 9. Later business events update `LoyaltyCard.LastActivityAt` and send APNs.
@@ -439,10 +441,13 @@ Only API registers hosted services.
 `LoyaltyNotificationBackgroundService`:
 
 - Config section: `LoyaltyNotifications`.
-- Default: enabled, no startup run, `PollIntervalSeconds=43200`.
+- Default: enabled, runs once on startup, `PollIntervalSeconds=120`.
 - Runs due custom notification campaigns and pending notification deliveries/retries.
+- `ProcessImmediately` remains the normal path for manual/current notifications; polling is the recovery/fallback path.
+- Transient APNs failures are retried with simple backoff using existing delivery timestamps and attempt counts. Permanent APNs failures are terminal and should not loop forever.
+- Old `Processing` notifications can be recovered by the scheduler without adding new columns.
 
-Cost-control decision for Azure SQL Free/UAT: no background loop should touch SQL every minute. Immediate foreground flows should process their own business notifications when explicitly wired.
+Historical note: the notification polling interval was previously extended to 12 hours to avoid keeping Azure SQL Serverless awake. STG and PROD now use Azure SQL Basic DTU, so that auto-pause constraint no longer applies in the same way. `LoyaltyMaintenance` remains a separate 12-hour maintenance worker.
 
 ## Configuration
 
