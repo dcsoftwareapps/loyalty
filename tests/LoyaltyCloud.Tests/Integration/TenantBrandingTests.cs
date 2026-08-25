@@ -184,8 +184,15 @@ public sealed class TenantBrandingTests
         var page = File.ReadAllText(Path.Combine(root, "src", "LoyaltyCloud.Admin", "Pages", "Config.razor"));
         var css = File.ReadAllText(Path.Combine(root, "src", "LoyaltyCloud.Admin", "wwwroot", "css", "site.css"));
 
-        Assert.Contains("Vista previa de Apple Wallet", page);
+        Assert.Contains("Personaliza el diseño de tu tarjeta digital.", page);
+        Assert.DoesNotContain("Vista previa de Apple Wallet", page);
         Assert.Contains("Vista previa aproximada.", page);
+        Assert.Contains("Reglas de puntos y beneficios", page);
+        Assert.Contains("Define cómo se acumulan, vencen y bonifican los puntos de tu programa.", page);
+        Assert.Contains("Cambiar logo", page);
+        Assert.Contains("Usar logo principal", page);
+        Assert.DoesNotContain("Opcional.", page);
+        Assert.DoesNotContain("Eliminar logo de tarjeta", page);
         Assert.Contains("PUNTOS", page);
         Assert.Contains("50 pts", page);
         Assert.Contains("NIVEL", page);
