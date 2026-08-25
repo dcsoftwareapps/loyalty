@@ -1,4 +1,5 @@
 using LoyaltyCloud.Application.Common.Interfaces;
+using LoyaltyCloud.Application.Common.Branding;
 using LoyaltyCloud.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
@@ -43,6 +44,8 @@ internal sealed class TenantBrandingReadService : ITenantBrandingReadService
                 tenant.DisplayName,
                 LogoUrl = tenant.Branding == null ? null : tenant.Branding.LogoUrl,
                 LogoBlobName = tenant.Branding == null ? null : tenant.Branding.LogoBlobName,
+                WalletBackgroundColor = tenant.Branding == null ? null : tenant.Branding.WalletBackgroundColor,
+                WalletLogoBlobName = tenant.Branding == null ? null : tenant.Branding.WalletLogoBlobName,
                 PrimaryColor = tenant.Branding == null ? null : tenant.Branding.PrimaryColor,
                 SecondaryColor = tenant.Branding == null ? null : tenant.Branding.SecondaryColor,
                 SupportPhone = tenant.Branding == null ? null : tenant.Branding.SupportPhone,
@@ -55,14 +58,25 @@ internal sealed class TenantBrandingReadService : ITenantBrandingReadService
         if (row is null)
             return Generic();
 
+        var primaryColor = TenantBrandingSanitizer.ColorOrDefault(row.PrimaryColor, TenantBrandingSanitizer.DefaultPrimaryColor, row.Id, "PrimaryColor", _logger);
+        var walletBackgroundColor = WalletColorContrast.IsHexColor(row.WalletBackgroundColor)
+            ? row.WalletBackgroundColor!.Trim().ToUpperInvariant()
+            : null;
+
         return new TenantBrandingInfo(
             row.Id,
             row.Slug,
             string.IsNullOrWhiteSpace(row.DisplayName) ? TenantBrandingSanitizer.DefaultDisplayName : row.DisplayName,
-            TenantBrandingSanitizer.ColorOrDefault(row.PrimaryColor, TenantBrandingSanitizer.DefaultPrimaryColor, row.Id, "PrimaryColor", _logger),
+            primaryColor,
             TenantBrandingSanitizer.ColorOrDefault(row.SecondaryColor, TenantBrandingSanitizer.DefaultSecondaryColor, row.Id, "SecondaryColor", _logger),
             _logoUrls.GetDisplayUrl(row.LogoBlobName)
                 ?? TenantBrandingSanitizer.UrlOrNull(row.LogoUrl, row.Id, "LogoUrl", _logger, Uri.UriSchemeHttps, Uri.UriSchemeHttp),
+            walletBackgroundColor,
+            walletBackgroundColor ?? primaryColor ?? WalletColorContrast.DefaultBackgroundHex,
+            _logoUrls.GetDisplayUrl(row.WalletLogoBlobName)
+                ?? _logoUrls.GetDisplayUrl(row.LogoBlobName)
+                ?? TenantBrandingSanitizer.UrlOrNull(row.LogoUrl, row.Id, "LogoUrl", _logger, Uri.UriSchemeHttps, Uri.UriSchemeHttp),
+            !string.IsNullOrWhiteSpace(row.WalletLogoBlobName),
             TenantBrandingSanitizer.TextOrNull(row.SupportPhone),
             TenantBrandingSanitizer.UrlOrNull(row.WhatsAppUrl, row.Id, "WhatsAppUrl", _logger, Uri.UriSchemeHttps, Uri.UriSchemeHttp, "tel"),
             TenantBrandingSanitizer.UrlOrNull(row.InstagramUrl, row.Id, "InstagramUrl", _logger, Uri.UriSchemeHttps, Uri.UriSchemeHttp),
@@ -77,6 +91,10 @@ internal sealed class TenantBrandingReadService : ITenantBrandingReadService
             TenantBrandingSanitizer.DefaultPrimaryColor,
             TenantBrandingSanitizer.DefaultSecondaryColor,
             LogoUrl: null,
+            WalletBackgroundColor: null,
+            ResolvedWalletBackgroundColor: WalletColorContrast.DefaultBackgroundHex,
+            WalletLogoUrl: null,
+            HasWalletLogo: false,
             SupportPhone: null,
             WhatsAppUrl: null,
             InstagramUrl: null,

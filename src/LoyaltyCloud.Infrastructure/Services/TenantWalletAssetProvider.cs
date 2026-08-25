@@ -32,13 +32,20 @@ internal sealed class TenantWalletAssetProvider : ITenantWalletAssetProvider
     public async Task<IReadOnlyList<WalletPassAsset>> LoadAssetsAsync(
         Guid tenantId,
         string tenantSlug,
+        string? walletLogoBlobName,
+        string? logoBlobName,
         CancellationToken cancellationToken = default)
     {
         var normalizedSlug = string.IsNullOrWhiteSpace(tenantSlug)
             ? "unknown"
             : tenantSlug.Trim().ToLowerInvariant();
 
-        var tenantAssets = await TryLoadTenantBlobAssetsAsync(tenantId, normalizedSlug, cancellationToken);
+        var tenantAssets = !string.IsNullOrWhiteSpace(walletLogoBlobName)
+            ? await TryLoadTenantBlobAssetsAsync(tenantId, normalizedSlug, "wallet-branding", cancellationToken)
+            : null;
+        tenantAssets ??= !string.IsNullOrWhiteSpace(logoBlobName)
+            ? await TryLoadTenantBlobAssetsAsync(tenantId, normalizedSlug, "wallet", cancellationToken)
+            : null;
         if (tenantAssets is not null)
             return tenantAssets;
 
@@ -48,6 +55,7 @@ internal sealed class TenantWalletAssetProvider : ITenantWalletAssetProvider
     private async Task<IReadOnlyList<WalletPassAsset>?> TryLoadTenantBlobAssetsAsync(
         Guid tenantId,
         string tenantSlug,
+        string folderName,
         CancellationToken cancellationToken)
     {
         if (string.IsNullOrWhiteSpace(_options.ConnectionString))
@@ -61,15 +69,16 @@ internal sealed class TenantWalletAssetProvider : ITenantWalletAssetProvider
 
             foreach (var spec in RequiredAssets)
             {
-                var blobName = $"{TenantBrandingLogoService.GetTenantBrandingPrefix(tenantId)}/wallet/{spec.Name}";
+                var blobName = $"{TenantBrandingLogoService.GetTenantBrandingPrefix(tenantId)}/{folderName}/{spec.Name}";
                 var blob = container.GetBlobClient(blobName);
                 if (!await blob.ExistsAsync(cancellationToken))
                 {
                     if (loaded.Count > 0)
                     {
                         _logger.LogWarning(
-                            "Tenant wallet assets are incomplete. TenantSlug={TenantSlug}, MissingBlob={BlobName}; falling back to bundled assets.",
+                            "Tenant wallet assets are incomplete. TenantSlug={TenantSlug}, Folder={Folder}, MissingBlob={BlobName}; falling back.",
                             tenantSlug,
+                            folderName,
                             blobName);
                     }
 
@@ -84,8 +93,9 @@ internal sealed class TenantWalletAssetProvider : ITenantWalletAssetProvider
             }
 
             _logger.LogInformation(
-                "Loaded tenant wallet assets from Blob Storage. TenantSlug={TenantSlug}, Files={Files}",
+                "Loaded tenant wallet assets from Blob Storage. TenantSlug={TenantSlug}, Folder={Folder}, Files={Files}",
                 tenantSlug,
+                folderName,
                 string.Join(", ", loaded.Select(a => a.Name)));
             return loaded;
         }
@@ -93,16 +103,27 @@ internal sealed class TenantWalletAssetProvider : ITenantWalletAssetProvider
         {
             _logger.LogDebug(
                 ex,
-                "Tenant wallet assets could not be loaded from Blob Storage. TenantSlug={TenantSlug}; falling back to bundled assets.",
-                tenantSlug);
+                "Tenant wallet assets could not be loaded from Blob Storage. TenantSlug={TenantSlug}, Folder={Folder}; falling back.",
+                tenantSlug,
+                folderName);
+            return null;
+        }
+        catch (InvalidOperationException ex)
+        {
+            _logger.LogDebug(
+                ex,
+                "Tenant wallet assets were invalid. TenantSlug={TenantSlug}, Folder={Folder}; falling back.",
+                tenantSlug,
+                folderName);
             return null;
         }
         catch (IOException ex)
         {
             _logger.LogDebug(
                 ex,
-                "Tenant wallet asset stream failed. TenantSlug={TenantSlug}; falling back to bundled assets.",
-                tenantSlug);
+                "Tenant wallet asset stream failed. TenantSlug={TenantSlug}, Folder={Folder}; falling back.",
+                tenantSlug,
+                folderName);
             return null;
         }
     }
