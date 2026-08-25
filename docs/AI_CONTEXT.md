@@ -1,10 +1,10 @@
 # LoyaltyCloud - AI Context
 
-Last updated: 2026-08-12
+Last updated: 2026-08-25
 
 Purpose: permanent technical context for continuing LoyaltyCloud with ChatGPT/Codex without losing important repository, infrastructure and product memory between chats.
 
-Do not create `docs/DECISIONS.md`. This repository intentionally uses `docs/AI_CONTEXT.md`, `docs/AI_HANDOFF.md`, `docs/ROADMAP.md` and focused feature docs instead.
+Do not create `docs/DECISIONS.md`. This repository intentionally uses `docs/AI_CONTEXT.md`, `docs/AI_HANDOFF.md`, `docs/ROADMAP.md`, `docs/RELEASE_PROCESS.md` and focused feature docs instead.
 
 ## Product Objective
 
@@ -54,8 +54,8 @@ Main technologies:
 - MediatR.
 - EF Core 9 with SQL Server provider and retrying execution strategy.
 - Azure SQL.
-- Azure App Service Linux for API.
-- Azure App Service Windows for Admin.
+- Azure App Service Linux for API and new PROD Admin.
+- Azure App Service Windows for legacy Admin during the PROD transition.
 - Azure Key Vault.
 - Azure Blob Storage.
 - Apple Wallet / PassKit.
@@ -147,6 +147,8 @@ Blazor Admin pages:
 | `/quick-help` | `QuickHelp.razor` | Quick cashier/admin help, registration QR and printable poster. |
 
 Visible Admin menu is grouped by operation, customers, loyalty program, communication and administration. Do not reintroduce any retired Admin hostname.
+
+Admin customer screens intentionally ignore `Customer.Email` as visible customer data. The field still exists for legacy/domain/API compatibility, but tenant Admin UI should show name, phone, customer ID/serial and operational data instead. Platform tenant creation has synchronized color picker and hex fields for tenant branding colors. Tenant Admin `/config` includes Apple Wallet card branding: optional `TenantBranding.WalletBackgroundColor` (`#RRGGBB`) and optional wallet-specific logo. Quick Help registration QR/poster must continue using the same tenant join URL source (`Admin:PublicBaseUrl` when configured, otherwise current Admin base URI). The poster top uses `TenantBrandingInfo.LogoUrl` when available and falls back to tenant display name.
 
 ## API Endpoints
 
@@ -295,6 +297,15 @@ Customer iPhone flow:
 4. Response includes `PassDownloadUrl`.
 5. Safari opens `GET /api/passes/{serialNumber}`.
 6. `PassGeneratorService` resolves tenant by card serial, reads tenant branding and dynamic levels, builds `pass.json`, signs manifest with Apple certificate, returns `.pkpass`.
+
+Wallet card branding is tenant-aware:
+
+- `TenantBranding.WalletBackgroundColor` overrides the Apple Wallet background color.
+- If no wallet color is set, Apple Wallet falls back to `TenantBranding.PrimaryColor`, then white.
+- Apple Wallet `foregroundColor` and `labelColor` are derived automatically from background luminance for readable contrast.
+- `TenantBranding.WalletLogoBlobName` points to wallet-specific generated assets under `tenant-branding/{tenantId}/wallet-branding/...`.
+- If no wallet logo is set, Apple Wallet falls back to generated assets from the tenant's main `LogoBlobName`, then bundled generic LoyaltyCloud assets.
+- Changing wallet color or wallet logo marks installed Apple passes updated and sends APNs best-effort; no visible `changeMessage` is generated for visual branding changes.
 7. iPhone installs pass and calls PassKit registration route.
 8. API stores `DeviceRegistration`.
 9. Later business events update `LoyaltyCard.LastActivityAt` and send APNs.
@@ -452,6 +463,7 @@ Important App Settings:
 | `Azure:BlobStorage:PassContainer` | API/Admin | Blob container, normally `passes`. |
 | `Azure:BlobStorage:SasExpirationMinutes` | API/Admin | SAS URL duration for logo assets. |
 | `Admin:ApiBaseUrl` | Admin | Base URL of API backend. Required at Admin startup. |
+| `Admin:PublicBaseUrl` | Admin | Public Admin base URL used by Quick Help registration links, QR and printable poster. Environment-specific; empty falls back to current Admin request/base URI. |
 | `Admin:Auth:SessionHours` | Admin | Tenant Admin cookie duration. RC1 target 168. |
 | `AdminApi:SharedSecret` | API/Admin | HMAC secret for Admin to API calls. Must match on both. |
 | `SuperAdmin:Username` | Admin | Platform Admin username. |
@@ -500,9 +512,17 @@ Production/UAT resources currently referenced:
 | --- | --- |
 | Resource Group | `rg-loyaltycloud-prod` |
 | API App Service | `loyaltycloud-api-894839` |
-| API URL | `https://loyaltycloud-api-894839.azurewebsites.net` |
-| Admin App Service | `loyaltycloud-admin` |
-| Admin URL | `https://loyaltycloud-admin.azurewebsites.net` |
+| API OS/runtime | Linux, .NET 9 |
+| API URL | `https://api.loyaltycloud.net` |
+| Legacy API URL | `https://loyaltycloud-api-894839.azurewebsites.net` |
+| Shared Linux App Service Plan | `asp-loyaltycloud-api-free` |
+| Shared Linux App Service Plan SKU | Basic B1, capacity 1, West US 3 |
+| New Admin App Service Linux | `loyaltycloud-admin-prod-01` |
+| New Admin OS/runtime | Linux, .NET 9 |
+| Admin public URL | `https://admin.loyaltycloud.net` |
+| Legacy Admin App Service Windows | `loyaltycloud-admin` |
+| Legacy Admin URL | `https://loyaltycloud-admin.azurewebsites.net` |
+| DNS provider | Cloudflare |
 | SQL Server | `sql-loyaltycloud-894839` |
 | Active DB | `LoyaltyCloudFree` |
 | Storage | `stloyaltycloud894839` |
@@ -510,14 +530,76 @@ Production/UAT resources currently referenced:
 
 Current PROD compute/cost state:
 
-- API App Service Plan is currently F1 Free.
-- Admin App Service Plan is currently F1 Free.
+- API and new Admin Linux run in the same Linux B1 App Service Plan `asp-loyaltycloud-api-free`.
+- The plan name still contains `free`, but the plan was scaled to SKU `B1`, tier `Basic`, capacity `1`. Do not recreate/rename it only because of the legacy name.
+- Legacy Admin Windows `loyaltycloud-admin` still exists during the transition and must not be removed or broken until cutover is complete.
+- Admin Windows is a fallback while the team transitions to `https://admin.loyaltycloud.net`.
 - Azure SQL `LoyaltyCloudFree` was migrated successfully from General Purpose Serverless `GP_S_Gen5_2` to Basic DTU after validating the same procedure in STG.
 - Final PROD SQL state: status `Online`, tier `Basic`, SKU `Basic`, service objective `Basic`, `maxSizeBytes=2147483648` (2 GB), `useFreeLimit=null`.
 - PROD SQL no longer uses Serverless auto-pause, so the cold start caused by waking the database is removed for PROD.
 - API PROD, Admin PROD and Wallet PROD were manually validated after the migration.
 
-The old Admin host no longer exists and must not be used.
+Current PROD release state:
+
+- Current stable PROD release tag: `v1.0.0`.
+- Release SHA: `cfe607c6f2b8f92922c4c07a1ce94fd089401091`.
+- `main` remains the primary branch.
+- Permanent integration branch `staging` exists for Azure STG release-candidate validation.
+- Formal release process is documented in `docs/RELEASE_PROCESS.md`.
+- Never develop a new feature directly on `main`.
+- Never develop directly on `staging`.
+- Before implementing a new feature, verify the current branch. If currently on `main` or `staging`, create a dedicated feature branch before modifying functional code.
+- Use branch prefixes `feature/`, `bugfix/` and `hotfix/`.
+- STG validation remains required before PROD.
+- Feature branches merge by PR into `staging`.
+- Azure STG should be deployed from `staging` when validating the next integrated release.
+- After STG approval, `staging` merges by PR into `main`.
+- PROD must be deployed from integrated `main`, never directly from `staging` or a feature branch.
+- Release tags are created only after PROD deploy and smoke test succeed.
+- Code rollback uses a known immutable release tag.
+- Database rollback is a separate reviewed process and is not implied by checking out an older tag.
+- Deployment slots are not available on the current B1 App Service Plan, and the plan should not be upgraded only to obtain slots unless explicitly approved.
+- Existing historical checkpoint tag: `prod-2026-08-24-before-billing`.
+
+Current PROD Billing/Payments state:
+
+- Billing/Payments is deployed and validated in PROD.
+- Migration `AddBillingPayments` is already applied in PROD.
+- Stripe LIVE is configured.
+- PROD Stripe webhook endpoint: `https://api.loyaltycloud.net/api/billing/webhooks/stripe`.
+- Tenant Billing UI is active and validated in PROD.
+- Current Founder plan prices: 1 month `$249 MXN`, 3 months `$699 MXN`, 6 months `$1,299 MXN`, 12 months `$2,490 MXN`.
+- Billing UI displays 3 months `Ahorras $48`, 6 months `Ahorras $195`, and 12 months `2 meses GRATIS` plus `Ahorras $498`.
+
+Quick Help/public registration QR should use `Admin:PublicBaseUrl=https://admin.loyaltycloud.net` in PROD. Do not change Apple Wallet `Apple:WebServiceURL` as part of Admin-domain QR work unless explicitly requested.
+
+Current PROD domain state:
+
+- `loyaltycloud.net` is managed in Cloudflare.
+- `api.loyaltycloud.net` points to `loyaltycloud-api-894839.azurewebsites.net`.
+- `admin.loyaltycloud.net` points to `loyaltycloud-admin-prod-01.azurewebsites.net`.
+- During initial configuration, Cloudflare CNAME records were left as DNS-only.
+- Azure verification TXT records `asuid.api` and `asuid.admin` were added.
+- Both custom domains are Verified/Secured in Azure and use managed Azure App Service certificates.
+- `GET /` on the API returns 404 because there is no API root endpoint; this is expected and was used only to confirm HTTPS/TLS.
+
+Current PROD Key Vault/Admin Linux state:
+
+- PROD Key Vault is `kv-loyaltycloud-894839` with RBAC enabled.
+- New Admin PROD Linux uses a System Assigned Managed Identity.
+- Current Admin Linux principal ID: `28e04e72-b2e1-4a77-9ab3-30430b81d8b0`.
+- It has `Key Vault Secrets User` on `kv-loyaltycloud-894839`.
+- New Admin PROD Linux `DefaultConnection` uses Key Vault reference `@Microsoft.KeyVault(VaultName=kv-loyaltycloud-894839;SecretName=loyaltycloud-sql-connection-string)`.
+- The Key Vault reference was validated and works.
+- PowerShell/Azure CLI repeatedly truncated `@Microsoft.KeyVault(...)` references, especially losing the final `)`. The robust workaround that worked was to create JSON and use `az rest` against the App Service `/config/connectionstrings` resource.
+
+Current PROD Admin/API transition state:
+
+- New Admin PROD Linux `Admin__ApiBaseUrl` was changed from `https://loyaltycloud-api-894839.azurewebsites.net` to `https://api.loyaltycloud.net`.
+- Login, navigation and `/platform/tenants` on the new Admin Linux were manually validated against real PROD data.
+- `Admin__PublicBaseUrl=https://admin.loyaltycloud.net` was configured both on the new Admin Linux and intentionally on the legacy Admin Windows so any newly printed Quick Help QR points to the new Admin domain.
+- Do not remove the legacy Admin Windows app or plan until the transition is complete and explicitly approved.
+- Do not change `Apple__WebServiceURL` yet.
 
 ## Azure STG
 
@@ -534,6 +616,7 @@ Current STG resources:
 | Admin App Service Plan Windows | `asp-loyaltycloud-admin-stg-01` |
 | Admin App Service | `loyaltycloud-admin-stg-01` |
 | Admin URL | `https://loyaltycloud-admin-stg-01.azurewebsites.net` |
+| Admin Linux test App Service | `loyaltycloud-admin-linux-stg-01` |
 | SQL Server | `sql-loyaltycloud-stg-01` |
 | Database | `LoyaltyCloudStg` |
 | Storage | `stloyaltycloudstg01` |
@@ -551,6 +634,7 @@ Current STG compute/cost state:
 - STG SQL no longer uses Serverless auto-pause, so the cold start caused by waking the database is removed for STG.
 - Storage observed through Azure Monitor during migration was approximately 26.9 MiB, around 1.3% of 2 GB.
 - API STG, Admin STG and Wallet were manually validated after the migration.
+- Admin Linux STG test was successful. Do not remove existing STG resources yet.
 
 Critical STG incident:
 
@@ -608,13 +692,41 @@ Lessons embedded in scripts:
 
 ## Deployment Notes
 
+Release procedure:
+
+- Use immutable SemVer tags for PROD releases.
+- Current PROD release: `v1.0.0` at `cfe607c6f2b8f92922c4c07a1ce94fd089401091`.
+- `main` is the PROD integration branch.
+- `staging` is the Azure STG integration/release-candidate branch.
+- Never develop features directly on `main` or `staging`; create a dedicated `feature/`, `bugfix/` or `hotfix/` branch from updated `main` first.
+- Do not use floating tags such as `latest` for rollback.
+- Merge feature branches into `staging` by PR.
+- Deploy Azure STG from `staging` for integrated validation.
+- Promote `staging` to `main` by PR after STG approval.
+- Deploy PROD only from integrated `main`.
+- Create release tags only after PROD smoke testing confirms the deploy is healthy.
+- See `docs/RELEASE_PROCESS.md` for the full procedure.
+
 API is Linux:
 
 - Publish with `dotnet publish`.
 - Create deployment ZIP using `tar -a -c -f`.
 - Do not use `Compress-Archive` for API Linux ZIP; it caused deployment/runtime issues.
 
-Admin is Windows:
+New PROD Admin is Linux:
+
+- Publish with `dotnet publish`.
+- Create deployment ZIP using `tar -a -c -f`.
+- Do not use `Compress-Archive` for Linux App Services; it produced Windows `\` paths inside the ZIP and Kudu failed during `rsync`.
+- Last validated Admin Linux deployment target: `loyaltycloud-admin-prod-01`.
+- Last validated package command shape:
+
+```powershell
+tar -a -c -f .\artifacts\admin-prod.zip `
+  -C .\artifacts\admin-prod .
+```
+
+Legacy Admin Windows still exists during transition:
 
 - Publish with `dotnet publish`.
 - Create ZIP with `Compress-Archive`.
@@ -653,12 +765,19 @@ Active/UAT focus:
 - Validate KBeauty real flows.
 - Continue Google Wallet STG/production smoke testing after deploys.
 - Observe both Basic DTU environments for behavior, costs and limits.
+- Continue controlled transition from legacy Admin Windows to new Admin Linux.
 
 Known current/pending:
 
 - Google Wallet issuer is Production Approved.
 - Google Wallet does not yet have a robust outbox/retry model.
 - Google Wallet sync is currently limited mainly to add-points sync once a member is linked.
+- Review whether Google Wallet has URLs/base URLs that should move to the new custom domains.
+- Analyze safe migration strategy before changing `Apple__WebServiceURL` to `https://api.loyaltycloud.net`.
+- Determine impact of changing `Apple__WebServiceURL` on already installed Apple Wallet passes, device registrations and `/v1/*` update flow.
+- Do not assume changing `Apple__WebServiceURL` automatically migrates existing installed passes.
+- Keep legacy `azurewebsites.net` hostnames compatible during the transition.
+- Do not remove `loyaltycloud-admin` or its Windows plan until cutover is complete and explicitly approved.
 - Pending decision: `GoogleWallet__ProgramName` is currently `KBeauty Loyalty`; consider `KBeauty` now and tenant-configurable naming later.
 - STG and PROD SQL are now Basic DTU and validated; Azure SQL Serverless cold start is no longer a known active issue for these environments.
 - Some committed default display values still say KBeauty for Apple/Google compatibility or provisional defaults.
@@ -669,6 +788,8 @@ Known current/pending:
 ## Working Conventions
 
 - Inspect before changing.
+- Before implementing a new feature, verify the current branch. If currently on `main` or `staging`, create a dedicated feature branch before modifying functional code.
+- Do not use `main` or `staging` for everyday feature development.
 - Keep changes scoped.
 - No large refactors unless explicitly requested.
 - No functional code changes for documentation-only tasks.

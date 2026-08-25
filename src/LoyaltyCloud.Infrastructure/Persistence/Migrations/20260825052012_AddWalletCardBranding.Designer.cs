@@ -4,6 +4,7 @@ using LoyaltyCloud.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
 #nullable disable
@@ -11,9 +12,11 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace LoyaltyCloud.Infrastructure.Persistence.Migrations
 {
     [DbContext(typeof(AppDbContext))]
-    partial class AppDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260825052012_AddWalletCardBranding")]
+    partial class AddWalletCardBranding
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -56,11 +59,6 @@ namespace LoyaltyCloud.Infrastructure.Persistence.Migrations
 
                     b.Property<int>("Months")
                         .HasColumnType("int");
-
-                    b.Property<string>("PaymentKind")
-                        .IsRequired()
-                        .HasMaxLength(30)
-                        .HasColumnType("nvarchar(30)");
 
                     b.Property<string>("PaymentMethod")
                         .IsRequired()
@@ -1199,22 +1197,6 @@ namespace LoyaltyCloud.Infrastructure.Persistence.Migrations
                         .HasPrecision(18, 2)
                         .HasColumnType("decimal(18,2)");
 
-                    b.Property<string>("StripeOneMonthPriceId")
-                        .HasMaxLength(200)
-                        .HasColumnType("nvarchar(200)");
-
-                    b.Property<string>("StripeSixMonthPriceId")
-                        .HasMaxLength(200)
-                        .HasColumnType("nvarchar(200)");
-
-                    b.Property<string>("StripeThreeMonthPriceId")
-                        .HasMaxLength(200)
-                        .HasColumnType("nvarchar(200)");
-
-                    b.Property<string>("StripeTwelveMonthPriceId")
-                        .HasMaxLength(200)
-                        .HasColumnType("nvarchar(200)");
-
                     b.Property<decimal>("ThreeMonthPrice")
                         .HasPrecision(18, 2)
                         .HasColumnType("decimal(18,2)");
@@ -1315,77 +1297,6 @@ namespace LoyaltyCloud.Infrastructure.Persistence.Migrations
                         .IsUnique();
 
                     b.ToTable("TenantAdminUsers", (string)null);
-                });
-
-            modelBuilder.Entity("LoyaltyCloud.Domain.Entities.TenantBillingProfile", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uniqueidentifier");
-
-                    b.Property<bool>("AutoRenewEnabled")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("bit")
-                        .HasDefaultValue(true);
-
-                    b.Property<string>("BillingContactEmail")
-                        .HasMaxLength(320)
-                        .HasColumnType("nvarchar(320)");
-
-                    b.Property<bool>("CancelAtPeriodEnd")
-                        .HasColumnType("bit");
-
-                    b.Property<string>("CardBrand")
-                        .HasMaxLength(30)
-                        .HasColumnType("nvarchar(30)");
-
-                    b.Property<string>("CardLast4")
-                        .HasMaxLength(4)
-                        .HasColumnType("nvarchar(4)");
-
-                    b.Property<decimal?>("RecurringAmount")
-                        .HasPrecision(18, 2)
-                        .HasColumnType("decimal(18,2)");
-
-                    b.Property<string>("RecurringCurrency")
-                        .HasMaxLength(3)
-                        .HasColumnType("nvarchar(3)");
-
-                    b.Property<int?>("RecurringMonths")
-                        .HasColumnType("int");
-
-                    b.Property<DateTime?>("StripeCurrentPeriodEndUtc")
-                        .HasColumnType("datetime2");
-
-                    b.Property<string>("StripeCustomerId")
-                        .HasMaxLength(200)
-                        .HasColumnType("nvarchar(200)");
-
-                    b.Property<string>("StripeSubscriptionId")
-                        .HasMaxLength(200)
-                        .HasColumnType("nvarchar(200)");
-
-                    b.Property<string>("StripeSubscriptionStatus")
-                        .HasMaxLength(40)
-                        .HasColumnType("nvarchar(40)");
-
-                    b.Property<Guid>("TenantId")
-                        .HasColumnType("uniqueidentifier");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("StripeCustomerId")
-                        .IsUnique()
-                        .HasFilter("[StripeCustomerId] IS NOT NULL");
-
-                    b.HasIndex("StripeSubscriptionId")
-                        .IsUnique()
-                        .HasFilter("[StripeSubscriptionId] IS NOT NULL");
-
-                    b.HasIndex("TenantId")
-                        .IsUnique();
-
-                    b.ToTable("TenantBillingProfiles", (string)null);
                 });
 
             modelBuilder.Entity("LoyaltyCloud.Domain.Entities.TenantBranding", b =>
@@ -1805,15 +1716,6 @@ namespace LoyaltyCloud.Infrastructure.Persistence.Migrations
                         .IsRequired();
 
                     b.Navigation("Tenant");
-                });
-
-            modelBuilder.Entity("LoyaltyCloud.Domain.Entities.TenantBillingProfile", b =>
-                {
-                    b.HasOne("LoyaltyCloud.Domain.Entities.Tenant", null)
-                        .WithOne()
-                        .HasForeignKey("LoyaltyCloud.Domain.Entities.TenantBillingProfile", "TenantId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
                 });
 
             modelBuilder.Entity("LoyaltyCloud.Domain.Entities.TenantBranding", b =>

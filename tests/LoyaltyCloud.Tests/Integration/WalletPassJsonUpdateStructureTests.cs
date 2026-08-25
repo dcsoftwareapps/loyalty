@@ -165,6 +165,41 @@ public sealed class WalletPassJsonUpdateStructureTests
     }
 
     [Fact]
+    [Trait("Category", "TenantBranding")]
+    [Trait("Category", "WalletProductionUpdate")]
+    public void Pass_json_uses_resolved_tenant_wallet_card_colors()
+    {
+        var now = new DateTime(2026, 8, 25, 12, 0, 0, DateTimeKind.Utc);
+        var customer = NewCustomer(now);
+        var card = NewCard(customer.Id, now);
+        card.EarnPoints(205, TransactionType.Purchase, ProgramConfigSnapshot.FromEntries([]), new FixedClock(now));
+        var pass = BuildPassJson(
+            card,
+            customer,
+            branding: new TenantWalletBrandingDto(
+                card.TenantId,
+                "kbeauty",
+                "KBeauty",
+                "KBeauty MX",
+                "KBeauty Loyalty",
+                "rgb(28,28,28)",
+                "rgb(255,255,255)",
+                "rgb(255,255,255)",
+                "#1C1C1C",
+                "tenant-branding/test/wallet/logo-original.png",
+                "tenant-branding/test/wallet-branding/logo-original.png",
+                "@kbeauty_mx",
+                "Cliente K-Beauty",
+                UsesBundledAssetsFallback: false,
+                UsesLegacyContactFallback: false));
+
+        Assert.Equal("rgb(28,28,28)", pass["backgroundColor"]!.GetValue<string>());
+        Assert.Equal("rgb(255,255,255)", pass["foregroundColor"]!.GetValue<string>());
+        Assert.Equal("rgb(255,255,255)", pass["labelColor"]!.GetValue<string>());
+        Assert.Equal("205 pts", SingleField(pass, "points")["value"]!.GetValue<string>());
+    }
+
+    [Fact]
     [Trait("Category", "MTLevel4")]
     [Trait("Category", "MTLevel6")]
     [Trait("Category", "WalletProductionUpdate")]
@@ -242,7 +277,8 @@ public sealed class WalletPassJsonUpdateStructureTests
         LoyaltyCard card,
         Customer customer,
         WalletNotificationContext? walletContext = null,
-        PassProgressValues? progress = null)
+        PassProgressValues? progress = null,
+        TenantWalletBrandingDto? branding = null)
     {
         var passGeneratorType = typeof(AppDbContext).Assembly
             .GetType("LoyaltyCloud.Infrastructure.Services.PassGeneratorService", throwOnError: true)!;
@@ -289,7 +325,7 @@ public sealed class WalletPassJsonUpdateStructureTests
                 card,
                 customer,
                 walletContext ?? new WalletNotificationContext(null, null, null, null, null, null, null, null, null),
-                new TenantWalletBrandingDto(
+                branding ?? new TenantWalletBrandingDto(
                     card.TenantId,
                     "kbeauty",
                     "KBeauty",
@@ -298,6 +334,9 @@ public sealed class WalletPassJsonUpdateStructureTests
                     "rgb(255,255,255)",
                     "rgb(0,0,0)",
                     "rgb(28,28,28)",
+                    "#FFFFFF",
+                    null,
+                    null,
                     "@kbeauty_mx\n\nkbeautymx.com\n\n+52 646 238 6962",
                     "Cliente K-Beauty",
                     UsesBundledAssetsFallback: true,

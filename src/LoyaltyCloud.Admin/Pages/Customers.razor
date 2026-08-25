@@ -12,7 +12,7 @@
 
 <div class="kb-form-row kb-form-row--horizontal">
     <div style="flex: 2; min-width: 240px;">
-        <label for="search">Buscar (nombre, email o ID del cliente)</label>
+        <label for="search">Buscar (nombre o ID del cliente)</label>
         <input id="search" type="text" @bind="searchTerm" @bind:event="oninput"
                @onkeydown="HandleSearchKeyDownAsync" />
     </div>
@@ -42,7 +42,6 @@ else
         <thead>
             <tr>
                 <th>Nombre</th>
-                <th>Email</th>
                 <th>ID del cliente</th>
                 <th>Nivel</th>
                 <th>Puntos</th>
@@ -55,7 +54,6 @@ else
         {
             <tr>
                 <td>@c.FullName</td>
-                <td style="color: var(--kb-ink-muted);">@c.Email</td>
                 <td><code>@c.SerialNumber</code></td>
                 <td><LevelBadge Level="@c.Level" /></td>
                 <td style="font-weight: 600;">@c.CurrentPoints.ToString("N0")</td>

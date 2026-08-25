@@ -13,11 +13,11 @@ public sealed partial class QuickHelpQrCodeTests
 {
     public static TheoryData<string> RegistrationUrls => new()
     {
-        "https://loyaltycloud-admin.azurewebsites.net/a/join",
-        "https://loyaltycloud-admin.azurewebsites.net/kbeauty/join",
-        "https://loyaltycloud-admin.azurewebsites.net/bitcafe/join",
-        "https://loyaltycloud-admin.azurewebsites.net/salon-bella-del-mar-2026/join",
-        "https://loyaltycloud-admin.azurewebsites.net/cafe-mx-123/join"
+        "https://admin.loyaltycloud.net/a/join",
+        "https://admin.loyaltycloud.net/kbeauty/join",
+        "https://admin.loyaltycloud.net/bitcafe/join",
+        "https://admin.loyaltycloud.net/salon-bella-del-mar-2026/join",
+        "https://admin.loyaltycloud.net/cafe-mx-123/join"
     };
 
     [Theory]
@@ -36,7 +36,7 @@ public sealed partial class QuickHelpQrCodeTests
     [Trait("Category", "QuickHelpQr")]
     public void Registration_qr_uses_plain_black_white_svg_with_quiet_zone()
     {
-        var svg = QrCodeSvgGenerator.GenerateSvg("https://loyaltycloud-admin.azurewebsites.net/kbeauty/join", scale: 7);
+        var svg = QrCodeSvgGenerator.GenerateSvg("https://admin.loyaltycloud.net/kbeauty/join", scale: 7);
 
         Assert.Contains("#000000", svg, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("#FFFFFF", svg, StringComparison.OrdinalIgnoreCase);
@@ -47,13 +47,16 @@ public sealed partial class QuickHelpQrCodeTests
 
     [Fact]
     [Trait("Category", "QuickHelpQr")]
-    public void Quick_help_builds_tenant_join_url_from_navigation_base_uri()
+    public void Quick_help_builds_tenant_join_url_from_configured_public_admin_base_url()
     {
         var page = File.ReadAllText(Path.Combine(FindRepositoryRoot(), "src", "LoyaltyCloud.Admin", "Pages", "QuickHelp.razor"));
 
-        Assert.Contains("new Uri(new Uri(Navigation.BaseUri)", page, StringComparison.Ordinal);
+        Assert.Contains("Configuration[\"Admin:PublicBaseUrl\"]", page, StringComparison.Ordinal);
+        Assert.Contains("GetPublicAdminBaseUri()", page, StringComparison.Ordinal);
+        Assert.Contains("return new Uri(Navigation.BaseUri);", page, StringComparison.Ordinal);
         Assert.Contains("$\"{tenantSlug.Trim().ToLowerInvariant()}/join\"", page, StringComparison.Ordinal);
         Assert.DoesNotContain("loyaltycloud-admin-894839", page, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("https://admin.loyaltycloud.net", page, StringComparison.OrdinalIgnoreCase);
     }
 
     private static string? DecodeSvgQr(string svg)

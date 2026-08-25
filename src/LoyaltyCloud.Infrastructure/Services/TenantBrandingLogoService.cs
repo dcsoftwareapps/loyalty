@@ -66,12 +66,45 @@ internal sealed class TenantBrandingLogoService :
         string contentType,
         Stream content,
         long contentLength,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default) =>
+        await UploadCoreAsync(
+            tenantId,
+            fileName,
+            contentType,
+            content,
+            contentLength,
+            walletSpecific: false,
+            cancellationToken);
+
+    public async Task<Result<TenantBrandingLogoResult>> UploadWalletLogoAsync(
+        Guid tenantId,
+        string fileName,
+        string contentType,
+        Stream content,
+        long contentLength,
+        CancellationToken cancellationToken = default) =>
+        await UploadCoreAsync(
+            tenantId,
+            fileName,
+            contentType,
+            content,
+            contentLength,
+            walletSpecific: true,
+            cancellationToken);
+
+    private async Task<Result<TenantBrandingLogoResult>> UploadCoreAsync(
+        Guid tenantId,
+        string fileName,
+        string contentType,
+        Stream content,
+        long contentLength,
+        bool walletSpecific,
+        CancellationToken cancellationToken)
     {
         if (tenantId == Guid.Empty)
             return Result.Fail<TenantBrandingLogoResult>("TenantId requerido.");
         if (contentLength <= 0 || contentLength > MaxLogoBytes)
-            return Result.Fail<TenantBrandingLogoResult>("El logo debe pesar maximo 2 MB.");
+            return Result.Fail<TenantBrandingLogoResult>("El logo debe pesar máximo 2 MB.");
         if (!AllowedContentTypes.Contains(contentType))
             return Result.Fail<TenantBrandingLogoResult>("El logo debe ser PNG o JPG.");
         if (_container is null)
@@ -111,26 +144,33 @@ internal sealed class TenantBrandingLogoService :
         using (original)
         {
             var extension = GetSafeExtension(fileName, contentType);
-            var originalBlobName = $"{GetTenantBrandingPrefix(tenantId)}/{OriginalBlobName}{extension}";
+            var folder = walletSpecific ? "wallet-branding" : "wallet";
+            var originalBlobName = walletSpecific
+                ? $"{GetTenantBrandingPrefix(tenantId)}/{folder}/{OriginalBlobName}{extension}"
+                : $"{GetTenantBrandingPrefix(tenantId)}/{OriginalBlobName}{extension}";
             await UploadPngOrOriginalAsync(originalBlobName, originalBytes, contentType, cancellationToken);
 
             foreach (var spec in WalletAssets)
             {
                 var bytes = RenderPng(original, spec);
                 await UploadPngOrOriginalAsync(
-                    $"{GetTenantBrandingPrefix(tenantId)}/wallet/{spec.Name}",
+                    $"{GetTenantBrandingPrefix(tenantId)}/{folder}/{spec.Name}",
                     bytes,
                     "image/png",
                     cancellationToken);
             }
 
-            branding.SetLogo(null, originalBlobName);
+            if (walletSpecific)
+                branding.SetWalletLogo(originalBlobName);
+            else
+                branding.SetLogo(null, originalBlobName);
             await _db.SaveChangesAsync(cancellationToken);
 
             _logger.LogInformation(
-                "Tenant logo uploaded. TenantId={TenantId}, OriginalBlob={OriginalBlob}, WalletAssets={WalletAssetCount}.",
+                "Tenant logo uploaded. TenantId={TenantId}, OriginalBlob={OriginalBlob}, WalletSpecific={WalletSpecific}, WalletAssets={WalletAssetCount}.",
                 tenantId,
                 originalBlobName,
+                walletSpecific,
                 WalletAssets.Length);
 
             return Result.Ok(new TenantBrandingLogoResult(
@@ -154,6 +194,24 @@ internal sealed class TenantBrandingLogoService :
         await _db.SaveChangesAsync(cancellationToken);
 
         _logger.LogInformation("Tenant logo reference removed. TenantId={TenantId}.", tenantId);
+        return Result.Ok();
+    }
+
+    public async Task<Result> RemoveWalletLogoAsync(Guid tenantId, CancellationToken cancellationToken = default)
+    {
+        if (tenantId == Guid.Empty)
+            return Result.Fail("TenantId requerido.");
+
+        var branding = await _db.TenantBrandings
+            .SingleOrDefaultAsync(b => b.TenantId == tenantId, cancellationToken);
+        if (branding is null)
+            return Result.Fail("Branding del tenant no encontrado.");
+
+        branding.ClearWalletLogo();
+        await DeletePrefixAsync($"{GetTenantBrandingPrefix(tenantId)}/wallet-branding/", cancellationToken);
+        await _db.SaveChangesAsync(cancellationToken);
+
+        _logger.LogInformation("Tenant wallet logo reference removed. TenantId={TenantId}.", tenantId);
         return Result.Ok();
     }
 
@@ -194,6 +252,15 @@ internal sealed class TenantBrandingLogoService :
                 }
             },
             cancellationToken);
+    }
+
+    private async Task DeletePrefixAsync(string prefix, CancellationToken cancellationToken)
+    {
+        if (_container is null)
+            return;
+
+        await foreach (var blob in _container.GetBlobsAsync(prefix: prefix, cancellationToken: cancellationToken))
+            await _container.DeleteBlobIfExistsAsync(blob.Name, DeleteSnapshotsOption.IncludeSnapshots, cancellationToken: cancellationToken);
     }
 
     private static byte[] RenderPng(Image<Rgba32> original, WalletLogoAssetSpec spec)

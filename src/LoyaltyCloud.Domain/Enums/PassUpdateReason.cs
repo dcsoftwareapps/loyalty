@@ -20,5 +20,8 @@ public enum PassUpdateReason
     RedemptionCancelled = 3,
 
     /// <summary>Expiraron puntos y el saldo bajo.</summary>
-    PointsExpired = 4
+    PointsExpired = 4,
+
+    /// <summary>Cambio visual de branding de la tarjeta digital.</summary>
+    BrandingUpdated = 5
 }

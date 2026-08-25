@@ -64,23 +64,50 @@ else
         <div class="kb-billing-selectors">
             <label>
                 <span>Plan</span>
-                <select @bind="planCode" @bind:after="LoadQuote" disabled="@busy">
+                <select @bind="planCode" @bind:after="OnPlanChanged" disabled="@busy">
                     @foreach (var plan in model.Plans)
                     {
                         <option value="@plan.Code">@plan.Name</option>
                     }
                 </select>
             </label>
-            <label>
-                <span>Período</span>
-                <select @bind="months" @bind:after="LoadQuote" disabled="@busy">
-                    <option value="1">1 mes</option>
-                    <option value="3">3 meses</option>
-                    <option value="6">6 meses</option>
-                    <option value="12">12 meses</option>
-                </select>
-            </label>
         </div>
+
+        @{
+            var periodOptions = GetBillingPeriodOptions().ToList();
+        }
+        @if (periodOptions.Count > 0)
+        {
+            <div class="kb-billing-periods" role="radiogroup" aria-label="Período">
+                @foreach (var option in periodOptions)
+                {
+                    var selected = option.Months == months;
+                    <button type="button"
+                            class="@(selected ? "kb-billing-period kb-billing-period--selected" : "kb-billing-period")"
+                            role="radio"
+                            aria-checked="@selected"
+                            disabled="@busy"
+                            @onclick="() => SelectPeriod(option.Months)">
+                        <span class="kb-billing-period-main">
+                            <span class="kb-billing-period-label">@FormatPeriod(option.Months)</span>
+                            <span class="kb-billing-period-price">@FormatOptionMoney(option.Price)</span>
+                        </span>
+                        @if (!string.IsNullOrWhiteSpace(option.Benefit))
+                        {
+                            <span class="kb-billing-period-benefit">@option.Benefit</span>
+                        }
+                        @if (!string.IsNullOrWhiteSpace(option.SecondaryBenefit))
+                        {
+                            <span class="kb-billing-period-secondary">@option.SecondaryBenefit</span>
+                        }
+                    </button>
+                }
+            </div>
+        }
+        else
+        {
+            <p class="kb-muted" role="status">No hay períodos disponibles para el plan seleccionado.</p>
+        }
 
         @if (quote is not null)
         {
@@ -165,6 +192,7 @@ else
     private bool busy;
     private string? billingContactEmail;
     private string? error;
+    private static readonly int[] BillingPeriods = [1, 3, 6, 12];
 
     protected override async Task OnInitializedAsync()
     {
@@ -173,6 +201,7 @@ else
             model = await BillingService.GetTenantBillingAsync(TenantContext.RequireTenantId());
             planCode = model.Plans.FirstOrDefault()?.Code ?? "";
             billingContactEmail = model.BillingContactEmail;
+            NormalizeSelectedPeriod();
             await LoadQuote();
         }
         catch (Exception ex)
@@ -181,12 +210,28 @@ else
         }
     }
 
+    private async Task OnPlanChanged()
+    {
+        NormalizeSelectedPeriod();
+        await LoadQuote();
+    }
+
+    private async Task SelectPeriod(int selectedMonths)
+    {
+        if (busy || selectedMonths == months)
+            return;
+
+        months = selectedMonths;
+        await LoadQuote();
+    }
+
     private async Task LoadQuote()
     {
         try
         {
             error = null;
-            quote = string.IsNullOrWhiteSpace(planCode)
+            NormalizeSelectedPeriod();
+            quote = string.IsNullOrWhiteSpace(planCode) || !GetBillingPeriodOptions().Any(option => option.Months == months)
                 ? null
                 : await BillingService.QuoteAsync(TenantContext.RequireTenantId(), planCode, months);
         }
@@ -210,6 +255,61 @@ else
         catch (Exception ex) { error = FriendlyError(ex); }
         finally { busy = false; }
     }
+
+    private void NormalizeSelectedPeriod()
+    {
+        var availableMonths = GetBillingPeriodOptions()
+            .Select(option => option.Months)
+            .ToList();
+
+        if (availableMonths.Count > 0 && !availableMonths.Contains(months))
+            months = availableMonths[0];
+    }
+
+    private IEnumerable<BillingPeriodOption> GetBillingPeriodOptions()
+    {
+        var plan = SelectedPlan;
+        if (plan is null)
+            yield break;
+
+        foreach (var period in BillingPeriods)
+        {
+            var price = GetPeriodPrice(plan, period);
+            if (price <= 0)
+                continue;
+
+            var (benefit, secondaryBenefit) = GetSavingsText(plan.OneMonthPrice, period, price);
+            yield return new BillingPeriodOption(period, price, benefit, secondaryBenefit);
+        }
+    }
+
+    private SubscriptionPlanDto? SelectedPlan => model?.Plans.FirstOrDefault(plan => string.Equals(plan.Code, planCode, StringComparison.Ordinal));
+
+    private static decimal GetPeriodPrice(SubscriptionPlanDto plan, int period) => period switch
+    {
+        1 => plan.OneMonthPrice,
+        3 => plan.ThreeMonthPrice,
+        6 => plan.SixMonthPrice,
+        12 => plan.TwelveMonthPrice,
+        _ => 0
+    };
+
+    private static (string? Benefit, string? SecondaryBenefit) GetSavingsText(decimal monthlyPrice, int period, decimal periodPrice)
+    {
+        if (monthlyPrice <= 0 || period <= 1)
+            return (null, null);
+
+        var savings = (monthlyPrice * period) - periodPrice;
+        if (savings <= 0)
+            return (null, null);
+
+        var savingsText = $"Ahorras {FormatOptionMoney(savings)}";
+        if (period == 12 && savings == monthlyPrice * 2)
+            return ("2 meses GRATIS ⭐", savingsText);
+
+        return (savingsText, null);
+    }
+
     private async Task PayCard()
     {
         Logger.LogInformation("Card payment clicked. QuotePresent={QuotePresent}, Busy={Busy}.", quote is not null, busy);
@@ -268,6 +368,9 @@ else
     }
 
     private static string FormatMoney(decimal amount, string currency) => $"${amount:N2} {currency}";
+    private static string FormatOptionMoney(decimal amount) => amount == decimal.Truncate(amount)
+        ? $"${amount:N0}"
+        : $"${amount:N2}";
     private static string FormatPeriod(int value) => value == 1 ? "1 mes" : $"{value} meses";
     private static string PaymentMethodLabel(BillingPaymentMethod method) => method switch
     {
@@ -298,4 +401,6 @@ else
     private static string FriendlyError(Exception ex) => string.IsNullOrWhiteSpace(ex.Message)
         ? "No fue posible procesar el pago. Intenta de nuevo."
         : ex.Message;
+
+    private sealed record BillingPeriodOption(int Months, decimal Price, string? Benefit, string? SecondaryBenefit);
 }

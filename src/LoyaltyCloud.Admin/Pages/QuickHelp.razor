@@ -6,8 +6,10 @@
 @using LoyaltyCloud.Admin.Auth
 @using LoyaltyCloud.Admin.Services
 @using LoyaltyCloud.Application.Common.Interfaces
+@using Microsoft.Extensions.Configuration
 @inject AuthenticationStateProvider AuthenticationStateProvider
 @inject ITenantBrandingReadService Branding
+@inject IConfiguration Configuration
 @inject IJSRuntime JS
 @inject NavigationManager Navigation
 
@@ -69,7 +71,14 @@
     {
         <section class="kb-registration-poster">
             <div class="kb-registration-poster-inner">
-                <div class="kb-poster-brand">@BusinessName</div>
+                @if (!string.IsNullOrWhiteSpace(branding?.LogoUrl))
+                {
+                    <img class="kb-poster-logo" src="@branding.LogoUrl" alt="@BusinessName" />
+                }
+                else
+                {
+                    <div class="kb-poster-brand">@BusinessName</div>
+                }
                 <div class="kb-poster-kicker">Programa de lealtad</div>
                 <h2>Regístrate y empieza a acumular puntos</h2>
                 <p>Escanea el código QR para crear tu cuenta y agregar tu tarjeta de lealtad.</p>
@@ -118,7 +127,7 @@
                     <li>Busca o escanea el ID del cliente.</li>
                     <li>Selecciona Descuento en dinero.</li>
                     <li>Captura los puntos a canjear.</li>
-                    <li>LoyaltyCloud calcula automaticamente el descuento.</li>
+                    <li>LoyaltyCloud calcula automáticamente el descuento.</li>
                     <li>Aplica ese importe manualmente en la caja/POS.</li>
                     <li>Confirma el canje.</li>
                     <li>El saldo se actualiza automáticamente.</li>
@@ -132,7 +141,7 @@
             <div>
                 <h2>Buscar o escanear cliente</h2>
                 <ul>
-                    <li>En Clientes puedes buscar por nombre, email o ID del cliente.</li>
+                    <li>En Clientes puedes buscar por nombre o ID del cliente.</li>
                     <li>En Sumar puntos y Canjear puntos puedes escanear el QR de Wallet.</li>
                     <li>También puedes escribir manualmente el ID del cliente si la cámara no está disponible.</li>
                 </ul>
@@ -145,7 +154,7 @@
         <div class="kb-help-common-grid">
             <div>
                 <h3>El cliente no aparece</h3>
-                <p>Verifica nombre, email o ID del cliente. Confirma también que el cliente esté activo.</p>
+                <p>Verifica nombre o ID del cliente. Confirma también que el cliente esté activo.</p>
             </div>
             <div>
                 <h3>No puede agregar Wallet</h3>
@@ -183,7 +192,7 @@
 
         if (!string.IsNullOrWhiteSpace(tenantSlug))
         {
-            registrationUrl = new Uri(new Uri(Navigation.BaseUri), $"{tenantSlug.Trim().ToLowerInvariant()}/join").ToString();
+            registrationUrl = new Uri(GetPublicAdminBaseUri(), $"{tenantSlug.Trim().ToLowerInvariant()}/join").ToString();
             registrationQrDataUri = QrCodeSvgGenerator.GenerateDataUri(registrationUrl, scale: 7);
             branding = await Branding.GetCurrentAsync();
         }
@@ -206,6 +215,24 @@
     }
 
     private async Task PrintQrAsync() => await JS.InvokeVoidAsync("window.print");
+
+    private Uri GetPublicAdminBaseUri()
+    {
+        var configuredBaseUrl = Configuration["Admin:PublicBaseUrl"];
+        if (!string.IsNullOrWhiteSpace(configuredBaseUrl)
+            && Uri.TryCreate(EnsureTrailingSlash(configuredBaseUrl), UriKind.Absolute, out var configuredUri))
+        {
+            return configuredUri;
+        }
+
+        return new Uri(Navigation.BaseUri);
+    }
+
+    private static string EnsureTrailingSlash(string value)
+    {
+        var trimmed = value.Trim();
+        return trimmed.EndsWith('/') ? trimmed : trimmed + "/";
+    }
 
     private static string CssColorOrFallback(string? value, string fallback)
     {

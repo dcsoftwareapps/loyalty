@@ -5,6 +5,8 @@ public sealed class TenantBranding
     public Guid TenantId { get; private set; }
     public string? LogoUrl { get; private set; }
     public string? LogoBlobName { get; private set; }
+    public string? WalletBackgroundColor { get; private set; }
+    public string? WalletLogoBlobName { get; private set; }
     public string PrimaryColor { get; private set; } = "#1C1C1C";
     public string SecondaryColor { get; private set; } = "#E8668E";
     public string? SupportPhone { get; private set; }
@@ -55,6 +57,24 @@ public sealed class TenantBranding
         LogoBlobName = null;
     }
 
+    public void SetWalletBackgroundColor(string? walletBackgroundColor)
+    {
+        WalletBackgroundColor = NormalizeWalletColor(walletBackgroundColor);
+    }
+
+    public void SetWalletLogo(string walletLogoBlobName)
+    {
+        if (string.IsNullOrWhiteSpace(walletLogoBlobName))
+            throw new ArgumentException("WalletLogoBlobName requerido.", nameof(walletLogoBlobName));
+
+        WalletLogoBlobName = NormalizeOptional(walletLogoBlobName, 500);
+    }
+
+    public void ClearWalletLogo()
+    {
+        WalletLogoBlobName = null;
+    }
+
     private static string NormalizeColor(string? value, string fallback, string paramName)
     {
         var color = string.IsNullOrWhiteSpace(value) ? fallback : value.Trim();
@@ -62,6 +82,25 @@ public sealed class TenantBranding
             throw new ArgumentException($"{paramName} no puede exceder 20 caracteres.", paramName);
 
         return color;
+    }
+
+    private static string? NormalizeWalletColor(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+            return null;
+
+        var color = value.Trim();
+        if (color.Length != 7 || color[0] != '#')
+            throw new ArgumentException("WalletBackgroundColor debe usar formato #RRGGBB.", nameof(value));
+
+        for (var i = 1; i < color.Length; i++)
+        {
+            var c = color[i];
+            if (!((c >= '0' && c <= '9') || (c >= 'a' && c <= 'f') || (c >= 'A' && c <= 'F')))
+                throw new ArgumentException("WalletBackgroundColor debe usar formato #RRGGBB.", nameof(value));
+        }
+
+        return color.ToUpperInvariant();
     }
 
     private static string? NormalizeOptional(string? value, int maxLength)

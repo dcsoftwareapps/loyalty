@@ -558,7 +558,7 @@ public sealed class AdminRoutingTests : IClassFixture<AdminRoutingTests.AdminWeb
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         Assert.Contains("Ayuda rápida", html);
         Assert.Contains("Las tareas más comunes para atender clientes.", html);
-        Assert.Contains("/kbeauty/join", html);
+        Assert.Contains("https://admin.loyaltycloud.net/kbeauty/join", html);
         Assert.Contains("QR de registro", html);
         Assert.Contains("Escanea para registrarte", html);
         Assert.Contains("Imprimir QR", html);
@@ -576,12 +576,17 @@ public sealed class AdminRoutingTests : IClassFixture<AdminRoutingTests.AdminWeb
         Assert.Contains("href=\"/scan\"", source);
         Assert.Contains("href=\"/redeem\"", source);
         Assert.Contains("ID del cliente", source);
-        Assert.Contains("nombre, email o ID del cliente", source);
+        Assert.Contains("nombre o ID del cliente", source);
+        Assert.Contains("Configuration[\"Admin:PublicBaseUrl\"]", source);
+        Assert.Contains("GetPublicAdminBaseUri()", source);
         Assert.Contains("{tenantSlug.Trim().ToLowerInvariant()}/join", source);
         Assert.Contains("QrCodeSvgGenerator.GenerateDataUri(registrationUrl", source);
         Assert.Contains("PrintQrAsync", source);
         Assert.Contains("window.print", source);
         Assert.Contains("BusinessName", source);
+        Assert.Contains("branding?.LogoUrl", source);
+        Assert.Contains("kb-poster-logo", source);
+        Assert.DoesNotContain("nombre, email o ID del cliente", source, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("Serial", source, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("kbeauty", source, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("bitcafe", source, StringComparison.OrdinalIgnoreCase);
@@ -590,10 +595,47 @@ public sealed class AdminRoutingTests : IClassFixture<AdminRoutingTests.AdminWeb
 
     [Fact]
     [Trait("Category", "AdminRouting")]
+    public void Customer_ui_does_not_render_customer_email_without_renaming_customer_contracts()
+    {
+        var root = GetRepositoryRoot();
+        var customersSource = File.ReadAllText(Path.Combine(root, "src", "LoyaltyCloud.Admin", "Pages", "Customers.razor"));
+        var detailSource = File.ReadAllText(Path.Combine(root, "src", "LoyaltyCloud.Admin", "Pages", "CustomerDetail.razor"));
+        var cardSource = File.ReadAllText(Path.Combine(root, "src", "LoyaltyCloud.Admin", "Components", "CustomerCard.razor"));
+
+        Assert.DoesNotContain("CustomerEmailDisplay", customersSource, StringComparison.Ordinal);
+        Assert.DoesNotContain("CustomerEmailDisplay", detailSource, StringComparison.Ordinal);
+        Assert.DoesNotContain("CustomerEmailDisplay", cardSource, StringComparison.Ordinal);
+        Assert.DoesNotContain("<th>Email</th>", customersSource, StringComparison.Ordinal);
+        Assert.DoesNotContain("@c.Email", customersSource, StringComparison.Ordinal);
+        Assert.DoesNotContain("Label=\"Email\"", detailSource, StringComparison.Ordinal);
+        Assert.DoesNotContain("@detail.Summary.Email", detailSource, StringComparison.Ordinal);
+        Assert.DoesNotContain("@Customer.Email", cardSource, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    [Trait("Category", "AdminRouting")]
+    public void Platform_tenant_create_form_exposes_synchronized_color_picker_and_hex_fields()
+    {
+        var source = File.ReadAllText(Path.Combine(GetRepositoryRoot(), "src", "LoyaltyCloud.Admin", "Pages", "PlatformTenants.razor"));
+
+        Assert.Contains("type=\"color\"", source);
+        Assert.Contains("Selector de color primario", source);
+        Assert.Contains("Selector de color secundario", source);
+        Assert.Contains("@bind=\"form.PrimaryColor\"", source);
+        Assert.Contains("@bind=\"form.SecondaryColor\"", source);
+        Assert.Contains("@bind:event=\"oninput\"", source);
+        Assert.Contains("SetPrimaryColor", source);
+        Assert.Contains("SetSecondaryColor", source);
+        Assert.Contains("NormalizePrimaryColor", source);
+        Assert.Contains("NormalizeSecondaryColor", source);
+    }
+
+    [Fact]
+    [Trait("Category", "AdminRouting")]
     public void Quick_help_qr_generator_encodes_registration_url_as_local_svg()
     {
         var dataUri = AdminApp::LoyaltyCloud.Admin.Services.QrCodeSvgGenerator.GenerateDataUri(
-            "https://loyaltycloud-admin.azurewebsites.net/bitcafe/join");
+            "https://admin.loyaltycloud.net/bitcafe/join");
 
         Assert.StartsWith("data:image/svg+xml;utf8,", dataUri, StringComparison.Ordinal);
         Assert.Contains("svg", Uri.UnescapeDataString(dataUri), StringComparison.OrdinalIgnoreCase);
@@ -1192,6 +1234,7 @@ public sealed class AdminRoutingTests : IClassFixture<AdminRoutingTests.AdminWeb
                 {
                     ["ConnectionStrings:DefaultConnection"] = "Server=(test);Database=Test;",
                     ["Admin:ApiBaseUrl"] = "https://api.test/",
+                    ["Admin:PublicBaseUrl"] = "https://admin.loyaltycloud.net",
                     ["AdminApi:SharedSecret"] = "test-admin-api-shared-secret-with-enough-length",
                     ["Azure:KeyVaultUri"] = "",
                     ["Azure:BlobStorage:ConnectionString"] = "",
