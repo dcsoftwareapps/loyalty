@@ -203,7 +203,9 @@ public sealed class TenantBrandingTests
         Assert.Contains("950 pts", page);
         Assert.Contains("kb-wallet-preview-field-labels", page);
         Assert.Contains("kb-wallet-preview-field-values", page);
-        Assert.Contains("kb-wallet-preview-qr-pattern", page);
+        Assert.Contains("QrCodeSvgGenerator.GenerateDataUri(PreviewQrUrl", page);
+        Assert.Contains("https://www.instagram.com/loyaltycloud.app/", page);
+        Assert.DoesNotContain("kb-wallet-preview-qr-pattern", page);
         Assert.DoesNotContain("Presenta este código en caja", page);
         Assert.DoesNotContain("La apariencia final puede variar ligeramente en Apple Wallet.", page);
         Assert.Contains("api/config/wallet-branding", page);
@@ -213,6 +215,8 @@ public sealed class TenantBrandingTests
         Assert.DoesNotContain("new RemoveTenantWalletLogoCommand", page);
         Assert.Contains("object-fit: contain", css);
         Assert.Contains(".kb-wallet-preview-qr", css);
+        Assert.Contains(".kb-wallet-preview-qr img", css);
+        Assert.DoesNotContain(".kb-wallet-preview-qr-pattern", css);
         Assert.Contains(".kb-wallet-preview-field-labels", css);
         Assert.Contains(".kb-wallet-preview-field-values", css);
     }
