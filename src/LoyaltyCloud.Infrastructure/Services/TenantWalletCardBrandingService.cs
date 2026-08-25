@@ -62,6 +62,11 @@ internal sealed class TenantWalletCardBrandingService : ITenantWalletCardBrandin
 
     public async Task RefreshInstalledApplePassesBestEffortAsync(Guid tenantId, CancellationToken ct)
     {
+        _logger.LogInformation(
+            "Tenant wallet branding refresh started. TenantId={TenantId}, apnService={ApnService}.",
+            tenantId,
+            _apn.GetType().Name);
+
         var devices = await _db.DeviceRegistrations
             .AsNoTracking()
             .Where(d => d.TenantId == tenantId)
@@ -76,25 +81,46 @@ internal sealed class TenantWalletCardBrandingService : ITenantWalletCardBrandin
             .Where(c => c.TenantId == tenantId && c.IsActive && serials.Contains(c.SerialNumber))
             .ToListAsync(ct);
 
+        var touchedAt = _dt.UtcNow;
         foreach (var card in cards)
+        {
+            var before = card.LastActivityAt;
             card.Touch(_dt);
+            _logger.LogInformation(
+                "Tenant wallet branding pass timestamp updated. TenantId={TenantId}, Serial={Serial}, LastActivityAtBefore={Before:O}, LastActivityAtAfter={After:O}.",
+                tenantId,
+                card.SerialNumber,
+                before,
+                card.LastActivityAt);
+        }
 
         await _db.SaveChangesAsync(ct);
 
         _logger.LogInformation(
-            "Tenant wallet branding changed. TenantId={TenantId}, CardsTouched={CardsTouched}, DevicesFound={DevicesFound}.",
+            "Tenant wallet branding changed. TenantId={TenantId}, CardsTouched={CardsTouched}, DevicesFound={DevicesFound}, TouchedAt={TouchedAt:O}.",
             tenantId,
             cards.Count,
-            devices.Count);
+            devices.Count,
+            touchedAt);
 
+        var attempted = 0;
+        var accepted = 0;
+        var failed = 0;
         foreach (var device in devices)
         {
+            attempted++;
             try
             {
                 await _apn.SendPassUpdateAsync(device.PushToken, PassUpdateReason.BrandingUpdated, ct);
+                accepted++;
+                _logger.LogInformation(
+                    "Tenant wallet branding APNs accepted. TenantId={TenantId}, Serial={Serial}.",
+                    tenantId,
+                    device.SerialNumber);
             }
             catch (Exception ex)
             {
+                failed++;
                 _logger.LogWarning(
                     ex,
                     "Best-effort APNs after wallet branding change failed. TenantId={TenantId}, Serial={Serial}.",
@@ -102,5 +128,13 @@ internal sealed class TenantWalletCardBrandingService : ITenantWalletCardBrandin
                     device.SerialNumber);
             }
         }
+
+        _logger.LogInformation(
+            "Tenant wallet branding refresh finished. TenantId={TenantId}, DevicesFound={DevicesFound}, PushesAttempted={Attempted}, PushesAccepted={Accepted}, PushesFailed={Failed}.",
+            tenantId,
+            devices.Count,
+            attempted,
+            accepted,
+            failed);
     }
 }

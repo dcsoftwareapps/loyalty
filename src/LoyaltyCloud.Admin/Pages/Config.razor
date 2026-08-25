@@ -4,15 +4,14 @@
 
 @using LoyaltyCloud.Application.Config.Commands.UpdateProgramConfig
 @using LoyaltyCloud.Application.Config.Queries.GetProgramConfig
-@using LoyaltyCloud.Application.Branding.Commands.RemoveTenantWalletLogo
-@using LoyaltyCloud.Application.Branding.Commands.UpdateWalletCardBranding
-@using LoyaltyCloud.Application.Branding.Commands.UploadTenantWalletLogo
 @using LoyaltyCloud.Application.Common.Branding
 @using LoyaltyCloud.Application.Common.Interfaces
 @using LoyaltyCloud.Common.Constants
 @using Microsoft.AspNetCore.Components.Forms
+@using LoyaltyCloud.Admin.Services
 @inject ISender Sender
 @inject ITenantBrandingReadService BrandingRead
+@inject AdminApiClient Api
 
 <PageTitle>Configuración · LoyaltyCloud</PageTitle>
 
@@ -88,22 +87,50 @@ else
                 </div>
             </div>
 
-            <div class="kb-wallet-preview"
-                 style="background:@ResolvedWalletBackground; color:@ResolvedWalletText;">
-                @if (!string.IsNullOrWhiteSpace(branding?.WalletLogoUrl))
-                {
-                    <img src="@branding.WalletLogoUrl" alt="" />
-                }
-                else
-                {
-                    <strong>@(branding?.DisplayName ?? "LoyaltyCloud")</strong>
-                }
-                <div class="kb-wallet-preview-fields">
-                    <span>PUNTOS</span>
-                    <strong>1,250</strong>
-                    <span>NIVEL</span>
-                    <strong>Glow</strong>
+            <div class="kb-wallet-preview-shell">
+                <h3>Vista previa de Apple Wallet</h3>
+                <div class="kb-wallet-preview"
+                     style="background:@ResolvedWalletBackground; color:@ResolvedWalletText;">
+                    <div class="kb-wallet-preview-logo">
+                        @if (!string.IsNullOrWhiteSpace(branding?.WalletLogoUrl))
+                        {
+                            <img src="@branding.WalletLogoUrl" alt="" />
+                        }
+                        else
+                        {
+                            <strong>@(branding?.DisplayName ?? "LoyaltyCloud")</strong>
+                        }
+                    </div>
+
+                    <div class="kb-wallet-preview-name">Daniel</div>
+
+                    <div class="kb-wallet-preview-fields">
+                        <div>
+                            <span>PUNTOS</span>
+                            <strong>50 pts</strong>
+                        </div>
+                        <div>
+                            <span>NIVEL</span>
+                            <strong>Mist ✨</strong>
+                        </div>
+                        <div>
+                            <span>PRÓXIMO</span>
+                            <strong>Glow</strong>
+                        </div>
+                        <div>
+                            <span>FALTAN</span>
+                            <strong>950 pts</strong>
+                        </div>
+                    </div>
+
+                    <div class="kb-wallet-preview-qr" aria-hidden="true">
+                        <span></span>
+                    </div>
+                    <p>Presenta este código en caja</p>
                 </div>
+                <p class="kb-muted kb-wallet-preview-note">
+                    Vista previa aproximada. La apariencia final puede variar ligeramente en Apple Wallet.
+                </p>
             </div>
         </div>
     </section>
@@ -240,7 +267,9 @@ else
         brandingBusy = true;
         try
         {
-            var result = await Sender.Send(new UpdateWalletCardBrandingCommand(walletBackgroundColor));
+            var result = await Api.PutAsJsonAsync<WalletBrandingRequest, TenantBrandingInfo>(
+                "api/config/wallet-branding",
+                new WalletBrandingRequest(walletBackgroundColor));
             if (result.IsSuccess)
             {
                 branding = result.Value;
@@ -279,12 +308,21 @@ else
         brandingBusy = true;
         try
         {
-            await using var stream = file.OpenReadStream(MaxLogoBytes);
-            var result = await Sender.Send(new UploadTenantWalletLogoCommand(
+            byte[] bytes;
+            await using (var stream = file.OpenReadStream(MaxLogoBytes))
+            await using (var ms = new MemoryStream())
+            {
+                await stream.CopyToAsync(ms);
+                bytes = ms.ToArray();
+            }
+
+            var result = await Api.PostAsJsonAsync<WalletLogoUploadRequest, TenantBrandingInfo>(
+                "api/config/wallet-branding/logo",
+                new WalletLogoUploadRequest(
                 file.Name,
                 file.ContentType,
-                stream,
-                file.Size));
+                    Convert.ToBase64String(bytes),
+                    file.Size));
 
             if (result.IsFailure)
             {
@@ -292,7 +330,7 @@ else
                 return;
             }
 
-            branding = await BrandingRead.GetCurrentAsync();
+            branding = result.Value;
             successMsg = "Logo de tarjeta actualizado.";
         }
         finally
@@ -307,14 +345,14 @@ else
         brandingBusy = true;
         try
         {
-            var result = await Sender.Send(new RemoveTenantWalletLogoCommand());
+            var result = await Api.DeleteAsync<TenantBrandingInfo>("api/config/wallet-branding/logo");
             if (result.IsFailure)
             {
                 errorMsg = string.Join(" ", result.Errors);
                 return;
             }
 
-            branding = await BrandingRead.GetCurrentAsync();
+            branding = result.Value;
             successMsg = "Logo de tarjeta eliminado.";
         }
         finally
@@ -348,4 +386,12 @@ else
         LoyaltyConstants.ConfigKeys.RadianceRequalificationPoints => "Re-cualificación Radiance (pts/año)",
         _ => key
     };
+
+    private sealed record WalletBrandingRequest(string? WalletBackgroundColor);
+
+    private sealed record WalletLogoUploadRequest(
+        string FileName,
+        string ContentType,
+        string ContentBase64,
+        long ContentLength);
 }
