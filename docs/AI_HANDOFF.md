@@ -6,6 +6,39 @@ Branch: `feature/wallet-card-branding`
 
 Last task worked: Wallet Card Branding finalization for Apple Wallet.
 
+## 2026-08-25 - Apple Wallet branding refresh and APNs reliability
+
+Current branch for this work: `feature/wallet-card-branding`.
+
+Scope:
+
+- Installed Apple Wallet passes did not reliably refresh after wallet color/logo changes even though regenerated passes contained the new branding.
+- Branding had a parallel best-effort APNs loop instead of the `LoyaltyNotification`/`NotificationDelivery` path used by points and visible events.
+- `ApnService` could log a non-2xx APNs response and return normally, letting callers count a rejected push as accepted.
+
+Changes implemented:
+
+- `IApnService.SendPassUpdateAsync` now returns an explicit APNs result.
+- HTTP 200 is success.
+- HTTP 429/5xx plus timeout/network failures are transient.
+- Permanent APNs reasons such as `BadDeviceToken`, `Unregistered` and `DeviceTokenNotForTopic` are treated as permanent because all non-429/non-5xx APNs failures are not counted as success.
+- `NoOpApnService` returns an unsupported/no-op result and must not be counted as APNs accepted.
+- Added shared Apple Wallet pass refresh service for touch/save/device lookup/APNs/result logging.
+- `TenantWalletCardBrandingService` now uses that shared refresh path after persisting branding. Branding remains best-effort: APNs failure does not roll back saved branding and no visible `changeMessage` is produced.
+- `AppleWalletNotificationChannelProcessor` now consumes the shared refresh result for `NotificationDelivery` status/counts.
+- Transient notification delivery failures become eligible for automatic retry with existing fields: `AttemptCount`, `CompletedAt`, `ProcessingStartedAt` and `FailureReason`.
+- Backoff is intentionally simple: attempt 1 retry after about 1 minute, attempt 2 after about 5 minutes, max attempts still comes from `LoyaltyNotifications:MaxAttempts`.
+- Permanent APNs failures are not selected for automatic retry.
+- Old stuck `Processing` notifications are eligible for recovery after about 15 minutes.
+- `LoyaltyNotifications:PollIntervalSeconds` changed from 43200 to 120.
+- `LoyaltyNotifications:RunOnStartup` changed from false to true.
+- `LoyaltyMaintenance` remains a separate 12-hour worker and was not changed.
+
+Operational note:
+
+- STG and PROD currently use Azure SQL Basic DTU, not Serverless auto-pause. The previous 12-hour notification polling interval was mainly a Serverless cost/cold-start guardrail and is no longer required in the same way.
+- Azure App Settings can override `appsettings.json`. After deploy, update API STG/PROD settings intentionally if the environment already has `LoyaltyNotifications__PollIntervalSeconds` or `LoyaltyNotifications__RunOnStartup`.
+
 ## Current State
 
 LoyaltyCloud is in RC1/UAT with Billing/Payments live in PROD.

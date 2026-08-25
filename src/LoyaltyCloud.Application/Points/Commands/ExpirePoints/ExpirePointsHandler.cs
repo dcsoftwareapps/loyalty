@@ -161,7 +161,7 @@ public sealed class ExpirePointsHandler : IRequestHandler<ExpirePointsCommand, R
             var devices = await _devices.GetBySerialNumberAsync(serial, ct);
             foreach (var device in devices)
             {
-                await _apn.SendPassUpdateAsync(device.PushToken, PassUpdateReason.PointsExpired, ct);
+                _ = await _apn.SendPassUpdateAsync(device.PushToken, PassUpdateReason.PointsExpired, ct);
                 sent++;
             }
 

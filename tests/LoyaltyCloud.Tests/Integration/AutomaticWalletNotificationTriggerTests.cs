@@ -40,6 +40,7 @@ public sealed class AutomaticWalletNotificationTriggerTests : IClassFixture<Cust
         await _factory.EnsureDatabaseCreatedAsync();
         _factory.Apn.Calls.Clear();
         _factory.Apn.FailSends = false;
+        _factory.Apn.NextResult = null;
         await ResetDataAsync();
         await SeedWalletCustomerAsync();
     }
@@ -227,6 +228,84 @@ public sealed class AutomaticWalletNotificationTriggerTests : IClassFixture<Cust
         Assert.True(await CampaignExistsAsync(result.Value.Id));
         Assert.Equal(1, await CountCampaignNotificationsAsync(result.Value.Id));
         Assert.Equal(1, await CountDeliveriesAsync(NotificationType.PointCampaignStarted, NotificationDeliveryStatus.Failed));
+    }
+
+    [Fact]
+    [Trait("Category", "AutomaticWalletNotifications")]
+    public async Task Transient_apns_failure_is_retried_without_duplicate_delivery()
+    {
+        _factory.Apn.NextResult = ApnPushResult.Transient(429, "TooManyRequests");
+        var result = await WithTenantAsync(sp => sp.GetRequiredService<ISender>().Send(CreateCurrentCampaign("Retry transient campaign")));
+        Assert.True(result.IsSuccess, result.Error);
+
+        var failed = await GetSingleDeliveryAsync(NotificationType.PointCampaignStarted);
+        Assert.Equal(NotificationDeliveryStatus.Failed, failed.Status);
+        Assert.Equal(1, failed.AttemptCount);
+        Assert.Contains("Transient APNs failure", failed.FailureReason);
+
+        await AgeSingleDeliveryAsync(NotificationType.PointCampaignStarted, DateTime.UtcNow.AddMinutes(-2));
+        _factory.Apn.NextResult = ApnPushResult.Accepted(200);
+
+        var processed = await WithTenantAsync(sp => sp.GetRequiredService<ILoyaltyNotificationService>().ProcessPendingAsync(25, 3));
+
+        Assert.Equal(1, processed);
+        var retried = await GetSingleDeliveryAsync(NotificationType.PointCampaignStarted);
+        Assert.Equal(NotificationDeliveryStatus.Succeeded, retried.Status);
+        Assert.Equal(2, retried.AttemptCount);
+        Assert.Equal(1, await CountDeliveriesTotalAsync(NotificationType.PointCampaignStarted));
+    }
+
+    [Fact]
+    [Trait("Category", "AutomaticWalletNotifications")]
+    public async Task Permanent_apns_failure_is_not_retried_by_scheduler()
+    {
+        _factory.Apn.NextResult = ApnPushResult.Permanent(400, "BadDeviceToken");
+        var result = await WithTenantAsync(sp => sp.GetRequiredService<ISender>().Send(CreateCurrentCampaign("Permanent failure campaign")));
+        Assert.True(result.IsSuccess, result.Error);
+
+        await AgeSingleDeliveryAsync(NotificationType.PointCampaignStarted, DateTime.UtcNow.AddMinutes(-20));
+        _factory.Apn.NextResult = ApnPushResult.Accepted(200);
+
+        var processed = await WithTenantAsync(sp => sp.GetRequiredService<ILoyaltyNotificationService>().ProcessPendingAsync(25, 3));
+
+        Assert.Equal(0, processed);
+        var delivery = await GetSingleDeliveryAsync(NotificationType.PointCampaignStarted);
+        Assert.Equal(NotificationDeliveryStatus.Failed, delivery.Status);
+        Assert.Equal(1, delivery.AttemptCount);
+        Assert.Contains("Permanent APNs failure", delivery.FailureReason);
+    }
+
+    [Fact]
+    [Trait("Category", "AutomaticWalletNotifications")]
+    public async Task Noop_apns_is_recorded_as_unsupported_not_success()
+    {
+        _factory.Apn.NextResult = ApnPushResult.Unsupported("APNs real deshabilitado por configuracion.");
+
+        var result = await WithTenantAsync(sp => sp.GetRequiredService<ISender>().Send(CreateCurrentCampaign("NoOp campaign")));
+
+        Assert.True(result.IsSuccess, result.Error);
+        var delivery = await GetSingleDeliveryAsync(NotificationType.PointCampaignStarted);
+        Assert.Equal(NotificationDeliveryStatus.Unsupported, delivery.Status);
+        Assert.Equal(0, delivery.PushesAccepted);
+        Assert.Equal(1, delivery.PushesFailed);
+    }
+
+    [Fact]
+    [Trait("Category", "AutomaticWalletNotifications")]
+    public async Task Stuck_processing_notification_is_recovered_by_scheduler()
+    {
+        var notificationId = await SeedStuckProcessingNotificationAsync();
+
+        var processed = await WithTenantAsync(sp => sp.GetRequiredService<ILoyaltyNotificationService>().ProcessPendingAsync(25, 3));
+
+        Assert.Equal(1, processed);
+        var delivery = await GetSingleDeliveryAsync(NotificationType.Custom);
+        Assert.Equal(NotificationDeliveryStatus.Succeeded, delivery.Status);
+        Assert.Equal(2, delivery.AttemptCount);
+        Assert.Single(_factory.Apn.Calls, call => call.Token == PushToken);
+        Assert.True(await WithTenantAsync(sp => sp.GetRequiredService<AppDbContext>()
+            .LoyaltyNotifications
+            .AnyAsync(n => n.Id == notificationId && n.Status == NotificationStatus.Delivered)));
     }
 
     [Fact]
@@ -554,6 +633,80 @@ public sealed class AutomaticWalletNotificationTriggerTests : IClassFixture<Cust
                     equals new { notification.TenantId, notification.Id }
                 where notification.Type == type && delivery.Status == status
                 select delivery).CountAsync();
+        });
+
+    private async Task<int> CountDeliveriesTotalAsync(NotificationType type) =>
+        await WithTenantAsync(sp =>
+        {
+            var db = sp.GetRequiredService<AppDbContext>();
+            return (
+                from delivery in db.NotificationDeliveries
+                join notification in db.LoyaltyNotifications
+                    on new { delivery.TenantId, Id = delivery.LoyaltyNotificationId }
+                    equals new { notification.TenantId, notification.Id }
+                where notification.Type == type
+                select delivery).CountAsync();
+        });
+
+    private async Task<NotificationDelivery> GetSingleDeliveryAsync(NotificationType type) =>
+        await WithTenantAsync(async sp =>
+        {
+            var db = sp.GetRequiredService<AppDbContext>();
+            return await (
+                from delivery in db.NotificationDeliveries
+                join notification in db.LoyaltyNotifications
+                    on new { delivery.TenantId, Id = delivery.LoyaltyNotificationId }
+                    equals new { notification.TenantId, notification.Id }
+                where notification.Type == type
+                select delivery).SingleAsync();
+        });
+
+    private async Task AgeSingleDeliveryAsync(NotificationType type, DateTime completedAtUtc) =>
+        await WithTenantAsync(async sp =>
+        {
+            var db = sp.GetRequiredService<AppDbContext>();
+            var delivery = await (
+                from row in db.NotificationDeliveries
+                join notification in db.LoyaltyNotifications
+                    on new { row.TenantId, Id = row.LoyaltyNotificationId }
+                    equals new { notification.TenantId, notification.Id }
+                where notification.Type == type
+                select row).SingleAsync();
+            db.Entry(delivery).Property(nameof(NotificationDelivery.CompletedAt)).CurrentValue = completedAtUtc;
+            await db.SaveChangesAsync();
+        });
+
+    private async Task<Guid> SeedStuckProcessingNotificationAsync() =>
+        await WithTenantAsync(async sp =>
+        {
+            var db = sp.GetRequiredService<AppDbContext>();
+            var card = await db.LoyaltyCards.SingleAsync(c => c.SerialNumber == Serial);
+            var notification = new LoyaltyNotification(
+                Guid.NewGuid(),
+                TenantSeed.KBeautyTenantId,
+                card.CustomerId,
+                card.Id,
+                NotificationType.Custom,
+                "Mensaje",
+                "Mensaje atorado",
+                DateTime.UtcNow.AddMinutes(-30),
+                null,
+                DateTime.UtcNow.AddHours(1),
+                $"stuck-test:{Guid.NewGuid():N}",
+                "test",
+                null);
+            var delivery = new NotificationDelivery(
+                Guid.NewGuid(),
+                TenantSeed.KBeautyTenantId,
+                notification.Id,
+                NotificationChannel.AppleWallet,
+                DateTime.UtcNow.AddMinutes(-30));
+            notification.AddDelivery(delivery);
+            notification.MarkProcessing(DateTime.UtcNow.AddMinutes(-20));
+            delivery.MarkProcessing(DateTime.UtcNow.AddMinutes(-20));
+            db.LoyaltyNotifications.Add(notification);
+            await db.SaveChangesAsync();
+            return notification.Id;
         });
 
     private async Task<WalletNotificationContext> GetWalletNotificationContextAsync() =>

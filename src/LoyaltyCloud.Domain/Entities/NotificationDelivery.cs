@@ -75,6 +75,16 @@ public class NotificationDelivery : Entity, ITenantOwned
         FailureReason = null;
     }
 
+    public void ResetStuckProcessing(DateTime staleBeforeUtc)
+    {
+        if (Status != NotificationDeliveryStatus.Processing || !AttemptedAt.HasValue || AttemptedAt.Value > staleBeforeUtc)
+            return;
+
+        Status = NotificationDeliveryStatus.Pending;
+        CompletedAt = null;
+        FailureReason = null;
+    }
+
     public void Cancel(DateTime nowUtc) =>
         MarkCompleted(NotificationDeliveryStatus.Cancelled, nowUtc, failureReason: "Cancelada.");
 }

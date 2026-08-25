@@ -289,7 +289,7 @@ internal sealed class TenantLoyaltyLevelManagementService : ITenantLoyaltyLevelM
 
                 foreach (var device in devices)
                 {
-                    await _apn.SendPassUpdateAsync(device.PushToken, PassUpdateReason.LevelChanged, ct);
+                    _ = await _apn.SendPassUpdateAsync(device.PushToken, PassUpdateReason.LevelChanged, ct);
                     sent++;
                 }
             }

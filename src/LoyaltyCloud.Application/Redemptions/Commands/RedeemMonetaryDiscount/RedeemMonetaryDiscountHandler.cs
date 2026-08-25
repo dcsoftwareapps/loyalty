@@ -138,7 +138,7 @@ public sealed class RedeemMonetaryDiscountHandler
         {
             var devices = await _devices.GetBySerialNumberAsync(serial, ct);
             foreach (var device in devices)
-                await _apn.SendPassUpdateAsync(device.PushToken, PassUpdateReason.RedemptionConfirmed, ct);
+                _ = await _apn.SendPassUpdateAsync(device.PushToken, PassUpdateReason.RedemptionConfirmed, ct);
         }
         catch (Exception ex)
         {

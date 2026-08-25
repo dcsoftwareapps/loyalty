@@ -8,13 +8,14 @@ public sealed class FakeApnService : IApnService
 {
     public List<(string Token, PassUpdateReason Reason)> Calls { get; } = new();
     public bool FailSends { get; set; }
+    public ApnPushResult? NextResult { get; set; }
 
-    public Task SendPassUpdateAsync(string pushToken, PassUpdateReason reason, CancellationToken ct = default)
+    public Task<ApnPushResult> SendPassUpdateAsync(string pushToken, PassUpdateReason reason, CancellationToken ct = default)
     {
         Calls.Add((pushToken, reason));
         if (FailSends)
-            throw new InvalidOperationException("Fake APNs failure.");
+            return Task.FromResult(ApnPushResult.Transient(500, "Fake APNs failure."));
 
-        return Task.CompletedTask;
+        return Task.FromResult(NextResult ?? ApnPushResult.Accepted(200));
     }
 }

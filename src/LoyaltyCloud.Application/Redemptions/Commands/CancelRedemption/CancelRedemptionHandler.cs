@@ -123,7 +123,7 @@ public sealed class CancelRedemptionHandler
         {
             var devices = await _devices.GetBySerialNumberAsync(serial, ct);
             foreach (var device in devices)
-                await _apn.SendPassUpdateAsync(device.PushToken, PassUpdateReason.RedemptionCancelled, ct);
+                _ = await _apn.SendPassUpdateAsync(device.PushToken, PassUpdateReason.RedemptionCancelled, ct);
         }
         catch (Exception ex)
         {

@@ -24,7 +24,7 @@ public sealed class BackgroundSchedulerConfigurationTests
 
     [Fact]
     [Trait("Category", "AzureSqlFree")]
-    public void Notification_processor_uses_twelve_hour_poll_interval_for_azure_sql_free()
+    public void Notification_processor_uses_two_minute_poll_interval_for_basic_dtu_recovery()
     {
         var root = GetRepositoryRoot();
         var options = File.ReadAllText(Path.Combine(root, "src", "LoyaltyCloud.API", "Configuration", "LoyaltyNotificationOptions.cs"));
@@ -35,9 +35,12 @@ public sealed class BackgroundSchedulerConfigurationTests
         Assert.Contains("ProcessDueCustomNotificationCampaignsCommand", service);
         Assert.Contains("ProcessPendingNotificationsCommand", service);
         Assert.Contains("TimeSpan.FromSeconds(Math.Max(options.PollIntervalSeconds", service);
-        Assert.Contains("public int PollIntervalSeconds { get; init; } = 43_200;", options);
-        Assert.Contains("\"PollIntervalSeconds\": 43200", appsettings);
-        Assert.Contains("\"PollIntervalSeconds\": 43200", developmentSettings);
+        Assert.Contains("public bool RunOnStartup { get; init; } = true;", options);
+        Assert.Contains("public int PollIntervalSeconds { get; init; } = 120;", options);
+        Assert.Contains("\"RunOnStartup\": true", appsettings);
+        Assert.Contains("\"PollIntervalSeconds\": 120", appsettings);
+        Assert.Contains("\"RunOnStartup\": true", developmentSettings);
+        Assert.Contains("\"PollIntervalSeconds\": 120", developmentSettings);
         Assert.DoesNotContain("TimeSpan.FromHours(options.IntervalHours)", service);
     }
 

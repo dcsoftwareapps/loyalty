@@ -13,13 +13,13 @@ internal sealed class NoOpApnService : IApnService
         _logger = logger;
     }
 
-    public Task SendPassUpdateAsync(string pushToken, PassUpdateReason reason, CancellationToken ct = default)
+    public Task<ApnPushResult> SendPassUpdateAsync(string pushToken, PassUpdateReason reason, CancellationToken ct = default)
     {
         _logger.LogInformation(
             "APNs skipped because NoOpApnService is registered. reason={Reason}, token={Token}.",
             reason,
             SafePushToken(pushToken));
-        return Task.CompletedTask;
+        return Task.FromResult(ApnPushResult.Unsupported("APNs real deshabilitado por configuracion."));
     }
 
     private static string SafePushToken(string value) =>
