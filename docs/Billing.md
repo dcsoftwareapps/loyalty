@@ -49,3 +49,32 @@ Antes de crear una orden, la pantalla solicita al backend una cotización con su
 - Aprobar por segunda vez una transferencia pagada no vuelve a extender la suscripción.
 - La vigencia usa comparación estricta contra UTC: al llegar a la fecha de expiración deja de ser operativa.
 La carga privada de comprobantes queda pendiente: `IStorageService` actual pertenece exclusivamente a pases Wallet y reutilizarlo mezclaría responsabilidades.
+
+## Renovación automática con Stripe
+
+La vigencia operativa continúa siendo responsabilidad de `TenantSubscription` y solo `invoice.paid` la extiende. Los identificadores y el estado del proveedor viven en `TenantBillingProfile`, uno por tenant. `AutoRenewEnabled` tiene default de dominio y constraint SQL en `true`; la migración `AddRecurringBilling` crea perfiles para tenants existentes con renovación activa.
+
+El perfil conserva exclusivamente datos seguros: `StripeCustomerId`, `StripeSubscriptionId`, status, fin del periodo, `CancelAtPeriodEnd`, periodo/monto recurrente, marca/últimos cuatro y `BillingContactEmail`. No se almacenan PAN, CVC, secretos ni payloads completos.
+
+Con renovación activa, Checkout usa `mode=subscription` y un Price configurable por periodo (1, 3, 6 o 12 meses). Los IDs se guardan en `SubscriptionPlan`; no están hardcodeados. Con renovación desactivada, el pago con tarjeta conserva `mode=payment`. Stripe Customer se reutiliza una vez asociado al perfil.
+
+Al apagar la opción, primero se actualiza Stripe con `cancel_at_period_end=true` y solo después se persiste localmente; el acceso pagado no se corta. Reactivarla antes del vencimiento revierte el flag sobre la misma Subscription. Si Stripe elimina la Subscription, el perfil queda sin renovación, pero `PaidThroughUtc` se conserva.
+
+Eventos requeridos en Stripe Dashboard:
+
+- `checkout.session.completed`
+- `invoice.upcoming`
+- `invoice.paid`
+- `invoice.payment_failed`
+- `customer.subscription.updated`
+- `customer.subscription.deleted`
+
+Cada evento valida la firma y se deduplica por Event ID. Las facturas pagadas se protegen además con el índice único de transacción por Invoice ID. `invoice.upcoming` genera el aviso previo (configurar Stripe para aproximadamente tres días); `invoice.payment_failed` no extiende vigencia y aplica el GracePeriod; `invoice.paid` crea historial de renovación y extiende una sola vez.
+
+Las notificaciones usan `IBillingNotificationService`. En este slice el adaptador registra/encola el intento de email y omite de forma segura tenants sin `BillingContactEmail`; debe conectarse al proveedor transaccional de Azure antes de producción. El correo se configura en Billing y nunca se deduce del username.
+
+### Configuración
+
+Azure conserva `Stripe__Enabled`, `Stripe__SecretKey`, `Stripe__PublishableKey` y `Stripe__WebhookSecret`. No se agregó ningún secreto. Configure en cada plan los Price IDs de Test/Live correspondientes a 1, 3, 6 y 12 meses.
+
+Para smoke local use Stripe Test Mode y `stripe listen --forward-to https://localhost:55128/api/billing/webhooks/stripe`. Stripe Test Clocks son apropiados para avanzar una Subscription de prueba hasta `invoice.upcoming` y `invoice.paid`; son solo una herramienta de prueba y no forman parte del modelo productivo. El Customer debe crearse bajo un Test Clock antes de iniciar la Subscription. Customer Portal queda como integration point futuro para actualizar tarjeta; LoyaltyCloud no captura tarjetas directamente.

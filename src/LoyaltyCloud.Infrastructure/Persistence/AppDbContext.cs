@@ -45,6 +45,7 @@ public class AppDbContext : DbContext, IUnitOfWork
     public DbSet<BillingOrder> BillingOrders => Set<BillingOrder>();
     public DbSet<PaymentTransaction> PaymentTransactions => Set<PaymentTransaction>();
     public DbSet<PaymentWebhookEvent> PaymentWebhookEvents => Set<PaymentWebhookEvent>();
+    public DbSet<TenantBillingProfile> TenantBillingProfiles => Set<TenantBillingProfile>();
 
     public AppDbContext(DbContextOptions<AppDbContext> options) : base(options) { }
 
@@ -228,6 +229,7 @@ public class AppDbContext : DbContext, IUnitOfWork
         ApplyTenantQueryFilter<TenantLoyaltyLevel>(modelBuilder);
         ApplyTenantQueryFilter<BillingOrder>(modelBuilder);
         ApplyTenantQueryFilter<PaymentTransaction>(modelBuilder);
+        ApplyTenantQueryFilter<TenantBillingProfile>(modelBuilder);
     }
 
     private void ApplyTenantQueryFilter<TEntity>(ModelBuilder modelBuilder)

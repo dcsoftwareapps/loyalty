@@ -122,6 +122,7 @@ public static class DependencyInjection
         services.AddScoped<ISuperAdminTenantManagementService, SuperAdminTenantManagementService>();
         services.AddScoped<ISubscriptionMaintenanceService, SubscriptionMaintenanceService>();
         services.AddScoped<IBillingService, BillingService>();
+        services.AddScoped<IBillingNotificationService, BillingNotificationService>();
         services.AddScoped<IPaymentGateway, StripePaymentGateway>();
         services.AddScoped<IPublicTenantResolver, PublicTenantResolver>();
         services.AddScoped<IPointsExpirationNotificationReadService, PointsExpirationNotificationReadService>();
