@@ -16,11 +16,6 @@
 <PageTitle>Configuración · LoyaltyCloud</PageTitle>
 
 <h1>Configuración del programa</h1>
-<p style="color: var(--kb-ink-muted); max-width: 600px;">
-    Reglas generales de acumulación, cumpleaños y expiración del programa.
-    Las recompensas y productos del mes se administran desde <a href="/rewards">Recompensas</a>.
-    Los niveles se administran desde <a href="/levels">Niveles</a>.
-</p>
 
 @if (entries is null)
 {
@@ -31,9 +26,9 @@ else
     @if (successMsg is not null) { <div class="kb-form-success">@successMsg</div> }
     @if (errorMsg is not null) { <div class="kb-form-error">@errorMsg</div> }
 
-    <section class="kb-card" style="max-width: 980px; margin-bottom: 24px;">
+    <section class="kb-card kb-config-card">
         <h2>Tarjeta digital</h2>
-        <p class="kb-muted">Personaliza cómo se ve la tarjeta en Apple Wallet.</p>
+        <p class="kb-muted">Personaliza el diseño de tu tarjeta digital.</p>
 
         <div class="kb-wallet-config">
             <div class="kb-wallet-form">
@@ -47,48 +42,61 @@ else
                                @oninput="OnWalletColorChanged" />
                         <input id="wallet-bg"
                                type="text"
-                               value="@walletBackgroundColor"
+                               value="@WalletColorInputValue"
                                @oninput="OnWalletColorChanged"
                                placeholder="#1C1C1C"
                                maxlength="7" />
                     </div>
-                    <p class="kb-muted">Opcional. Vacío usa el color principal del negocio.</p>
                 </div>
 
                 <div class="kb-form-row">
                     <label for="wallet-logo">Logo de la tarjeta</label>
-                    <InputFile id="wallet-logo" OnChange="UploadWalletLogoAsync" accept="image/png,image/jpeg" disabled="@brandingBusy" />
-                    <p class="kb-muted">Opcional. Si no cargas uno, utilizaremos el logo principal de tu negocio.</p>
+                    <label class="kb-file-upload">
+                        <span class="kb-btn kb-btn--ghost kb-btn--small">Cambiar logo</span>
+                        <InputFile id="wallet-logo"
+                                   class="kb-file-input-hidden"
+                                   OnChange="UploadWalletLogoAsync"
+                                   accept="image/png,image/jpeg"
+                                   disabled="@brandingBusy" />
+                    </label>
+                    @if (!string.IsNullOrWhiteSpace(selectedWalletLogoFileName))
+                    {
+                        <span class="kb-file-name">@selectedWalletLogoFileName</span>
+                    }
                     @if (!string.IsNullOrWhiteSpace(branding?.WalletLogoUrl))
                     {
                         <div class="kb-logo-preview">
                             <img src="@branding.WalletLogoUrl" alt="Logo de la tarjeta" />
-                            <span>@(branding.HasWalletLogo ? "Logo de la tarjeta" : "Usando logo principal")</span>
                         </div>
                     }
-                    <button class="kb-btn kb-btn--ghost kb-btn--small"
-                            @onclick="RemoveWalletLogoAsync"
-                            disabled="@(!CanRemoveWalletLogo || brandingBusy)">
-                        Eliminar logo de tarjeta
-                    </button>
+                    @if (CanRemoveWalletLogo)
+                    {
+                        <button class="kb-btn kb-btn--ghost kb-btn--small"
+                                @onclick="RemoveWalletLogoAsync"
+                                disabled="@brandingBusy">
+                            Usar logo principal
+                        </button>
+                    }
                 </div>
 
                 <div class="kb-form-row kb-form-row--horizontal">
                     <button class="kb-btn kb-btn--primary"
                             @onclick="SaveWalletBrandingAsync"
                             disabled="@brandingBusy">
-                        @(brandingBusy ? "Guardando…" : "Guardar tarjeta digital")
+                        @(brandingBusy ? "Guardando…" : "Guardar")
                     </button>
-                    <button class="kb-btn kb-btn--ghost"
-                            @onclick="UsePrimaryColorAsync"
-                            disabled="@brandingBusy">
-                        Usar color principal
-                    </button>
+                    @if (CanUsePrimaryColor)
+                    {
+                        <button class="kb-btn kb-btn--ghost"
+                                @onclick="UsePrimaryColorAsync"
+                                disabled="@brandingBusy">
+                            Usar color principal
+                        </button>
+                    }
                 </div>
             </div>
 
             <div class="kb-wallet-preview-shell">
-                <h3>Vista previa de Apple Wallet</h3>
                 <div class="kb-wallet-preview"
                      style="background:@ResolvedWalletBackground; color:@ResolvedWalletText;">
                     <div class="kb-wallet-preview-logo">
@@ -132,46 +140,51 @@ else
         </div>
     </section>
 
-    <table class="kb-table" style="max-width: 800px;">
-        <thead>
-            <tr>
-                <th>Regla</th>
-                <th>Valor</th>
-            </tr>
-        </thead>
-        <tbody>
-        @foreach (var e in entries)
-        {
-            <tr>
-                <td>
-                    <strong>@FriendlyName(e.Key)</strong>
-                    @if (!string.IsNullOrWhiteSpace(e.Description))
-                    {
-                        <br/><small style="color:var(--kb-ink-muted);">@e.Description</small>
-                    }
-                </td>
-                <td>
-                    @if (IsPointsExpirationEnabled(e.Key))
-                    {
-                        <select @bind="edited[e.Key]" style="max-width: 160px;">
-                            <option value="true">Sí</option>
-                            <option value="false">No</option>
-                        </select>
-                    }
-                    else
-                    {
-                        <input type="text" @bind="edited[e.Key]" style="max-width: 160px;" />
-                    }
-                </td>
-            </tr>
-        }
-        </tbody>
-    </table>
+    <section class="kb-card kb-config-card kb-config-card--rules">
+        <h2>Reglas de puntos y beneficios</h2>
+        <p class="kb-muted">Define cómo se acumulan, vencen y bonifican los puntos de tu programa.</p>
 
-    <button class="kb-btn kb-btn--primary kb-btn--large" style="margin-top: 24px;"
-            @onclick="SaveAsync" disabled="@busy">
-        @(busy ? "Guardando…" : "Guardar cambios")
-    </button>
+        <table class="kb-table kb-config-rules-table">
+            <thead>
+                <tr>
+                    <th>Regla</th>
+                    <th>Valor</th>
+                </tr>
+            </thead>
+            <tbody>
+            @foreach (var e in entries)
+            {
+                <tr>
+                    <td>
+                        <strong>@FriendlyName(e.Key)</strong>
+                        @if (!string.IsNullOrWhiteSpace(e.Description))
+                        {
+                            <br/><small style="color:var(--kb-ink-muted);">@e.Description</small>
+                        }
+                    </td>
+                    <td>
+                        @if (IsPointsExpirationEnabled(e.Key))
+                        {
+                            <select @bind="edited[e.Key]" style="max-width: 160px;">
+                                <option value="true">Sí</option>
+                                <option value="false">No</option>
+                            </select>
+                        }
+                        else
+                        {
+                            <input type="text" @bind="edited[e.Key]" style="max-width: 160px;" />
+                        }
+                    </td>
+                </tr>
+            }
+            </tbody>
+        </table>
+
+        <button class="kb-btn kb-btn--primary kb-btn--large kb-config-save"
+                @onclick="SaveAsync" disabled="@busy">
+            @(busy ? "Guardando…" : "Guardar")
+        </button>
+    </section>
 }
 
 @code {
@@ -183,10 +196,15 @@ else
     private TenantBrandingInfo? branding;
     private string? walletBackgroundColor;
     private bool brandingBusy;
+    private string? selectedWalletLogoFileName;
     private const long MaxLogoBytes = 2 * 1024 * 1024;
 
     private bool CanRemoveWalletLogo => branding?.HasWalletLogo == true;
-    private string WalletPickerColor => WalletColorContrast.NormalizeHexOrDefault(walletBackgroundColor, branding?.PrimaryColor ?? WalletColorContrast.DefaultBackgroundHex);
+    private bool CanUsePrimaryColor => !string.IsNullOrWhiteSpace(branding?.WalletBackgroundColor);
+    private string WalletColorInputValue => !string.IsNullOrWhiteSpace(walletBackgroundColor)
+        ? walletBackgroundColor
+        : ResolvedWalletBackground;
+    private string WalletPickerColor => WalletColorContrast.NormalizeHexOrDefault(WalletColorInputValue, WalletColorContrast.DefaultBackgroundHex);
     private string ResolvedWalletBackground => WalletColorContrast.NormalizeHexOrDefault(
         string.IsNullOrWhiteSpace(walletBackgroundColor) ? branding?.ResolvedWalletBackgroundColor : walletBackgroundColor,
         WalletColorContrast.DefaultBackgroundHex);
@@ -207,6 +225,7 @@ else
 
         branding = await BrandingRead.GetCurrentAsync();
         walletBackgroundColor = branding.WalletBackgroundColor ?? string.Empty;
+        selectedWalletLogoFileName = null;
     }
 
     private async Task SaveAsync()
@@ -288,6 +307,7 @@ else
     {
         successMsg = errorMsg = null;
         var file = args.File;
+        selectedWalletLogoFileName = file.Name;
         if (file.Size <= 0 || file.Size > MaxLogoBytes)
         {
             errorMsg = "El logo debe pesar máximo 2 MB.";
@@ -329,6 +349,7 @@ else
 
             branding = result.Value;
             successMsg = "Logo de tarjeta actualizado.";
+            selectedWalletLogoFileName = null;
         }
         finally
         {
@@ -350,7 +371,8 @@ else
             }
 
             branding = result.Value;
-            successMsg = "Logo de tarjeta eliminado.";
+            successMsg = "Logo principal restaurado.";
+            selectedWalletLogoFileName = null;
         }
         finally
         {

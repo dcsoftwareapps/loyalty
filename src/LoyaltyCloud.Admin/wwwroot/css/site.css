@@ -326,6 +326,47 @@ input[type=color].kb-color-picker {
     font-size: 0.86rem;
     font-weight: 700;
 }
+.kb-config-card {
+    max-width: 980px;
+    margin-bottom: 24px;
+}
+.kb-config-card > .kb-muted {
+    margin-top: -8px;
+    margin-bottom: 22px;
+}
+.kb-config-card .kb-form-row {
+    gap: 8px;
+    margin-bottom: 22px;
+}
+.kb-file-upload {
+    display: inline-flex;
+    align-items: center;
+    margin: 0;
+}
+.kb-file-input-hidden {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
+}
+.kb-file-name {
+    display: block;
+    color: var(--kb-ink-muted);
+    font-size: 0.82rem;
+}
+.kb-config-rules-table {
+    box-shadow: none;
+    border: 1px solid var(--kb-sand-100);
+    margin-top: 4px;
+}
+.kb-config-save {
+    margin-top: 24px;
+}
 .kb-wallet-config {
     display: grid;
     grid-template-columns: minmax(0, 1fr) minmax(340px, 420px);
