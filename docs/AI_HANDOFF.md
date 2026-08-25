@@ -4,7 +4,7 @@ Last updated: 2026-08-25
 
 Branch: `feature/wallet-card-branding`
 
-Last task worked: Phase 1 Wallet Card Branding for Apple Wallet.
+Last task worked: Wallet Card Branding finalization for Apple Wallet.
 
 ## Current State
 
@@ -21,14 +21,15 @@ Current codebase state at the end of this handoff task:
 - Permanent development rule added: never develop a new feature directly on `main`.
 - Before implementing a new feature, verify the current branch. If currently on `main`, create a dedicated feature branch before modifying code.
 - Branch naming convention: `feature/<name>`, `bugfix/<name>`, `hotfix/<name>`.
-- Documentation changes are intentionally uncommitted so they can be reviewed first.
-- Wallet Card Branding changes are in progress on `feature/wallet-card-branding`.
+- Wallet Card Branding finalization is on `feature/wallet-card-branding`.
+- `feature/wallet-card-branding` was updated with `origin/staging` at `d515f23b6bf25f2238496f16faa95a7cfe21ae7a` before finalizing the branch, preserving recurring billing changes.
 - EF migration `20260825052012_AddWalletCardBranding` adds `TenantBrandings.WalletBackgroundColor` and `TenantBrandings.WalletLogoBlobName`.
+- Tenant Admin `/config` wallet branding mutations now go through the API with signed Admin API requests instead of executing MediatR/Application directly inside Admin.
+- Wallet branding changes mark installed Apple passes updated through `TenantWalletCardBrandingService` and send best-effort APNs after persistence.
+- Local validation passed: `dotnet build .\LoyaltyCloud.sln`, `dotnet test .\tests\LoyaltyCloud.Tests\LoyaltyCloud.Tests.csproj --filter "Category=TenantBranding|Category=WalletProductionUpdate"`, and EF pending-model check.
 - No migration was applied.
-- Build/tests should be reviewed in the latest task output before continuing.
 - No database update was executed.
 - No deploy was executed.
-- No commit was created.
 
 Active product status:
 

@@ -178,6 +178,34 @@ public sealed class TenantBrandingTests
 
     [Fact]
     [Trait("Category", "TenantBranding")]
+    public void Config_wallet_preview_matches_real_pass_structure_and_uses_api_for_mutations()
+    {
+        var root = GetRepositoryRoot();
+        var page = File.ReadAllText(Path.Combine(root, "src", "LoyaltyCloud.Admin", "Pages", "Config.razor"));
+        var css = File.ReadAllText(Path.Combine(root, "src", "LoyaltyCloud.Admin", "wwwroot", "css", "site.css"));
+
+        Assert.Contains("Vista previa de Apple Wallet", page);
+        Assert.Contains("Vista previa aproximada. La apariencia final puede variar ligeramente en Apple Wallet.", page);
+        Assert.Contains("PUNTOS", page);
+        Assert.Contains("50 pts", page);
+        Assert.Contains("NIVEL", page);
+        Assert.Contains("Mist ✨", page);
+        Assert.Contains("PRÓXIMO", page);
+        Assert.Contains("Glow", page);
+        Assert.Contains("FALTAN", page);
+        Assert.Contains("950 pts", page);
+        Assert.Contains("Presenta este código en caja", page);
+        Assert.Contains("api/config/wallet-branding", page);
+        Assert.Contains("api/config/wallet-branding/logo", page);
+        Assert.DoesNotContain("new UpdateWalletCardBrandingCommand", page);
+        Assert.DoesNotContain("new UploadTenantWalletLogoCommand", page);
+        Assert.DoesNotContain("new RemoveTenantWalletLogoCommand", page);
+        Assert.Contains("object-fit: contain", css);
+        Assert.Contains(".kb-wallet-preview-qr", css);
+    }
+
+    [Fact]
+    [Trait("Category", "TenantBranding")]
     public void Generic_wallet_assets_exist_with_required_names()
     {
         var root = GetRepositoryRoot();
