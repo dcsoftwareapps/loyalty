@@ -37,6 +37,28 @@ else
         <div class="kb-card"><div class="kb-card-label">Pagado hasta</div><div class="kb-card-value">@(model.PaidThroughUtc?.ToLocalTime().ToString("dd/MM/yyyy") ?? "Sin vigencia")</div></div>
     </section>
 
+    <section class="kb-card kb-billing-auto-renew">
+        <h2>Renovación automática</h2>
+        <p>Cobraremos automáticamente tu suscripción al finalizar cada periodo.</p>
+        <label class="kb-toggle">
+            <input type="checkbox" checked="@model.AutoRenewEnabled" @onchange="ToggleAutoRenew" disabled="@busy" />
+            <span>@(model.AutoRenewEnabled ? "Activada" : "Desactivada")</span>
+        </label>
+        <label>
+            <span>Correo de facturación</span>
+            <input type="email" @bind="billingContactEmail" maxlength="320" placeholder="facturacion@negocio.com" />
+        </label>
+        @if (model.CancelAtPeriodEnd)
+        {
+            <p>La renovación automática está desactivada. Tu suscripción permanecerá activa hasta: @(model.NextChargeUtc?.ToLocalTime().ToString("dd/MM/yyyy") ?? model.PaidThroughUtc?.ToLocalTime().ToString("dd/MM/yyyy")). No se realizarán más cargos.</p>
+        }
+        else if (model.AutoRenewEnabled)
+        {
+            <p><strong>Próximo cobro:</strong> @(model.NextChargeUtc?.ToLocalTime().ToString("dd/MM/yyyy") ?? "Se mostrará después del primer pago")</p>
+            <p><strong>Monto:</strong> @(model.RecurringAmount.HasValue ? FormatMoney(model.RecurringAmount.Value, model.RecurringCurrency ?? "MXN") : "Por definir")</p>
+        }
+        <p><strong>Método:</strong> @(string.IsNullOrWhiteSpace(model.CardLast4) ? "Sin método de pago guardado" : $"{model.CardBrand} •••• {model.CardLast4}")</p>
+    </section>
     <section class="kb-card kb-billing-renewal">
         <h2>Renovar</h2>
         <div class="kb-billing-selectors">
@@ -168,6 +190,7 @@ else
     private string planCode = "";
     private int months = 1;
     private bool busy;
+    private string? billingContactEmail;
     private string? error;
     private static readonly int[] BillingPeriods = [1, 3, 6, 12];
 
@@ -177,6 +200,7 @@ else
         {
             model = await BillingService.GetTenantBillingAsync(TenantContext.RequireTenantId());
             planCode = model.Plans.FirstOrDefault()?.Code ?? "";
+            billingContactEmail = model.BillingContactEmail;
             NormalizeSelectedPeriod();
             await LoadQuote();
         }
@@ -216,6 +240,20 @@ else
             quote = null;
             error = FriendlyError(ex);
         }
+    }
+
+    private async Task ToggleAutoRenew(ChangeEventArgs args)
+    {
+        if (model is null || busy) return;
+        var enabled = args.Value is bool value && value;
+        try
+        {
+            busy = true; error = null;
+            await BillingService.UpdateAutoRenewAsync(TenantContext.RequireTenantId(), enabled, billingContactEmail);
+            model = await BillingService.GetTenantBillingAsync(TenantContext.RequireTenantId());
+        }
+        catch (Exception ex) { error = FriendlyError(ex); }
+        finally { busy = false; }
     }
 
     private void NormalizeSelectedPeriod()

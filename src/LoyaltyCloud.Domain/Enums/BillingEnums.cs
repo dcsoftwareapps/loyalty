@@ -5,3 +5,6 @@ public enum BillingPaymentMethod { Card, BankTransfer }
 public enum PaymentProvider { Manual, Stripe }
 public enum PaymentTransactionStatus { Succeeded, Failed, Refunded }
 public enum WebhookProcessingStatus { Received, Processed, Failed, Ignored }
+
+public enum BillingPaymentKind { InitialCheckout, ManualRenewal, AutomaticRenewal, BankTransfer }
+public enum BillingNotificationType { UpcomingCharge, PaymentSucceeded, PaymentFailed, AutoRenewDisabled, AutoRenewEnabled }
