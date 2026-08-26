@@ -24,6 +24,7 @@ La base activa de produccion/UAT es `LoyaltyCloudFree`.
 - Hard delete tenant desde Platform Admin.
 - Sesion Tenant Admin persistente de 168 horas con sliding expiration.
 - Dashboard / Analytics.
+- Reportes v1 con páginas independientes.
 - Customer Detail.
 - Customer Detail avanzado para auditoria de puntos.
 - Sumar puntos con QR/camara.

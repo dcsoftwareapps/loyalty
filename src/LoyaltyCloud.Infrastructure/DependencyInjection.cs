@@ -102,6 +102,7 @@ public static class DependencyInjection
         services.AddScoped<IPasswordHashingService, PasswordHashingService>();
 
         services.AddScoped<IDashboardReadService, DashboardReadService>();
+        services.AddScoped<IReportsReadService, ReportsReadService>();
         services.AddScoped<ICustomerListReadService, CustomerListReadService>();
         services.AddScoped<ICustomerDetailReadService, CustomerDetailReadService>();
         services.AddScoped<IRedemptionHistoryReadService, RedemptionHistoryReadService>();

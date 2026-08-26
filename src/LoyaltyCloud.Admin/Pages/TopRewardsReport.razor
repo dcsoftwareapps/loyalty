@@ -1,0 +1,152 @@
+@page "/reports/top-rewards"
+@attribute [Authorize]
+@rendermode InteractiveServer
+
+@using System.Globalization
+@using LoyaltyCloud.Application.Admin.Queries.GetReportsSummary
+@inject ISender Sender
+
+<PageTitle>Recompensas más canjeadas - LoyaltyCloud</PageTitle>
+
+<h1>Recompensas más canjeadas</h1>
+<p class="kb-muted" style="margin-top: -8px; max-width: 760px;">
+    Ranking de recompensas de catálogo canjeadas dentro del periodo seleccionado.
+</p>
+
+<section class="kb-card kb-reports-filters">
+    <div>
+        <label for="periodPreset">Periodo</label>
+        <select id="periodPreset" @bind="periodPreset" @bind:after="ReloadAsync">
+            <option value="7">Últimos 7 días</option>
+            <option value="30">Últimos 30 días</option>
+            <option value="90">Últimos 90 días</option>
+            <option value="month">Mes actual</option>
+            <option value="custom">Personalizado</option>
+        </select>
+    </div>
+
+    @if (periodPreset == CustomPreset)
+    {
+        <div>
+            <label for="periodStart">Fecha inicio</label>
+            <input id="periodStart" type="date" @bind="customStartDate" @bind:after="ReloadAsync" />
+        </div>
+        <div>
+            <label for="periodEnd">Fecha fin</label>
+            <input id="periodEnd" type="date" @bind="customEndDate" @bind:after="ReloadAsync" />
+        </div>
+    }
+</section>
+
+@if (errorMsg is not null)
+{
+    <div class="kb-form-error">@errorMsg</div>
+}
+
+@if (isLoading)
+{
+    <p>Cargando...</p>
+}
+else if (rewards is not null)
+{
+    <p class="kb-muted">
+        @FormatDate(periodStartUtc) - @FormatDate(periodEndUtc.AddDays(-1))
+    </p>
+    <p class="kb-muted">
+        Nota: se utiliza el nombre actual de la recompensa porque el canje no conserva una copia histórica del nombre.
+    </p>
+
+    @if (rewards.Count == 0)
+    {
+        <p class="kb-muted">No hay recompensas de catálogo canjeadas en este periodo.</p>
+    }
+    else
+    {
+        <table class="kb-table kb-table--compact">
+            <thead>
+                <tr>
+                    <th>Recompensa</th>
+                    <th class="kb-cell-number">Número de canjes</th>
+                </tr>
+            </thead>
+            <tbody>
+            @foreach (var reward in rewards)
+            {
+                <tr>
+                    <td>@reward.RewardName</td>
+                    <td class="kb-cell-number">@FormatNumber(reward.Redemptions)</td>
+                </tr>
+            }
+            </tbody>
+        </table>
+    }
+}
+
+@code {
+    private const string CustomPreset = "custom";
+
+    private IReadOnlyList<ReportsTopRewardDto>? rewards;
+    private string? errorMsg;
+    private bool isLoading;
+    private string periodPreset = "30";
+    private DateTime customStartDate = DateTime.UtcNow.Date.AddDays(-30);
+    private DateTime customEndDate = DateTime.UtcNow.Date;
+    private DateTime periodStartUtc;
+    private DateTime periodEndUtc;
+
+    protected override async Task OnInitializedAsync() => await LoadAsync();
+
+    private async Task ReloadAsync() => await LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        isLoading = true;
+        errorMsg = null;
+
+        try
+        {
+            (periodStartUtc, periodEndUtc) = GetPeriod();
+            var result = await Sender.Send(new GetTopRewardsReportQuery(periodStartUtc, periodEndUtc));
+            if (result.IsSuccess)
+            {
+                rewards = result.Value;
+                return;
+            }
+
+            errorMsg = result.Error;
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    private (DateTime StartUtc, DateTime EndUtc) GetPeriod()
+    {
+        var todayUtc = DateTime.UtcNow.Date;
+        return periodPreset switch
+        {
+            "7" => (todayUtc.AddDays(-7), todayUtc.AddDays(1)),
+            "90" => (todayUtc.AddDays(-90), todayUtc.AddDays(1)),
+            "month" => (new DateTime(todayUtc.Year, todayUtc.Month, 1, 0, 0, 0, DateTimeKind.Utc), todayUtc.AddDays(1)),
+            "custom" => BuildCustomPeriod(),
+            _ => (todayUtc.AddDays(-30), todayUtc.AddDays(1))
+        };
+    }
+
+    private (DateTime StartUtc, DateTime EndUtc) BuildCustomPeriod()
+    {
+        var start = DateTime.SpecifyKind(customStartDate.Date, DateTimeKind.Utc);
+        var end = DateTime.SpecifyKind(customEndDate.Date.AddDays(1), DateTimeKind.Utc);
+        if (start >= end)
+        {
+            end = start.AddDays(1);
+            customEndDate = start;
+        }
+
+        return (start, end);
+    }
+
+    private static string FormatNumber(int value) => value.ToString("N0");
+    private static string FormatDate(DateTime value) => value.ToLocalTime().ToString("dd MMM yyyy", CultureInfo.GetCultureInfo("es-MX"));
+}
