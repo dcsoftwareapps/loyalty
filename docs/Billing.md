@@ -78,3 +78,46 @@ Las notificaciones usan `IBillingNotificationService`. En este slice el adaptado
 Azure conserva `Stripe__Enabled`, `Stripe__SecretKey`, `Stripe__PublishableKey` y `Stripe__WebhookSecret`. No se agregó ningún secreto. Configure en cada plan los Price IDs de Test/Live correspondientes a 1, 3, 6 y 12 meses.
 
 Para smoke local use Stripe Test Mode y `stripe listen --forward-to https://localhost:55128/api/billing/webhooks/stripe`. Stripe Test Clocks son apropiados para avanzar una Subscription de prueba hasta `invoice.upcoming` y `invoice.paid`; son solo una herramienta de prueba y no forman parte del modelo productivo. El Customer debe crearse bajo un Test Clock antes de iniciar la Subscription. Customer Portal queda como integration point futuro para actualizar tarjeta; LoyaltyCloud no captura tarjetas directamente.
+
+## Email transaccional de Billing
+
+Las notificaciones por email son opcionales y quedan **OFF por default**. Su configuración funcional no sensible vive en el registro singleton de BillingSettings y se administra exclusivamente por SuperAdmin desde /platform/billing-settings: estado, proveedor, remitente y URL pública. Billing, Stripe, renovaciones y webhooks siguen operando cuando email está deshabilitado o incompleto; no se intenta abrir una conexión SMTP.
+
+IBillingNotificationService consulta esta configuración antes de usar ITransactionalEmailSender. El destinatario sigue siendo exclusivamente TenantBillingProfile.BillingContactEmail. Un fallo del proveedor se registra de forma segura y nunca revierte pagos, órdenes, transacciones, vigencia ni eventos procesados.
+
+### Cloudflare Email Service
+
+El proveedor inicial es Cloudflare Email Service mediante SMTP con TLS implícito. Los defaults técnicos versionables son Email__SmtpHost=smtp.mx.cloudflare.net, Email__SmtpPort=465 y Email__Username=api_token.
+
+El único secreto de email es Email__Password. Debe almacenarse en Azure Key Vault, Azure App Settings o User Secrets; nunca se guarda en DB, nunca se muestra en la UI y la aplicación solo expone el booleano CredentialsConfigured.
+
+Para habilitarlo posteriormente:
+
+1. Completar el onboarding del dominio y sus registros SPF/DKIM/bounce en Cloudflare.
+2. Crear un API token de mínimo privilegio y guardar Email__Password externamente.
+3. En Billing Settings configurar FromAddress, FromName y ApplicationBaseUrl.
+4. Usar URL HTTPS fuera de Development y activar el toggle.
+5. Verificar el estado “Configurada” y hacer la primera prueba con un destinatario controlado.
+
+El backend impide habilitar email si falta proveedor, remitente, URL válida o credenciales externas. El botón de correo de prueba queda como pendiente deliberado; no se agregó para evitar envíos accidentales mientras el feature está OFF.
+
+### Stripe Price IDs y Checkout
+
+SuperAdmin configura por plan Stripe Price ID para 1, 3, 6 y 12 meses. Con AutoRenew activo, el ID del periodo es obligatorio. Si falta, se rechaza antes de crear BillingOrder o llamar a Stripe. Los Price IDs son configurables y no secretos.
+
+### Checklist STG/PROD
+
+- Aplicar migraciones en orden: AddBillingPayments, AddRecurringBilling, AddWalletCardBranding, AddBillingEmailSettings.
+- Configurar cuatro Stripe Price IDs test/live según ambiente.
+- Configurar Stripe__Enabled, Stripe__SecretKey, Stripe__PublishableKey y Stripe__WebhookSecret.
+- Habilitar exactamente checkout.session.completed, invoice.upcoming, invoice.paid, invoice.payment_failed, customer.subscription.updated y customer.subscription.deleted.
+- Mantener email OFF o configurar Cloudflare, Email__Password, Billing Settings y BillingContactEmail.
+- Probar Checkout recurrente, toggle OFF/ON, pago exitoso/fallido/upcoming, historial y tarjeta enmascarada.
+- Confirmar firma, idempotencia Event/Invoice, aislamiento tenant, suspended billing access y ausencia de Developer Login en Production.
+- Ejecutar restore, build, suite completa y git diff --check.
+
+### Test Clocks y limitaciones conocidas
+
+Stripe Test Clocks son la opción preferida para avanzar un Customer de Test Mode por creación, upcoming, invoice paid y siguiente periodo. Requieren credenciales Test, Prices recurrentes y crear el Customer bajo el clock antes de la Subscription; no forman parte del dominio productivo.
+
+Customer Portal sigue pendiente. No hay reintentos propios de email. Email no puede habilitarse sin ApplicationBaseUrl válida; fuera de Development debe usar HTTPS. El smoke real Stripe/Cloudflare depende de credenciales y recursos externos no versionados.

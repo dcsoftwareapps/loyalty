@@ -6,7 +6,7 @@ namespace LoyaltyCloud.Infrastructure.Persistence.Configurations;
 
 internal sealed class BillingSettingsConfiguration : IEntityTypeConfiguration<BillingSettings>
 {
-    public void Configure(EntityTypeBuilder<BillingSettings> b) { b.ToTable("BillingSettings"); b.HasKey(x=>x.Id); b.Property(x=>x.Code).HasMaxLength(30).IsRequired(); b.HasIndex(x=>x.Code).IsUnique(); b.Property(x=>x.Currency).HasMaxLength(3); b.Property(x=>x.TaxRate).HasPrecision(5,2); b.Property(x=>x.BankName).HasMaxLength(150); b.Property(x=>x.BeneficiaryName).HasMaxLength(200); b.Property(x=>x.Clabe).HasMaxLength(18); b.Property(x=>x.SupportEmail).HasMaxLength(320); }
+    public void Configure(EntityTypeBuilder<BillingSettings> b) { b.ToTable("BillingSettings"); b.HasKey(x=>x.Id); b.Property(x=>x.Code).HasMaxLength(30).IsRequired(); b.HasIndex(x=>x.Code).IsUnique(); b.Property(x=>x.Currency).HasMaxLength(3); b.Property(x=>x.TaxRate).HasPrecision(5,2); b.Property(x=>x.BankName).HasMaxLength(150); b.Property(x=>x.BeneficiaryName).HasMaxLength(200); b.Property(x=>x.Clabe).HasMaxLength(18); b.Property(x=>x.SupportEmail).HasMaxLength(320); b.Property(x=>x.EmailNotificationsEnabled).HasDefaultValue(false); b.Property(x=>x.EmailProvider).HasMaxLength(40).HasDefaultValue("Cloudflare"); b.Property(x=>x.EmailFromAddress).HasMaxLength(320); b.Property(x=>x.EmailFromName).HasMaxLength(100).HasDefaultValue("LoyaltyCloud"); b.Property(x=>x.EmailApplicationBaseUrl).HasMaxLength(500); }
 }
 internal sealed class SubscriptionPlanConfiguration : IEntityTypeConfiguration<SubscriptionPlan>
 {
