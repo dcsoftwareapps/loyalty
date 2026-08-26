@@ -326,6 +326,161 @@ input[type=color].kb-color-picker {
     font-size: 0.86rem;
     font-weight: 700;
 }
+.kb-config-card {
+    max-width: 980px;
+    margin-bottom: 0;
+}
+.kb-config-card + .kb-config-card {
+    margin-top: 28px;
+}
+.kb-config-card > .kb-muted {
+    margin-top: -8px;
+    margin-bottom: 22px;
+}
+.kb-config-card .kb-form-row {
+    gap: 8px;
+    margin-bottom: 22px;
+}
+.kb-file-upload {
+    display: inline-flex;
+    align-items: center;
+    margin: 0;
+}
+.kb-file-input-hidden {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
+}
+.kb-file-name {
+    display: block;
+    color: var(--kb-ink-muted);
+    font-size: 0.82rem;
+}
+.kb-config-rules-table {
+    box-shadow: none;
+    border: 1px solid var(--kb-sand-100);
+    margin-top: 4px;
+}
+.kb-config-save {
+    margin-top: 24px;
+    min-width: 120px;
+    min-height: 46px;
+    padding: 12px 24px;
+    font-size: 1rem;
+}
+.kb-wallet-config {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(340px, 420px);
+    gap: 28px;
+    align-items: start;
+}
+.kb-wallet-form {
+    min-width: 0;
+}
+.kb-wallet-preview-shell {
+    min-width: 0;
+}
+.kb-wallet-preview-shell h3 {
+    margin: 0 0 10px;
+    font-family: var(--font-body);
+    font-size: 0.98rem;
+    font-weight: 800;
+}
+.kb-wallet-preview {
+    width: 100%;
+    max-width: 420px;
+    min-height: 560px;
+    border-radius: var(--kb-radius-lg);
+    padding: 28px 24px 30px;
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+    box-shadow: var(--kb-shadow-lg);
+    overflow: hidden;
+}
+.kb-wallet-preview-logo {
+    min-height: 70px;
+    display: flex;
+    align-items: flex-start;
+}
+.kb-wallet-preview-logo img {
+    width: 180px;
+    max-width: 100%;
+    height: auto;
+    max-height: 70px;
+    object-fit: contain;
+    object-position: left center;
+}
+.kb-wallet-preview-logo strong {
+    font-size: 1.16rem;
+    line-height: 1.1;
+}
+.kb-wallet-preview-name {
+    font-family: var(--font-display);
+    font-size: 4rem;
+    line-height: 0.95;
+    font-weight: 600;
+    margin-top: 4px;
+}
+.kb-wallet-preview-field-labels,
+.kb-wallet-preview-field-values {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    column-gap: 10px;
+    align-items: baseline;
+}
+.kb-wallet-preview-field-labels {
+    margin-top: 6px;
+}
+.kb-wallet-preview-field-labels span {
+    display: block;
+    font-size: 0.64rem;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    opacity: 0.72;
+    text-transform: uppercase;
+    white-space: nowrap;
+}
+.kb-wallet-preview-field-values {
+    margin-top: -14px;
+}
+.kb-wallet-preview-field-values strong {
+    display: block;
+    font-size: 1rem;
+    line-height: 1.1;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+.kb-wallet-preview-qr {
+    display: grid;
+    place-items: center;
+    width: min(82%, 270px);
+    aspect-ratio: 1;
+    margin: auto auto 0;
+    border-radius: var(--kb-radius-sm);
+    background: #fff;
+    padding: 18px;
+}
+.kb-wallet-preview-qr img {
+    display: block;
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+}
+.kb-wallet-preview-note {
+    margin: 12px 0 0;
+    color: var(--kb-ink-muted);
+    font-size: 0.8rem;
+    font-style: italic;
+    line-height: 1.35;
+}
 .kb-help-qr {
     display: flex;
     flex-direction: column;
@@ -624,6 +779,12 @@ input[type=color].kb-color-picker {
     .kb-card-value { font-size: 2rem; }
     h1 { font-size: 1.85rem; }
     .kb-help-registration-layout { grid-template-columns: 1fr; }
+    .kb-wallet-config { grid-template-columns: 1fr; }
+    .kb-wallet-preview { max-width: 420px; }
+    .kb-wallet-preview-field-labels { column-gap: 8px; }
+    .kb-wallet-preview-field-values { column-gap: 8px; }
+    .kb-wallet-preview-field-labels span { font-size: 0.58rem; }
+    .kb-wallet-preview-field-values strong { font-size: 0.9rem; }
     .kb-help-qr { max-width: 220px; }
     .kb-registration-poster-inner { padding: 28px 20px; }
 }

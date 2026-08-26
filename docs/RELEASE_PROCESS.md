@@ -1,6 +1,6 @@
 # LoyaltyCloud Release Process
 
-This document defines the simple PROD release process for LoyaltyCloud.
+This document defines the simple STG and PROD release process for LoyaltyCloud.
 
 The current stable PROD release is:
 
@@ -10,15 +10,18 @@ The current stable PROD release is:
 
 ## 1. Git Strategy
 
-- `main` remains the primary branch.
+- `main` is the PROD integration branch and represents the stable line intended for production.
+- `staging` is the STG integration/release-candidate branch and represents the code currently being validated in Azure STG.
+- `feature/*`, `bugfix/*` and `hotfix/*` branches are isolated development branches.
 - Never develop a new feature directly on `main`.
+- Never develop directly on `staging`.
 - Every new feature, bugfix or hotfix must use a dedicated branch created from an updated `main`.
 - PROD releases are represented by immutable annotated tags.
 - Do not create a separate branch for every deploy.
 - Do not reuse old branches for new work.
 - Do not use floating tags like `latest` as the source of rollback.
 - Prefer versioned immutable tags such as `v1.0.0`, `v1.0.1`, `v1.1.0`.
-- Before implementing a new feature, verify the current branch. If currently on `main`, create a dedicated feature branch before modifying code.
+- Before implementing a new feature, verify the current branch. If currently on `main` or `staging`, create a dedicated feature branch before modifying functional code.
 
 Branch naming convention:
 
@@ -46,7 +49,7 @@ Use Semantic Versioning in a practical way:
 - MINOR: compatible functionality, for example `v1.0.1` -> `v1.1.0`.
 - MAJOR: important or incompatible change, for example `v1.x` -> `v2.0.0`.
 
-## 3. Flow: Feature -> STG -> Main -> PROD -> Tag
+## 3. Flow: Feature -> Staging -> STG -> Main -> PROD -> Tag
 
 1. Start on `main`.
 2. Update `main`.
@@ -70,13 +73,17 @@ git checkout -b feature/<descriptive-name>
 
 5. Implement the feature only on that branch.
 6. Validate build/tests as appropriate.
-7. Deploy that branch to STG when integrated validation is needed.
-8. Validate manually in STG.
-9. After approval, commit/push the feature branch and open a PR into `main`.
-10. Merge the PR into `main`.
-11. Deploy PROD only from integrated `main`, never directly from a feature branch.
-12. Smoke test PROD.
-13. Only after PROD is confirmed healthy, create and push the release tag.
+7. Push the feature branch.
+8. Open a PR from the feature branch into `staging`.
+9. Merge approved features into `staging`.
+10. Deploy Azure STG from `staging` for integrated validation.
+11. Validate manually in STG.
+12. Multiple features may be integrated together in `staging`.
+13. After the integrated candidate is approved, open a PR from `staging` into `main`.
+14. Merge the PR into `main`.
+15. Deploy PROD only from integrated `main`, never directly from `staging` or a feature branch.
+16. Smoke test PROD.
+17. Only after PROD is confirmed healthy, create and push the release tag.
 
 Do not create a release tag before PROD has been validated.
 
@@ -84,7 +91,39 @@ If the deploy fails before PROD is stable, do not create a new release tag. Rede
 
 If work starts while the local checkout is already on a related feature branch, continue there. Do not create nested or unnecessary branches.
 
-## 4. Create a Release
+Example integrated STG candidate:
+
+```text
+feature/billing-recurring-payments
+        \
+         -> staging -> Azure STG validation -> main -> PROD -> v1.1.0
+        /
+feature/wallet-card-branding
+```
+
+Do not merge unfinished features directly into `main`.
+
+## 4. Staging Branch
+
+`staging` is permanent and reusable.
+
+Rules:
+
+- `staging` should normally receive changes through PRs from `feature/*`, `bugfix/*` or `hotfix/*` branches.
+- Azure STG should normally be deployed from `staging` when validating the next integrated release.
+- Do not use force push as the normal way to maintain `staging`.
+- Do not rewrite `staging` history as the first option.
+- After promoting `staging` into `main` and validating PROD, bring `staging` back in sync with `main` when needed.
+- If `main` receives a production hotfix, integrate that hotfix back into `staging` to avoid divergence.
+
+If a feature merged into `staging` is not ready for the next release, prefer one of these:
+
+- revert the feature merge commit on `staging`;
+- fix the feature in its original branch or a follow-up bugfix branch and merge it again.
+
+Avoid deleting commits or resetting/force-pushing `staging` unless explicitly reviewed and approved.
+
+## 5. Create a Release
 
 Verify the current branch and working tree:
 
@@ -104,7 +143,7 @@ git push origin v1.0.1
 
 Never move a release tag after it has been pushed.
 
-## 5. List Releases
+## 6. List Releases
 
 ```powershell
 git tag --sort=-version:refname
@@ -116,7 +155,7 @@ View one release:
 git show v1.0.0 --no-patch
 ```
 
-## 6. Temporarily Check Out a Release
+## 7. Temporarily Check Out a Release
 
 ```powershell
 git fetch --tags
@@ -125,14 +164,14 @@ git checkout v1.0.0
 
 This puts the repository in detached HEAD state. Use it only to publish/deploy that exact release or inspect the code.
 
-## 7. Return to Main
+## 8. Return to Main
 
 ```powershell
 git checkout main
 git pull origin main
 ```
 
-## 8. Rollback API/Admin
+## 9. Rollback API/Admin
 
 To rollback code, check out the desired release tag and publish/deploy using the normal LoyaltyCloud deploy procedure.
 
@@ -149,9 +188,17 @@ Shared PROD App Service Plan:
 - Despite the legacy name, the plan is currently Linux B1.
 - API and Admin share this plan.
 
-## 9. Database and Migrations Warning
+## 10. Database and Migrations Warning
 
 A code rollback is not automatically a database rollback.
+
+Migrations in feature branches require explicit review before deployment:
+
+- Merging a feature into `staging` does not automatically mean applying its migration.
+- Before deploying STG, review migrations included in the candidate.
+- Apply only the required migrations explicitly to `LoyaltyCloudStg`.
+- Always verify the target connection string/database before applying STG migrations.
+- PROD migration application remains a separate reviewed step after the `staging` -> `main` promotion.
 
 Before deploying an older release:
 
@@ -166,7 +213,7 @@ Important current PROD database state:
 - Billing/Payments is live in PROD.
 - Stripe LIVE is configured.
 
-## 10. When to Use Release Branches
+## 11. When to Use Release Branches
 
 Do not create `release/1.0` now.
 
@@ -177,7 +224,7 @@ Create a branch such as `release/1.0` only if both are true:
 
 For the current workflow, release tags are enough and simpler.
 
-## 11. Current PROD Billing State
+## 12. Current PROD Billing State
 
 Billing PROD is active:
 

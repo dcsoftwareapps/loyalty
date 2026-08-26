@@ -954,8 +954,7 @@ public sealed class AdminRoutingTests : IClassFixture<AdminRoutingTests.AdminWeb
         Assert.DoesNotContain("Costo de canje:", source);
         Assert.DoesNotContain("<code", source);
         Assert.DoesNotContain("Puntos por referido", source);
-        Assert.Contains("href=\"/rewards\"", source);
-        Assert.Contains("Recompensas", source);
+        Assert.Contains("Reglas de puntos y beneficios", source);
     }
 
     [Fact]

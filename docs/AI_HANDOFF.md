@@ -1,10 +1,43 @@
 # LoyaltyCloud - AI Handoff
 
-Last updated: 2026-08-24
+Last updated: 2026-08-25
 
-Branch: `main`
+Branch: `feature/wallet-card-branding`
 
-Last task worked: Documented the permanent branch-first development rule for new work.
+Last task worked: Wallet Card Branding finalization for Apple Wallet.
+
+## 2026-08-25 - Apple Wallet branding refresh and APNs reliability
+
+Current branch for this work: `feature/wallet-card-branding`.
+
+Scope:
+
+- Installed Apple Wallet passes did not reliably refresh after wallet color/logo changes even though regenerated passes contained the new branding.
+- Branding had a parallel best-effort APNs loop instead of the `LoyaltyNotification`/`NotificationDelivery` path used by points and visible events.
+- `ApnService` could log a non-2xx APNs response and return normally, letting callers count a rejected push as accepted.
+
+Changes implemented:
+
+- `IApnService.SendPassUpdateAsync` now returns an explicit APNs result.
+- HTTP 200 is success.
+- HTTP 429/5xx plus timeout/network failures are transient.
+- Permanent APNs reasons such as `BadDeviceToken`, `Unregistered` and `DeviceTokenNotForTopic` are treated as permanent because all non-429/non-5xx APNs failures are not counted as success.
+- `NoOpApnService` returns an unsupported/no-op result and must not be counted as APNs accepted.
+- Added shared Apple Wallet pass refresh service for touch/save/device lookup/APNs/result logging.
+- `TenantWalletCardBrandingService` now uses that shared refresh path after persisting branding. Branding remains best-effort: APNs failure does not roll back saved branding and no visible `changeMessage` is produced.
+- `AppleWalletNotificationChannelProcessor` now consumes the shared refresh result for `NotificationDelivery` status/counts.
+- Transient notification delivery failures become eligible for automatic retry with existing fields: `AttemptCount`, `CompletedAt`, `ProcessingStartedAt` and `FailureReason`.
+- Backoff is intentionally simple: attempt 1 retry after about 1 minute, attempt 2 after about 5 minutes, max attempts still comes from `LoyaltyNotifications:MaxAttempts`.
+- Permanent APNs failures are not selected for automatic retry.
+- Old stuck `Processing` notifications are eligible for recovery after about 15 minutes.
+- `LoyaltyNotifications:PollIntervalSeconds` changed from 43200 to 120.
+- `LoyaltyNotifications:RunOnStartup` changed from false to true.
+- `LoyaltyMaintenance` remains a separate 12-hour worker and was not changed.
+
+Operational note:
+
+- STG and PROD currently use Azure SQL Basic DTU, not Serverless auto-pause. The previous 12-hour notification polling interval was mainly a Serverless cost/cold-start guardrail and is no longer required in the same way.
+- Azure App Settings can override `appsettings.json`. After deploy, update API STG/PROD settings intentionally if the environment already has `LoyaltyNotifications__PollIntervalSeconds` or `LoyaltyNotifications__RunOnStartup`.
 
 ## Current State
 
@@ -21,13 +54,15 @@ Current codebase state at the end of this handoff task:
 - Permanent development rule added: never develop a new feature directly on `main`.
 - Before implementing a new feature, verify the current branch. If currently on `main`, create a dedicated feature branch before modifying code.
 - Branch naming convention: `feature/<name>`, `bugfix/<name>`, `hotfix/<name>`.
-- Documentation changes are intentionally uncommitted so they can be reviewed first.
-- No build was executed.
-- No tests were executed.
-- No EF migrations were created or applied.
+- Wallet Card Branding finalization is on `feature/wallet-card-branding`.
+- `feature/wallet-card-branding` was updated with `origin/staging` at `d515f23b6bf25f2238496f16faa95a7cfe21ae7a` before finalizing the branch, preserving recurring billing changes.
+- EF migration `20260825052012_AddWalletCardBranding` adds `TenantBrandings.WalletBackgroundColor` and `TenantBrandings.WalletLogoBlobName`.
+- Tenant Admin `/config` wallet branding mutations now go through the API with signed Admin API requests instead of executing MediatR/Application directly inside Admin.
+- Wallet branding changes mark installed Apple passes updated through `TenantWalletCardBrandingService` and send best-effort APNs after persistence.
+- Local validation passed: `dotnet build .\LoyaltyCloud.sln`, `dotnet test .\tests\LoyaltyCloud.Tests\LoyaltyCloud.Tests.csproj --filter "Category=TenantBranding|Category=WalletProductionUpdate"`, and EF pending-model check.
+- No migration was applied.
 - No database update was executed.
 - No deploy was executed.
-- No commit was created.
 
 Active product status:
 
@@ -54,6 +89,8 @@ Active product status:
 - API PROD, Admin PROD and Wallet PROD were manually validated after the PROD SQL migration.
 - API STG, Admin STG and Wallet were manually validated after the STG SQL migration.
 - Quick Help registration QR/poster now uses `Admin:PublicBaseUrl` when configured; PROD should use `https://admin.loyaltycloud.net`.
+- Tenant Admin `/config` now owns Apple Wallet card branding only: optional wallet background color, optional wallet-specific logo, contrast preview and fallback to main tenant logo/color.
+- Google Wallet tenant branding was intentionally not changed in this phase.
 - `Admin__PublicBaseUrl=https://admin.loyaltycloud.net` was also configured intentionally on the legacy PROD Admin Windows app so newly printed Quick Help QR posters point to the new Admin domain during transition.
 - New PROD Admin Linux `Admin__ApiBaseUrl` uses `https://api.loyaltycloud.net`.
 - Do not change `Apple__WebServiceURL` yet; Apple Wallet hostname migration needs a separate impact review.
@@ -61,9 +98,12 @@ Active product status:
 - Current PROD release: `v1.0.0`.
 - `v1.0.0` SHA: `cfe607c6f2b8f92922c4c07a1ce94fd089401091`.
 - Release policy: immutable SemVer tags documented in `docs/RELEASE_PROCESS.md`.
-- New work must begin from updated `main` on a dedicated branch; do not use `main` for everyday feature development.
-- Feature branches may be deployed to STG for integrated validation.
-- PROD must be deployed from integrated `main`, never directly from a feature branch.
+- Branch policy: `main` is PROD integration, `staging` is Azure STG integration/release-candidate validation, and `feature/*`/`bugfix/*`/`hotfix/*` are isolated development branches.
+- New work must begin from updated `main` on a dedicated branch; do not use `main` or `staging` for everyday feature development.
+- Feature branches should merge into `staging` by PR for integrated STG validation.
+- Azure STG should be deployed from `staging` when validating the next release candidate.
+- After STG approval, open a PR from `staging` into `main`.
+- PROD must be deployed from integrated `main`, never directly from `staging` or a feature branch.
 - Release tags are created only after PROD deploy and smoke test succeed.
 - Rollback of code uses a known release tag; rollback of database is separate and must be reviewed explicitly.
 - Deployment slots are not available on the current B1 plan and the plan should not be upgraded only to obtain slots without explicit approval.
@@ -258,6 +298,13 @@ git push origin v1.0.0
 ```
 
 The first push attempt from the sandbox failed because SSH/network access to GitHub was denied. The retry with elevated network permission succeeded and pushed only the tag.
+
+Staging branch initialization on 2026-08-25:
+
+- Local branch `staging` was created from `main` at `59c0340`.
+- `origin/staging` was pushed and configured as the upstream for local `staging`.
+- No feature branches were merged into `staging` during initialization.
+- Existing work in `feature/wallet-card-branding` remained uncommitted and was not merged.
 
 ## Recent Errors and Root Causes
 
@@ -934,7 +981,7 @@ For the next technical session:
 1. Read `docs/AI_CONTEXT.md`.
 2. Read this handoff.
 3. Read `docs/RELEASE_PROCESS.md` before any PROD deploy/rollback work.
-4. Before implementing a new feature, verify the current branch. If currently on `main`, create a dedicated feature branch before modifying code.
+4. Before implementing a new feature, verify the current branch. If currently on `main` or `staging`, create a dedicated feature branch before modifying functional code.
 5. If already on a related feature branch, continue there instead of creating another branch.
 6. If working on STG, verify current App Settings and connection strings from Azure before changing code.
 7. For Google Wallet STG, keep `reviewStatus = UNDER_REVIEW` in LoyaltyClass PATCH payloads and retry save-link with a known customer serial if a regression appears.

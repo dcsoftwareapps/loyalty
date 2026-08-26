@@ -12,6 +12,7 @@ public sealed class SubscriptionPlan : Entity
     public decimal SixMonthPrice { get; private set; }
     public decimal TwelveMonthPrice { get; private set; }
     public bool IsActive { get; private set; }
+    public string? StripeOneMonthPriceId { get; private set; } public string? StripeThreeMonthPriceId { get; private set; } public string? StripeSixMonthPriceId { get; private set; } public string? StripeTwelveMonthPriceId { get; private set; }
     public DateTime CreatedAt { get; private set; }
     public DateTime? UpdatedAt { get; private set; }
     private SubscriptionPlan() { }
@@ -23,5 +24,7 @@ public sealed class SubscriptionPlan : Entity
         Name = name.Trim(); Currency = currency.Trim().ToUpperInvariant(); MonthlyPrice = p1; ThreeMonthPrice = p3;
         SixMonthPrice = p6; TwelveMonthPrice = p12; IsActive = active; UpdatedAt = nowUtc;
     }
+    public void SetStripePriceIds(string? p1, string? p3, string? p6, string? p12) { StripeOneMonthPriceId=p1; StripeThreeMonthPriceId=p3; StripeSixMonthPriceId=p6; StripeTwelveMonthPriceId=p12; }
+    public string? StripePriceFor(int months) => months switch { 1 => StripeOneMonthPriceId, 3 => StripeThreeMonthPriceId, 6 => StripeSixMonthPriceId, 12 => StripeTwelveMonthPriceId, _ => throw new ArgumentException("Periodo inválido.") };
     public decimal PriceFor(int months) => months switch { 1 => MonthlyPrice, 3 => ThreeMonthPrice, 6 => SixMonthPrice, 12 => TwelveMonthPrice, _ => throw new ArgumentException("Periodo inválido.") };
 }

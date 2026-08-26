@@ -153,6 +153,7 @@ internal sealed class LoyaltyNotificationService : ILoyaltyNotificationService
         if (notification.Status == NotificationStatus.Cancelled)
             return await MapAsync(notification, ct);
 
+        PrepareRetryableWork(notification);
         notification.MarkProcessing(_dt.UtcNow);
         foreach (var delivery in notification.Deliveries.Where(d => d.Status == NotificationDeliveryStatus.Pending))
         {
@@ -220,6 +221,30 @@ internal sealed class LoyaltyNotificationService : ILoyaltyNotificationService
         foreach (var notification in pending)
             await ProcessAsync(notification.Id, ct);
         return pending.Count;
+    }
+
+    private void PrepareRetryableWork(LoyaltyNotification notification)
+    {
+        var staleBefore = _dt.UtcNow.AddMinutes(-15);
+        var changed = false;
+
+        foreach (var delivery in notification.Deliveries)
+        {
+            if (delivery.Status == NotificationDeliveryStatus.Failed
+                && delivery.FailureReason?.StartsWith(NotificationDeliveryFailureReasons.TransientApnsFailurePrefix, StringComparison.Ordinal) == true)
+            {
+                delivery.ResetForRetry();
+                changed = true;
+            }
+            else if (delivery.Status == NotificationDeliveryStatus.Processing)
+            {
+                delivery.ResetStuckProcessing(staleBefore);
+                changed |= delivery.Status == NotificationDeliveryStatus.Pending;
+            }
+        }
+
+        if (changed)
+            notification.MarkPendingForRetry();
     }
 
     private async Task<NotificationDto> MapAsync(LoyaltyNotification notification, CancellationToken ct)

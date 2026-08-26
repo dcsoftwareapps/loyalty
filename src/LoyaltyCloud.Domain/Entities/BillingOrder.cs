@@ -14,7 +14,7 @@ public sealed class BillingOrder : Entity, ITenantOwned
     public string Currency { get; private set; } = "MXN";
     public BillingOrderStatus Status { get; private set; }
     public BillingPaymentMethod PaymentMethod { get; private set; }
-    public PaymentProvider Provider { get; private set; }
+    public PaymentProvider Provider { get; private set; } public BillingPaymentKind PaymentKind { get; private set; }
     public DateTime CreatedAt { get; private set; }
     public DateTime ExpiresAt { get; private set; }
     public string? ExternalCheckoutId { get; private set; }
@@ -26,11 +26,11 @@ public sealed class BillingOrder : Entity, ITenantOwned
     public DateTime? ApprovedAt { get; private set; }
     private BillingOrder() { }
     public BillingOrder(Guid id, Guid tenantId, string planCode, int months, decimal subtotal, decimal tax, decimal total,
-        string currency, BillingPaymentMethod method, DateTime nowUtc, DateTime fromUtc, DateTime throughUtc) : base(id)
+        string currency, BillingPaymentMethod method, DateTime nowUtc, DateTime fromUtc, DateTime throughUtc, BillingPaymentKind? paymentKind = null) : base(id)
     {
         if (tenantId == Guid.Empty || months is not (1 or 3 or 6 or 12) || subtotal < 0 || tax < 0 || total < 0) throw new ArgumentException("Orden inválida.");
         TenantId = tenantId; PlanCode = planCode; Months = months; Subtotal = subtotal; Tax = tax; Total = total; Currency = currency;
-        PaymentMethod = method; Provider = method == BillingPaymentMethod.Card ? PaymentProvider.Stripe : PaymentProvider.Manual;
+        PaymentMethod = method; Provider = method == BillingPaymentMethod.Card ? PaymentProvider.Stripe : PaymentProvider.Manual; PaymentKind = paymentKind ?? (method == BillingPaymentMethod.BankTransfer ? BillingPaymentKind.BankTransfer : BillingPaymentKind.InitialCheckout);
         Status = method == BillingPaymentMethod.Card ? BillingOrderStatus.Pending : BillingOrderStatus.AwaitingTransfer;
         CreatedAt = nowUtc; ExpiresAt = nowUtc.AddHours(24); SubscriptionFromUtc = fromUtc; SubscriptionThroughUtc = throughUtc;
         BankReference = method == BillingPaymentMethod.BankTransfer ? $"LC-{id:N}"[..15].ToUpperInvariant() : null;

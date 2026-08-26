@@ -1,4 +1,5 @@
 using LoyaltyCloud.Application;
+using LoyaltyCloud.Application.Common.Branding;
 using LoyaltyCloud.Application.Common.Interfaces;
 using LoyaltyCloud.Domain.Entities;
 using LoyaltyCloud.Domain.Enums;
@@ -73,10 +74,61 @@ public sealed class TenantBrandingTests
         Assert.Equal(BellaSlug, wallet.TenantSlug);
         Assert.Equal("Bella Salon", wallet.OrganizationName);
         Assert.Equal("Tarjeta de Lealtad Bella Salon", wallet.Description);
-        Assert.Equal("rgb(255,255,255)", wallet.BackgroundColor);
-        Assert.Equal("rgb(0,0,0)", wallet.ForegroundColor);
-        Assert.Equal("rgb(139,92,246)", wallet.LabelColor);
+        Assert.Equal("rgb(139,92,246)", wallet.BackgroundColor);
+        Assert.Equal("rgb(17,24,39)", wallet.ForegroundColor);
+        Assert.Equal("rgb(17,24,39)", wallet.LabelColor);
         Assert.Contains("instagram.com/bella_salon", wallet.ContactValue);
+    }
+
+    [Fact]
+    [Trait("Category", "TenantBranding")]
+    public async Task Wallet_branding_uses_wallet_background_color_with_automatic_light_contrast()
+    {
+        await using var env = await BrandingTestEnvironment.CreateAsync();
+        await env.SetWalletBackgroundColorAsync(BellaTenantId, "#1c1c1c");
+
+        var wallet = await env.ReadWalletBrandingAsync(BellaTenantId, BellaSlug);
+
+        Assert.Equal("#1C1C1C", wallet.BackgroundHex);
+        Assert.Equal("rgb(28,28,28)", wallet.BackgroundColor);
+        Assert.Equal("rgb(255,255,255)", wallet.ForegroundColor);
+        Assert.Equal("rgb(255,255,255)", wallet.LabelColor);
+    }
+
+    [Fact]
+    [Trait("Category", "TenantBranding")]
+    public async Task Wallet_branding_without_wallet_background_falls_back_to_primary_color()
+    {
+        await using var env = await BrandingTestEnvironment.CreateAsync();
+
+        var wallet = await env.ReadWalletBrandingAsync(BellaTenantId, BellaSlug);
+
+        Assert.Equal("#8B5CF6", wallet.BackgroundHex);
+        Assert.Equal("rgb(139,92,246)", wallet.BackgroundColor);
+        Assert.Equal("rgb(17,24,39)", wallet.ForegroundColor);
+        Assert.Equal("rgb(17,24,39)", wallet.LabelColor);
+    }
+
+    [Fact]
+    [Trait("Category", "TenantBranding")]
+    public void Wallet_color_contrast_uses_dark_text_on_light_background()
+    {
+        var colors = WalletColorContrast.ResolveTextColors("#FFFFFF");
+
+        Assert.Equal("#111827", colors.ForegroundHex);
+        Assert.Equal("#111827", colors.LabelHex);
+    }
+
+    [Theory]
+    [Trait("Category", "TenantBranding")]
+    [InlineData("#123456", true)]
+    [InlineData("#ABCDEF", true)]
+    [InlineData("#FFF", false)]
+    [InlineData("123456", false)]
+    [InlineData("#XYZXYZ", false)]
+    public void Wallet_background_color_requires_rrggbb_hex(string value, bool expected)
+    {
+        Assert.Equal(expected, WalletColorContrast.IsHexColor(value));
     }
 
     [Fact]
@@ -117,10 +169,56 @@ public sealed class TenantBrandingTests
         var source = File.ReadAllText(Path.Combine(root, "src", "LoyaltyCloud.Infrastructure", "Services", "TenantWalletAssetProvider.cs"));
 
         Assert.Contains("GetTenantBrandingPrefix(tenantId)", source);
+        Assert.Contains("\"wallet-branding\"", source);
         Assert.Contains("tenant-branding/{tenantId:D}", File.ReadAllText(Path.Combine(root, "src", "LoyaltyCloud.Infrastructure", "Services", "TenantBrandingLogoService.cs")));
         Assert.Contains("AppleWalletGeneric", source);
         Assert.DoesNotContain("TenantSeed.KBeautySlug", source);
         Assert.DoesNotContain("legacy-kbeauty", source);
+    }
+
+    [Fact]
+    [Trait("Category", "TenantBranding")]
+    public void Config_wallet_preview_matches_real_pass_structure_and_uses_api_for_mutations()
+    {
+        var root = GetRepositoryRoot();
+        var page = File.ReadAllText(Path.Combine(root, "src", "LoyaltyCloud.Admin", "Pages", "Config.razor"));
+        var css = File.ReadAllText(Path.Combine(root, "src", "LoyaltyCloud.Admin", "wwwroot", "css", "site.css"));
+
+        Assert.Contains("Personaliza el diseño de tu tarjeta digital.", page);
+        Assert.DoesNotContain("Vista previa de Apple Wallet", page);
+        Assert.Contains("Vista previa aproximada.", page);
+        Assert.Contains("Reglas de puntos y beneficios", page);
+        Assert.Contains("Define cómo se acumulan, vencen y bonifican los puntos de tu programa.", page);
+        Assert.Contains("Cambiar logo", page);
+        Assert.Contains("Usar logo principal", page);
+        Assert.DoesNotContain("Opcional.", page);
+        Assert.DoesNotContain("Eliminar logo de tarjeta", page);
+        Assert.Contains("PUNTOS", page);
+        Assert.Contains("50 pts", page);
+        Assert.Contains("NIVEL", page);
+        Assert.Contains("Mist ✨", page);
+        Assert.Contains("PRÓXIMO", page);
+        Assert.Contains("Glow", page);
+        Assert.Contains("FALTAN", page);
+        Assert.Contains("950 pts", page);
+        Assert.Contains("kb-wallet-preview-field-labels", page);
+        Assert.Contains("kb-wallet-preview-field-values", page);
+        Assert.Contains("QrCodeSvgGenerator.GenerateDataUri(PreviewQrUrl", page);
+        Assert.Contains("https://www.instagram.com/loyaltycloud.app/", page);
+        Assert.DoesNotContain("kb-wallet-preview-qr-pattern", page);
+        Assert.DoesNotContain("Presenta este código en caja", page);
+        Assert.DoesNotContain("La apariencia final puede variar ligeramente en Apple Wallet.", page);
+        Assert.Contains("api/config/wallet-branding", page);
+        Assert.Contains("api/config/wallet-branding/logo", page);
+        Assert.DoesNotContain("new UpdateWalletCardBrandingCommand", page);
+        Assert.DoesNotContain("new UploadTenantWalletLogoCommand", page);
+        Assert.DoesNotContain("new RemoveTenantWalletLogoCommand", page);
+        Assert.Contains("object-fit: contain", css);
+        Assert.Contains(".kb-wallet-preview-qr", css);
+        Assert.Contains(".kb-wallet-preview-qr img", css);
+        Assert.DoesNotContain(".kb-wallet-preview-qr-pattern", css);
+        Assert.Contains(".kb-wallet-preview-field-labels", css);
+        Assert.Contains(".kb-wallet-preview-field-values", css);
     }
 
     [Fact]
@@ -256,6 +354,15 @@ public sealed class TenantBrandingTests
             await using var stream = new MemoryStream(bytes);
             return await scope.ServiceProvider.GetRequiredService<ITenantBrandingLogoService>()
                 .UploadAsync(tenantId, fileName, contentType, stream, bytes.LongLength);
+        }
+
+        public async Task SetWalletBackgroundColorAsync(Guid tenantId, string? color)
+        {
+            using var scope = _services.CreateScope();
+            var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+            var branding = await db.TenantBrandings.SingleAsync(x => x.TenantId == tenantId);
+            branding.SetWalletBackgroundColor(color);
+            await db.SaveChangesAsync();
         }
 
         private async Task InitializeAsync()

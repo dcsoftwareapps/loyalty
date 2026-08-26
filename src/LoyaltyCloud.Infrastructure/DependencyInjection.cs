@@ -111,6 +111,7 @@ public static class DependencyInjection
         services.AddScoped<IDeviceRegistrationPlatformReadService, DeviceRegistrationPlatformReadService>();
         services.AddScoped<ITenantWalletBrandingReadService, TenantWalletBrandingReadService>();
         services.AddScoped<ITenantBrandingReadService, TenantBrandingReadService>();
+        services.AddScoped<ITenantWalletCardBrandingService, TenantWalletCardBrandingService>();
         services.AddScoped<TenantBrandingLogoService>();
         services.AddScoped<ITenantBrandingLogoService>(sp => sp.GetRequiredService<TenantBrandingLogoService>());
         services.AddScoped<ITenantBrandingLogoUrlProvider>(sp => sp.GetRequiredService<TenantBrandingLogoService>());
@@ -122,6 +123,7 @@ public static class DependencyInjection
         services.AddScoped<ISuperAdminTenantManagementService, SuperAdminTenantManagementService>();
         services.AddScoped<ISubscriptionMaintenanceService, SubscriptionMaintenanceService>();
         services.AddScoped<IBillingService, BillingService>();
+        services.AddScoped<IBillingNotificationService, BillingNotificationService>();
         services.AddScoped<IPaymentGateway, StripePaymentGateway>();
         services.AddScoped<IPublicTenantResolver, PublicTenantResolver>();
         services.AddScoped<IPointsExpirationNotificationReadService, PointsExpirationNotificationReadService>();
@@ -130,6 +132,7 @@ public static class DependencyInjection
         services.AddScoped<IPointCampaignNotificationReadService, PointCampaignNotificationReadService>();
         services.AddScoped<ICustomNotificationAudienceReadService, CustomNotificationAudienceReadService>();
         services.AddScoped<ILoyaltyNotificationService, LoyaltyNotificationService>();
+        services.AddScoped<IAppleWalletPassRefreshService, AppleWalletPassRefreshService>();
         services.AddScoped<INotificationChannelProcessor, AppleWalletNotificationChannelProcessor>();
     }
 

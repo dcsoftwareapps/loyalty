@@ -182,6 +182,85 @@ public sealed class AdminApiPointsFlowTests : IClassFixture<CustomWebApplication
         Assert.Equal(HttpStatusCode.NotFound, catalogResponse.StatusCode);
     }
 
+    [Fact]
+    [Trait("Category", "TenantBranding")]
+    [Trait("Category", "WalletProductionUpdate")]
+    public async Task Signed_admin_wallet_branding_request_touches_only_tenant_cards_and_attempts_apple_wallet_push()
+    {
+        _factory.Apn.NextResult = null;
+        var kbeautySerial = "KB-BRAND1";
+        var bellaSerial = "KB-BELLA1";
+        var before = DateTime.UtcNow.AddHours(-2);
+
+        await SeedCardWithDeviceAsync(kbeautySerial, "kbeauty-branding-device", "kbeauty-branding-token", before);
+        await EnsureBellaTenantWithConfigAsync();
+        await SeedBellaCardWithDeviceAsync(bellaSerial, "bella-branding-device", "bella-branding-token", before);
+        var initialApnCount = _factory.Apn.Calls.Count;
+
+        using var request = CreateSignedRequest(
+            HttpMethod.Put,
+            "/api/config/wallet-branding",
+            new { walletBackgroundColor = "#1c1c1c" },
+            tenantSlug: TenantSeed.KBeautySlug);
+        using var response = await _client.SendAsync(request);
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var branding = await response.Content.ReadFromJsonAsync<TenantBrandingInfo>();
+        Assert.NotNull(branding);
+        Assert.Equal(TenantSeed.KBeautyTenantId, branding!.TenantId);
+        Assert.Equal("#1C1C1C", branding.WalletBackgroundColor);
+
+        using var scope = _factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        var kbeautyCard = await db.LoyaltyCards
+            .IgnoreQueryFilters()
+            .SingleAsync(c => c.SerialNumber == kbeautySerial);
+        var bellaCard = await db.LoyaltyCards
+            .IgnoreQueryFilters()
+            .SingleAsync(c => c.SerialNumber == bellaSerial);
+
+        Assert.True(kbeautyCard.LastActivityAt > before);
+        Assert.Equal(before, bellaCard.LastActivityAt);
+        Assert.Contains(_factory.Apn.Calls.Skip(initialApnCount), call =>
+            call.Token == "kbeauty-branding-token"
+            && call.Reason == PassUpdateReason.BrandingUpdated);
+        Assert.DoesNotContain(_factory.Apn.Calls.Skip(initialApnCount), call =>
+            call.Token == "bella-branding-token");
+
+        var since = new DateTimeOffset(before).ToUnixTimeSeconds();
+        using var registrations = await _client.GetAsync($"/v1/devices/kbeauty-branding-device/registrations/pass.com.kbeautymx.loyalty?passesUpdatedSince={since}");
+        Assert.Equal(HttpStatusCode.OK, registrations.StatusCode);
+        var payload = await registrations.Content.ReadAsStringAsync();
+        Assert.Contains(kbeautySerial, payload, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    [Trait("Category", "TenantBranding")]
+    [Trait("Category", "WalletProductionUpdate")]
+    public async Task Signed_admin_wallet_branding_request_keeps_branding_when_apns_is_rejected()
+    {
+        _factory.Apn.NextResult = ApnPushResult.Permanent(400, "BadDeviceToken");
+        var serial = "KB-BRAND2";
+        await SeedCardWithDeviceAsync(serial, "kbeauty-branding-device-2", "kbeauty-branding-token-2", DateTime.UtcNow.AddHours(-2));
+
+        using var request = CreateSignedRequest(
+            HttpMethod.Put,
+            "/api/config/wallet-branding",
+            new { walletBackgroundColor = "#222222" },
+            tenantSlug: TenantSeed.KBeautySlug);
+        using var response = await _client.SendAsync(request);
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        using var scope = _factory.Services.CreateScope();
+        var tenantContext = scope.ServiceProvider.GetRequiredService<IMutableTenantContext>();
+        tenantContext.SetTenant(TenantSeed.KBeautyTenantId, TenantSeed.KBeautySlug);
+        var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        var branding = await db.TenantBrandings.SingleAsync(b => b.TenantId == TenantSeed.KBeautyTenantId);
+        Assert.Equal("#222222", branding.WalletBackgroundColor);
+
+        _factory.Apn.NextResult = null;
+    }
+
     private async Task EnsureTenantOperationalAsync()
     {
         using var scope = _factory.Services.CreateScope();
@@ -193,7 +272,14 @@ public sealed class AdminApiPointsFlowTests : IClassFixture<CustomWebApplication
         await db.SaveChangesAsync();
     }
 
-    private async Task SeedCardWithDeviceAsync(string serial)
+    private Task SeedCardWithDeviceAsync(string serial) =>
+        SeedCardWithDeviceAsync(serial, "device-api-flow", "push-token-api-flow", DateTime.UtcNow);
+
+    private async Task SeedCardWithDeviceAsync(
+        string serial,
+        string deviceIdentifier,
+        string pushToken,
+        DateTime now)
     {
         using var scope = _factory.Services.CreateScope();
         var tenantContext = scope.ServiceProvider.GetRequiredService<IMutableTenantContext>();
@@ -208,7 +294,6 @@ public sealed class AdminApiPointsFlowTests : IClassFixture<CustomWebApplication
             return;
         }
 
-        var now = DateTime.UtcNow;
         var customer = new Customer(
             Guid.NewGuid(),
             TenantSeed.KBeautyTenantId,
@@ -229,10 +314,52 @@ public sealed class AdminApiPointsFlowTests : IClassFixture<CustomWebApplication
         db.DeviceRegistrations.Add(new DeviceRegistration(
             Guid.NewGuid(),
             TenantSeed.KBeautyTenantId,
-            "device-api-flow",
+            deviceIdentifier,
             "pass.com.kbeautymx.loyalty",
             serial,
-            "push-token-api-flow",
+            pushToken,
+            now));
+        await db.SaveChangesAsync();
+    }
+
+    private async Task SeedBellaCardWithDeviceAsync(
+        string serial,
+        string deviceIdentifier,
+        string pushToken,
+        DateTime now)
+    {
+        using var scope = _factory.Services.CreateScope();
+        var tenantContext = scope.ServiceProvider.GetRequiredService<IMutableTenantContext>();
+        tenantContext.SetTenant(BellaTenantId, BellaTenantSlug);
+        var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+
+        if (await db.LoyaltyCards.AnyAsync(c => c.SerialNumber == serial))
+            return;
+
+        var customer = new Customer(
+            Guid.NewGuid(),
+            BellaTenantId,
+            "Bella Wallet Customer",
+            $"bella-wallet-{Guid.NewGuid():N}@test.local",
+            new DateTime(1991, 1, 1),
+            now,
+            "6460000001");
+        var card = new LoyaltyCard(
+            Guid.NewGuid(),
+            BellaTenantId,
+            customer.Id,
+            serial,
+            now);
+
+        db.Customers.Add(customer);
+        db.LoyaltyCards.Add(card);
+        db.DeviceRegistrations.Add(new DeviceRegistration(
+            Guid.NewGuid(),
+            BellaTenantId,
+            deviceIdentifier,
+            "pass.com.kbeautymx.loyalty",
+            serial,
+            pushToken,
             now));
         await db.SaveChangesAsync();
     }

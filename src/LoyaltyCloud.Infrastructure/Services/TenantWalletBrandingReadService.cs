@@ -1,4 +1,5 @@
 using LoyaltyCloud.Application.Common.Interfaces;
+using LoyaltyCloud.Application.Common.Branding;
 using LoyaltyCloud.Infrastructure.Configuration;
 using LoyaltyCloud.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
@@ -9,9 +10,6 @@ namespace LoyaltyCloud.Infrastructure.Services;
 
 internal sealed class TenantWalletBrandingReadService : ITenantWalletBrandingReadService
 {
-    private const string DefaultBackgroundColor = "rgb(255,255,255)";
-    private const string DefaultForegroundColor = "rgb(0,0,0)";
-    private const string DefaultLabelColor = "rgb(17,24,39)";
     private const string GenericContactFallback = "LoyaltyCloud";
 
     private readonly AppDbContext _db;
@@ -43,6 +41,9 @@ internal sealed class TenantWalletBrandingReadService : ITenantWalletBrandingRea
                 tenant.DisplayName,
                 tenant.Slug,
                 LogoUrl = tenant.Branding == null ? null : tenant.Branding.LogoUrl,
+                LogoBlobName = tenant.Branding == null ? null : tenant.Branding.LogoBlobName,
+                WalletBackgroundColor = tenant.Branding == null ? null : tenant.Branding.WalletBackgroundColor,
+                WalletLogoBlobName = tenant.Branding == null ? null : tenant.Branding.WalletLogoBlobName,
                 PrimaryColor = tenant.Branding == null ? null : tenant.Branding.PrimaryColor,
                 SecondaryColor = tenant.Branding == null ? null : tenant.Branding.SecondaryColor,
                 SupportPhone = tenant.Branding == null ? null : tenant.Branding.SupportPhone,
@@ -65,17 +66,29 @@ internal sealed class TenantWalletBrandingReadService : ITenantWalletBrandingRea
                 tenantId);
         }
 
+        var primaryColor = TenantBrandingSanitizer.ColorOrDefault(
+            row.PrimaryColor,
+            TenantBrandingSanitizer.DefaultPrimaryColor,
+            tenantId,
+            "PrimaryColor",
+            _logger);
+        var backgroundHex = WalletColorContrast.IsHexColor(row.WalletBackgroundColor)
+            ? row.WalletBackgroundColor!.Trim().ToUpperInvariant()
+            : WalletColorContrast.NormalizeHexOrDefault(primaryColor);
+        var textColors = WalletColorContrast.ResolveTextColors(backgroundHex);
+
         return new TenantWalletBrandingDto(
             TenantId: tenantId,
             TenantSlug: row.Slug,
             DisplayName: row.DisplayName,
             OrganizationName: row.DisplayName,
             Description: $"Tarjeta de Lealtad {row.DisplayName}",
-            BackgroundColor: DefaultBackgroundColor,
-            ForegroundColor: DefaultForegroundColor,
-            LabelColor: TenantBrandingSanitizer.ToRgbColor(
-                TenantBrandingSanitizer.ColorOrDefault(row.PrimaryColor, TenantBrandingSanitizer.DefaultPrimaryColor, tenantId, "PrimaryColor", _logger),
-                DefaultLabelColor),
+            BackgroundColor: WalletColorContrast.ToAppleRgb(backgroundHex),
+            ForegroundColor: WalletColorContrast.ToAppleRgb(textColors.ForegroundHex),
+            LabelColor: WalletColorContrast.ToAppleRgb(textColors.LabelHex),
+            BackgroundHex: backgroundHex,
+            LogoBlobName: row.LogoBlobName,
+            WalletLogoBlobName: row.WalletLogoBlobName,
             ContactValue: contactValue!,
             CustomerFallbackName: $"Cliente {row.DisplayName}",
             UsesBundledAssetsFallback: false,

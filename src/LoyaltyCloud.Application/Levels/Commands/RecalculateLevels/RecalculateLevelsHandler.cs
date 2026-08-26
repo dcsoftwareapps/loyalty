@@ -108,7 +108,7 @@ public sealed class RecalculateLevelsHandler
             var devices = await _devices.GetBySerialNumberAsync(serial, ct);
             foreach (var device in devices)
             {
-                await _apn.SendPassUpdateAsync(device.PushToken, PassUpdateReason.LevelChanged, ct);
+                _ = await _apn.SendPassUpdateAsync(device.PushToken, PassUpdateReason.LevelChanged, ct);
                 sent++;
             }
 

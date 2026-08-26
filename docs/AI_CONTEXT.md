@@ -1,6 +1,6 @@
 # LoyaltyCloud - AI Context
 
-Last updated: 2026-08-24
+Last updated: 2026-08-25
 
 Purpose: permanent technical context for continuing LoyaltyCloud with ChatGPT/Codex without losing important repository, infrastructure and product memory between chats.
 
@@ -148,7 +148,7 @@ Blazor Admin pages:
 
 Visible Admin menu is grouped by operation, customers, loyalty program, communication and administration. Do not reintroduce any retired Admin hostname.
 
-Admin customer screens intentionally ignore `Customer.Email` as visible customer data. The field still exists for legacy/domain/API compatibility, but tenant Admin UI should show name, phone, customer ID/serial and operational data instead. Platform tenant creation has synchronized color picker and hex fields for tenant branding colors. Quick Help registration QR/poster must continue using the same tenant join URL source (`Admin:PublicBaseUrl` when configured, otherwise current Admin base URI). The poster top uses `TenantBrandingInfo.LogoUrl` when available and falls back to tenant display name.
+Admin customer screens intentionally ignore `Customer.Email` as visible customer data. The field still exists for legacy/domain/API compatibility, but tenant Admin UI should show name, phone, customer ID/serial and operational data instead. Platform tenant creation has synchronized color picker and hex fields for tenant branding colors. Tenant Admin `/config` includes Apple Wallet card branding: optional `TenantBranding.WalletBackgroundColor` (`#RRGGBB`) and optional wallet-specific logo. Quick Help registration QR/poster must continue using the same tenant join URL source (`Admin:PublicBaseUrl` when configured, otherwise current Admin base URI). The poster top uses `TenantBrandingInfo.LogoUrl` when available and falls back to tenant display name.
 
 ## API Endpoints
 
@@ -297,6 +297,17 @@ Customer iPhone flow:
 4. Response includes `PassDownloadUrl`.
 5. Safari opens `GET /api/passes/{serialNumber}`.
 6. `PassGeneratorService` resolves tenant by card serial, reads tenant branding and dynamic levels, builds `pass.json`, signs manifest with Apple certificate, returns `.pkpass`.
+
+Wallet card branding is tenant-aware:
+
+- `TenantBranding.WalletBackgroundColor` overrides the Apple Wallet background color.
+- If no wallet color is set, Apple Wallet falls back to `TenantBranding.PrimaryColor`, then white.
+- Apple Wallet `foregroundColor` and `labelColor` are derived automatically from background luminance for readable contrast.
+- `TenantBranding.WalletLogoBlobName` points to wallet-specific generated assets under `tenant-branding/{tenantId}/wallet-branding/...`.
+- If no wallet logo is set, Apple Wallet falls back to generated assets from the tenant's main `LogoBlobName`, then bundled generic LoyaltyCloud assets.
+- Changing wallet color or wallet logo marks installed Apple passes updated and sends APNs best-effort; no visible `changeMessage` is generated for visual branding changes.
+- Wallet branding refresh now uses the shared Apple Wallet pass refresh path: touch `LoyaltyCard.LastActivityAt`, save, inspect `DeviceRegistration`, send APNs, and log `NoRecipients`, `NoOp`/unsupported, accepted pushes and rejected pushes.
+- APNs responses are explicit results. HTTP 200 is success; HTTP 429/5xx and network/timeout failures are transient; APNs permanent reasons such as `BadDeviceToken`, `Unregistered` and `DeviceTokenNotForTopic` are permanent. Non-2xx APNs responses must never be counted as success.
 7. iPhone installs pass and calls PassKit registration route.
 8. API stores `DeviceRegistration`.
 9. Later business events update `LoyaltyCard.LastActivityAt` and send APNs.
@@ -430,10 +441,13 @@ Only API registers hosted services.
 `LoyaltyNotificationBackgroundService`:
 
 - Config section: `LoyaltyNotifications`.
-- Default: enabled, no startup run, `PollIntervalSeconds=43200`.
+- Default: enabled, runs once on startup, `PollIntervalSeconds=120`.
 - Runs due custom notification campaigns and pending notification deliveries/retries.
+- `ProcessImmediately` remains the normal path for manual/current notifications; polling is the recovery/fallback path.
+- Transient APNs failures are retried with simple backoff using existing delivery timestamps and attempt counts. Permanent APNs failures are terminal and should not loop forever.
+- Old `Processing` notifications can be recovered by the scheduler without adding new columns.
 
-Cost-control decision for Azure SQL Free/UAT: no background loop should touch SQL every minute. Immediate foreground flows should process their own business notifications when explicitly wired.
+Historical note: the notification polling interval was previously extended to 12 hours to avoid keeping Azure SQL Serverless awake. STG and PROD now use Azure SQL Basic DTU, so that auto-pause constraint no longer applies in the same way. `LoyaltyMaintenance` remains a separate 12-hour maintenance worker.
 
 ## Configuration
 
@@ -535,13 +549,17 @@ Current PROD release state:
 - Current stable PROD release tag: `v1.0.0`.
 - Release SHA: `cfe607c6f2b8f92922c4c07a1ce94fd089401091`.
 - `main` remains the primary branch.
+- Permanent integration branch `staging` exists for Azure STG release-candidate validation.
 - Formal release process is documented in `docs/RELEASE_PROCESS.md`.
 - Never develop a new feature directly on `main`.
-- Before implementing a new feature, verify the current branch. If currently on `main`, create a dedicated feature branch before modifying code.
+- Never develop directly on `staging`.
+- Before implementing a new feature, verify the current branch. If currently on `main` or `staging`, create a dedicated feature branch before modifying functional code.
 - Use branch prefixes `feature/`, `bugfix/` and `hotfix/`.
 - STG validation remains required before PROD.
-- Feature branches may be deployed to STG for integrated validation.
-- PROD must be deployed from integrated `main`, never directly from a feature branch.
+- Feature branches merge by PR into `staging`.
+- Azure STG should be deployed from `staging` when validating the next integrated release.
+- After STG approval, `staging` merges by PR into `main`.
+- PROD must be deployed from integrated `main`, never directly from `staging` or a feature branch.
 - Release tags are created only after PROD deploy and smoke test succeed.
 - Code rollback uses a known immutable release tag.
 - Database rollback is a separate reviewed process and is not implied by checking out an older tag.
@@ -683,9 +701,13 @@ Release procedure:
 
 - Use immutable SemVer tags for PROD releases.
 - Current PROD release: `v1.0.0` at `cfe607c6f2b8f92922c4c07a1ce94fd089401091`.
-- Never develop features directly on `main`; create a dedicated `feature/`, `bugfix/` or `hotfix/` branch from updated `main` first.
+- `main` is the PROD integration branch.
+- `staging` is the Azure STG integration/release-candidate branch.
+- Never develop features directly on `main` or `staging`; create a dedicated `feature/`, `bugfix/` or `hotfix/` branch from updated `main` first.
 - Do not use floating tags such as `latest` for rollback.
-- Deploy feature branches to STG when integrated validation is needed.
+- Merge feature branches into `staging` by PR.
+- Deploy Azure STG from `staging` for integrated validation.
+- Promote `staging` to `main` by PR after STG approval.
 - Deploy PROD only from integrated `main`.
 - Create release tags only after PROD smoke testing confirms the deploy is healthy.
 - See `docs/RELEASE_PROCESS.md` for the full procedure.
@@ -771,8 +793,8 @@ Known current/pending:
 ## Working Conventions
 
 - Inspect before changing.
-- Before implementing a new feature, verify the current branch. If currently on `main`, create a dedicated feature branch before modifying code.
-- Do not use `main` for everyday feature development.
+- Before implementing a new feature, verify the current branch. If currently on `main` or `staging`, create a dedicated feature branch before modifying functional code.
+- Do not use `main` or `staging` for everyday feature development.
 - Keep changes scoped.
 - No large refactors unless explicitly requested.
 - No functional code changes for documentation-only tasks.
