@@ -64,12 +64,11 @@ La base activa de produccion/UAT es `LoyaltyCloudFree`.
 
 ## TODO
 
-- Revisar ruido de logs diagnosticos temporales antes de GA.
-- Confirmar configuracion final de CORS/App Settings para Admin oficial.
-- Agregar refresh tenant-wide si se requiere que cambios de branding/logo disparen APNs inmediato.
-- Definir prefijo neutral/configurable de seriales.
-- Definir estrategia Apple Pass Type ID/certificados para SaaS GA.
-- Actualizar defaults de provisioning para no crear `Mist/Glow/Radiance` como plantilla generica.
+- Reportes
+- Configurar tamaño del logo en el pass
+- Colores del pass en Google Wallet / Android
+- Terminar pagos recurrentes
+- Dashboard de valor
 
 ## DEFERRED
 
