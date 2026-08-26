@@ -491,17 +491,20 @@ public sealed class AdminRoutingTests : IClassFixture<AdminRoutingTests.AdminWeb
             "<span class=\"kb-sidebar-section\">Puntos</span>",
             "<NavLink href=\"/scan\">Sumar puntos</NavLink>",
             "<NavLink href=\"/redeem\">Canjear puntos</NavLink>",
-            "<span class=\"kb-sidebar-section\">Clientes</span>",
-            "<NavLink href=\"/customers\">Clientes</NavLink>",
-            "<NavLink href=\"/redemptions\">Canjes</NavLink>",
-            "<span class=\"kb-sidebar-section\">Programa de lealtad</span>",
-            "<NavLink href=\"/rewards\">Recompensas</NavLink>",
-            "<NavLink href=\"/campaigns\">Campañas</NavLink>",
             "<span class=\"kb-sidebar-section\">Comunicación</span>",
             "<NavLink href=\"/marketing-notifications\">Mensajes</NavLink>",
-            "<span class=\"kb-sidebar-section\">Administración</span>",
+            "<span class=\"kb-sidebar-section\">Programas de lealtad</span>",
+            "<NavLink href=\"/rewards\">Recompensas</NavLink>",
             "<NavLink href=\"/levels\">Niveles</NavLink>",
-            "<NavLink href=\"/config\">Configuración</NavLink>"
+            "<NavLink href=\"/campaigns\">Campañas</NavLink>",
+            "<span class=\"kb-sidebar-section\">Reportes</span>",
+            "<NavLink href=\"/customers\">Clientes</NavLink>",
+            "<NavLink href=\"/redemptions\">Canjes</NavLink>",
+            "<NavLink href=\"/reports/inactive-customers\">Clientes inactivos</NavLink>",
+            "<NavLink href=\"/reports/top-rewards\">Recompensas más canjeadas</NavLink>",
+            "<span class=\"kb-sidebar-section\">Administración</span>",
+            "<NavLink href=\"/config\">Configuración</NavLink>",
+            "<NavLink href=\"@($\"/{TenantContext.TenantSlug}/billing\")\">Suscripción</NavLink>"
         };
 
         var previousIndex = -1;
@@ -522,9 +525,11 @@ public sealed class AdminRoutingTests : IClassFixture<AdminRoutingTests.AdminWeb
         Assert.Equal(1, CountOccurrences(source, "href=\"/campaigns\""));
         Assert.Equal(1, CountOccurrences(source, "href=\"/marketing-notifications\""));
         Assert.Equal(1, CountOccurrences(source, "href=\"/config\""));
+        Assert.Equal(0, CountOccurrences(source, "href=\"/reports\""));
+        Assert.Equal(1, CountOccurrences(source, "href=\"/reports/inactive-customers\""));
+        Assert.Equal(1, CountOccurrences(source, "href=\"/reports/top-rewards\""));
         Assert.Equal(1, CountOccurrences(source, "href=\"/quick-help\""));
         Assert.Equal(5, CountOccurrences(source, "class=\"kb-sidebar-section\""));
-        Assert.DoesNotContain("Operación</span>", source);
         Assert.DoesNotContain("<NavLink href=\"/notifications\"", source);
         Assert.DoesNotContain(">Clientas</NavLink>", source);
         Assert.Contains("Ayuda rápida", source);
@@ -1090,6 +1095,36 @@ public sealed class AdminRoutingTests : IClassFixture<AdminRoutingTests.AdminWeb
             Assert.DoesNotContain("serial manualmente", source, StringComparison.OrdinalIgnoreCase);
             Assert.DoesNotContain("Ingresa un serial", source, StringComparison.OrdinalIgnoreCase);
         }
+    }
+
+    [Fact]
+    [Trait("Category", "Reports")]
+    [Trait("Category", "AdminRouting")]
+    public void Admin_menu_links_to_reports_page_once()
+    {
+        var root = GetRepositoryRoot();
+        var layout = File.ReadAllText(Path.Combine(root, "src", "LoyaltyCloud.Admin", "Components", "Layout", "MainLayout.razor"));
+        var reportsPage = File.ReadAllText(Path.Combine(root, "src", "LoyaltyCloud.Admin", "Pages", "Reports.razor"));
+        var inactivePage = File.ReadAllText(Path.Combine(root, "src", "LoyaltyCloud.Admin", "Pages", "InactiveCustomersReport.razor"));
+        var topRewardsPage = File.ReadAllText(Path.Combine(root, "src", "LoyaltyCloud.Admin", "Pages", "TopRewardsReport.razor"));
+
+        Assert.Contains("<span class=\"kb-sidebar-section\">Reportes</span>", layout);
+        Assert.DoesNotContain("<NavLink href=\"/reports\">Reportes</NavLink>", layout);
+        Assert.Equal(0, CountOccurrences(layout, "href=\"/reports\""));
+        Assert.Contains("<NavLink href=\"/reports/inactive-customers\">Clientes inactivos</NavLink>", layout);
+        Assert.Contains("<NavLink href=\"/reports/top-rewards\">Recompensas más canjeadas</NavLink>", layout);
+        Assert.Contains("@page \"/reports\"", reportsPage);
+        Assert.Contains("@attribute [Authorize]", reportsPage);
+        Assert.Contains("href=\"/customers\"", reportsPage);
+        Assert.Contains("href=\"/redemptions\"", reportsPage);
+        Assert.DoesNotContain("MetricCard", reportsPage);
+        Assert.DoesNotContain("GetReportsSummaryQuery", reportsPage);
+        Assert.Contains("@page \"/reports/inactive-customers\"", inactivePage);
+        Assert.Contains("@page \"/reports/top-rewards\"", topRewardsPage);
+        Assert.Contains("GetInactiveCustomersReportQuery", inactivePage);
+        Assert.Contains("GetTopRewardsReportQuery", topRewardsPage);
+        Assert.Contains("Sin actividad durante", inactivePage);
+        Assert.Contains("Últimos 30 días", topRewardsPage);
     }
 
     [Fact]

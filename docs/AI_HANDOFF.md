@@ -1,10 +1,42 @@
 # LoyaltyCloud - AI Handoff
 
-Last updated: 2026-08-25
+Last updated: 2026-08-26
 
-Branch: `feature/wallet-card-branding`
+Branch: `feature/reports-summary`
 
-Last task worked: Wallet Card Branding finalization for Apple Wallet.
+Last task worked: Reports v1 UX and navigation refactor.
+
+## 2026-08-26 - Reports v1 UX and navigation refactor
+
+Current branch for this work: `feature/reports-summary`.
+
+Scope:
+
+- `/reports` is now a lightweight reports landing, not a KPI/dashboard page.
+- Added dedicated report pages:
+  - `/reports/inactive-customers`
+  - `/reports/top-rewards`
+- Customers and redemptions remain on their existing pages/routes and are linked from the Reports sidebar group.
+- Reports v1 uses the existing Dashboard-style pattern: Blazor page -> MediatR query -> read service -> EF Core `AsNoTracking`.
+- No new API endpoint was added.
+- No schema/model change or migration was added.
+- Individual report pages own their filters and query only the data they need.
+
+Definitions:
+
+- Active customer: unique customer with at least one point transaction or redemption in the selected period.
+- Inactive customer: active customer/card with no point transaction or redemption for the selected threshold. Customers with no activity use `Customer.CreatedAt` as the reference.
+- Registered purchase: `PointTransaction.Type == Purchase`.
+- Registered purchase amount: sum of `PointTransaction.PurchaseAmount` for purchase transactions.
+- Points issued: positive `Purchase`, `BonusWelcome`, `BonusBirthday` and `BonusReferral` point transactions. `RedemptionReversal` is intentionally excluded.
+- Points redeemed: non-cancelled `Redemption.PointsSpent`, avoiding double counting with point transactions.
+- Points expired: negative `PointTransaction` rows with `Type == Expiry` or `Expired`.
+- Counted redemption: `Redemption.Status != Cancelled`.
+
+Known limitation:
+
+- Top redeemed rewards display the current `RewardCatalogItem.Name`. `Redemption` does not store a historical reward-name snapshot.
+- The period/current-program KPI cards from the first Reports v1 draft were intentionally removed from the Reports UI. They were not moved to Dashboard in this task.
 
 ## 2026-08-25 - Apple Wallet branding refresh and APNs reliability
 

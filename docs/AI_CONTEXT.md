@@ -132,6 +132,9 @@ Blazor Admin pages:
 | `/{tenantSlug}/login` | `Login.razor` | Tenant Admin login. Public for the tenant slug. |
 | `/{tenantSlug}/join` | `Join.razor` | Public customer registration and wallet add flow. |
 | `/dashboard` | `Dashboard.razor` | Tenant dashboard. |
+| `/reports` | `Reports.razor` | Tenant reports landing with links to report pages. |
+| `/reports/inactive-customers` | `InactiveCustomersReport.razor` | Customers active in the program with no point movements or redemptions for the selected inactivity threshold. |
+| `/reports/top-rewards` | `TopRewardsReport.razor` | Most redeemed catalog rewards for the selected period. |
 | `/scan` | `Scan.razor` | Add points. Supports manual ID/serial and QR scanner. |
 | `/redeem` | `Redeem.razor` | Redeem points, including monetary discount and catalog rewards. Supports QR scanner. |
 | `/customers` | `Customers.razor` | Customer list/search. |
@@ -755,6 +758,7 @@ Done:
 - Hard delete tenant.
 - Tenant dynamic levels and tenant-level recalculation.
 - Customer detail audit.
+- Reports v1 with separate report pages for inactive customers and top redeemed rewards.
 - QR add-points and redemption flows.
 - Direct monetary discount redemption.
 - Reward catalog/monthly product.
@@ -777,6 +781,7 @@ Active/UAT focus:
 Known current/pending:
 
 - Google Wallet issuer is Production Approved.
+- Reports v1 is a tenant Admin section using the same in-process MediatR/read-service pattern as Dashboard. `/reports` is a lightweight landing, while individual report pages own their filters and queries. It does not add database schema, an API endpoint, charts or exports.
 - Google Wallet does not yet have a robust outbox/retry model.
 - Google Wallet sync is currently limited mainly to add-points sync once a member is linked.
 - Review whether Google Wallet has URLs/base URLs that should move to the new custom domains.
