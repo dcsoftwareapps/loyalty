@@ -248,7 +248,7 @@ public sealed class ManualSubscriptionBillingTests
         var gateway = new CheckoutTestGateway();
         await using var env = await BillingTestEnvironment.CreateAsync(paymentGateway: gateway);
         var tenantId = await env.AddTenantAsync("checkout-order", TenantSubscriptionStatus.Suspended);
-        await env.SavePlanAsync(new SubscriptionPlanDto(Guid.Empty, "standard", "Regular", "MXN", 250m, 0m, 0m, 0m, true));
+        await env.SavePlanAsync(new SubscriptionPlanDto(Guid.Empty, "standard", "Regular", "MXN", 250m, 0m, 0m, 0m, true, "price_test_monthly"));
         await env.EnableCardPaymentsAsync();
 
         var order = await env.CreateCardOrderAsync(tenantId, "standard", 1);
@@ -492,6 +492,149 @@ public sealed class ManualSubscriptionBillingTests
         Assert.Contains("RecordManualSubscriptionPaymentCommand", source);
     }
 
+
+    [Fact]
+    [Trait("Category", "RecurringBilling")]
+    public async Task Upcoming_invoice_requests_notification_once_without_extending()
+    {
+        var gateway = new CheckoutTestGateway();
+        var notifications = new RecordingBillingNotifications();
+        await using var env = await BillingTestEnvironment.CreateAsync(paymentGateway: gateway, notifications: notifications);
+        var paidThrough = FixedNow.AddMonths(1);
+        var tenantId = await env.AddTenantAsync("upcoming-email", TenantSubscriptionStatus.Active, paidThrough: paidThrough);
+        await env.ConfigureRecurringProfileAsync(tenantId, "sub_upcoming");
+
+        gateway.SetInvoiceConfirmation("evt_upcoming", "invoice.upcoming", "sub_upcoming", "in_upcoming", paid: false);
+        await env.ProcessStripeWebhookAsync();
+        await env.ProcessStripeWebhookAsync();
+
+        Assert.Equal(paidThrough, (await env.GetSubscriptionAsync(tenantId)).PaidThroughUtc);
+        Assert.Single(notifications.Items);
+        Assert.Equal(BillingNotificationType.UpcomingCharge, notifications.Items[0].Type);
+    }
+
+    [Fact]
+    [Trait("Category", "RecurringBilling")]
+    public async Task Paid_invoice_extends_once_records_transaction_and_requests_email_once()
+    {
+        var gateway = new CheckoutTestGateway();
+        var notifications = new RecordingBillingNotifications();
+        await using var env = await BillingTestEnvironment.CreateAsync(paymentGateway: gateway, notifications: notifications);
+        var original = FixedNow.AddMonths(1);
+        var tenantId = await env.AddTenantAsync("paid-email", TenantSubscriptionStatus.Active, paidThrough: original);
+        await env.ConfigureRecurringProfileAsync(tenantId, "sub_paid");
+
+        gateway.SetInvoiceConfirmation("evt_paid_invoice", "invoice.paid", "sub_paid", "in_paid", paid: true);
+        await env.ProcessStripeWebhookAsync();
+        await env.ProcessStripeWebhookAsync();
+
+        Assert.Equal(original.AddMonths(1), (await env.GetSubscriptionAsync(tenantId)).PaidThroughUtc);
+        Assert.Equal(1, await env.ExternalTransactionCountAsync("in_paid"));
+        Assert.Single(notifications.Items);
+        Assert.Equal(BillingNotificationType.PaymentSucceeded, notifications.Items[0].Type);
+    }
+
+    [Fact]
+    [Trait("Category", "RecurringBilling")]
+    public async Task Failed_invoice_keeps_vigency_applies_grace_and_requests_email_once()
+    {
+        var gateway = new CheckoutTestGateway();
+        var notifications = new RecordingBillingNotifications();
+        await using var env = await BillingTestEnvironment.CreateAsync(paymentGateway: gateway, notifications: notifications);
+        var original = FixedNow.AddDays(2);
+        var tenantId = await env.AddTenantAsync("failed-email", TenantSubscriptionStatus.Active, paidThrough: original);
+        await env.ConfigureRecurringProfileAsync(tenantId, "sub_failed");
+
+        gateway.SetInvoiceConfirmation("evt_failed_invoice", "invoice.payment_failed", "sub_failed", "in_failed", paid: false);
+        await env.ProcessStripeWebhookAsync();
+        await env.ProcessStripeWebhookAsync();
+
+        var subscription = await env.GetSubscriptionAsync(tenantId);
+        Assert.Equal(original, subscription.PaidThroughUtc);
+        Assert.Equal(FixedNow.AddDays(7), subscription.GracePeriodEndsAt);
+        Assert.Single(notifications.Items);
+        Assert.Equal(BillingNotificationType.PaymentFailed, notifications.Items[0].Type);
+    }
+
+    [Fact]
+    [Trait("Category", "RecurringBilling")]
+    public async Task Notification_provider_failure_does_not_rollback_paid_invoice()
+    {
+        var gateway = new CheckoutTestGateway();
+        var notifications = new RecordingBillingNotifications { Failure = new InvalidOperationException("email unavailable") };
+        await using var env = await BillingTestEnvironment.CreateAsync(paymentGateway: gateway, notifications: notifications);
+        var original = FixedNow.AddMonths(1);
+        var tenantId = await env.AddTenantAsync("email-failure", TenantSubscriptionStatus.Active, paidThrough: original);
+        await env.ConfigureRecurringProfileAsync(tenantId, "sub_email_failure");
+
+        gateway.SetInvoiceConfirmation("evt_email_failure", "invoice.paid", "sub_email_failure", "in_email_failure", paid: true);
+        await env.ProcessStripeWebhookAsync();
+
+        Assert.Equal(original.AddMonths(1), (await env.GetSubscriptionAsync(tenantId)).PaidThroughUtc);
+        Assert.Equal(1, await env.ExternalTransactionCountAsync("in_email_failure"));
+        Assert.Equal(1, await env.WebhookEventCountAsync("evt_email_failure"));
+    }
+
+    [Fact]
+    [Trait("Category", "RecurringBilling")]
+    public async Task Missing_recurring_price_id_does_not_create_broken_order()
+    {
+        var gateway = new CheckoutTestGateway();
+        await using var env = await BillingTestEnvironment.CreateAsync(paymentGateway: gateway);
+        var tenantId = await env.AddTenantAsync("missing-price", TenantSubscriptionStatus.Active, paidThrough: FixedNow.AddMonths(1));
+        await env.SavePlanAsync(new SubscriptionPlanDto(Guid.Empty, "standard", "Regular", "MXN", 250m, 0m, 0m, 0m, true));
+        await env.EnableCardPaymentsAsync();
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() => env.CreateCardOrderAsync(tenantId, "standard", 1));
+
+        Assert.Contains("Stripe Price ID no configurado", exception.Message);
+        Assert.Equal(0, await env.OrderCountAsync(tenantId));
+        Assert.Equal(0, gateway.CreateCalls);
+    }
+
+    [Fact]
+    [Trait("Category", "BillingEmailSettings")]
+    public async Task Email_is_disabled_by_default_and_credentials_are_only_exposed_as_a_boolean()
+    {
+        await using var env = await BillingTestEnvironment.CreateAsync(emailPassword: "secret-placeholder");
+        var settings = await env.GetEmailSettingsAsync();
+        Assert.False(settings.Enabled);
+        Assert.True(settings.CredentialsConfigured);
+        Assert.DoesNotContain("secret-placeholder", settings.ToString());
+    }
+
+    [Fact]
+    [Trait("Category", "BillingEmailSettings")]
+    public async Task Email_cannot_be_enabled_without_from_address()
+    {
+        await using var env = await BillingTestEnvironment.CreateAsync(emailPassword: "secret-placeholder");
+        await Assert.ThrowsAsync<InvalidOperationException>(() => env.SaveEmailSettingsAsync(
+            new(true, "Cloudflare", null, "LoyaltyCloud", "https://admin.test", true, false)));
+    }
+
+    [Fact]
+    [Trait("Category", "BillingEmailSettings")]
+    public async Task Email_cannot_be_enabled_without_runtime_credentials_even_if_client_claims_they_exist()
+    {
+        await using var env = await BillingTestEnvironment.CreateAsync();
+        await Assert.ThrowsAsync<InvalidOperationException>(() => env.SaveEmailSettingsAsync(
+            new(true, "Cloudflare", "notifications@example.test", "LoyaltyCloud", "https://admin.test", true, false)));
+    }
+
+    [Fact]
+    [Trait("Category", "BillingEmailSettings")]
+    public async Task Valid_email_configuration_can_be_enabled_and_persists()
+    {
+        await using var env = await BillingTestEnvironment.CreateAsync(emailPassword: "secret-placeholder");
+        await env.SaveEmailSettingsAsync(new(
+            true, "Cloudflare", "notifications@example.test", "LoyaltyCloud",
+            "https://admin.test", false, false));
+        var persisted = await env.GetEmailSettingsAsync();
+        Assert.True(persisted.Enabled);
+        Assert.True(persisted.IsComplete);
+        Assert.Equal("notifications@example.test", persisted.FromAddress);
+        Assert.Equal("https://admin.test", persisted.ApplicationBaseUrl);
+    }
     private sealed class BillingTestEnvironment : IAsyncDisposable
     {
         private readonly ServiceProvider _services;
@@ -501,7 +644,7 @@ public sealed class ManualSubscriptionBillingTests
             _services = services;
         }
 
-        public static async Task<BillingTestEnvironment> CreateAsync(int graceDays = 7, IPaymentGateway? paymentGateway = null)
+        public static async Task<BillingTestEnvironment> CreateAsync(int graceDays = 7, IPaymentGateway? paymentGateway = null, IBillingNotificationService? notifications = null, string? emailPassword = null)
         {
             var dbName = "LoyaltyCloud_MT3G_" + Guid.NewGuid().ToString("N");
             var configuration = new ConfigurationBuilder()
@@ -517,7 +660,8 @@ public sealed class ManualSubscriptionBillingTests
                     ["Wallet:UseRealPassSigning"] = "false",
                     ["Wallet:UseRealApns"] = "false",
                     ["Provisioning:TrialDays"] = "14",
-                    ["Billing:GracePeriodDays"] = graceDays.ToString()
+                    ["Billing:GracePeriodDays"] = graceDays.ToString(),
+                    ["Email:Password"] = emailPassword
                 })
                 .Build();
 
@@ -529,6 +673,11 @@ public sealed class ManualSubscriptionBillingTests
             {
                 services.RemoveAll<IPaymentGateway>();
                 services.AddSingleton(paymentGateway);
+            }
+            if (notifications is not null)
+            {
+                services.RemoveAll<IBillingNotificationService>();
+                services.AddSingleton(notifications);
             }
             services.RemoveAll<IDateTimeProvider>();
             services.AddSingleton<IDateTimeProvider>(new FixedClock(FixedNow));
@@ -581,6 +730,17 @@ public sealed class ManualSubscriptionBillingTests
             return await scope.ServiceProvider.GetRequiredService<ISubscriptionMaintenanceService>().ProcessAsync();
         }
 
+        public async Task<BillingEmailSettingsDto> GetEmailSettingsAsync()
+        {
+            using var scope = _services.CreateScope();
+            return await scope.ServiceProvider.GetRequiredService<IBillingService>().GetEmailSettingsAsync();
+        }
+
+        public async Task SaveEmailSettingsAsync(BillingEmailSettingsDto settings)
+        {
+            using var scope = _services.CreateScope();
+            await scope.ServiceProvider.GetRequiredService<IBillingService>().SaveEmailSettingsAsync(settings);
+        }
         public async Task<int> SavePlanAsync(SubscriptionPlanDto plan)
         {
             using var scope = _services.CreateScope();
@@ -612,7 +772,7 @@ public sealed class ManualSubscriptionBillingTests
         public async Task<BillingOrderDto> CreatePayableCardOrderAsync(Guid tenantId)
         {
             await SavePlanAsync(new SubscriptionPlanDto(
-                Guid.Empty, "standard", "Regular", "MXN", 250m, 0m, 0m, 0m, true));
+                Guid.Empty, "standard", "Regular", "MXN", 250m, 0m, 0m, 0m, true, "price_test_monthly"));
             await EnableCardPaymentsAsync();
             return await CreateCardOrderAsync(tenantId, "standard", 1);
         }
@@ -703,6 +863,34 @@ public sealed class ManualSubscriptionBillingTests
             return tenantId;
         }
 
+
+        public async Task ConfigureRecurringProfileAsync(Guid tenantId, string subscriptionId)
+        {
+            await GetTenantBillingAsync(tenantId);
+            using var scope = _services.CreateScope();
+            var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+            var slug = await db.Tenants.IgnoreQueryFilters().Where(x => x.Id == tenantId).Select(x => x.Slug).SingleAsync();
+            scope.ServiceProvider.GetRequiredService<IMutableTenantContext>().SetTenant(tenantId, slug);
+            var profile = await db.TenantBillingProfiles.IgnoreQueryFilters().SingleAsync(x => x.TenantId == tenantId);
+            profile.SetContactEmail("billing@example.test");
+            profile.AttachSubscription(subscriptionId, "active", FixedNow.AddMonths(1), false, 1, 290m, "MXN", "Visa", "4242");
+            await db.SaveChangesAsync();
+        }
+
+        public async Task<int> ExternalTransactionCountAsync(string externalId)
+        {
+            using var scope = _services.CreateScope();
+            return await scope.ServiceProvider.GetRequiredService<AppDbContext>().PaymentTransactions
+                .IgnoreQueryFilters().CountAsync(x => x.ExternalTransactionId == externalId);
+        }
+
+        public async Task<int> OrderCountAsync(Guid tenantId)
+        {
+            using var scope = _services.CreateScope();
+            return await scope.ServiceProvider.GetRequiredService<AppDbContext>().BillingOrders
+                .IgnoreQueryFilters().CountAsync(x => x.TenantId == tenantId);
+        }
+
         public async Task<TenantSubscription> GetSubscriptionAsync(Guid tenantId)
         {
             using var scope = _services.CreateScope();
@@ -762,6 +950,19 @@ public sealed class ManualSubscriptionBillingTests
         public DateTime Today { get; }
     }
 
+
+    private sealed class RecordingBillingNotifications : IBillingNotificationService
+    {
+        public List<BillingNotification> Items { get; } = [];
+        public Exception? Failure { get; init; }
+        public Task SendAsync(BillingNotification notification, CancellationToken ct = default)
+        {
+            Items.Add(notification);
+            if (Failure is not null) throw Failure;
+            return Task.CompletedTask;
+        }
+    }
+
     private sealed class CheckoutTestGateway : IPaymentGateway
     {
         private StripePaymentConfirmation? _confirmation;
@@ -789,6 +990,9 @@ public sealed class ManualSubscriptionBillingTests
             _confirmation = new StripePaymentConfirmation(
                 eventId, "checkout.session.expired", "cs_test_checkout", string.Empty,
                 orderId, tenantId, 29000, "mxn", false, null, null);
+
+        public void SetInvoiceConfirmation(string eventId, string eventType, string subscriptionId, string invoiceId, bool paid)
+            => _confirmation = new StripePaymentConfirmation(eventId, eventType, invoiceId, invoiceId, Guid.Empty, Guid.Empty, 29000, "mxn", paid, "Visa", "4242", SubscriptionId: subscriptionId, InvoiceId: invoiceId, PeriodEndUtc: FixedNow.AddMonths(2));
 
         public Task<CheckoutSessionSnapshot> GetCheckoutSessionAsync(string sessionId, CancellationToken ct = default)
         {

@@ -5,6 +5,7 @@ namespace LoyaltyCloud.Application.Billing;
 public sealed record BillingSettingsDto(string Currency, decimal TaxRate, bool PricesIncludeTax, int GracePeriodDays,
     bool CardPaymentsEnabled, bool BankTransferEnabled, bool RequireTransferReceipt, bool AutomaticRenewalEnabled,
     bool CfdiEnabled, string? BankName, string? BeneficiaryName, string? Clabe, string? BankTransferInstructions, string? SupportEmail);
+public sealed record BillingEmailSettingsDto(bool Enabled, string Provider, string? FromAddress, string FromName, string? ApplicationBaseUrl, bool CredentialsConfigured, bool IsComplete);
 public sealed record SubscriptionPlanDto(Guid Id, string Code, string Name, string Currency, decimal OneMonthPrice,
     decimal ThreeMonthPrice, decimal SixMonthPrice, decimal TwelveMonthPrice, bool IsActive, string? StripeOneMonthPriceId = null, string? StripeThreeMonthPriceId = null, string? StripeSixMonthPriceId = null, string? StripeTwelveMonthPriceId = null);
 public sealed record BillingQuoteDto(decimal Subtotal, decimal Tax, decimal Total, string Currency);
@@ -36,6 +37,8 @@ public interface IBillingService
 {
     Task<BillingSettingsDto> GetSettingsAsync(CancellationToken ct = default);
     Task SaveSettingsAsync(BillingSettingsDto settings, CancellationToken ct = default);
+    Task<BillingEmailSettingsDto> GetEmailSettingsAsync(CancellationToken ct = default);
+    Task SaveEmailSettingsAsync(BillingEmailSettingsDto settings, CancellationToken ct = default);
     Task<IReadOnlyList<SubscriptionPlanDto>> GetPlansAsync(bool activeOnly = false, CancellationToken ct = default);
     Task<int> SavePlanAsync(SubscriptionPlanDto plan, CancellationToken ct = default);
     Task<TenantBillingDto> GetTenantBillingAsync(Guid tenantId, CancellationToken ct = default);

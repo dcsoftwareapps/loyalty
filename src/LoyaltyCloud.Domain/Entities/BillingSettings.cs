@@ -20,6 +20,11 @@ public sealed class BillingSettings : Entity
     public string? Clabe { get; private set; }
     public string? BankTransferInstructions { get; private set; }
     public string? SupportEmail { get; private set; }
+    public bool EmailNotificationsEnabled { get; private set; }
+    public string EmailProvider { get; private set; } = "Cloudflare";
+    public string? EmailFromAddress { get; private set; }
+    public string EmailFromName { get; private set; } = "LoyaltyCloud";
+    public string? EmailApplicationBaseUrl { get; private set; }
     public DateTime UpdatedAt { get; private set; }
 
     private BillingSettings() { }
@@ -40,6 +45,12 @@ public sealed class BillingSettings : Entity
         BankName = Clean(bankName, 150); BeneficiaryName = Clean(beneficiaryName, 200);
         Clabe = Clean(clabe, 18); BankTransferInstructions = Clean(instructions, 2000);
         SupportEmail = Clean(supportEmail, 320); UpdatedAt = nowUtc;
+    }
+    public void UpdateEmailNotifications(bool enabled, string provider, string? fromAddress, string fromName, string? applicationBaseUrl, DateTime nowUtc)
+    {
+        EmailNotificationsEnabled = enabled; EmailProvider = Clean(provider, 40) ?? "Cloudflare";
+        EmailFromAddress = Clean(fromAddress, 320); EmailFromName = Clean(fromName, 100) ?? "LoyaltyCloud";
+        EmailApplicationBaseUrl = Clean(applicationBaseUrl, 500); UpdatedAt = nowUtc;
     }
     private static string? Clean(string? value, int max) => string.IsNullOrWhiteSpace(value) ? null : value.Trim()[..Math.Min(value.Trim().Length, max)];
 }

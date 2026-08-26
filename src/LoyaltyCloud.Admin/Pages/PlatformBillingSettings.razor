@@ -53,6 +53,29 @@ else
     </section>
 
     <section class="kb-card" style="margin-top:20px">
+        <h2>Notificaciones por email</h2>
+        <p>Estado: <strong>@(emailEnabled ? "Habilitadas" : "Deshabilitadas")</strong></p>
+        @if (!emailEnabled)
+        {
+            <p class="kb-muted">Las notificaciones por email están desactivadas. Billing y las renovaciones continuarán funcionando normalmente.</p>
+        }
+        <div class="kb-form-row">
+            <label><input type="checkbox" @bind="emailEnabled" disabled="@busy" /> Habilitar notificaciones por email</label>
+            <label>Proveedor</label>
+            <select @bind="emailProvider" disabled="@busy">
+                <option value="Cloudflare">Cloudflare</option>
+            </select>
+            <label>Nombre del remitente</label><input @bind="emailFromName" maxlength="100" disabled="@busy" />
+            <label>Correo remitente</label><input type="email" @bind="emailFromAddress" maxlength="320" disabled="@busy" />
+            <label>URL pública de LoyaltyCloud</label><input type="url" @bind="emailApplicationBaseUrl" maxlength="500" disabled="@busy" />
+            <p>Credenciales: <strong>@(emailCredentialsConfigured ? "Configuradas" : "No configuradas")</strong></p>
+            <p>Configuración: <strong>@(emailConfigurationComplete ? "Configurada" : "Incompleta")</strong></p>
+            <button type="button" class="kb-btn kb-btn--ghost" @onclick="SaveEmailSettings" disabled="@busy">
+                @(busy ? "Guardando..." : "Guardar configuración")
+            </button>
+        </div>
+    </section>
+    <section class="kb-card" style="margin-top:20px">
         <h2>Plan y precios</h2>
         <div class="kb-form-row">
             <label>Código</label><input @bind="planCode" disabled="@busy" />
@@ -61,6 +84,10 @@ else
             <label>3 meses</label><input type="number" step="0.01" @bind="p3" disabled="@busy" />
             <label>6 meses</label><input type="number" step="0.01" @bind="p6" disabled="@busy" />
             <label>12 meses</label><input type="number" step="0.01" @bind="p12" disabled="@busy" />
+            <label>Stripe Price ID - 1 mes</label><input @bind="stripeP1" maxlength="200" disabled="@busy" />
+            <label>Stripe Price ID - 3 meses</label><input @bind="stripeP3" maxlength="200" disabled="@busy" />
+            <label>Stripe Price ID - 6 meses</label><input @bind="stripeP6" maxlength="200" disabled="@busy" />
+            <label>Stripe Price ID - 12 meses</label><input @bind="stripeP12" maxlength="200" disabled="@busy" />
             <label><input type="checkbox" @bind="planActive" disabled="@busy" /> Plan activo</label>
             <button class="kb-btn kb-btn--ghost" @onclick="SavePlan" disabled="@busy">
                 @(busy ? "Guardando..." : "Guardar plan")
@@ -76,6 +103,7 @@ else
 
 @code {
     private BillingSettingsDto? settings;
+    private BillingEmailSettingsDto? emailSettings;
     private IReadOnlyList<SubscriptionPlanDto> plans = [];
     private Guid planId;
     private string planCode = "standard";
@@ -86,6 +114,10 @@ else
     private int graceDays = 7;
     private bool card, bank, receipt, busy;
     private string? bankName, beneficiary, clabe, instructions, support;
+    private string? stripeP1, stripeP3, stripeP6, stripeP12;
+    private bool emailEnabled, emailCredentialsConfigured, emailConfigurationComplete;
+    private string emailProvider = "Cloudflare", emailFromName = "LoyaltyCloud";
+    private string? emailFromAddress, emailApplicationBaseUrl;
     private string? toastMessage;
     private bool toastIsError;
     private int toastVersion;
@@ -93,6 +125,8 @@ else
     protected override async Task OnInitializedAsync()
     {
         settings = await Billing.GetSettingsAsync();
+        emailSettings = await Billing.GetEmailSettingsAsync();
+        ApplyEmailSettings(emailSettings);
         plans = await Billing.GetPlansAsync();
         var plan = plans.FirstOrDefault();
         if (plan is not null)
@@ -136,6 +170,37 @@ else
         }
     }
 
+    private async Task SaveEmailSettings()
+    {
+        if (busy) return;
+        try
+        {
+            busy = true;
+            await Billing.SaveEmailSettingsAsync(new(
+                emailEnabled, emailProvider, EmptyToNull(emailFromAddress), emailFromName,
+                EmptyToNull(emailApplicationBaseUrl), emailCredentialsConfigured, false));
+            emailSettings = await Billing.GetEmailSettingsAsync();
+            ApplyEmailSettings(emailSettings);
+            ShowToast("Configuración de email guardada correctamente.", isError: false);
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Failed to save billing email settings.");
+            ShowToast("No fue posible guardar la configuración de email.", isError: true);
+        }
+        finally { busy = false; }
+    }
+
+    private void ApplyEmailSettings(BillingEmailSettingsDto value)
+    {
+        emailEnabled = value.Enabled;
+        emailProvider = value.Provider;
+        emailFromAddress = value.FromAddress;
+        emailFromName = value.FromName;
+        emailApplicationBaseUrl = value.ApplicationBaseUrl;
+        emailCredentialsConfigured = value.CredentialsConfigured;
+        emailConfigurationComplete = value.IsComplete;
+    }
     private async Task SavePlan()
     {
         if (busy)
@@ -145,7 +210,7 @@ else
         {
             busy = true;
             var requestedCode = planCode.Trim().ToLowerInvariant();
-            var affected = await Billing.SavePlanAsync(new(planId, requestedCode, planName, currency, p1, p3, p6, p12, planActive));
+            var affected = await Billing.SavePlanAsync(new(planId, requestedCode, planName, currency, p1, p3, p6, p12, planActive, EmptyToNull(stripeP1), EmptyToNull(stripeP3), EmptyToNull(stripeP6), EmptyToNull(stripeP12)));
             plans = await Billing.GetPlansAsync();
             var persisted = plans.Single(x => x.Code == requestedCode);
             ApplyPlan(persisted);
@@ -174,7 +239,13 @@ else
         p6 = plan.SixMonthPrice;
         p12 = plan.TwelveMonthPrice;
         planActive = plan.IsActive;
+        stripeP1 = plan.StripeOneMonthPriceId;
+        stripeP3 = plan.StripeThreeMonthPriceId;
+        stripeP6 = plan.StripeSixMonthPriceId;
+        stripeP12 = plan.StripeTwelveMonthPriceId;
     }
+
+    private static string? EmptyToNull(string? value) => string.IsNullOrWhiteSpace(value) ? null : value.Trim();
 
     private void ShowToast(string message, bool isError)
     {
