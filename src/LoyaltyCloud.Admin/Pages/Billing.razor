@@ -1,5 +1,5 @@
 @page "/{TenantSlug}/billing"
-@layout LoyaltyCloud.Admin.Components.Layout.BillingLayout
+@layout LoyaltyCloud.Admin.Components.Layout.BillingAdaptiveLayout
 @attribute [Authorize]
 @rendermode InteractiveServer
 @using LoyaltyCloud.Application.Billing
@@ -14,10 +14,6 @@
 
 <header class="kb-billing-header">
     <h1>Suscripción y pagos</h1>
-    @if (model?.SubscriptionStatus == nameof(TenantSubscriptionStatus.Active))
-    {
-        <a href="/dashboard" class="kb-billing-back">← Volver al panel</a>
-    }
 </header>
 
 @if (error is not null)
@@ -175,14 +171,18 @@ else
         </table>
     </section>
 
-    <form method="post" action="/logout" style="margin-top:20px">
-        <AntiforgeryToken />
-        <button class="kb-btn kb-btn--ghost">Cerrar sesión</button>
-    </form>
+    @if (BillingOnly)
+    {
+        <form method="post" action="/logout" style="margin-top:20px">
+            <AntiforgeryToken />
+            <button class="kb-btn kb-btn--ghost">Cerrar sesión</button>
+        </form>
+    }
 }
 
 @code {
     [Parameter] public string TenantSlug { get; set; } = "";
+    [CascadingParameter(Name = "BillingOnly")] public bool BillingOnly { get; set; }
 
     private TenantBillingDto? model;
     private BillingOrderDto? created;

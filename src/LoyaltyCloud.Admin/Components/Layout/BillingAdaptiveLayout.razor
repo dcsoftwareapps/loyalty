@@ -1,0 +1,48 @@
+@inherits LayoutComponentBase
+@using LoyaltyCloud.Admin.Auth
+@using LoyaltyCloud.Admin.Components.Layout
+@inject AdminAuthService Auth
+@inject AuthenticationStateProvider AuthenticationStateProvider
+@inject ILogger<BillingAdaptiveLayout> Logger
+
+@if (resolved)
+{
+    @if (billingOnly)
+    {
+        <CascadingValue Name="BillingOnly" Value="@true">
+            <div class="kb-app">
+                <main class="kb-main" style="max-width:960px;margin:0 auto;width:100%;">@Body</main>
+            </div>
+        </CascadingValue>
+    }
+    else
+    {
+        <CascadingValue Name="BillingOnly" Value="@false">
+            <LayoutView Layout="@typeof(MainLayout)">@Body</LayoutView>
+        </CascadingValue>
+    }
+}
+
+@code {
+    private bool resolved;
+    private bool billingOnly = true;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        resolved = false;
+        try
+        {
+            var principal = (await AuthenticationStateProvider.GetAuthenticationStateAsync()).User;
+            billingOnly = await Auth.IsBillingOnlyAsync(principal);
+        }
+        catch (Exception ex)
+        {
+            billingOnly = true;
+            Logger.LogError(ex, "Could not resolve Billing layout; using restricted navigation.");
+        }
+        finally
+        {
+            resolved = true;
+        }
+    }
+}

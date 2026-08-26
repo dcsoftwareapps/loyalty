@@ -5,14 +5,22 @@ namespace LoyaltyCloud.Infrastructure.Services.GoogleWallet;
 
 public sealed class GoogleWalletIdGenerator
 {
-    public string BuildClassId(GoogleWalletOptions options)
+    public string BuildClassId(GoogleWalletOptions options, Guid tenantId)
     {
         ArgumentNullException.ThrowIfNull(options);
+        if (tenantId == Guid.Empty)
+            throw new ArgumentException("TenantId requerido.", nameof(tenantId));
+
         var issuerId = RequireIssuerId(options);
         var suffix = NormalizeSuffix(options.ClassSuffix, "ClassSuffix");
-        return $"{issuerId}.{suffix}";
+        return $"{issuerId}.{suffix}-{tenantId:N}";
     }
 
+    public string BuildLegacyClassId(GoogleWalletOptions options)
+    {
+        ArgumentNullException.ThrowIfNull(options);
+        return $"{RequireIssuerId(options)}.{NormalizeSuffix(options.ClassSuffix, "ClassSuffix")}";
+    }
     public string BuildObjectId(GoogleWalletOptions options, Guid tenantId, string serialNumber)
     {
         ArgumentNullException.ThrowIfNull(options);

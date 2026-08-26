@@ -845,12 +845,6 @@ input[type=color].kb-color-picker {
     flex-wrap: wrap;
 }
 .kb-billing-header h1 { margin-bottom: 0; }
-.kb-billing-back {
-    color: var(--kb-ink-muted);
-    font-weight: 700;
-    text-decoration: none;
-}
-.kb-billing-back:hover { color: var(--kb-ink); text-decoration: underline; }
 .kb-billing-selectors {
     display: grid;
     grid-template-columns: minmax(0, 1fr);

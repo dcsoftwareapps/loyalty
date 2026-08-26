@@ -1,22 +1,28 @@
 using LoyaltyCloud.Application.Common.Wallet;
+using LoyaltyCloud.Application.Common.Interfaces;
 using LoyaltyCloud.Infrastructure.Configuration;
 
 namespace LoyaltyCloud.Infrastructure.Services.GoogleWallet;
 
 public sealed class GoogleWalletObjectMapper
 {
-    public GoogleWalletClassData ToClassData(string classId, GoogleWalletOptions options)
+    public GoogleWalletClassData ToClassData(
+        string classId,
+        GoogleWalletOptions options,
+        TenantWalletBrandingDto branding)
     {
         ArgumentNullException.ThrowIfNull(options);
+        ArgumentNullException.ThrowIfNull(branding);
 
+        var logoUri = BuildTenantLogoUri(options, branding.TenantId);
         return new GoogleWalletClassData(
             Id: classId,
-            ProgramName: options.ProgramName,
-            IssuerName: options.IssuerName,
-            LogoUri: string.IsNullOrWhiteSpace(options.LogoUri) ? null : options.LogoUri.Trim(),
-            WideLogoUri: NormalizeWideLogoUri(options),
-            HeroImageUri: string.IsNullOrWhiteSpace(options.HeroImageUri) ? null : options.HeroImageUri.Trim(),
-            HexBackgroundColor: string.IsNullOrWhiteSpace(options.HexBackgroundColor) ? null : options.HexBackgroundColor.Trim());
+            ProgramName: branding.DisplayName,
+            IssuerName: branding.OrganizationName,
+            LogoUri: logoUri,
+            WideLogoUri: logoUri,
+            HeroImageUri: null,
+            HexBackgroundColor: branding.BackgroundHex);
     }
 
     public GoogleWalletObjectData ToObjectData(
@@ -171,16 +177,16 @@ public sealed class GoogleWalletObjectMapper
             }
         };
 
-    private static string? NormalizeWideLogoUri(GoogleWalletOptions options)
+    private static string? BuildTenantLogoUri(GoogleWalletOptions options, Guid tenantId)
     {
-        if (!string.IsNullOrWhiteSpace(options.WideLogoUri))
-            return options.WideLogoUri.Trim();
+        var configuredUri = string.IsNullOrWhiteSpace(options.LogoUri)
+            ? options.WideLogoUri
+            : options.LogoUri;
+        if (!Uri.TryCreate(configuredUri, UriKind.Absolute, out var publicUri))
+            return null;
 
-        return string.IsNullOrWhiteSpace(options.LogoUri)
-            ? null
-            : options.LogoUri.Trim();
+        return new Uri(publicUri, $"/api/wallet-assets/google/{tenantId:D}/logo.png").ToString();
     }
-
     private static Dictionary<string, object?> TemplateItem(string firstFieldPath, string? secondFieldPath = null)
     {
         var item = new Dictionary<string, object?>

@@ -381,4 +381,12 @@ Automated tests only validate internal behavior and JWT shape. Android validatio
 - No production API authentication was added.
 - No Smart Tap/NFC.
 - No advanced Google notification messages.
+## Aislamiento multi-tenant de Class y branding
 
+Cada tenant usa una LoyaltyClass estable y exclusiva con formato:
+
+{issuerId}.{classSuffix}-{tenantId:N}
+
+Los LoyaltyObject conservan su ID tenant-aware existente (tenant + serial) y siempre referencian la clase del mismo tenant. programName, issuerName, color y logos se resuelven desde TenantBranding por TenantId; los valores globales históricos de KBeauty no se usan para construir el payload. El logo de Google se sirve desde /api/wallet-assets/google/{tenantId}/logo.png, usando primero el logo específico de Wallet, después el logo principal del tenant y finalmente assets neutrales de LoyaltyCloud.
+
+Compatibilidad: la clase histórica compartida no se borra. En la siguiente sincronización o generación de Save Link, cada objeto existente se actualiza para referenciar la nueva clase tenant-specific mediante PATCH y la relación persistida se actualiza. Los object IDs tenant-aware existentes se preservan. Si Google rechazara cambiar classId en un objeto histórico concreto, no debe borrarse automáticamente; se debe inspeccionar ese objeto y planear una migración controlada.

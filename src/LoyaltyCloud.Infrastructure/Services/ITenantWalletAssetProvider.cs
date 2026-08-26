@@ -1,6 +1,6 @@
 namespace LoyaltyCloud.Infrastructure.Services;
 
-internal interface ITenantWalletAssetProvider
+public interface ITenantWalletAssetProvider
 {
     Task<IReadOnlyList<WalletPassAsset>> LoadAssetsAsync(
         Guid tenantId,
@@ -10,4 +10,4 @@ internal interface ITenantWalletAssetProvider
         CancellationToken cancellationToken = default);
 }
 
-internal sealed record WalletPassAsset(string Name, byte[] Bytes);
+public sealed record WalletPassAsset(string Name, byte[] Bytes);
