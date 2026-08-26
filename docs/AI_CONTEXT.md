@@ -742,6 +742,8 @@ Do not deploy, run database update or commit unless the user explicitly asks.
 
 Current state: RC1 / UAT real.
 
+Live pending list: `docs/ROADMAP.md`.
+
 Done:
 
 - Apple Wallet signed pass and PassKit web service.

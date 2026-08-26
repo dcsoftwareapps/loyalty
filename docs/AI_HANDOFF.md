@@ -981,13 +981,14 @@ For the next technical session:
 1. Read `docs/AI_CONTEXT.md`.
 2. Read this handoff.
 3. Read `docs/RELEASE_PROCESS.md` before any PROD deploy/rollback work.
-4. Before implementing a new feature, verify the current branch. If currently on `main` or `staging`, create a dedicated feature branch before modifying functional code.
-5. If already on a related feature branch, continue there instead of creating another branch.
-6. If working on STG, verify current App Settings and connection strings from Azure before changing code.
-7. For Google Wallet STG, keep `reviewStatus = UNDER_REVIEW` in LoyaltyClass PATCH payloads and retry save-link with a known customer serial if a regression appears.
-8. For Admin domain transition, keep legacy Admin Windows online until the new Linux Admin has been fully validated by users.
-9. Before any Apple hostname work, inspect `Apple__WebServiceURL` impact on existing installed passes and design a safe migration plan.
-10. Observe both Basic DTU databases after the migration and only revisit SQL tier if cost or limits require it.
+4. Use `docs/ROADMAP.md` as the live source for current pending items.
+5. Before implementing a new feature, verify the current branch. If currently on `main` or `staging`, create a dedicated feature branch before modifying functional code.
+6. If already on a related feature branch, continue there instead of creating another branch.
+7. If working on STG, verify current App Settings and connection strings from Azure before changing code.
+8. For Google Wallet STG, keep `reviewStatus = UNDER_REVIEW` in LoyaltyClass PATCH payloads and retry save-link with a known customer serial if a regression appears.
+9. For Admin domain transition, keep legacy Admin Windows online until the new Linux Admin has been fully validated by users.
+10. Before any Apple hostname work, inspect `Apple__WebServiceURL` impact on existing installed passes and design a safe migration plan.
+11. Observe both Basic DTU databases after the migration and only revisit SQL tier if cost or limits require it.
 
 Recommended first command for local orientation:
 
