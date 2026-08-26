@@ -1,4 +1,6 @@
 using Microsoft.AspNetCore.Mvc;
+using LoyaltyCloud.Application.Common.Interfaces;
+using LoyaltyCloud.Infrastructure.Services;
 
 namespace LoyaltyCloud.API.Controllers;
 
@@ -15,12 +17,45 @@ public sealed class WalletAssetsController : ControllerBase
         };
 
     private readonly ILogger<WalletAssetsController> _logger;
+    private readonly ITenantWalletBrandingReadService _branding;
+    private readonly ITenantWalletAssetProvider _assets;
 
-    public WalletAssetsController(ILogger<WalletAssetsController> logger)
+    public WalletAssetsController(
+        ILogger<WalletAssetsController> logger,
+        ITenantWalletBrandingReadService branding,
+        ITenantWalletAssetProvider assets)
     {
         _logger = logger;
+        _branding = branding;
+        _assets = assets;
     }
 
+    [HttpGet("google/{tenantId:guid}/logo.png")]
+    [ResponseCache(NoStore = true, Location = ResponseCacheLocation.None)]
+    [Produces("image/png")]
+    public async Task<IActionResult> GetGoogleWalletLogo(Guid tenantId, CancellationToken ct)
+    {
+        TenantWalletBrandingDto branding;
+        try
+        {
+            branding = await _branding.GetForTenantAsync(tenantId, ct);
+        }
+        catch (InvalidOperationException)
+        {
+            return NotFound();
+        }
+
+        var assets = await _assets.LoadAssetsAsync(
+            branding.TenantId,
+            branding.TenantSlug,
+            branding.WalletLogoBlobName,
+            branding.LogoBlobName,
+            ct);
+        var logo = assets.Single(asset => string.Equals(asset.Name, "logo@3x.png", StringComparison.OrdinalIgnoreCase));
+
+        Response.Headers.CacheControl = "no-store";
+        return File(logo.Bytes, "image/png");
+    }
     [HttpGet("apple/{assetName}")]
     [ResponseCache(Duration = 3600, Location = ResponseCacheLocation.Any)]
     [Produces("image/png")]

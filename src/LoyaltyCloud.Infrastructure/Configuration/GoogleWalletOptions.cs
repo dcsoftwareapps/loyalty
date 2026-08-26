@@ -10,8 +10,8 @@ public sealed partial class GoogleWalletOptions
     public string IssuerId { get; init; } = string.Empty;
     public string ClassSuffix { get; init; } = "loyalty";
     public string ObjectIdPrefix { get; init; } = "member";
-    public string ProgramName { get; init; } = "KBeauty Loyalty";
-    public string IssuerName { get; init; } = "KBeauty MX";
+    public string ProgramName { get; init; } = "LoyaltyCloud";
+    public string IssuerName { get; init; } = "LoyaltyCloud";
     public string? LogoUri { get; init; }
     public string? WideLogoUri { get; init; }
     public string? HeroImageUri { get; init; }
@@ -38,10 +38,6 @@ public sealed partial class GoogleWalletOptions
             errors.Add("GoogleWallet:ClassSuffix es requerido.");
         if (string.IsNullOrWhiteSpace(ObjectIdPrefix))
             errors.Add("GoogleWallet:ObjectIdPrefix es requerido.");
-        if (string.IsNullOrWhiteSpace(ProgramName))
-            errors.Add("GoogleWallet:ProgramName es requerido.");
-        if (string.IsNullOrWhiteSpace(IssuerName))
-            errors.Add("GoogleWallet:IssuerName es requerido.");
         if (string.IsNullOrWhiteSpace(ServiceAccountJson) && string.IsNullOrWhiteSpace(ServiceAccountJsonPath))
             errors.Add("GoogleWallet:ServiceAccountJson o GoogleWallet:ServiceAccountJsonPath es requerido cuando GoogleWallet esta habilitado.");
         if (!string.IsNullOrWhiteSpace(HexBackgroundColor) && !HexColorPattern().IsMatch(HexBackgroundColor.Trim()))

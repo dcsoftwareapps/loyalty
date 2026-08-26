@@ -18,9 +18,9 @@ public sealed class GoogleWalletIdGeneratorTests
             ClassSuffix = "KBeauty Loyalty"
         };
 
-        var id = generator.BuildClassId(options);
+        var id = generator.BuildClassId(options, TenantId);
 
-        Assert.Equal("issuer_123.kbeauty_loyalty", id);
+        Assert.Equal($"issuer_123.kbeauty_loyalty-{TenantId:N}", id);
     }
 
     [Fact]
@@ -62,7 +62,7 @@ public sealed class GoogleWalletIdGeneratorTests
         var generator = new GoogleWalletIdGenerator();
         var options = new GoogleWalletOptions { IssuerId = "" };
 
-        Assert.Throws<InvalidOperationException>(() => generator.BuildClassId(options));
+        Assert.Throws<InvalidOperationException>(() => generator.BuildClassId(options, TenantId));
     }
 }
 

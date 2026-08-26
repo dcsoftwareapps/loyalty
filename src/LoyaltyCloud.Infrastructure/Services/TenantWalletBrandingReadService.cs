@@ -29,9 +29,13 @@ internal sealed class TenantWalletBrandingReadService : ITenantWalletBrandingRea
         _logger = logger;
     }
 
-    public async Task<TenantWalletBrandingDto> GetCurrentAsync(CancellationToken cancellationToken = default)
+    public Task<TenantWalletBrandingDto> GetCurrentAsync(CancellationToken cancellationToken = default) =>
+        GetForTenantAsync(_tenantContext.RequireTenantId(), cancellationToken);
+
+    public async Task<TenantWalletBrandingDto> GetForTenantAsync(Guid tenantId, CancellationToken cancellationToken = default)
     {
-        var tenantId = _tenantContext.RequireTenantId();
+        if (tenantId == Guid.Empty)
+            throw new ArgumentException("TenantId requerido.", nameof(tenantId));
 
         var row = await _db.Tenants
             .AsNoTracking()

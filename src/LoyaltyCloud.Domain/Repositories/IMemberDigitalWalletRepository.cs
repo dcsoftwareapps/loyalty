@@ -16,6 +16,11 @@ public interface IMemberDigitalWalletRepository
         string externalObjectId,
         CancellationToken ct = default);
 
+    Task<Guid?> GetOldestTenantIdByExternalClassIdAsync(
+        DigitalWalletProvider provider,
+        string externalClassId,
+        CancellationToken ct = default);
+
     Task AddAsync(MemberDigitalWallet wallet, CancellationToken ct = default);
 
     void Update(MemberDigitalWallet wallet);

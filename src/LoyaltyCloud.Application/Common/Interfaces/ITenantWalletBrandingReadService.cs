@@ -3,6 +3,7 @@ namespace LoyaltyCloud.Application.Common.Interfaces;
 public interface ITenantWalletBrandingReadService
 {
     Task<TenantWalletBrandingDto> GetCurrentAsync(CancellationToken cancellationToken = default);
+    Task<TenantWalletBrandingDto> GetForTenantAsync(Guid tenantId, CancellationToken cancellationToken = default);
 }
 
 public sealed record TenantWalletBrandingDto(
