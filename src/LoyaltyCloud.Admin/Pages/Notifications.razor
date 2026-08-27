@@ -88,14 +88,14 @@ else
                 <th>Tipo</th>
                 <th>Mensaje</th>
                 <th>Estado</th>
-                <th>Apple Wallet</th>
+                <th>Canales Wallet</th>
                 <th>Acciones</th>
             </tr>
         </thead>
         <tbody>
         @foreach (var item in notifications)
         {
-            var wallet = item.Deliveries.FirstOrDefault(d => d.Channel == NotificationChannel.AppleWallet);
+            var walletDeliveries = item.Deliveries.Where(d => d.Channel is NotificationChannel.AppleWallet or NotificationChannel.GoogleWallet).ToList();
             <tr>
                 <td class="kb-muted">@FormatDateTime(item.CreatedAt)</td>
                 <td>@DisplayText(item.CustomerName)</td>
@@ -107,16 +107,22 @@ else
                 </td>
                 <td><span class="@NotificationStatusClass(item.Status)">@item.Status</span></td>
                 <td>
-                    @if (wallet is null)
+                    @if (walletDeliveries.Count == 0)
                     {
                         <span class="kb-muted">No disponible</span>
                     }
                     else
                     {
-                        <span class="@DeliveryStatusClass(wallet.Status)">@wallet.Status</span>
-                        <div class="kb-muted" title="@wallet.FailureReason">
-                            @wallet.PushesAccepted/@wallet.PushesAttempted aceptados
-                        </div>
+                        @foreach (var wallet in walletDeliveries)
+                        {
+                            <div>
+                                <strong>@WalletChannelText(wallet.Channel):</strong>
+                                <span class="@DeliveryStatusClass(wallet.Status)">@DeliveryStatusText(wallet.Channel, wallet.Status)</span>
+                                <div class="kb-muted" title="@wallet.FailureReason">
+                                    @wallet.PushesAccepted/@wallet.PushesAttempted aceptados por proveedor
+                                </div>
+                            </div>
+                        }
                     }
                 </td>
                 <td>
@@ -214,6 +220,13 @@ else
     private static string FormatDateTime(DateTime value) => value.ToLocalTime().ToString("dd MMM yyyy HH:mm");
     private static string DisplayText(string? value) => string.IsNullOrWhiteSpace(value) ? "No disponible" : value;
 
+    private static string WalletChannelText(NotificationChannel channel) => channel switch
+    {
+        NotificationChannel.AppleWallet => "Apple",
+        NotificationChannel.GoogleWallet => "Google",
+        _ => channel.ToString()
+    };
+
     private static string NotificationStatusClass(NotificationStatus status) => status switch
     {
         NotificationStatus.Delivered => "kb-badge kb-badge--success",
@@ -221,6 +234,18 @@ else
         NotificationStatus.Failed => "kb-badge kb-badge--warning",
         NotificationStatus.Cancelled => "kb-badge kb-badge--muted",
         _ => "kb-badge kb-badge--muted"
+    };
+
+    private static string DeliveryStatusText(NotificationChannel channel, NotificationDeliveryStatus status) => status switch
+    {
+        NotificationDeliveryStatus.Succeeded when channel == NotificationChannel.GoogleWallet => "Aceptado por Google",
+        NotificationDeliveryStatus.Succeeded => "Enviado a Apple",
+        NotificationDeliveryStatus.Failed => "Fallido",
+        NotificationDeliveryStatus.NoRecipients => "Sin destinatarios",
+        NotificationDeliveryStatus.Unsupported => "No disponible",
+        NotificationDeliveryStatus.Processing => "Procesando",
+        NotificationDeliveryStatus.Cancelled => "Cancelado",
+        _ => "Pendiente"
     };
 
     private static string DeliveryStatusClass(NotificationDeliveryStatus status) => status switch

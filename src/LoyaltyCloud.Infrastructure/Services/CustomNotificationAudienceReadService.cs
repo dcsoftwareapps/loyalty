@@ -44,7 +44,7 @@ internal sealed class CustomNotificationAudienceReadService : ICustomNotificatio
             .ToList();
         var warnings = new List<string>();
         if (recipients.Count == 0)
-            warnings.Add("La audiencia no tiene destinatarios con Apple Wallet registrado.");
+            warnings.Add("La audiencia no tiene destinatarios con Wallet registrado.");
 
         var criteria = BuildCriteria(audienceType, minimumPoints, pointsExpiringDaysAhead);
         _logger.LogInformation(
@@ -60,7 +60,9 @@ internal sealed class CustomNotificationAudienceReadService : ICustomNotificatio
             distribution,
             recipients.Take(Math.Clamp(sampleSize, 1, 100)).ToList(),
             criteria,
-            warnings);
+            warnings,
+            recipients.Count(r => r.DeviceRegistrationCount > 0),
+            recipients.Count(r => r.GoogleWalletCount > 0));
     }
 
     public async Task<IReadOnlyList<CustomNotificationAudienceRecipientDto>> ResolveRecipientsAsync(
@@ -89,11 +91,11 @@ internal sealed class CustomNotificationAudienceReadService : ICustomNotificatio
         if (CustomNotificationCampaign.IsPointsExpiringAudience(audienceType))
         {
             var candidates = await QueryPointsExpiringCandidateSerialsAsync(pointsExpiringDaysAhead ?? 15, ct);
-            return candidates.Count(c => c.DeviceRegistrationCount == 0);
+            return candidates.Count(c => c.DeviceRegistrationCount == 0 && c.GoogleWalletCount == 0);
         }
 
         var rows = await QueryBaseRecipientsAsync(audienceType, minimumPoints, requireDeviceRegistration: false, ct);
-        return rows.Count(r => r.DeviceRegistrationCount == 0);
+        return rows.Count(r => r.DeviceRegistrationCount == 0 && r.GoogleWalletCount == 0);
     }
 
     private async Task<List<CustomNotificationAudienceRecipientDto>> QueryBaseRecipientsAsync(
@@ -121,7 +123,15 @@ internal sealed class CustomNotificationAudienceReadService : ICustomNotificatio
                 card.CurrentPoints,
                 DeviceRegistrationCount = _db.DeviceRegistrations
                     .AsNoTracking()
-                    .Count(registration => registration.TenantId == tenantId && registration.SerialNumber == card.SerialNumber)
+                    .Count(registration => registration.TenantId == tenantId && registration.SerialNumber == card.SerialNumber),
+                GoogleWalletCount = _db.MemberDigitalWallets
+                    .AsNoTracking()
+                    .Count(wallet => wallet.TenantId == tenantId
+                        && wallet.LoyaltyCardId == card.Id
+                        && wallet.Provider == DigitalWalletProvider.Google
+                        && wallet.Status == DigitalWalletStatus.Active
+                        && wallet.ExternalObjectId != string.Empty
+                        && wallet.ExternalClassId != string.Empty)
             };
 
         if (eligibleLevels is not null)
@@ -131,7 +141,7 @@ internal sealed class CustomNotificationAudienceReadService : ICustomNotificatio
             query = query.Where(x => x.CurrentPoints >= (minimumPoints ?? 0));
 
         if (requireDeviceRegistration)
-            query = query.Where(x => x.DeviceRegistrationCount > 0);
+            query = query.Where(x => x.DeviceRegistrationCount > 0 || x.GoogleWalletCount > 0);
 
         return await query
             .OrderBy(x => x.FullName)
@@ -143,7 +153,8 @@ internal sealed class CustomNotificationAudienceReadService : ICustomNotificatio
                 x.SerialNumber,
                 x.Level,
                 x.CurrentPoints,
-                x.DeviceRegistrationCount))
+                x.DeviceRegistrationCount,
+                x.GoogleWalletCount))
             .ToListAsync(ct);
     }
 
@@ -151,7 +162,7 @@ internal sealed class CustomNotificationAudienceReadService : ICustomNotificatio
     {
         var candidates = await QueryPointsExpiringCandidateSerialsAsync(daysAhead, ct);
         return candidates
-            .Where(c => c.DeviceRegistrationCount > 0)
+            .Where(c => c.DeviceRegistrationCount > 0 || c.GoogleWalletCount > 0)
             .Select(c => new CustomNotificationAudienceRecipientDto(
                 c.CustomerId,
                 c.LoyaltyCardId,
@@ -159,7 +170,8 @@ internal sealed class CustomNotificationAudienceReadService : ICustomNotificatio
                 c.SerialNumber,
                 c.Level,
                 c.CurrentPoints,
-                c.DeviceRegistrationCount))
+                c.DeviceRegistrationCount,
+                c.GoogleWalletCount))
             .ToList();
     }
 
@@ -204,7 +216,15 @@ internal sealed class CustomNotificationAudienceReadService : ICustomNotificatio
                 g.Key.CurrentPoints,
                 _db.DeviceRegistrations
                     .AsNoTracking()
-                    .Count(registration => registration.TenantId == tenantId && registration.SerialNumber == g.Key.SerialNumber)))
+                    .Count(registration => registration.TenantId == tenantId && registration.SerialNumber == g.Key.SerialNumber),
+                _db.MemberDigitalWallets
+                    .AsNoTracking()
+                    .Count(wallet => wallet.TenantId == tenantId
+                        && wallet.LoyaltyCardId == g.Key.LoyaltyCardId
+                        && wallet.Provider == DigitalWalletProvider.Google
+                        && wallet.Status == DigitalWalletStatus.Active
+                        && wallet.ExternalObjectId != string.Empty
+                        && wallet.ExternalClassId != string.Empty)))
             .ToListAsync(ct);
 
         return rows;
@@ -292,5 +312,6 @@ internal sealed class CustomNotificationAudienceReadService : ICustomNotificatio
         string SerialNumber,
         string Level,
         int CurrentPoints,
-        int DeviceRegistrationCount);
+        int DeviceRegistrationCount,
+        int GoogleWalletCount);
 }
