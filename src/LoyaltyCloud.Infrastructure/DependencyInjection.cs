@@ -138,6 +138,7 @@ public static class DependencyInjection
         services.AddScoped<ILoyaltyNotificationService, LoyaltyNotificationService>();
         services.AddScoped<IAppleWalletPassRefreshService, AppleWalletPassRefreshService>();
         services.AddScoped<INotificationChannelProcessor, AppleWalletNotificationChannelProcessor>();
+        services.AddScoped<INotificationChannelProcessor, GoogleWalletNotificationChannelProcessor>();
     }
 
     private static void AddWalletServices(

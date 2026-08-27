@@ -31,7 +31,9 @@ public sealed record CustomNotificationAudiencePreviewDto(
     IReadOnlyList<CustomNotificationLevelDistributionDto> LevelDistribution,
     IReadOnlyList<CustomNotificationAudienceRecipientDto> SampleRecipients,
     string Criteria,
-    IReadOnlyList<string> Warnings);
+    IReadOnlyList<string> Warnings,
+    int AppleRecipients = 0,
+    int GoogleRecipients = 0);
 
 public sealed record CustomNotificationAudienceRecipientDto(
     Guid CustomerId,
@@ -40,7 +42,8 @@ public sealed record CustomNotificationAudienceRecipientDto(
     string SerialNumber,
     string Level,
     int CurrentPoints,
-    int DeviceRegistrationCount);
+    int DeviceRegistrationCount,
+    int GoogleWalletCount = 0);
 
 public sealed record CustomNotificationLevelDistributionDto(
     string Level,

@@ -6,5 +6,6 @@ public enum NotificationChannel
     Email = 1,
     Sms = 2,
     WhatsApp = 3,
-    MobilePush = 4
+    MobilePush = 4,
+    GoogleWallet = 5
 }
