@@ -103,7 +103,7 @@ public sealed class ProcessCustomNotificationCampaignHandler
                     Message: campaign.LongMessage,
                     ScheduledAtUtc: null,
                     DisplayUntilUtc: campaign.DisplayUntilUtc,
-                    Channels: [NotificationChannel.AppleWallet],
+                    Channels: BuildChannels(recipient),
                     CorrelationId: correlationId,
                     Source: "custom-campaign",
                     MetadataJson: metadataJson,
@@ -139,6 +139,16 @@ public sealed class ProcessCustomNotificationCampaignHandler
         {
             return Result.Fail<CustomNotificationCampaignProcessingDto>(ex.Message);
         }
+    }
+
+    private static IReadOnlyList<NotificationChannel> BuildChannels(CustomNotificationAudienceRecipientDto recipient)
+    {
+        var channels = new List<NotificationChannel>(2);
+        if (recipient.DeviceRegistrationCount > 0)
+            channels.Add(NotificationChannel.AppleWallet);
+        if (recipient.GoogleWalletCount > 0)
+            channels.Add(NotificationChannel.GoogleWallet);
+        return channels;
     }
 
     internal static string BuildCorrelationId(Guid campaignId, string serialNumber) =>

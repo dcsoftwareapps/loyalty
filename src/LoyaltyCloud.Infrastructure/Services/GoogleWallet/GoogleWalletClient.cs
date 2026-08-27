@@ -108,6 +108,34 @@ internal sealed class GoogleWalletClient : IGoogleWalletClient
         throw await CreateExceptionAsync("actualizar LoyaltyObject", updated, ct);
     }
 
+    public async Task AddMessageAsync(
+        string objectId,
+        string header,
+        string body,
+        string messageId,
+        CancellationToken ct = default)
+    {
+        var payload = new
+        {
+            message = new
+            {
+                header,
+                body,
+                id = messageId,
+                messageType = "TEXT_AND_NOTIFY"
+            }
+        };
+
+        var response = await SendAsync(
+            HttpMethod.Post,
+            $"loyaltyObject/{Uri.EscapeDataString(objectId)}/addMessage",
+            payload,
+            ct);
+        if (response.StatusCode is HttpStatusCode.OK)
+            return;
+
+        throw await CreateExceptionAsync("agregar mensaje a LoyaltyObject", response, ct);
+    }
     private async Task<HttpResponseMessage> SendAsync(
         HttpMethod method,
         string relativeUrl,

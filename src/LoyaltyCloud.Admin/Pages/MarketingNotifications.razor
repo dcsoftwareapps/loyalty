@@ -148,6 +148,8 @@
                     <div class="kb-card" style="margin-top:16px;">
                         <h3>Audiencia</h3>
                         <DetailItem Label="Destinatarios" Value="@preview.TotalRecipients.ToString("N0")" />
+                        <DetailItem Label="Apple Wallet" Value="@preview.AppleRecipients.ToString("N0")" />
+                        <DetailItem Label="Google Wallet" Value="@preview.GoogleRecipients.ToString("N0")" />
                         <DetailItem Label="Sin Wallet" Value="@preview.ExcludedWithoutDeviceRegistration.ToString("N0")" />
                         <DetailItem Label="Criterio" Value="@preview.Criteria" />
                         @if (preview.Warnings.Count > 0)
@@ -203,8 +205,8 @@
                         <strong>@campaign.ShortMessage</strong>
                         <div class="kb-muted kb-text-truncate" title="@campaign.LongMessage">@campaign.LongMessage</div>
                     </td>
-                    <td><span class="@CampaignStatusClass(campaign.Status)">@campaign.Status</span></td>
-                    <td class="kb-muted">@($"{campaign.NotificationsSucceeded}/{campaign.IntendedRecipients} entregadas")</td>
+                    <td><span class="@CampaignStatusClass(campaign.Status)">@CampaignStatusText(campaign.Status)</span></td>
+                    <td class="kb-muted">@($"{campaign.NotificationsSucceeded}/{campaign.IntendedRecipients} enviadas")</td>
                     <td>
                         <div class="kb-actions-inline">
                             @if (campaign.Status == CustomNotificationCampaignStatus.Scheduled)
@@ -538,6 +540,17 @@
 
         return clean;
     }
+
+    private static string CampaignStatusText(CustomNotificationCampaignStatus status) => status switch
+    {
+        CustomNotificationCampaignStatus.Completed => "Completada",
+        CustomNotificationCampaignStatus.PartiallyCompleted => "Completada parcialmente",
+        CustomNotificationCampaignStatus.Failed => "Fallida",
+        CustomNotificationCampaignStatus.Cancelled => "Cancelada",
+        CustomNotificationCampaignStatus.Scheduled => "Programada",
+        CustomNotificationCampaignStatus.Processing => "Procesando",
+        _ => "Borrador"
+    };
 
     private static string CampaignStatusClass(CustomNotificationCampaignStatus status) => status switch
     {
