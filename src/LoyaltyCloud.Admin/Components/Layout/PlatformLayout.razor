@@ -1,24 +1,25 @@
 @inherits LayoutComponentBase
 
 <div class="kb-app kb-platform">
-    <nav class="kb-sidebar">
+    <nav class="kb-sidebar" aria-label="Navegación de plataforma">
         <div class="kb-sidebar-brand">
-            <h1>LoyaltyCloud</h1>
-            <span>Platform</span>
+            <div class="kb-brand-identity">
+                <span class="kb-brand-mark">L</span>
+                <div><strong>LoyaltyCloud</strong><span>Administración</span></div>
+            </div>
         </div>
-        <NavLink href="/platform/tenants" Match="NavLinkMatch.Prefix">Tenants</NavLink>
-        <NavLink href="/platform/billing-settings">Billing Settings</NavLink>
-        <NavLink href="/platform/billing-transfers">Transferencias</NavLink>
-
-        <form method="post" action="/platform/logout" class="kb-signout">
-            <AntiforgeryToken />
-            <button type="submit" class="kb-btn kb-btn--ghost" style="width:100%;margin-top:8px;">
-                Cerrar sesión
-            </button>
-        </form>
+        <div class="kb-sidebar-nav">
+            <span class="kb-sidebar-section">Plataforma</span>
+            <NavLink href="/platform/tenants" Match="NavLinkMatch.Prefix"><NavIcon Name="users" /><span>Tenants</span></NavLink>
+            <NavLink href="/platform/billing-settings"><NavIcon Name="settings" /><span>Configuración de cobros</span></NavLink>
+            <NavLink href="/platform/billing-transfers"><NavIcon Name="history" /><span>Transferencias</span></NavLink>
+        </div>
+        <div class="kb-sidebar-footer">
+            <form method="post" action="/platform/logout" class="kb-signout">
+                <AntiforgeryToken />
+                <button type="submit" class="kb-sidebar-logout"><NavIcon Name="logout" /><span>Cerrar sesión</span></button>
+            </form>
+        </div>
     </nav>
-
-    <main class="kb-main">
-        @Body
-    </main>
+    <main class="kb-main"><div class="kb-content">@Body</div></main>
 </div>

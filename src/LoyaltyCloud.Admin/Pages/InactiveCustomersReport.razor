@@ -7,10 +7,7 @@
 
 <PageTitle>Clientes inactivos - LoyaltyCloud</PageTitle>
 
-<h1>Clientes inactivos</h1>
-<p class="kb-muted" style="margin-top: -8px; max-width: 760px;">
-    Clientes activos sin movimientos de puntos ni canjes durante el periodo seleccionado.
-</p>
+<header class="kb-page-header"><div><span class="kb-eyebrow">Reportes</span><h1>Clientes inactivos</h1><p>Clientes activos sin movimientos de puntos ni canjes durante el periodo seleccionado.</p></div></header>
 
 <section class="kb-card kb-reports-filters">
     <div>
@@ -40,7 +37,7 @@
 
 @if (isLoading)
 {
-    <p>Cargando...</p>
+    <div class="kb-loading-state" role="status"><span class="kb-spinner"></span><span>Cargando reporte…</span></div>
 }
 else if (report is not null)
 {
@@ -50,11 +47,11 @@ else if (report is not null)
 
     @if (report.Items.Count == 0)
     {
-        <p class="kb-muted">No hay clientes inactivos con este criterio.</p>
+        <div class="kb-empty-state"><span class="kb-empty-icon"><NavIcon Name="users" /></span><h3>No hay clientes inactivos</h3><p>No encontramos clientes que coincidan con este criterio.</p></div>
     }
     else
     {
-        <table class="kb-table kb-table--compact">
+        <div class="kb-table-shell"><div class="kb-table-responsive"><table class="kb-table kb-table--compact">
             <thead>
                 <tr>
                     <th>Cliente</th>
@@ -78,7 +75,7 @@ else if (report is not null)
                 </tr>
             }
             </tbody>
-        </table>
+        </table></div></div>
     }
 }
 

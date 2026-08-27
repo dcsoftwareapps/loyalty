@@ -49,7 +49,7 @@ public sealed class BillingUxTests
 
         Assert.Contains("@layout LoyaltyCloud.Admin.Components.Layout.BillingAdaptiveLayout", page);
         Assert.Contains("LayoutView Layout=\"@typeof(MainLayout)\"", adaptiveLayout);
-        Assert.Contains("class=\"kb-sidebar\"", mainLayout);
+        Assert.Contains("class=\"kb-sidebar ", mainLayout);
         Assert.Contains("Dashboard", mainLayout);
         Assert.Contains("Suscripción", mainLayout);
     }

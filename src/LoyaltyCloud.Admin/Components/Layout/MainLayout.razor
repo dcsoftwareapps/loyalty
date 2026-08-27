@@ -8,68 +8,83 @@
 @if (canRender)
 {
     <div class="kb-app" style="@TenantStyle">
-        <nav class="kb-sidebar">
+        <header class="kb-mobile-header">
+            <div class="kb-mobile-brand"><span class="kb-brand-mark">L</span><strong>LoyaltyCloud</strong></div>
+            <button type="button" class="kb-icon-button" aria-label="Abrir navegación" aria-expanded="@menuOpen" @onclick="ToggleMenu"><NavIcon Name="@(menuOpen ? "close" : "menu")" /></button>
+        </header>
+        @if (menuOpen)
+        {
+            <button type="button" class="kb-sidebar-backdrop" aria-label="Cerrar navegación" @onclick="CloseMenu"></button>
+        }
+
+        <aside class="kb-sidebar @(menuOpen ? "kb-sidebar--open" : null)" aria-label="Navegación principal">
             <div class="kb-sidebar-brand">
-                @if (!string.IsNullOrWhiteSpace(branding?.LogoUrl))
-                {
-                    <img src="@branding.LogoUrl" alt="@branding.DisplayName" class="kb-brand-logo" />
-                }
-                else
-                {
-                    <h1>@(branding?.DisplayName ?? "LoyaltyCloud")</h1>
-                }
-                <span>LoyaltyCloud</span>
-            </div>
-            <NavLink href="/dashboard" Match="NavLinkMatch.All">Dashboard</NavLink>
-
-            <span class="kb-sidebar-section">Puntos</span>
-            <NavLink href="/scan">Sumar puntos</NavLink>
-            <NavLink href="/redeem">Canjear puntos</NavLink>
-
-            <span class="kb-sidebar-section">Comunicación</span>
-            <NavLink href="/marketing-notifications">Mensajes</NavLink>
-
-            <span class="kb-sidebar-section">Programas de lealtad</span>
-            <NavLink href="/rewards">Recompensas</NavLink>
-            <NavLink href="/levels">Niveles</NavLink>
-            <NavLink href="/campaigns">Campañas</NavLink>
-
-            <span class="kb-sidebar-section">Reportes</span>
-            <NavLink href="/customers">Clientes</NavLink>
-            <NavLink href="/redemptions">Canjes</NavLink>
-            <NavLink href="/reports/inactive-customers">Clientes inactivos</NavLink>
-            <NavLink href="/reports/top-rewards">Recompensas más canjeadas</NavLink>
-
-            <span class="kb-sidebar-section">Administración</span>
-            <NavLink href="/config">Configuración</NavLink>
-            <NavLink href="@($"/{TenantContext.TenantSlug}/billing")">Suscripción</NavLink>
-
-            <div class="kb-sidebar-help">
-                <NavLink href="/quick-help">Ayuda rápida</NavLink>
+                <div class="kb-brand-identity">
+                    @if (!string.IsNullOrWhiteSpace(branding?.LogoUrl))
+                    {
+                        <img src="@branding.LogoUrl" alt="@branding.DisplayName" class="kb-brand-logo" />
+                    }
+                    else
+                    {
+                        <span class="kb-brand-mark" aria-hidden="true">L</span>
+                    }
+                    <div><strong>LoyaltyCloud</strong><span>Admin</span></div>
+                </div>
+                <button type="button" class="kb-icon-button kb-sidebar-close" aria-label="Cerrar navegación" @onclick="CloseMenu"><NavIcon Name="close" /></button>
             </div>
 
-            <form method="post" action="/logout" class="kb-signout">
-                <AntiforgeryToken />
-                <button type="submit" class="kb-btn kb-btn--ghost" style="width:100%;margin-top:8px;">
-                    Cerrar sesión
-                </button>
-            </form>
-        </nav>
+            <nav class="kb-sidebar-nav" @onclick="CloseMenu">
+                <span class="kb-sidebar-section">Principal</span>
+                <NavLink href="/dashboard" Match="NavLinkMatch.All"><NavIcon Name="dashboard" /><span>Dashboard</span></NavLink>
+                <NavLink href="/customers"><NavIcon Name="users" /><span>Clientes</span></NavLink>
 
-        <main class="kb-main">
-            @Body
-        </main>
+                <span class="kb-sidebar-section">Reportes</span>
+                <NavLink href="/reports" Match="NavLinkMatch.All"><NavIcon Name="chart" /><span>Reportes</span></NavLink>
+                <NavLink href="/reports/inactive-customers"><NavIcon Name="users" /><span>Clientes inactivos</span></NavLink>
+                <NavLink href="/reports/top-rewards"><NavIcon Name="gift" /><span>Más canjeadas</span></NavLink>
+                <NavLink href="/scan"><NavIcon Name="plus" /><span>Escanear QR / agregar puntos</span></NavLink>
+                <NavLink href="/redeem"><NavIcon Name="scan" /><span>Canjear puntos</span></NavLink>
+
+                <span class="kb-sidebar-section">Programa</span>
+                <NavLink href="/redemptions"><NavIcon Name="history" /><span>Canjes</span></NavLink>
+                <NavLink href="/rewards"><NavIcon Name="gift" /><span>Recompensas</span></NavLink>
+                <NavLink href="/campaigns"><NavIcon Name="spark" /><span>Campañas</span></NavLink>
+                <NavLink href="/marketing-notifications"><NavIcon Name="message" /><span>Mensajes</span></NavLink>
+
+                <span class="kb-sidebar-section">Gestión</span>
+                <NavLink href="/levels"><NavIcon Name="levels" /><span>Niveles</span></NavLink>
+                <NavLink href="/config"><NavIcon Name="settings" /><span>Diseño y configuración</span></NavLink>
+                <NavLink href="@($"/{TenantContext.TenantSlug}/billing")"><NavIcon Name="card" /><span>Suscripción y pagos</span></NavLink>
+                <NavLink href="/quick-help"><NavIcon Name="help" /><span>Ayuda</span></NavLink>
+            </nav>
+
+            <div class="kb-sidebar-footer">
+                <div class="kb-tenant-summary">
+                    <span class="kb-tenant-avatar" aria-hidden="true">@TenantInitial</span>
+                    <div><strong>@TenantName</strong><span>Administrador</span></div>
+                </div>
+                <form method="post" action="/logout" class="kb-signout">
+                    <AntiforgeryToken />
+                    <button type="submit" class="kb-sidebar-logout"><NavIcon Name="logout" /><span>Cerrar sesión</span></button>
+                </form>
+            </div>
+        </aside>
+
+        <main class="kb-main"><div class="kb-content">@Body</div></main>
     </div>
 }
 
 @code {
     private LoyaltyCloud.Application.Common.Interfaces.TenantBrandingInfo? branding;
     private bool canRender;
+    private bool menuOpen;
 
-    private string TenantStyle =>
-        branding is null
-            ? string.Empty
-            : $"--kb-blush:{branding.PrimaryColor};--kb-sand-100:{branding.SecondaryColor};";
+    private string TenantName => branding?.DisplayName ?? "LoyaltyCloud";
+    private string TenantInitial => TenantName.Trim()[..1].ToUpperInvariant();
+    private string TenantStyle => branding is null ? string.Empty : $"--kb-blush:{branding.PrimaryColor};--kb-sand-100:{branding.SecondaryColor};";
+
+    private void ToggleMenu() => menuOpen = !menuOpen;
+    private void CloseMenu() => menuOpen = false;
 
     protected override async Task OnParametersSetAsync()
     {
@@ -84,14 +99,8 @@
 
         if (branding is null)
         {
-            try
-            {
-                branding = await Branding.GetCurrentAsync();
-            }
-            catch
-            {
-                branding = null;
-            }
+            try { branding = await Branding.GetCurrentAsync(); }
+            catch { branding = null; }
         }
 
         canRender = true;
