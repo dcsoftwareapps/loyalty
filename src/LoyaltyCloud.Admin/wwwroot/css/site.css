@@ -1075,7 +1075,21 @@ button:focus-visible, a:focus-visible { outline: 3px solid color-mix(in srgb, va
     overflow-y: auto;
     background: var(--lc-surface);
     border-right: 1px solid var(--lc-border-subtle);
+    scrollbar-color: var(--lc-border) transparent;
+    scrollbar-width: thin;
 }
+.kb-sidebar::-webkit-scrollbar { width: 6px; }
+.kb-sidebar::-webkit-scrollbar-track { background: transparent; }
+.kb-sidebar::-webkit-scrollbar-thumb {
+    min-height: 36px;
+    border: 1px solid transparent;
+    border-radius: 999px;
+    background: var(--lc-border);
+    background-clip: content-box;
+}
+.kb-sidebar::-webkit-scrollbar-thumb:hover { background-color: var(--lc-text-muted); }
+.kb-sidebar::-webkit-scrollbar-button { display: none; width: 0; height: 0; }
+.kb-sidebar::-webkit-scrollbar-corner { background: transparent; }
 .kb-sidebar-brand {
     display: flex;
     align-items: center;
