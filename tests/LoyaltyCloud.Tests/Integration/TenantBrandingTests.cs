@@ -65,6 +65,22 @@ public sealed class TenantBrandingTests
 
     [Fact]
     [Trait("Category", "TenantBranding")]
+    public async Task Explicit_wallet_branding_read_never_falls_back_to_current_or_first_tenant()
+    {
+        await using var env = await BrandingTestEnvironment.CreateAsync();
+
+        var requested = await env.ReadWalletBrandingForTenantAsync(
+            currentTenantId: BellaTenantId,
+            currentTenantSlug: BellaSlug,
+            requestedTenantId: BrokenTenantId);
+
+        Assert.Equal(BrokenTenantId, requested.TenantId);
+        Assert.Equal(BrokenSlug, requested.TenantSlug);
+        Assert.Equal("Broken Brand", requested.DisplayName);
+        Assert.DoesNotContain("Bella", requested.DisplayName);
+    }
+    [Fact]
+    [Trait("Category", "TenantBranding")]
     public async Task Wallet_branding_uses_tenant_display_name_and_colors()
     {
         await using var env = await BrandingTestEnvironment.CreateAsync();
@@ -337,6 +353,16 @@ public sealed class TenantBrandingTests
             return await scope.ServiceProvider.GetRequiredService<ITenantBrandingReadService>().GetCurrentAsync();
         }
 
+        public async Task<TenantWalletBrandingDto> ReadWalletBrandingForTenantAsync(
+            Guid currentTenantId,
+            string currentTenantSlug,
+            Guid requestedTenantId)
+        {
+            using var scope = _services.CreateScope();
+            scope.ServiceProvider.GetRequiredService<IMutableTenantContext>().SetTenant(currentTenantId, currentTenantSlug);
+            return await scope.ServiceProvider.GetRequiredService<ITenantWalletBrandingReadService>()
+                .GetForTenantAsync(requestedTenantId);
+        }
         public async Task<TenantWalletBrandingDto> ReadWalletBrandingAsync(Guid tenantId, string tenantSlug)
         {
             using var scope = _services.CreateScope();

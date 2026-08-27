@@ -1,10 +1,42 @@
 # LoyaltyCloud - AI Handoff
 
-Last updated: 2026-08-25
+Last updated: 2026-08-26
 
-Branch: `feature/wallet-card-branding`
+Branch: `feature/reports-summary`
 
-Last task worked: Wallet Card Branding finalization for Apple Wallet.
+Last task worked: Reports v1 UX and navigation refactor.
+
+## 2026-08-26 - Reports v1 UX and navigation refactor
+
+Current branch for this work: `feature/reports-summary`.
+
+Scope:
+
+- `/reports` is now a lightweight reports landing, not a KPI/dashboard page.
+- Added dedicated report pages:
+  - `/reports/inactive-customers`
+  - `/reports/top-rewards`
+- Customers and redemptions remain on their existing pages/routes and are linked from the Reports sidebar group.
+- Reports v1 uses the existing Dashboard-style pattern: Blazor page -> MediatR query -> read service -> EF Core `AsNoTracking`.
+- No new API endpoint was added.
+- No schema/model change or migration was added.
+- Individual report pages own their filters and query only the data they need.
+
+Definitions:
+
+- Active customer: unique customer with at least one point transaction or redemption in the selected period.
+- Inactive customer: active customer/card with no point transaction or redemption for the selected threshold. Customers with no activity use `Customer.CreatedAt` as the reference.
+- Registered purchase: `PointTransaction.Type == Purchase`.
+- Registered purchase amount: sum of `PointTransaction.PurchaseAmount` for purchase transactions.
+- Points issued: positive `Purchase`, `BonusWelcome`, `BonusBirthday` and `BonusReferral` point transactions. `RedemptionReversal` is intentionally excluded.
+- Points redeemed: non-cancelled `Redemption.PointsSpent`, avoiding double counting with point transactions.
+- Points expired: negative `PointTransaction` rows with `Type == Expiry` or `Expired`.
+- Counted redemption: `Redemption.Status != Cancelled`.
+
+Known limitation:
+
+- Top redeemed rewards display the current `RewardCatalogItem.Name`. `Redemption` does not store a historical reward-name snapshot.
+- The period/current-program KPI cards from the first Reports v1 draft were intentionally removed from the Reports UI. They were not moved to Dashboard in this task.
 
 ## 2026-08-25 - Apple Wallet branding refresh and APNs reliability
 
@@ -981,13 +1013,14 @@ For the next technical session:
 1. Read `docs/AI_CONTEXT.md`.
 2. Read this handoff.
 3. Read `docs/RELEASE_PROCESS.md` before any PROD deploy/rollback work.
-4. Before implementing a new feature, verify the current branch. If currently on `main` or `staging`, create a dedicated feature branch before modifying functional code.
-5. If already on a related feature branch, continue there instead of creating another branch.
-6. If working on STG, verify current App Settings and connection strings from Azure before changing code.
-7. For Google Wallet STG, keep `reviewStatus = UNDER_REVIEW` in LoyaltyClass PATCH payloads and retry save-link with a known customer serial if a regression appears.
-8. For Admin domain transition, keep legacy Admin Windows online until the new Linux Admin has been fully validated by users.
-9. Before any Apple hostname work, inspect `Apple__WebServiceURL` impact on existing installed passes and design a safe migration plan.
-10. Observe both Basic DTU databases after the migration and only revisit SQL tier if cost or limits require it.
+4. Use `docs/ROADMAP.md` as the live source for current pending items.
+5. Before implementing a new feature, verify the current branch. If currently on `main` or `staging`, create a dedicated feature branch before modifying functional code.
+6. If already on a related feature branch, continue there instead of creating another branch.
+7. If working on STG, verify current App Settings and connection strings from Azure before changing code.
+8. For Google Wallet STG, keep `reviewStatus = UNDER_REVIEW` in LoyaltyClass PATCH payloads and retry save-link with a known customer serial if a regression appears.
+9. For Admin domain transition, keep legacy Admin Windows online until the new Linux Admin has been fully validated by users.
+10. Before any Apple hostname work, inspect `Apple__WebServiceURL` impact on existing installed passes and design a safe migration plan.
+11. Observe both Basic DTU databases after the migration and only revisit SQL tier if cost or limits require it.
 
 Recommended first command for local orientation:
 

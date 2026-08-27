@@ -1,4 +1,5 @@
 using LoyaltyCloud.Application.Common.Wallet;
+using LoyaltyCloud.Application.Common.Interfaces;
 using LoyaltyCloud.Infrastructure.Configuration;
 using LoyaltyCloud.Infrastructure.Services.GoogleWallet;
 using Xunit;
@@ -75,7 +76,7 @@ public sealed class GoogleWalletObjectMapperTests
             HexBackgroundColor = "#FFFFFF"
         };
 
-        var data = mapper.ToClassData("issuer.loyalty", options);
+        var data = mapper.ToClassData("issuer.loyalty", options, Branding());
         var payload = mapper.ToClassPayload(data);
 
         Assert.Equal("issuer.loyalty", payload["id"]);
@@ -104,12 +105,12 @@ public sealed class GoogleWalletObjectMapperTests
             WideLogoUri = "https://assets.example/wide-logo.png"
         };
 
-        var data = mapper.ToClassData("issuer.loyalty", options);
+        var data = mapper.ToClassData("issuer.loyalty", options, Branding());
         var payload = mapper.ToClassPayload(data);
 
         var wideLogo = Assert.IsType<Dictionary<string, object?>>(payload["wideProgramLogo"]);
         var sourceUri = Assert.IsType<Dictionary<string, object?>>(wideLogo["sourceUri"]);
-        Assert.Equal("https://assets.example/wide-logo.png", sourceUri["uri"]);
+        Assert.Equal("https://assets.example/api/wallet-assets/google/b1000000-0000-0000-0000-000000000001/logo.png", sourceUri["uri"]);
     }
 
     [Fact]
@@ -124,7 +125,7 @@ public sealed class GoogleWalletObjectMapperTests
             WideLogoUri = "https://assets.example/logo.png"
         };
 
-        var data = mapper.ToClassData("issuer.loyalty", options);
+        var data = mapper.ToClassData("issuer.loyalty", options, Branding());
         var payload = mapper.ToClassPayload(
             data,
             includeProgramLogo: false);
@@ -147,11 +148,27 @@ public sealed class GoogleWalletObjectMapperTests
             HexBackgroundColor = "#FFFFFF"
         };
 
-        var data = mapper.ToClassData("issuer.loyalty", options);
+        var data = mapper.ToClassData("issuer.loyalty", options, Branding());
         var payload = mapper.ToClassPayload(data);
 
         Assert.Equal("UNDER_REVIEW", payload["reviewStatus"]);
         Assert.DoesNotContain(payload, item => Equals(item.Value, "APPROVED"));
     }
+    private static TenantWalletBrandingDto Branding() => new(
+        Guid.Parse("b1000000-0000-0000-0000-000000000001"),
+        "kbeauty",
+        "KBeauty Loyalty",
+        "KBeauty MX",
+        "Tarjeta KBeauty",
+        "rgb(255,255,255)",
+        "rgb(0,0,0)",
+        "rgb(0,0,0)",
+        "#FFFFFF",
+        null,
+        null,
+        "LoyaltyCloud",
+        "Cliente",
+        false,
+        false);
 }
 

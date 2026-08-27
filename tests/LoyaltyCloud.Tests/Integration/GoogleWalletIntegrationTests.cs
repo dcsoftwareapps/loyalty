@@ -50,7 +50,7 @@ public sealed class GoogleWalletIntegrationTests : IntegrationTestBase
         Assert.DoesNotContain(' ', saveLink.SaveUrl);
         Assert.True(saveLink.SaveUrl.Length < 1800);
         Assert.StartsWith("issuer-test.", saveLink.ObjectId);
-        Assert.Equal("issuer-test.loyalty", saveLink.ClassId);
+        Assert.StartsWith("issuer-test.loyalty-", saveLink.ClassId);
 
         using (var scope = Factory.Services.CreateScope())
         {

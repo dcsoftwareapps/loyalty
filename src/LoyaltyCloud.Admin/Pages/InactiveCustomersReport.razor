@@ -1,0 +1,127 @@
+@page "/reports/inactive-customers"
+@attribute [Authorize]
+@rendermode InteractiveServer
+
+@using LoyaltyCloud.Application.Admin.Queries.GetReportsSummary
+@inject ISender Sender
+
+<PageTitle>Clientes inactivos - LoyaltyCloud</PageTitle>
+
+<h1>Clientes inactivos</h1>
+<p class="kb-muted" style="margin-top: -8px; max-width: 760px;">
+    Clientes activos sin movimientos de puntos ni canjes durante el periodo seleccionado.
+</p>
+
+<section class="kb-card kb-reports-filters">
+    <div>
+        <label for="inactivePreset">Sin actividad durante</label>
+        <select id="inactivePreset" @bind="inactivePreset" @bind:after="ReloadAsync">
+            <option value="30">30 días</option>
+            <option value="60">60 días</option>
+            <option value="90">90 días</option>
+            <option value="180">180 días</option>
+            <option value="custom">Personalizado</option>
+        </select>
+    </div>
+
+    @if (inactivePreset == CustomPreset)
+    {
+        <div>
+            <label for="inactiveDays">Días sin actividad</label>
+            <input id="inactiveDays" type="number" min="1" step="1" @bind="customInactiveDays" @bind:after="ReloadAsync" />
+        </div>
+    }
+</section>
+
+@if (errorMsg is not null)
+{
+    <div class="kb-form-error">@errorMsg</div>
+}
+
+@if (isLoading)
+{
+    <p>Cargando...</p>
+}
+else if (report is not null)
+{
+    <p class="kb-muted">
+        Total: @FormatNumber(report.Total) clientes con @report.ThresholdDays días o más sin actividad.
+    </p>
+
+    @if (report.Items.Count == 0)
+    {
+        <p class="kb-muted">No hay clientes inactivos con este criterio.</p>
+    }
+    else
+    {
+        <table class="kb-table kb-table--compact">
+            <thead>
+                <tr>
+                    <th>Cliente</th>
+                    <th>ID del cliente</th>
+                    <th>Nivel actual</th>
+                    <th class="kb-cell-number">Puntos actuales</th>
+                    <th>Última actividad</th>
+                    <th class="kb-cell-number">Días sin actividad</th>
+                </tr>
+            </thead>
+            <tbody>
+            @foreach (var customer in report.Items)
+            {
+                <tr>
+                    <td><a href="@($"/customers/{customer.CustomerId}")">@customer.CustomerName</a></td>
+                    <td><code>@customer.SerialNumber</code></td>
+                    <td><span class="kb-level kb-level--neutral">@customer.CurrentLevel</span></td>
+                    <td class="kb-cell-number">@FormatNumber(customer.CurrentPoints)</td>
+                    <td class="kb-muted">@FormatDateTime(customer.LastActivityUtc)</td>
+                    <td class="kb-cell-number">@FormatNumber(customer.DaysWithoutActivity)</td>
+                </tr>
+            }
+            </tbody>
+        </table>
+    }
+}
+
+@code {
+    private const string CustomPreset = "custom";
+
+    private ReportsInactiveCustomersDto? report;
+    private string? errorMsg;
+    private bool isLoading;
+    private string inactivePreset = "90";
+    private int customInactiveDays = 90;
+
+    protected override async Task OnInitializedAsync() => await LoadAsync();
+
+    private async Task ReloadAsync() => await LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        isLoading = true;
+        errorMsg = null;
+
+        try
+        {
+            var result = await Sender.Send(new GetInactiveCustomersReportQuery(GetInactiveThresholdDays()));
+            if (result.IsSuccess)
+            {
+                report = result.Value;
+                return;
+            }
+
+            errorMsg = result.Error;
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    private int GetInactiveThresholdDays() =>
+        inactivePreset == CustomPreset
+            ? Math.Max(1, customInactiveDays)
+            : int.TryParse(inactivePreset, out var days) ? days : 90;
+
+    private static string FormatNumber(int value) => value.ToString("N0");
+    private static string FormatDateTime(DateTime value) => value.ToLocalTime().ToString("dd MMM yyyy HH:mm");
+}

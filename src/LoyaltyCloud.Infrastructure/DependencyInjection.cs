@@ -68,6 +68,7 @@ public static class DependencyInjection
         services.Configure<ProvisioningOptions>(configuration.GetSection(ProvisioningOptions.SectionName));
         services.Configure<BillingOptions>(configuration.GetSection(BillingOptions.SectionName));
         services.Configure<StripeOptions>(configuration.GetSection(StripeOptions.SectionName));
+        services.Configure<EmailOptions>(configuration.GetSection(EmailOptions.SectionName));
     }
 
     private static void AddRepositories(IServiceCollection services)
@@ -102,6 +103,7 @@ public static class DependencyInjection
         services.AddScoped<IPasswordHashingService, PasswordHashingService>();
 
         services.AddScoped<IDashboardReadService, DashboardReadService>();
+        services.AddScoped<IReportsReadService, ReportsReadService>();
         services.AddScoped<ICustomerListReadService, CustomerListReadService>();
         services.AddScoped<ICustomerDetailReadService, CustomerDetailReadService>();
         services.AddScoped<IRedemptionHistoryReadService, RedemptionHistoryReadService>();
@@ -124,6 +126,8 @@ public static class DependencyInjection
         services.AddScoped<ISubscriptionMaintenanceService, SubscriptionMaintenanceService>();
         services.AddScoped<IBillingService, BillingService>();
         services.AddScoped<IBillingNotificationService, BillingNotificationService>();
+        services.AddScoped<IBillingEmailConfigurationProvider, BillingEmailConfigurationProvider>();
+        services.AddScoped<ITransactionalEmailSender, SmtpEmailSender>();
         services.AddScoped<IPaymentGateway, StripePaymentGateway>();
         services.AddScoped<IPublicTenantResolver, PublicTenantResolver>();
         services.AddScoped<IPointsExpirationNotificationReadService, PointsExpirationNotificationReadService>();

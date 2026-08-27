@@ -20,6 +20,7 @@ internal sealed class GoogleWalletService : IGoogleWalletService
     private readonly IUnitOfWork _uow;
     private readonly IGoogleWalletClient _client;
     private readonly IGoogleWalletCredentialsProvider _credentialsProvider;
+    private readonly ITenantWalletBrandingReadService _branding;
     private readonly GoogleWalletIdGenerator _idGenerator;
     private readonly GoogleWalletObjectMapper _mapper;
     private readonly GoogleWalletJwtFactory _jwtFactory;
@@ -33,6 +34,7 @@ internal sealed class GoogleWalletService : IGoogleWalletService
         IUnitOfWork uow,
         IGoogleWalletClient client,
         IGoogleWalletCredentialsProvider credentialsProvider,
+        ITenantWalletBrandingReadService branding,
         GoogleWalletIdGenerator idGenerator,
         GoogleWalletObjectMapper mapper,
         GoogleWalletJwtFactory jwtFactory,
@@ -45,6 +47,7 @@ internal sealed class GoogleWalletService : IGoogleWalletService
         _uow = uow;
         _client = client;
         _credentialsProvider = credentialsProvider;
+        _branding = branding;
         _idGenerator = idGenerator;
         _mapper = mapper;
         _jwtFactory = jwtFactory;
@@ -148,7 +151,11 @@ internal sealed class GoogleWalletService : IGoogleWalletService
         CancellationToken ct)
     {
         var now = _dt.UtcNow;
-        var classId = _idGenerator.BuildClassId(_options);
+        var classId = _idGenerator.BuildClassId(_options, data.TenantId);
+        var legacyClassId = _idGenerator.BuildLegacyClassId(_options);
+        var legacyOwnerTenantId = await _wallets.GetOldestTenantIdByExternalClassIdAsync(DigitalWalletProvider.Google, legacyClassId, ct);
+        if (legacyOwnerTenantId == data.TenantId)
+            classId = legacyClassId;
         var objectId = _idGenerator.BuildObjectId(_options, data.TenantId, data.SerialNumber);
 
         var wallet = await _wallets.GetByLoyaltyCardAndProviderAsync(
@@ -179,7 +186,9 @@ internal sealed class GoogleWalletService : IGoogleWalletService
             _wallets.Update(wallet);
         }
 
-        var classData = _mapper.ToClassData(classId, _options);
+        var branding = await _branding.GetForTenantAsync(data.TenantId, ct);
+        var classData = _mapper.ToClassData(classId, _options, branding);
+        _logger.LogInformation("Google Wallet tenant resources resolved. TenantId={TenantId}, TenantSlug={TenantSlug}, ClassId={ClassId}, ObjectId={ObjectId}.", data.TenantId, branding.TenantSlug, classId, objectId);
         var objectData = _mapper.ToObjectData(objectId, classId, data);
 
         try

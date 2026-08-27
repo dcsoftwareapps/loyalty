@@ -41,22 +41,51 @@ public sealed class BillingUxTests
     }
 
     [Fact]
-    public void Active_billing_shows_tenant_dashboard_navigation_but_suspended_billing_does_not()
+    public void Active_billing_reuses_the_normal_tenant_layout()
     {
         var page = Read("src", "LoyaltyCloud.Admin", "Pages", "Billing.razor");
+        var adaptiveLayout = Read("src", "LoyaltyCloud.Admin", "Components", "Layout", "BillingAdaptiveLayout.razor");
+        var mainLayout = Read("src", "LoyaltyCloud.Admin", "Components", "Layout", "MainLayout.razor");
 
-        Assert.Contains("model?.SubscriptionStatus == nameof(TenantSubscriptionStatus.Active)", page);
-        Assert.Contains("href=\"/dashboard\"", page);
-        Assert.Contains("← Volver al panel", page);
+        Assert.Contains("@layout LoyaltyCloud.Admin.Components.Layout.BillingAdaptiveLayout", page);
+        Assert.Contains("LayoutView Layout=\"@typeof(MainLayout)\"", adaptiveLayout);
+        Assert.Contains("class=\"kb-sidebar\"", mainLayout);
+        Assert.Contains("Dashboard", mainLayout);
+        Assert.Contains("Suscripción", mainLayout);
     }
 
     [Fact]
-    public void Suspended_billing_keeps_logout_available()
+    public void Billing_never_shows_the_back_to_dashboard_link()
     {
         var page = Read("src", "LoyaltyCloud.Admin", "Pages", "Billing.razor");
 
+        Assert.DoesNotContain("Volver al panel", page);
+        Assert.DoesNotContain("href=\"/dashboard\"", page);
+    }
+
+    [Fact]
+    public void Suspended_billing_uses_restricted_shell_and_keeps_logout()
+    {
+        var page = Read("src", "LoyaltyCloud.Admin", "Pages", "Billing.razor");
+        var adaptiveLayout = Read("src", "LoyaltyCloud.Admin", "Components", "Layout", "BillingAdaptiveLayout.razor");
+
+        Assert.Contains("if (billingOnly)", adaptiveLayout);
+        Assert.Contains("max-width:960px", adaptiveLayout);
+        Assert.Contains("@if (BillingOnly)", page);
         Assert.Contains("action=\"/logout\"", page);
         Assert.Contains("Cerrar sesión", page);
+        Assert.DoesNotContain("kb-sidebar", adaptiveLayout);
+    }
+
+    [Fact]
+    public void Billing_layout_uses_real_auth_state_and_rechecks_after_reactivation()
+    {
+        var adaptiveLayout = Read("src", "LoyaltyCloud.Admin", "Components", "Layout", "BillingAdaptiveLayout.razor");
+
+        Assert.Contains("Auth.IsBillingOnlyAsync(principal)", adaptiveLayout);
+        Assert.Contains("OnParametersSetAsync", adaptiveLayout);
+        Assert.Contains("Value=\"@false\"", adaptiveLayout);
+        Assert.Contains("Value=\"@true\"", adaptiveLayout);
     }
 
     [Fact]
@@ -196,6 +225,29 @@ public sealed class BillingUxTests
         Assert.Contains("Plan guardado correctamente.", page);
     }
 
+    [Fact]
+    public void Super_admin_can_configure_all_recurring_Stripe_price_ids()
+    {
+        var page = Read("src", "LoyaltyCloud.Admin", "Pages", "PlatformBillingSettings.razor");
+        Assert.Contains("Stripe Price ID - 1 mes", page);
+        Assert.Contains("Stripe Price ID - 3 meses", page);
+        Assert.Contains("Stripe Price ID - 6 meses", page);
+        Assert.Contains("Stripe Price ID - 12 meses", page);
+        Assert.Contains("plan.StripeOneMonthPriceId", page);
+    }
+
+    [Fact]
+    public void Billing_email_settings_are_restricted_and_do_not_render_secrets()
+    {
+        var page = Read("src", "LoyaltyCloud.Admin", "Pages", "PlatformBillingSettings.razor");
+
+        Assert.Contains("Authorize(Roles = LoyaltyCloud.Admin.Auth.SuperAdminAuthDefaults.Role)", page);
+        Assert.Contains("Notificaciones por email", page);
+        Assert.Contains("Credenciales:", page);
+        Assert.DoesNotContain("Email__Password", page);
+        Assert.DoesNotContain("SmtpHost", page);
+        Assert.DoesNotContain("SmtpPort", page);
+    }
     private static string Read(params string[] parts) =>
         File.ReadAllText(Path.Combine([GetRepositoryRoot(), .. parts]));
 

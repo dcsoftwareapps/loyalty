@@ -29,6 +29,17 @@ internal sealed class MemberDigitalWalletRepository : IMemberDigitalWalletReposi
         _db.MemberDigitalWallets
             .FirstOrDefaultAsync(w => w.Provider == provider && w.ExternalObjectId == externalObjectId, ct);
 
+    public Task<Guid?> GetOldestTenantIdByExternalClassIdAsync(
+        DigitalWalletProvider provider,
+        string externalClassId,
+        CancellationToken ct = default) =>
+        _db.MemberDigitalWallets
+            .IgnoreQueryFilters()
+            .Where(wallet => wallet.Provider == provider && wallet.ExternalClassId == externalClassId)
+            .OrderBy(wallet => wallet.CreatedAt)
+            .ThenBy(wallet => wallet.Id)
+            .Select(wallet => (Guid?)wallet.TenantId)
+            .FirstOrDefaultAsync(ct);
     public async Task AddAsync(MemberDigitalWallet wallet, CancellationToken ct = default)
     {
         await _db.MemberDigitalWallets.AddAsync(wallet, ct);
