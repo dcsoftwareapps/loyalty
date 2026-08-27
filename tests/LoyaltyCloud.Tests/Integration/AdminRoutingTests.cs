@@ -489,13 +489,12 @@ public sealed class AdminRoutingTests : IClassFixture<AdminRoutingTests.AdminWeb
         {
             "<span class=\"kb-sidebar-section\">Principal</span>",
             "href=\"/dashboard\"",
-            "href=\"/customers\"",
-            "<span class=\"kb-sidebar-section\">Reportes</span>",
-            "href=\"/reports\"",
-            "href=\"/reports/inactive-customers\"",
-            "href=\"/reports/top-rewards\"",
             "href=\"/scan\"",
             "href=\"/redeem\"",
+            "<span class=\"kb-sidebar-section\">Reportes</span>",
+            "href=\"/customers\"",
+            "href=\"/reports/inactive-customers\"",
+            "href=\"/reports/top-rewards\"",
             "<span class=\"kb-sidebar-section\">Programa</span>",
             "href=\"/redemptions\"",
             "href=\"/rewards\"",
@@ -1073,7 +1072,7 @@ public sealed class AdminRoutingTests : IClassFixture<AdminRoutingTests.AdminWeb
     [Fact]
     [Trait("Category", "Reports")]
     [Trait("Category", "AdminRouting")]
-    public void Admin_menu_links_to_reports_page_once()
+    public void Admin_menu_links_directly_to_useful_reports_without_exposing_the_reports_hub()
     {
         var root = GetRepositoryRoot();
         var layout = File.ReadAllText(Path.Combine(root, "src", "LoyaltyCloud.Admin", "Components", "Layout", "MainLayout.razor"));
@@ -1082,8 +1081,7 @@ public sealed class AdminRoutingTests : IClassFixture<AdminRoutingTests.AdminWeb
         var topRewardsPage = File.ReadAllText(Path.Combine(root, "src", "LoyaltyCloud.Admin", "Pages", "TopRewardsReport.razor"));
 
         Assert.Contains("<span class=\"kb-sidebar-section\">Reportes</span>", layout);
-        Assert.DoesNotContain("<NavLink href=\"/reports\">Reportes</NavLink>", layout);
-        Assert.Equal(1, CountOccurrences(layout, "href=\"/reports\""));
+        Assert.DoesNotContain("href=\"/reports\"", layout);
         Assert.Contains("href=\"/reports/inactive-customers\"", layout);
         Assert.Contains("href=\"/reports/top-rewards\"", layout);
         Assert.Contains("@page \"/reports\"", reportsPage);

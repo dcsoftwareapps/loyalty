@@ -45,6 +45,9 @@ public sealed class AdminDashboardModernizationTests
         Assert.Contains("aria-expanded=\"@menuOpen\"", layout);
         Assert.Contains("kb-sidebar-backdrop", layout);
         Assert.Contains("<NavIcon", layout);
+        Assert.Contains("branding?.LogoUrl", layout);
+        Assert.Contains("<strong>LoyaltyCloud</strong>", layout);
+        Assert.DoesNotContain("<span>Admin</span>", layout);
         Assert.Contains("<svg class=\"kb-nav-icon\"", icons);
         Assert.DoesNotContain("🛍️", layout);
     }

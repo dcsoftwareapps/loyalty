@@ -1083,10 +1083,10 @@ button:focus-visible, a:focus-visible { outline: 3px solid color-mix(in srgb, va
     min-height: 48px;
     margin: 0 6px var(--lc-space-5);
 }
-.kb-brand-identity, .kb-mobile-brand { display: flex; align-items: center; gap: 11px; min-width: 0; }
-.kb-brand-identity > div, .kb-tenant-summary > div { display: flex; min-width: 0; flex-direction: column; }
+.kb-brand-identity { display: flex; flex: 1; flex-direction: column; align-items: center; gap: 8px; min-width: 0; text-align: center; }
+.kb-mobile-brand { display: flex; align-items: center; gap: 11px; min-width: 0; }
+.kb-tenant-summary > div { display: flex; min-width: 0; flex-direction: column; }
 .kb-brand-identity strong, .kb-mobile-brand strong { font-size: .98rem; letter-spacing: -.01em; }
-.kb-brand-identity span:not(.kb-brand-mark) { color: var(--lc-text-muted); font-size: .7rem; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; }
 .kb-brand-mark {
     display: grid;
     width: 34px;

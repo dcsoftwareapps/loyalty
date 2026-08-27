@@ -28,7 +28,7 @@
                     {
                         <span class="kb-brand-mark" aria-hidden="true">L</span>
                     }
-                    <div><strong>LoyaltyCloud</strong><span>Admin</span></div>
+                    <strong>LoyaltyCloud</strong>
                 </div>
                 <button type="button" class="kb-icon-button kb-sidebar-close" aria-label="Cerrar navegación" @onclick="CloseMenu"><NavIcon Name="close" /></button>
             </div>
@@ -36,14 +36,13 @@
             <nav class="kb-sidebar-nav" @onclick="CloseMenu">
                 <span class="kb-sidebar-section">Principal</span>
                 <NavLink href="/dashboard" Match="NavLinkMatch.All"><NavIcon Name="dashboard" /><span>Dashboard</span></NavLink>
-                <NavLink href="/customers"><NavIcon Name="users" /><span>Clientes</span></NavLink>
+                <NavLink href="/scan"><NavIcon Name="plus" /><span>Escanear QR</span></NavLink>
+                <NavLink href="/redeem"><NavIcon Name="scan" /><span>Canjear puntos</span></NavLink>
 
                 <span class="kb-sidebar-section">Reportes</span>
-                <NavLink href="/reports" Match="NavLinkMatch.All"><NavIcon Name="chart" /><span>Reportes</span></NavLink>
+                <NavLink href="/customers"><NavIcon Name="users" /><span>Clientes</span></NavLink>
                 <NavLink href="/reports/inactive-customers"><NavIcon Name="users" /><span>Clientes inactivos</span></NavLink>
-                <NavLink href="/reports/top-rewards"><NavIcon Name="gift" /><span>Más canjeadas</span></NavLink>
-                <NavLink href="/scan"><NavIcon Name="plus" /><span>Escanear QR / agregar puntos</span></NavLink>
-                <NavLink href="/redeem"><NavIcon Name="scan" /><span>Canjear puntos</span></NavLink>
+                <NavLink href="/reports/top-rewards"><NavIcon Name="gift" /><span>Recompensas más canjeadas</span></NavLink>
 
                 <span class="kb-sidebar-section">Programa</span>
                 <NavLink href="/redemptions"><NavIcon Name="history" /><span>Canjes</span></NavLink>

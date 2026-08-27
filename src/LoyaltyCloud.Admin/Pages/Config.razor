@@ -69,14 +69,6 @@ else
                             <img src="@branding.WalletLogoUrl" alt="Logo de la tarjeta" />
                         </div>
                     }
-                    @if (CanRemoveWalletLogo)
-                    {
-                        <button class="kb-btn kb-btn--ghost kb-btn--small"
-                                @onclick="RemoveWalletLogoAsync"
-                                disabled="@brandingBusy">
-                            Usar logo principal
-                        </button>
-                    }
                 </div>
 
                 <div class="kb-form-row kb-form-row--horizontal">
@@ -85,14 +77,6 @@ else
                             disabled="@brandingBusy">
                         @(brandingBusy ? "Guardando…" : "Guardar")
                     </button>
-                    @if (CanUsePrimaryColor)
-                    {
-                        <button class="kb-btn kb-btn--ghost"
-                                @onclick="UsePrimaryColorAsync"
-                                disabled="@brandingBusy">
-                            Usar color principal
-                        </button>
-                    }
                 </div>
             </div>
 
@@ -198,8 +182,6 @@ else
     private const string PreviewQrUrl = "https://www.instagram.com/loyaltycloud.app/";
     private static readonly string PreviewQrDataUri = QrCodeSvgGenerator.GenerateDataUri(PreviewQrUrl, scale: 7);
 
-    private bool CanRemoveWalletLogo => branding?.HasWalletLogo == true;
-    private bool CanUsePrimaryColor => !string.IsNullOrWhiteSpace(branding?.WalletBackgroundColor);
     private string WalletColorInputValue => !string.IsNullOrWhiteSpace(walletBackgroundColor)
         ? walletBackgroundColor
         : ResolvedWalletBackground;
@@ -262,12 +244,6 @@ else
     private void OnWalletColorChanged(ChangeEventArgs args)
     {
         walletBackgroundColor = args.Value?.ToString()?.Trim() ?? string.Empty;
-    }
-
-    private async Task UsePrimaryColorAsync()
-    {
-        walletBackgroundColor = string.Empty;
-        await SaveWalletBrandingAsync();
     }
 
     private async Task SaveWalletBrandingAsync()
@@ -356,28 +332,6 @@ else
         }
     }
 
-    private async Task RemoveWalletLogoAsync()
-    {
-        successMsg = errorMsg = null;
-        brandingBusy = true;
-        try
-        {
-            var result = await Api.DeleteAsync<TenantBrandingInfo>("api/config/wallet-branding/logo");
-            if (result.IsFailure)
-            {
-                errorMsg = string.Join(" ", result.Errors);
-                return;
-            }
-
-            branding = result.Value;
-            successMsg = "Logo principal restaurado.";
-            selectedWalletLogoFileName = null;
-        }
-        finally
-        {
-            brandingBusy = false;
-        }
-    }
 
     // Mapping legible para mostrar en la tabla; no afecta los keys reales.
     private static bool IsVisibleConfigEntry(ConfigDto entry) =>
