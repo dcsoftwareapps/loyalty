@@ -6,6 +6,39 @@ Branch: `feature/reports-summary`
 
 Last task worked: Reports v1 UX and navigation refactor.
 
+## 2026-08-27 - Reusable temporary STG deploy workflow
+
+Current branch for this work: `feature/admin-dashboard-modernization`.
+
+Added a reusable STG-only deploy script:
+
+```powershell
+.\scripts\deploy-stg.ps1 -Branch "feature/<branch-name>" -Target Admin -DryRun
+.\scripts\deploy-stg.ps1 -Branch "feature/<branch-name>" -Target Admin -Execute
+```
+
+Supported targets are `Admin`, `Api` and `Both`.
+
+Important behavior:
+
+- Dry-run is the default when `-Execute` is not passed.
+- The script checks repo root, working tree, Azure CLI login, branch/ref existence and commit metadata.
+- Real deploys require a clean working tree before checkout/update.
+- Dry-run does not checkout/update a branch when local changes are present; it reports that a real deploy would stop.
+- Branch updates use `origin` and fast-forward only; no arbitrary merges are performed.
+- The EF migrations path is detected from `AppDbContextModelSnapshot.cs`; current physical path is `src/LoyaltyCloud.Infrastructure/Persistence/Migrations`.
+- New migration files are detected relative to `origin/staging`.
+- If migration files are detected, deploy is blocked and no database update is executed.
+- Packaging uses `tar -a -c -f`, not `Compress-Archive`.
+- Targets are fixed to STG resources: `rg-loyaltycloud-stg`, `loyaltycloud-api-stg-01`, `loyaltycloud-admin-linux-stg-01`.
+- PROD resource names are explicitly refused.
+- The script does not modify App Settings, Key Vault, SQL, firewall, slots, commits, pushes, PRs, tags or merges.
+
+Documentation updated:
+
+- `docs/RELEASE_PROCESS.md` now documents temporary STG branch deploys.
+- `docs/AI_CONTEXT.md` references `scripts/deploy-stg.ps1` as the canonical reusable STG deploy helper.
+
 ## 2026-08-26 - Reports v1 UX and navigation refactor
 
 Current branch for this work: `feature/reports-summary`.
@@ -105,7 +138,7 @@ Active product status:
 - PROD/UAT API Linux App Service: `loyaltycloud-api-894839`.
 - Legacy PROD/UAT API host remains available: `https://loyaltycloud-api-894839.azurewebsites.net`.
 - PROD/UAT active database: `LoyaltyCloudFree`.
-- STG exists separately with `loyaltycloud-api-stg-01` and `loyaltycloud-admin-stg-01`.
+- STG exists separately with API `loyaltycloud-api-stg-01`, original Admin Windows `loyaltycloud-admin-stg-01`, and Admin Linux `loyaltycloud-admin-linux-stg-01`.
 - Apple Wallet works in production/UAT.
 - Google Wallet is approved for production and STG generates Save Links correctly.
 - PROD has `GoogleWallet__*` App Settings configured.
@@ -159,7 +192,7 @@ STG resource names:
 | Admin App Service Plan Windows | `asp-loyaltycloud-admin-stg-01` |
 | Admin App Service | `loyaltycloud-admin-stg-01` |
 | Admin URL | `https://loyaltycloud-admin-stg-01.azurewebsites.net` |
-| Admin Linux test App Service | `loyaltycloud-admin-linux-stg-01` |
+| Admin Linux App Service for temporary branch deploys | `loyaltycloud-admin-linux-stg-01` |
 | SQL Server | `sql-loyaltycloud-stg-01` |
 | SQL Database | `LoyaltyCloudStg` |
 | Storage | `stloyaltycloudstg01` |

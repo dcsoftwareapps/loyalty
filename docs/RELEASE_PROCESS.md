@@ -123,6 +123,35 @@ If a feature merged into `staging` is not ready for the next release, prefer one
 
 Avoid deleting commits or resetting/force-pushing `staging` unless explicitly reviewed and approved.
 
+## 4.1 Temporary STG Deploys from a Branch
+
+For temporary STG validation of a specific branch, use the reusable deploy script:
+
+```powershell
+.\scripts\deploy-stg.ps1 -Branch "feature/<branch-name>" -Target Admin -DryRun
+.\scripts\deploy-stg.ps1 -Branch "feature/<branch-name>" -Target Admin -Execute
+```
+
+Supported targets are `Admin`, `Api` and `Both`.
+
+The script is intentionally STG-only:
+
+- it uses the documented STG App Services;
+- it deploys Admin temporary branch builds to the Linux STG Admin App Service `loyaltycloud-admin-linux-stg-01`;
+- it refuses PROD resource names;
+- it checks Azure CLI login;
+- it checks the branch and commit being deployed;
+- it detects the EF migrations directory from `AppDbContextModelSnapshot.cs` and blocks if the branch contains migration files not already in `origin/staging`;
+- it never runs `dotnet ef database update`;
+- it packages deployments with `tar -a -c -f`;
+- it does not modify App Settings, Key Vault, SQL, firewall, slots, Git tags or branches beyond a safe checkout/update of the requested branch during `-Execute`.
+
+Deploying a feature branch to STG does not replace the release flow. Approved work still goes:
+
+```text
+feature branch -> STG validation -> PR to staging -> integrated STG validation -> PR to main -> PROD -> tag
+```
+
 ## 5. Create a Release
 
 Verify the current branch and working tree:

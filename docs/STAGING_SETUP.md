@@ -452,6 +452,8 @@ Deploy:
 az webapp deploy --resource-group rg-loyaltycloud-stg --name loyaltycloud-admin-stg-01 --src-path .\artifacts\admin.zip --type zip
 ```
 
+Nota: ese bloque documenta el Admin Windows original creado durante el setup inicial de STG. Para deploys temporales de branches del Admin, usar `scripts/deploy-stg.ps1`, que apunta al Admin Linux STG `loyaltycloud-admin-linux-stg-01` y empaqueta con `tar -a -c -f`.
+
 ## 8. Validaciones
 
 Validaciones realizadas o previstas para confirmar que STG quedo operativo:
