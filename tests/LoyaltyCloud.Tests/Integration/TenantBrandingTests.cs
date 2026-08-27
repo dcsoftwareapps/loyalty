@@ -206,7 +206,10 @@ public sealed class TenantBrandingTests
         Assert.Contains("Reglas de puntos y beneficios", page);
         Assert.Contains("Define cómo se acumulan, vencen y bonifican los puntos de tu programa.", page);
         Assert.Contains("Cambiar logo", page);
-        Assert.Contains("Usar logo principal", page);
+        Assert.DoesNotContain("Usar logo principal", page);
+        Assert.DoesNotContain("Usar color principal", page);
+        Assert.DoesNotContain("RemoveWalletLogoAsync", page);
+        Assert.DoesNotContain("UsePrimaryColorAsync", page);
         Assert.DoesNotContain("Opcional.", page);
         Assert.DoesNotContain("Eliminar logo de tarjeta", page);
         Assert.Contains("PUNTOS", page);
