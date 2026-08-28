@@ -1,0 +1,23 @@
+@if (Labels.Count > 0 && Values.Count == Labels.Count)
+{
+    var max = Math.Max(1m, Values.Max());
+    <div class="kb-report-chart" role="img" aria-label="@AriaLabel">
+        @for (var index = 0; index < Labels.Count; index++)
+        {
+            var width = Math.Max(2m, Values[index] / max * 100m);
+            <div class="kb-chart-row">
+                <span title="@Labels[index]">@Labels[index]</span>
+                <div class="kb-chart-track"><span class="kb-chart-bar" style="width:@($"{width:0.##}%")"></span></div>
+                <strong>@FormatValue(Values[index])</strong>
+            </div>
+        }
+    </div>
+}
+
+@code {
+    [Parameter, EditorRequired] public IReadOnlyList<string> Labels { get; set; } = Array.Empty<string>();
+    [Parameter, EditorRequired] public IReadOnlyList<decimal> Values { get; set; } = Array.Empty<decimal>();
+    [Parameter] public string AriaLabel { get; set; } = "Gráfica de barras";
+    [Parameter] public string ValueFormat { get; set; } = "N0";
+    private string FormatValue(decimal value) => value.ToString(ValueFormat, System.Globalization.CultureInfo.GetCultureInfo("es-MX"));
+}

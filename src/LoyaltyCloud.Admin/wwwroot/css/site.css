@@ -1360,3 +1360,39 @@ input[type="checkbox"], input[type="radio"] { width: 18px; height: 18px; accent-
     .kb-card, .kb-panel, .kb-filter-bar, .kb-reports-filters { border-radius: 10px; }
     .kb-report-card { min-height: 96px; padding: var(--lc-space-4); }
 }
+
+/* Advanced reports */
+.kb-report-nav { display:flex; gap:6px; margin:-8px 0 var(--lc-space-6); padding:5px; overflow-x:auto; border:1px solid var(--lc-border-subtle); border-radius:var(--lc-radius-md); background:var(--lc-surface); scrollbar-width:thin; }
+.kb-report-nav a { flex:0 0 auto; padding:9px 12px; border-radius:8px; color:var(--lc-text-secondary); font-size:var(--lc-font-sm); font-weight:650; text-decoration:none; white-space:nowrap; }
+.kb-report-nav a:hover { background:var(--kb-sand-50); color:var(--lc-text-primary); }
+.kb-report-nav a.active { background:var(--kb-blush-soft); color:var(--lc-primary-hover); }
+.kb-kpi-grid { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:var(--lc-space-4); margin-bottom:var(--lc-space-6); }
+.kb-kpi-card { min-width:0; padding:var(--lc-space-5); border:1px solid var(--lc-border-subtle); border-radius:var(--lc-radius-md); background:var(--lc-surface); box-shadow:var(--lc-shadow-sm); }
+.kb-kpi-card > span,.kb-kpi-card > small { display:block; color:var(--lc-text-muted); font-size:var(--lc-font-xs); }
+.kb-kpi-card > strong { display:block; margin:7px 0 3px; color:var(--lc-text-primary); font-size:clamp(1.6rem,3vw,2.25rem); line-height:1; font-variant-numeric:tabular-nums; }
+.kb-kpi-card > .kb-kpi-text { overflow:hidden; font-size:var(--lc-font-base); line-height:1.25; text-overflow:ellipsis; white-space:nowrap; }
+.kb-kpi-card--accent { border-color:color-mix(in srgb,var(--lc-primary) 32%,var(--lc-border-subtle)); background:linear-gradient(145deg,var(--kb-blush-soft),var(--lc-surface) 72%); }
+.kb-report-panel { margin-bottom:var(--lc-space-6); padding:var(--lc-space-6); border:1px solid var(--lc-border-subtle); border-radius:var(--lc-radius-md); background:var(--lc-surface); box-shadow:var(--lc-shadow-sm); }
+.kb-report-panel .kb-panel-heading { margin-bottom:var(--lc-space-5); }
+.kb-report-panel h2 { margin:3px 0 0; font-size:var(--lc-font-title); }
+.kb-report-chart { display:grid; gap:12px; }
+.kb-chart-row { display:grid; grid-template-columns:minmax(105px,1fr) minmax(160px,4fr) 64px; align-items:center; gap:12px; font-size:var(--lc-font-sm); }
+.kb-chart-row > span { overflow:hidden; color:var(--lc-text-secondary); text-overflow:ellipsis; white-space:nowrap; }
+.kb-chart-row > strong { text-align:right; font-variant-numeric:tabular-nums; }
+.kb-chart-track { height:12px; overflow:hidden; border-radius:999px; background:var(--kb-sand-50); }
+.kb-chart-bar { display:block; height:100%; border-radius:inherit; background:linear-gradient(90deg,var(--lc-primary),var(--kb-blush)); transition:width 220ms ease; }
+.kb-line-chart svg { width:100%; height:230px; overflow:visible; }
+.kb-chart-axis { stroke:var(--lc-border-subtle); stroke-width:1; vector-effect:non-scaling-stroke; }
+.kb-chart-line { fill:none; stroke:var(--lc-primary); stroke-width:4; stroke-linecap:round; stroke-linejoin:round; vector-effect:non-scaling-stroke; }
+.kb-chart-dot { fill:var(--lc-surface); stroke:var(--lc-primary); stroke-width:3; vector-effect:non-scaling-stroke; }
+.kb-chart-labels { display:flex; justify-content:space-between; gap:8px; color:var(--lc-text-muted); font-size:var(--lc-font-xs); }
+.kb-retention-legend { display:flex; gap:18px; margin-bottom:16px; color:var(--lc-text-secondary); font-size:var(--lc-font-sm); }
+.kb-retention-legend span { display:flex; align-items:center; gap:7px; }
+.kb-retention-legend i { width:10px; height:10px; border-radius:3px; }
+.kb-stacked-chart { display:grid; gap:12px; }
+.kb-stacked-row { display:grid; grid-template-columns:70px 1fr 48px; align-items:center; gap:12px; font-size:var(--lc-font-sm); }
+.kb-stacked-row > div { display:flex; height:18px; overflow:hidden; border-radius:999px; background:var(--kb-sand-50); }
+.kb-stacked-row i { display:block; height:100%; }
+.kb-stacked-row strong { text-align:right; }
+.is-new { background:var(--kb-sand-100); }.is-returning { background:var(--lc-primary); }
+@media (max-width:780px) { .kb-kpi-grid { grid-template-columns:1fr; } .kb-chart-row { grid-template-columns:92px minmax(110px,1fr) 52px; gap:8px; } .kb-report-panel { padding:var(--lc-space-5); } .kb-line-chart svg { height:190px; } }

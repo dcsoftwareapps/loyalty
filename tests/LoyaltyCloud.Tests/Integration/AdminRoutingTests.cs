@@ -1079,11 +1079,14 @@ public sealed class AdminRoutingTests : IClassFixture<AdminRoutingTests.AdminWeb
         var reportsPage = File.ReadAllText(Path.Combine(root, "src", "LoyaltyCloud.Admin", "Pages", "Reports.razor"));
         var inactivePage = File.ReadAllText(Path.Combine(root, "src", "LoyaltyCloud.Admin", "Pages", "InactiveCustomersReport.razor"));
         var topRewardsPage = File.ReadAllText(Path.Combine(root, "src", "LoyaltyCloud.Admin", "Pages", "TopRewardsReport.razor"));
+        var advancedPages = new[] { "TopCustomersReport.razor", "VisitFrequencyReport.razor", "ReturningCustomersReport.razor", "ActivityTrendsReport.razor", "LevelDistributionReport.razor" }.Select(file => File.ReadAllText(Path.Combine(root, "src", "LoyaltyCloud.Admin", "Pages", file))).ToArray();
 
         Assert.Contains("<span class=\"kb-sidebar-section\">Reportes</span>", layout);
         Assert.DoesNotContain("href=\"/reports\"", layout);
         Assert.Contains("href=\"/reports/inactive-customers\"", layout);
         Assert.Contains("href=\"/reports/top-rewards\"", layout);
+        Assert.Contains("href=\"/reports/top-customers\"", layout);
+        Assert.Contains("href=\"/reports/activity-trends\"", layout);
         Assert.Contains("@page \"/reports\"", reportsPage);
         Assert.Contains("@attribute [Authorize]", reportsPage);
         Assert.Contains("href=\"/customers\"", reportsPage);
@@ -1096,6 +1099,10 @@ public sealed class AdminRoutingTests : IClassFixture<AdminRoutingTests.AdminWeb
         Assert.Contains("GetTopRewardsReportQuery", topRewardsPage);
         Assert.Contains("Sin actividad durante", inactivePage);
         Assert.Contains("Últimos 30 días", topRewardsPage);
+        Assert.All(advancedPages, page => Assert.Contains("<ReportSubnav />", page));
+        Assert.Contains(advancedPages, page => page.Contains("@page \"/reports/visit-frequency\"", StringComparison.Ordinal));
+        Assert.Contains(advancedPages, page => page.Contains("@page \"/reports/returning-customers\"", StringComparison.Ordinal));
+        Assert.Contains(advancedPages, page => page.Contains("@page \"/reports/level-distribution\"", StringComparison.Ordinal));
     }
 
     [Fact]

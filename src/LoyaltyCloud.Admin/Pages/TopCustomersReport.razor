@@ -1,0 +1,39 @@
+@page "/reports/top-customers"
+@attribute [Authorize]
+@rendermode InteractiveServer
+@inject ISender Sender
+
+<PageTitle>Mejores clientes - LoyaltyCloud</PageTitle>
+<header class="kb-page-header"><div><span class="kb-eyebrow">Reportes avanzados</span><h1>Mejores clientes</h1><p>Identifica a tus clientes de mayor valor por puntos, consumo o actividad.</p></div></header>
+<ReportSubnav />
+<section class="kb-card kb-reports-filters">
+    <div><label for="topPeriod">Periodo</label><select id="topPeriod" @bind="period" @bind:after="LoadAsync"><option value="7">Últimos 7 días</option><option value="30">Últimos 30 días</option><option value="90">Últimos 90 días</option><option value="year">Año actual</option><option value="custom">Personalizado</option></select></div>
+    <div><label for="topMetric">Ordenar por</label><select id="topMetric" @bind="metric" @bind:after="LoadAsync"><option value="PointsEarned">Puntos generados</option><option value="PointsRedeemed">Puntos canjeados</option><option value="Activity">Actividad</option><option value="PurchaseAmount">Monto registrado</option></select></div>
+    <div><label for="topLimit">Resultados</label><select id="topLimit" @bind="limit" @bind:after="LoadAsync"><option value="10">Top 10</option><option value="20">Top 20</option><option value="50">Top 50</option></select></div>
+    @if (period == "custom") { <div><label for="topStart">Fecha inicio</label><input id="topStart" type="date" @bind="customStart" /></div><div><label for="topEnd">Fecha fin</label><input id="topEnd" type="date" @bind="customEnd" /></div><button type="button" class="kb-btn kb-btn--primary" @onclick="LoadAsync">Aplicar</button> }
+    <div><label for="topLevel">Nivel</label><input id="topLevel" placeholder="Todos" @bind="level" @bind:after="LoadAsync" /></div>
+</section>
+@if (error is not null) { <div class="kb-form-error">@error</div> }
+@if (loading) { <div class="kb-loading-state"><span class="kb-spinner"></span><span>Analizando clientes…</span></div> }
+else if (report is not null)
+{
+    <section class="kb-kpi-grid">
+        <article class="kb-kpi-card"><span>Clientes destacados</span><strong>@report.Customers.Count.ToString("N0")</strong><small>en el periodo seleccionado</small></article>
+        <article class="kb-kpi-card"><span>Líder del periodo</span><strong class="kb-kpi-text">@(report.Customers.FirstOrDefault()?.CustomerName ?? "Sin datos")</strong><small>@MetricLabel</small></article>
+        <article class="kb-kpi-card"><span>Valor líder</span><strong>@FormatValue(report.Customers.FirstOrDefault()?.RankingValue ?? 0)</strong><small>@MetricLabel</small></article>
+    </section>
+    @if (report.Customers.Count == 0) { <div class="kb-empty-state"><h3>Aún no hay actividad</h3><p>Ajusta el periodo o vuelve cuando existan movimientos.</p></div> }
+    else
+    {
+        <section class="kb-report-panel"><div class="kb-panel-heading"><div><span class="kb-eyebrow">Comparativo</span><h2>Top clientes</h2></div></div><ReportBarChart Labels="@report.Customers.Take(10).Select(x => x.CustomerName).ToList()" Values="@report.Customers.Take(10).Select(x => x.RankingValue).ToList()" AriaLabel="Ranking de mejores clientes" /></section>
+        <div class="kb-table-shell"><div class="kb-table-responsive"><table class="kb-table kb-table--compact"><thead><tr><th>#</th><th>Cliente</th><th>Nivel</th><th class="kb-cell-number">Puntos generados</th><th class="kb-cell-number">Puntos canjeados</th><th class="kb-cell-number">Actividad</th><th class="kb-cell-number">Monto</th></tr></thead><tbody>@{ var rank = 0; }@foreach (var item in report.Customers) { rank++; <tr><td>@rank</td><td><a href="@($"/customers/{item.CustomerId}")"><strong>@item.CustomerName</strong></a></td><td><span class="kb-level kb-level--neutral">@item.Level</span></td><td class="kb-cell-number">@item.PointsEarned.ToString("N0")</td><td class="kb-cell-number">@item.PointsRedeemed.ToString("N0")</td><td class="kb-cell-number">@item.ActivityCount.ToString("N0")</td><td class="kb-cell-number">@item.PurchaseAmount.ToString("C0")</td></tr> }</tbody></table></div></div>
+    }
+}
+@code {
+    private TopCustomersReportDto? report; private bool loading; private string? error; private string period = "90"; private string metric = "PointsEarned"; private int limit = 20; private string? level; private DateTime customStart = DateTime.UtcNow.Date.AddDays(-30); private DateTime customEnd = DateTime.UtcNow.Date;
+    private TopCustomerMetric SelectedMetric => Enum.TryParse<TopCustomerMetric>(metric, out var value) ? value : TopCustomerMetric.PointsEarned;
+    private string MetricLabel => SelectedMetric switch { TopCustomerMetric.PointsRedeemed => "puntos canjeados", TopCustomerMetric.Activity => "movimientos", TopCustomerMetric.PurchaseAmount => "monto registrado", _ => "puntos generados" };
+    protected override Task OnInitializedAsync() => LoadAsync();
+    private async Task LoadAsync() { loading = true; error = null; var (start,end)=GetPeriod(); var result = await Sender.Send(new GetTopCustomersReportQuery(start, end, SelectedMetric, string.IsNullOrWhiteSpace(level)?null:level.Trim(), limit)); if (result.IsSuccess) report = result.Value; else error = result.Error; loading = false; } private (DateTime,DateTime) GetPeriod(){var today=DateTime.UtcNow.Date;return period switch{"year"=>(new DateTime(today.Year,1,1,0,0,0,DateTimeKind.Utc),today.AddDays(1)),"custom"=>(DateTime.SpecifyKind(customStart.Date,DateTimeKind.Utc),DateTime.SpecifyKind(customEnd.Date.AddDays(1),DateTimeKind.Utc)),_=>(today.AddDays(-int.Parse(period)),today.AddDays(1))};}
+    private string FormatValue(decimal value) => SelectedMetric == TopCustomerMetric.PurchaseAmount ? value.ToString("C0") : value.ToString("N0");
+}

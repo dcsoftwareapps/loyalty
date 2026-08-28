@@ -1,0 +1,29 @@
+@if (Labels.Count > 0 && Values.Count == Labels.Count)
+{
+    var points = BuildPoints();
+    <div class="kb-line-chart" role="img" aria-label="@AriaLabel">
+        <svg viewBox="0 0 720 230" preserveAspectRatio="none" aria-hidden="true">
+            <line x1="34" y1="198" x2="704" y2="198" class="kb-chart-axis" />
+            <line x1="34" y1="24" x2="34" y2="198" class="kb-chart-axis" />
+            <polyline points="@points" class="kb-chart-line" />
+            @for (var index = 0; index < Values.Count; index++)
+            {
+                var point = PointAt(index);
+                <circle cx="@point.X" cy="@point.Y" r="5" class="kb-chart-dot"><title>@Labels[index]: @Values[index].ToString(ValueFormat)</title></circle>
+            }
+        </svg>
+        <div class="kb-chart-labels">
+            @foreach (var label in Labels) { <span>@label</span> }
+        </div>
+    </div>
+}
+
+@code {
+    [Parameter, EditorRequired] public IReadOnlyList<string> Labels { get; set; } = Array.Empty<string>();
+    [Parameter, EditorRequired] public IReadOnlyList<decimal> Values { get; set; } = Array.Empty<decimal>();
+    [Parameter] public string AriaLabel { get; set; } = "Gráfica de tendencia";
+    [Parameter] public string ValueFormat { get; set; } = "N0";
+    private decimal MaxValue => Math.Max(1m, Values.Count == 0 ? 1m : Values.Max());
+    private (decimal X, decimal Y) PointAt(int index) => (34m + (Values.Count == 1 ? 335m : index * 670m / (Values.Count - 1)), 198m - Values[index] / MaxValue * 164m);
+    private string BuildPoints() => string.Join(" ", Enumerable.Range(0, Values.Count).Select(i => { var p = PointAt(i); return $"{p.X:0.##},{p.Y:0.##}"; }));
+}
