@@ -624,7 +624,7 @@ Current STG resources:
 | Admin App Service Plan Windows | `asp-loyaltycloud-admin-stg-01` |
 | Admin App Service | `loyaltycloud-admin-stg-01` |
 | Admin URL | `https://loyaltycloud-admin-stg-01.azurewebsites.net` |
-| Admin Linux test App Service | `loyaltycloud-admin-linux-stg-01` |
+| Admin Linux App Service for temporary branch deploys | `loyaltycloud-admin-linux-stg-01` |
 | SQL Server | `sql-loyaltycloud-stg-01` |
 | Database | `LoyaltyCloudStg` |
 | Storage | `stloyaltycloudstg01` |
@@ -689,6 +689,7 @@ Important scripts:
 | `infra/create-stg.ps1` | Dry-run by default; creates STG Azure resources only with `-Execute`. Compatible with Windows PowerShell 5.1. |
 | `infra/configure-stg-secrets.ps1` | Configures selected STG secrets. Switches: `-ConfigureAdminApi`, `-ConfigureSuperAdmin`, `-ConfigureAppleWallet`, `-ConfigureGoogleWallet`. |
 | `infra/copy-apple-wallet-secrets-to-stg.ps1` | Copies allowlisted Apple Wallet secrets from PROD Key Vault to STG Key Vault. Dry-run by default. |
+| `scripts/deploy-stg.ps1` | Reusable STG-only temporary deploy script for a requested branch and target (`Admin`, `Api` or `Both`). Dry-run by default, deploys Admin to `loyaltycloud-admin-linux-stg-01`, and blocks deployment when migration files are present relative to `origin/staging`. |
 
 Lessons embedded in scripts:
 
@@ -697,6 +698,7 @@ Lessons embedded in scripts:
 - Windows Web App creation must not reuse Linux runtime arguments.
 - Windows PowerShell 5.1 does not support `ProcessStartInfo.ArgumentList`.
 - SQL password prompt should only happen when creating SQL Server.
+- Temporary branch deploys to STG should use `scripts/deploy-stg.ps1`; it must never be repointed to PROD, it deploys Admin to the Linux STG Admin app, and it never runs EF database updates.
 
 ## Deployment Notes
 
@@ -710,6 +712,7 @@ Release procedure:
 - Do not use floating tags such as `latest` for rollback.
 - Merge feature branches into `staging` by PR.
 - Deploy Azure STG from `staging` for integrated validation.
+- Temporary feature-branch deploys to STG should use `scripts/deploy-stg.ps1`; keep them STG-only and continue to use PRs for promotion.
 - Promote `staging` to `main` by PR after STG approval.
 - Deploy PROD only from integrated `main`.
 - Create release tags only after PROD smoke testing confirms the deploy is healthy.

@@ -44,12 +44,12 @@
         <label for="status-filter">Estado</label>
         <select id="status-filter" @bind="statusFilter">
             <option value="">Todos</option>
-            <option value="@NotificationStatus.Pending">Pending</option>
+            <option value="@NotificationStatus.Pending">Pendiente</option>
             <option value="@NotificationStatus.Processing">Processing</option>
             <option value="@NotificationStatus.Delivered">Delivered</option>
             <option value="@NotificationStatus.PartiallyDelivered">PartiallyDelivered</option>
-            <option value="@NotificationStatus.Failed">Failed</option>
-            <option value="@NotificationStatus.Cancelled">Cancelled</option>
+            <option value="@NotificationStatus.Failed">Fallida</option>
+            <option value="@NotificationStatus.Cancelled">Cancelada</option>
         </select>
     </div>
     <div style="flex:1;min-width:180px;">

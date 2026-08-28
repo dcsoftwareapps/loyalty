@@ -4,14 +4,33 @@
 
 <PageTitle>Reportes - LoyaltyCloud</PageTitle>
 
-<h1>Reportes</h1>
-<p class="kb-muted" style="margin-top: -8px; max-width: 720px;">
-    Consulta reportes operativos independientes del programa de lealtad.
-</p>
+<header class="kb-page-header">
+    <div>
+        <span class="kb-eyebrow">Análisis</span>
+        <h1>Reportes</h1>
+        <p>Consulta información operativa para entender y mejorar tu programa de lealtad.</p>
+    </div>
+</header>
 
-<section class="kb-card kb-report-links">
-    <a href="/customers">Clientes</a>
-    <a href="/redemptions">Canjes</a>
-    <a href="/reports/inactive-customers">Clientes inactivos</a>
-    <a href="/reports/top-rewards">Recompensas más canjeadas</a>
+<section class="kb-report-grid" aria-label="Reportes disponibles">
+    <a class="kb-report-card" href="/customers">
+        <span class="kb-report-icon"><NavIcon Name="users" /></span>
+        <span><strong>Clientes</strong><small>Consulta y administra la base de clientes.</small></span>
+        <span aria-hidden="true">→</span>
+    </a>
+    <a class="kb-report-card" href="/redemptions">
+        <span class="kb-report-icon"><NavIcon Name="history" /></span>
+        <span><strong>Canjes</strong><small>Revisa el historial de recompensas canjeadas.</small></span>
+        <span aria-hidden="true">→</span>
+    </a>
+    <a class="kb-report-card" href="/reports/inactive-customers">
+        <span class="kb-report-icon"><NavIcon Name="users" /></span>
+        <span><strong>Clientes inactivos</strong><small>Identifica clientes sin actividad reciente.</small></span>
+        <span aria-hidden="true">→</span>
+    </a>
+    <a class="kb-report-card" href="/reports/top-rewards">
+        <span class="kb-report-icon"><NavIcon Name="gift" /></span>
+        <span><strong>Recompensas más canjeadas</strong><small>Conoce las recompensas preferidas de tus clientes.</small></span>
+        <span aria-hidden="true">→</span>
+    </a>
 </section>

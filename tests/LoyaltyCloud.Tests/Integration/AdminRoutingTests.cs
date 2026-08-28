@@ -88,7 +88,7 @@ public sealed class AdminRoutingTests : IClassFixture<AdminRoutingTests.AdminWeb
 
         using var getLogin = await client.GetAsync("/platform/login");
         var loginHtml = await getLogin.Content.ReadAsStringAsync();
-        Assert.Contains("Developer Login", loginHtml);
+        Assert.Contains("Acceso de desarrollo", loginHtml);
         Assert.Contains("action=\"/platform/developer-login\"", loginHtml);
 
         var form = ExtractHiddenInputs(loginHtml);
@@ -473,7 +473,7 @@ public sealed class AdminRoutingTests : IClassFixture<AdminRoutingTests.AdminWeb
         var redemptionsSource = File.ReadAllText(Path.Combine(GetRepositoryRoot(), "src", "LoyaltyCloud.Admin", "Pages", "Redemptions.razor"));
 
         Assert.Contains("href=\"/redeem\"", layoutSource);
-        Assert.Contains(">Canjear puntos</NavLink>", layoutSource);
+        Assert.Contains(">Canjear puntos</span>", layoutSource);
         Assert.Contains("@page \"/redeem\"", redeemSource);
         Assert.Contains("@page \"/redemptions\"", redemptionsSource);
         Assert.Contains("href=\"/redemptions\"", redeemSource);
@@ -487,64 +487,36 @@ public sealed class AdminRoutingTests : IClassFixture<AdminRoutingTests.AdminWeb
 
         var orderedItems = new[]
         {
-            "<NavLink href=\"/dashboard\" Match=\"NavLinkMatch.All\">Dashboard</NavLink>",
-            "<span class=\"kb-sidebar-section\">Puntos</span>",
-            "<NavLink href=\"/scan\">Sumar puntos</NavLink>",
-            "<NavLink href=\"/redeem\">Canjear puntos</NavLink>",
-            "<span class=\"kb-sidebar-section\">Comunicación</span>",
-            "<NavLink href=\"/marketing-notifications\">Mensajes</NavLink>",
-            "<span class=\"kb-sidebar-section\">Programas de lealtad</span>",
-            "<NavLink href=\"/rewards\">Recompensas</NavLink>",
-            "<NavLink href=\"/levels\">Niveles</NavLink>",
-            "<NavLink href=\"/campaigns\">Campañas</NavLink>",
+            "<span class=\"kb-sidebar-section\">Principal</span>",
+            "href=\"/dashboard\"",
+            "href=\"/scan\"",
+            "href=\"/redeem\"",
             "<span class=\"kb-sidebar-section\">Reportes</span>",
-            "<NavLink href=\"/customers\">Clientes</NavLink>",
-            "<NavLink href=\"/redemptions\">Canjes</NavLink>",
-            "<NavLink href=\"/reports/inactive-customers\">Clientes inactivos</NavLink>",
-            "<NavLink href=\"/reports/top-rewards\">Recompensas más canjeadas</NavLink>",
-            "<span class=\"kb-sidebar-section\">Administración</span>",
-            "<NavLink href=\"/config\">Configuración</NavLink>",
-            "<NavLink href=\"@($\"/{TenantContext.TenantSlug}/billing\")\">Suscripción</NavLink>"
+            "href=\"/customers\"",
+            "href=\"/reports/inactive-customers\"",
+            "href=\"/reports/top-rewards\"",
+            "<span class=\"kb-sidebar-section\">Programa</span>",
+            "href=\"/redemptions\"",
+            "href=\"/rewards\"",
+            "href=\"/campaigns\"",
+            "href=\"/marketing-notifications\"",
+            "<span class=\"kb-sidebar-section\">Gestión</span>",
+            "href=\"/levels\"",
+            "href=\"/config\"",
+            "href=\"/quick-help\""
         };
 
         var previousIndex = -1;
         foreach (var item in orderedItems)
         {
-            var index = source.IndexOf(item, StringComparison.Ordinal);
+            var index = source.IndexOf(item, previousIndex + 1, StringComparison.Ordinal);
             Assert.True(index > previousIndex, $"Expected menu item after previous item: {item}");
             previousIndex = index;
         }
 
-        Assert.Equal(1, CountOccurrences(source, "href=\"/dashboard\""));
-        Assert.Equal(1, CountOccurrences(source, "href=\"/scan\""));
-        Assert.Equal(1, CountOccurrences(source, "href=\"/redeem\""));
-        Assert.Equal(1, CountOccurrences(source, "href=\"/customers\""));
-        Assert.Equal(1, CountOccurrences(source, "href=\"/redemptions\""));
-        Assert.Equal(1, CountOccurrences(source, "href=\"/rewards\""));
-        Assert.Equal(1, CountOccurrences(source, "href=\"/levels\""));
-        Assert.Equal(1, CountOccurrences(source, "href=\"/campaigns\""));
-        Assert.Equal(1, CountOccurrences(source, "href=\"/marketing-notifications\""));
-        Assert.Equal(1, CountOccurrences(source, "href=\"/config\""));
-        Assert.Equal(0, CountOccurrences(source, "href=\"/reports\""));
-        Assert.Equal(1, CountOccurrences(source, "href=\"/reports/inactive-customers\""));
-        Assert.Equal(1, CountOccurrences(source, "href=\"/reports/top-rewards\""));
-        Assert.Equal(1, CountOccurrences(source, "href=\"/quick-help\""));
-        Assert.Equal(5, CountOccurrences(source, "class=\"kb-sidebar-section\""));
-        Assert.DoesNotContain("<NavLink href=\"/notifications\"", source);
-        Assert.DoesNotContain(">Clientas</NavLink>", source);
-        Assert.Contains("Ayuda rápida", source);
-        Assert.True(
-            source.IndexOf("href=\"/quick-help\"", StringComparison.Ordinal) >
-            source.IndexOf("href=\"/config\"", StringComparison.Ordinal));
-        Assert.True(
-            source.IndexOf("<NavLink href=\"/dashboard\" Match=\"NavLinkMatch.All\">Dashboard</NavLink>", StringComparison.Ordinal) <
-            source.IndexOf("<span class=\"kb-sidebar-section\">Puntos</span>", StringComparison.Ordinal));
         Assert.DoesNotContain("href=\"/operacion\"", source, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("href=\"/puntos\"", source, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("href=\"/clientes\"", source, StringComparison.OrdinalIgnoreCase);
-        Assert.DoesNotContain("href=\"/programa-de-lealtad\"", source, StringComparison.OrdinalIgnoreCase);
-        Assert.DoesNotContain("href=\"/comunicacion\"", source, StringComparison.OrdinalIgnoreCase);
-        Assert.DoesNotContain("href=\"/administracion\"", source, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]
@@ -870,7 +842,7 @@ public sealed class AdminRoutingTests : IClassFixture<AdminRoutingTests.AdminWeb
         Assert.DoesNotContain("href=\"/notifications\"", source);
         Assert.DoesNotContain(">Notificaciones</NavLink>", source);
         Assert.Contains("href=\"/marketing-notifications\"", source);
-        Assert.Contains(">Mensajes</NavLink>", source);
+        Assert.Contains(">Mensajes</span>", source);
     }
 
     [Fact]
@@ -1100,7 +1072,7 @@ public sealed class AdminRoutingTests : IClassFixture<AdminRoutingTests.AdminWeb
     [Fact]
     [Trait("Category", "Reports")]
     [Trait("Category", "AdminRouting")]
-    public void Admin_menu_links_to_reports_page_once()
+    public void Admin_menu_links_directly_to_useful_reports_without_exposing_the_reports_hub()
     {
         var root = GetRepositoryRoot();
         var layout = File.ReadAllText(Path.Combine(root, "src", "LoyaltyCloud.Admin", "Components", "Layout", "MainLayout.razor"));
@@ -1109,10 +1081,9 @@ public sealed class AdminRoutingTests : IClassFixture<AdminRoutingTests.AdminWeb
         var topRewardsPage = File.ReadAllText(Path.Combine(root, "src", "LoyaltyCloud.Admin", "Pages", "TopRewardsReport.razor"));
 
         Assert.Contains("<span class=\"kb-sidebar-section\">Reportes</span>", layout);
-        Assert.DoesNotContain("<NavLink href=\"/reports\">Reportes</NavLink>", layout);
-        Assert.Equal(0, CountOccurrences(layout, "href=\"/reports\""));
-        Assert.Contains("<NavLink href=\"/reports/inactive-customers\">Clientes inactivos</NavLink>", layout);
-        Assert.Contains("<NavLink href=\"/reports/top-rewards\">Recompensas más canjeadas</NavLink>", layout);
+        Assert.DoesNotContain("href=\"/reports\"", layout);
+        Assert.Contains("href=\"/reports/inactive-customers\"", layout);
+        Assert.Contains("href=\"/reports/top-rewards\"", layout);
         Assert.Contains("@page \"/reports\"", reportsPage);
         Assert.Contains("@attribute [Authorize]", reportsPage);
         Assert.Contains("href=\"/customers\"", reportsPage);

@@ -1,9 +1,21 @@
-<div class="kb-card">
-    <div class="kb-card-label">@Label</div>
+<article class="kb-card kb-metric-card">
+    <div class="kb-metric-topline">
+        <span class="kb-card-label">@Label</span>
+        @if (!string.IsNullOrWhiteSpace(Icon))
+        {
+            <span class="kb-metric-icon"><NavIcon Name="@Icon" /></span>
+        }
+    </div>
     <div class="kb-card-value">@Value</div>
-</div>
+    @if (!string.IsNullOrWhiteSpace(Context))
+    {
+        <p class="kb-card-context">@Context</p>
+    }
+</article>
 
 @code {
     [Parameter, EditorRequired] public string Label { get; set; } = string.Empty;
     [Parameter, EditorRequired] public string Value { get; set; } = string.Empty;
+    [Parameter] public string? Icon { get; set; }
+    [Parameter] public string? Context { get; set; }
 }
