@@ -1,3 +1,4 @@
+using LoyaltyCloud.Application.Admin.Queries.AdvancedReports;
 using LoyaltyCloud.Application.Admin.Queries.GetReportsSummary;
 using LoyaltyCloud.Application.Common.Interfaces;
 using LoyaltyCloud.Common.Services;
@@ -7,7 +8,7 @@ using Microsoft.EntityFrameworkCore;
 
 namespace LoyaltyCloud.Infrastructure.Services;
 
-internal sealed class ReportsReadService : IReportsReadService
+internal sealed partial class ReportsReadService : IReportsReadService
 {
     private static readonly TransactionType[] PointsIssuedTypes =
     [

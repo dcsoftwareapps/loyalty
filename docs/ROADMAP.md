@@ -25,6 +25,15 @@ La base activa de produccion/UAT es `LoyaltyCloudFree`.
 - Sesion Tenant Admin persistente de 168 horas con sliding expiration.
 - Dashboard / Analytics.
 - Reportes v1 con páginas independientes.
+- Reportes avanzados tenant-aware con filtros independientes, KPIs, gráficas y detalle:
+  - Clientes en riesgo (`/reports/inactive-customers`).
+  - Recompensas más canjeadas (`/reports/top-rewards`).
+  - Mejores clientes (`/reports/top-customers`).
+  - Frecuencia de visita (`/reports/visit-frequency`).
+  - Clientes nuevos y recurrentes (`/reports/returning-customers`).
+  - Actividad mensual y tendencias (`/reports/activity-trends`).
+  - Distribución actual por nivel (`/reports/level-distribution`).
+- Indicadores reutilizables: clientes nuevos/activos, puntos emitidos/canjeados/vencidos, canjes, compras, monto registrado, total de clientes y saldo actual de puntos.
 - Customer Detail.
 - Customer Detail avanzado para auditoria de puntos.
 - Sumar puntos con QR/camara.
@@ -38,6 +47,7 @@ La base activa de produccion/UAT es `LoyaltyCloudFree`.
 - Campanas de puntos.
 - Producto del mes.
 - Mensajes personalizados Apple Wallet.
+- Mensajes personalizados con notificación corta y detalle largo para Apple Wallet y Google Wallet.
 - Motor base de notificaciones.
 - Notificaciones visibles Apple Wallet con `changeMessage`.
 - LevelChanged, PointsAdded, PointsExpiring, MonthlyProductStarted, BirthdayBenefitStarted, PointCampaignStarted y Custom.
@@ -54,6 +64,19 @@ La base activa de produccion/UAT es `LoyaltyCloudFree`.
 - Google Wallet aprobado para produccion.
 - Google Wallet Save Link validado en STG.
 
+### Estado de Reportes
+
+**Completado**
+
+- Clientes en riesgo, recompensas más canjeadas, mejores clientes, frecuencia de visita, clientes recurrentes/nuevos, actividad mensual y distribución actual por nivel.
+
+**Backend reutilizable disponible**
+
+- Clientes nuevos y activos; puntos emitidos, canjeados y vencidos; cantidad de canjes; compras y monto registrado; total de clientes y saldo actual de puntos.
+
+**Pendiente / evolución futura**
+
+- Exportación CSV/PDF e históricos que requieran snapshots. No se presentan métricas como revenue, LTV o crecimiento sin una fuente suficiente.
 ## RC1 / UAT
 
 - Crear tenants reales desde Platform Admin.
@@ -65,7 +88,6 @@ La base activa de produccion/UAT es `LoyaltyCloudFree`.
 
 ## TODO
 
-- Reportes
 - Configurar tamaño del logo en el pass
 - Colores del pass en Google Wallet / Android
 - Terminar pagos recurrentes
@@ -77,6 +99,15 @@ La base activa de produccion/UAT es `LoyaltyCloudFree`.
 - Plantillas por canal.
 - A/B testing.
 - Journeys automatizados.
-- Reportes avanzados.
+- Exportación de reportes avanzados (CSV/PDF) y análisis históricos que requieran snapshots.
 - Inventario/stock de recompensas.
 - Sucursales/stores.
+
+## Definiciones de Reportes
+
+- **Visita:** día calendario único en el que un cliente tuvo una transacción de puntos o un canje no cancelado. Varias operaciones del mismo cliente el mismo día cuentan como una visita.
+- **Cliente nuevo:** cliente cuya primera actividad registrada ocurrió dentro del periodo analizado.
+- **Cliente recurrente:** cliente activo en el periodo cuya primera actividad ocurrió antes de ese periodo.
+- **Nuevos vs recurrentes:** se integra en Clientes recurrentes para evitar duplicar análisis.
+- **Distribución por nivel:** representa el estado actual; no se presenta histórico porque no existen snapshots de nivel.
+- **Monto registrado:** suma de `PurchaseAmount` en transacciones reales de tipo compra; no se presenta como revenue ni LTV.

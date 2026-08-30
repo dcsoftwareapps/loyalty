@@ -25,7 +25,7 @@
     <div>
         <h1>Mensajes personalizados</h1>
         <p class="kb-muted" style="margin-top:-8px;">
-            Envia o programa mensajes visibles en Apple Wallet para audiencias con pase instalado.
+            Envia o programa mensajes visibles en Apple Wallet y Google Wallet para audiencias con pase instalado.
         </p>
     </div>
     <button class="kb-btn kb-btn--primary" @onclick="ToggleForm" disabled="@busy">
@@ -53,9 +53,19 @@
                 }
 
                 <div class="kb-form-row">
-                    <label for="message">Mensaje</label>
-                    <textarea id="message" rows="5" maxlength="500" @bind="form.Message" @bind:event="oninput"></textarea>
-                    <div class="kb-muted">@($"{(form.Message?.Length ?? 0)}/500")</div>
+                    <label for="short-message">Notificación</label>
+                    <input id="short-message" maxlength="@ShortMessageMaxLength" @bind="form.ShortMessage" @bind:event="oninput" />
+                    <div class="kb-muted">Este texto aparecerá en la notificación del teléfono.</div>
+                    <div class="@ShortMessageCounterClass">
+                        @($"{(form.ShortMessage?.Length ?? 0)}/{ShortMessageMaxLength} · recomendado {ShortMessageRecommendedLength}")
+                    </div>
+                </div>
+
+                <div class="kb-form-row">
+                    <label for="long-message">Detalle del mensaje</label>
+                    <textarea id="long-message" rows="5" maxlength="@LongMessageMaxLength" @bind="form.LongMessage" @bind:event="oninput"></textarea>
+                    <div class="kb-muted">Este contenido se mostrará al consultar el mensaje.</div>
+                    <div class="kb-muted">@($"{(form.LongMessage?.Length ?? 0)}/{LongMessageMaxLength}")</div>
                 </div>
 
                 <div class="kb-form-row kb-form-row--horizontal">
@@ -132,14 +142,16 @@
                 <div class="kb-card" style="background:rgb(250,248,244);border-color:#eee;">
                     <div class="kb-muted" style="font-size:.78rem;text-transform:uppercase;">Vista previa Wallet</div>
                     <h3 style="margin-top:8px;">@GeneratedTitle</h3>
-                    @if (string.IsNullOrWhiteSpace(form.Message))
+                    @if (string.IsNullOrWhiteSpace(form.ShortMessage) && string.IsNullOrWhiteSpace(form.LongMessage))
                     {
                         <p class="kb-muted" style="margin-bottom:0;">Escribe un mensaje para previsualizarlo.</p>
                     }
                     else
                     {
-                        <p style="font-size:1.3rem;font-weight:700;margin-bottom:16px;">@BuildShortMessage(form.Message)</p>
-                        <div class="kb-muted" style="white-space:pre-line;">@form.Message.Trim()</div>
+                        <div class="kb-muted" style="font-size:.78rem;text-transform:uppercase;">Notificación</div>
+                        <p style="font-size:1.3rem;font-weight:700;margin:4px 0 16px;">@DisplayText(form.ShortMessage?.Trim())</p>
+                        <div class="kb-muted" style="font-size:.78rem;text-transform:uppercase;">Detalle</div>
+                        <div class="kb-muted" style="white-space:pre-line;">@DisplayText(form.LongMessage?.Trim())</div>
                     }
                 </div>
 
@@ -186,7 +198,7 @@
                     <th>Creada</th>
                     <th>Nombre</th>
                     <th>Audiencia</th>
-                    <th>Mensaje</th>
+                    <th>Notificación / detalle</th>
                     <th>Estado</th>
                     <th>Métricas</th>
                     <th>Acciones</th>
@@ -320,7 +332,8 @@
         successMsg = null;
         try
         {
-            var message = form.Message.Trim();
+            var shortMessage = NormalizeSingleLine(form.ShortMessage);
+            var longMessage = form.LongMessage.Trim();
             var generatedName = await GenerateInternalNameAsync();
 
             var result = await Api.PostAsJsonAsync<CustomNotificationCampaignRequest, CustomNotificationCampaignDto>(
@@ -328,8 +341,8 @@
                 new CustomNotificationCampaignRequest(
                     generatedName,
                     GeneratedTitle,
-                    BuildShortMessage(message),
-                    message,
+                    shortMessage,
+                    longMessage,
                     form.AudienceType,
                     CustomNotificationCampaign.IsMinimumPointsAudience(form.AudienceType) ? form.MinimumPoints : null,
                     CustomNotificationCampaign.IsPointsExpiringAudience(form.AudienceType) ? form.PointsExpiringDaysAhead : null,
@@ -407,8 +420,17 @@
         validationErrors.Clear();
         errorMsg = null;
 
-        if (string.IsNullOrWhiteSpace(form.Message) || form.Message.Trim().Length > 500)
-            validationErrors.Add("El mensaje es obligatorio y debe tener máximo 500 caracteres.");
+        var shortMessage = NormalizeSingleLine(form.ShortMessage);
+        if (string.IsNullOrWhiteSpace(shortMessage))
+            validationErrors.Add("La notificación es obligatoria.");
+        else if (shortMessage.Length > ShortMessageMaxLength)
+            validationErrors.Add($"La notificación debe tener máximo {ShortMessageMaxLength} caracteres.");
+
+        if (string.IsNullOrWhiteSpace(form.LongMessage))
+            validationErrors.Add("El detalle del mensaje es obligatorio.");
+        else if (form.LongMessage.Trim().Length > LongMessageMaxLength)
+            validationErrors.Add($"El detalle del mensaje debe tener máximo {LongMessageMaxLength} caracteres.");
+
         var effectiveSendAtUtc = form.SendImmediately ? DateTime.UtcNow : form.ScheduledAtUtc;
 
         if (form.DisplayUntilUtc <= DateTime.UtcNow)
@@ -521,13 +543,7 @@
         }
     }
 
-    private static string BuildShortMessage(string? value)
-    {
-        var clean = NormalizeMessage(value);
-        return clean.Length <= 40 ? clean : clean[..40].TrimEnd();
-    }
-
-    private static string NormalizeMessage(string? value)
+    private static string NormalizeSingleLine(string? value)
     {
         var clean = (value ?? string.Empty)
             .Replace('\r', ' ')
@@ -540,6 +556,11 @@
 
         return clean;
     }
+
+    private string ShortMessageCounterClass =>
+        NormalizeSingleLine(form.ShortMessage).Length <= ShortMessageRecommendedLength
+            ? "kb-muted"
+            : "kb-form-warning";
 
     private static string CampaignStatusText(CustomNotificationCampaignStatus status) => status switch
     {
@@ -610,7 +631,8 @@
 
     private sealed class CustomMessageForm
     {
-        public string Message { get; set; } = string.Empty;
+        public string ShortMessage { get; set; } = string.Empty;
+        public string LongMessage { get; set; } = string.Empty;
         public string AudienceType { get; set; } = CustomNotificationCampaign.AudienceAllWalletUsers;
         public int? MinimumPoints { get; set; } = 0;
         public int? PointsExpiringDaysAhead { get; set; } = 15;
@@ -631,4 +653,8 @@
             };
         }
     }
+
+    private const int ShortMessageRecommendedLength = 35;
+    private const int ShortMessageMaxLength = 40;
+    private const int LongMessageMaxLength = 500;
 }

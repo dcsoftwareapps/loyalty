@@ -493,8 +493,7 @@ public sealed class AdminRoutingTests : IClassFixture<AdminRoutingTests.AdminWeb
             "href=\"/redeem\"",
             "<span class=\"kb-sidebar-section\">Reportes</span>",
             "href=\"/customers\"",
-            "href=\"/reports/inactive-customers\"",
-            "href=\"/reports/top-rewards\"",
+            "href=\"/reports/activity-trends\"",
             "<span class=\"kb-sidebar-section\">Programa</span>",
             "href=\"/redemptions\"",
             "href=\"/rewards\"",
@@ -763,25 +762,25 @@ public sealed class AdminRoutingTests : IClassFixture<AdminRoutingTests.AdminWeb
 
     [Fact]
     [Trait("Category", "AdminMarketingNotifications")]
-    public void Marketing_notifications_form_only_requires_visible_message()
+    public void Marketing_notifications_form_collects_notification_and_message_detail()
     {
         var source = File.ReadAllText(Path.Combine(GetRepositoryRoot(), "src", "LoyaltyCloud.Admin", "Pages", "MarketingNotifications.razor"));
 
-        Assert.Contains("<label for=\"message\">Mensaje</label>", source);
-        Assert.Contains("@bind=\"form.Message\"", source);
+        Assert.Contains("<label for=\"short-message\">Notificación</label>", source);
+        Assert.Contains("<label for=\"long-message\">Detalle del mensaje</label>", source);
+        Assert.Contains("@bind=\"form.ShortMessage\"", source);
+        Assert.Contains("@bind=\"form.LongMessage\"", source);
         Assert.Contains("@bind:event=\"oninput\"", source);
+        Assert.Contains("Este texto aparecerá en la notificación del teléfono.", source);
+        Assert.Contains("Este contenido se mostrará al consultar el mensaje.", source);
         Assert.DoesNotContain("id=\"campaign-name\"", source);
         Assert.DoesNotContain("id=\"campaign-title\"", source);
-        Assert.DoesNotContain("id=\"short-message\"", source);
-        Assert.DoesNotContain("id=\"long-message\"", source);
         Assert.DoesNotContain("Nombre interno", source);
-        Assert.DoesNotContain("Mensaje corto", source);
-        Assert.DoesNotContain("Mensaje largo", source);
         Assert.DoesNotContain("public string Name { get; set; }", source);
         Assert.DoesNotContain("public string Title { get; set; }", source);
-        Assert.DoesNotContain("public string ShortMessage { get; set; }", source);
-        Assert.DoesNotContain("public string LongMessage { get; set; }", source);
-        Assert.Contains("public string Message { get; set; }", source);
+        Assert.Contains("public string ShortMessage { get; set; }", source);
+        Assert.Contains("public string LongMessage { get; set; }", source);
+        Assert.DoesNotContain("public string Message { get; set; }", source);
     }
 
     [Fact]
@@ -792,15 +791,16 @@ public sealed class AdminRoutingTests : IClassFixture<AdminRoutingTests.AdminWeb
 
         Assert.Contains("private const string GeneratedTitle = \"NOVEDAD\";", source);
         Assert.Contains("var generatedName = await GenerateInternalNameAsync();", source);
+        Assert.Contains("var shortMessage = NormalizeSingleLine(form.ShortMessage);", source);
+        Assert.Contains("var longMessage = form.LongMessage.Trim();", source);
         Assert.Contains("generatedName,", source);
         Assert.Contains("GeneratedTitle,", source);
-        Assert.Contains("BuildShortMessage(message),", source);
-        Assert.Contains("message,", source);
+        Assert.Contains("shortMessage,", source);
+        Assert.Contains("longMessage,", source);
         Assert.Contains("new CustomNotificationCampaignRequest(", source);
         Assert.DoesNotContain("form.Name.Trim()", source);
         Assert.DoesNotContain("form.Title.Trim()", source);
-        Assert.DoesNotContain("form.ShortMessage.Trim()", source);
-        Assert.DoesNotContain("form.LongMessage.Trim()", source);
+        Assert.DoesNotContain("BuildShortMessage(message),", source);
     }
 
     [Fact]
@@ -822,15 +822,16 @@ public sealed class AdminRoutingTests : IClassFixture<AdminRoutingTests.AdminWeb
 
     [Fact]
     [Trait("Category", "AdminMarketingNotifications")]
-    public void Marketing_notifications_preview_uses_generated_title_and_message_without_unavailable_filler()
+    public void Marketing_notifications_preview_separates_notification_and_detail_without_unavailable_filler()
     {
         var source = File.ReadAllText(Path.Combine(GetRepositoryRoot(), "src", "LoyaltyCloud.Admin", "Pages", "MarketingNotifications.razor"));
 
         Assert.Contains("<h3 style=\"margin-top:8px;\">@GeneratedTitle</h3>", source);
-        Assert.Contains("@BuildShortMessage(form.Message)", source);
-        Assert.Contains("@form.Message.Trim()", source);
-        Assert.DoesNotContain("@DisplayText(form.ShortMessage)", source);
-        Assert.DoesNotContain("@DisplayText(form.LongMessage)", source);
+        Assert.Contains("Notificación", source);
+        Assert.Contains("Detalle", source);
+        Assert.Contains("@DisplayText(form.ShortMessage?.Trim())", source);
+        Assert.Contains("@DisplayText(form.LongMessage?.Trim())", source);
+        Assert.DoesNotContain("@BuildShortMessage(form.Message)", source);
     }
 
     [Fact]
@@ -1079,11 +1080,17 @@ public sealed class AdminRoutingTests : IClassFixture<AdminRoutingTests.AdminWeb
         var reportsPage = File.ReadAllText(Path.Combine(root, "src", "LoyaltyCloud.Admin", "Pages", "Reports.razor"));
         var inactivePage = File.ReadAllText(Path.Combine(root, "src", "LoyaltyCloud.Admin", "Pages", "InactiveCustomersReport.razor"));
         var topRewardsPage = File.ReadAllText(Path.Combine(root, "src", "LoyaltyCloud.Admin", "Pages", "TopRewardsReport.razor"));
+        var advancedPages = new[] { "TopCustomersReport.razor", "VisitFrequencyReport.razor", "ReturningCustomersReport.razor", "ActivityTrendsReport.razor", "LevelDistributionReport.razor" }.Select(file => File.ReadAllText(Path.Combine(root, "src", "LoyaltyCloud.Admin", "Pages", file))).ToArray();
+        var reportSubnav = File.ReadAllText(Path.Combine(root, "src", "LoyaltyCloud.Admin", "Components", "Reports", "ReportSubnav.razor"));
+        var visitFrequencyPage = File.ReadAllText(Path.Combine(root, "src", "LoyaltyCloud.Admin", "Pages", "VisitFrequencyReport.razor"));
 
         Assert.Contains("<span class=\"kb-sidebar-section\">Reportes</span>", layout);
         Assert.DoesNotContain("href=\"/reports\"", layout);
-        Assert.Contains("href=\"/reports/inactive-customers\"", layout);
-        Assert.Contains("href=\"/reports/top-rewards\"", layout);
+        Assert.Contains("href=\"/customers\"", layout);
+        Assert.Contains("href=\"/reports/activity-trends\"", layout);
+        Assert.DoesNotContain("href=\"/reports/top-customers\"", layout);
+        Assert.DoesNotContain("href=\"/reports/inactive-customers\"", layout);
+        Assert.DoesNotContain("href=\"/reports/top-rewards\"", layout);
         Assert.Contains("@page \"/reports\"", reportsPage);
         Assert.Contains("@attribute [Authorize]", reportsPage);
         Assert.Contains("href=\"/customers\"", reportsPage);
@@ -1096,6 +1103,15 @@ public sealed class AdminRoutingTests : IClassFixture<AdminRoutingTests.AdminWeb
         Assert.Contains("GetTopRewardsReportQuery", topRewardsPage);
         Assert.Contains("Sin actividad durante", inactivePage);
         Assert.Contains("Últimos 30 días", topRewardsPage);
+        Assert.All(advancedPages, page => Assert.Contains("<ReportSubnav />", page));
+        Assert.Contains(advancedPages, page => page.Contains("@page \"/reports/visit-frequency\"", StringComparison.Ordinal));
+        Assert.Contains(advancedPages, page => page.Contains("@page \"/reports/returning-customers\"", StringComparison.Ordinal));
+        Assert.Contains(advancedPages, page => page.Contains("@page \"/reports/level-distribution\"", StringComparison.Ordinal));
+        foreach (var route in new[] { "/reports/top-customers", "/reports/inactive-customers", "/reports/visit-frequency", "/reports/returning-customers", "/reports/activity-trends", "/reports/level-distribution", "/reports/top-rewards" })
+            Assert.Contains($"href=\"{route}\"", reportSubnav);
+        Assert.Contains("@FormatNumber(report.FourToSixVisits + report.SevenPlusVisits)", visitFrequencyPage);
+        Assert.Contains("private static string FormatNumber(int value) => value.ToString(\"N0\")", visitFrequencyPage);
+        Assert.DoesNotContain("@(report.FourToSixVisits + report.SevenPlusVisits).ToString", visitFrequencyPage);
     }
 
     [Fact]

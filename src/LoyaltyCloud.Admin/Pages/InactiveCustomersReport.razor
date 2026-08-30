@@ -9,6 +9,8 @@
 
 <header class="kb-page-header"><div><span class="kb-eyebrow">Reportes</span><h1>Clientes inactivos</h1><p>Clientes activos sin movimientos de puntos ni canjes durante el periodo seleccionado.</p></div></header>
 
+<ReportSubnav />
+
 <section class="kb-card kb-reports-filters">
     <div>
         <label for="inactivePreset">Sin actividad durante</label>
@@ -41,6 +43,7 @@
 }
 else if (report is not null)
 {
+    <section class="kb-kpi-grid"><article class="kb-kpi-card kb-kpi-card--accent"><span>Clientes en riesgo</span><strong>@FormatNumber(report.Total)</strong><small>@report.ThresholdDays días o más sin actividad</small></article><article class="kb-kpi-card"><span>Mayor inactividad</span><strong>@(report.Items.Count == 0 ? "—" : report.Items.Max(x => x.DaysWithoutActivity).ToString("N0"))</strong><small>días sin volver</small></article></section>
     <p class="kb-muted">
         Total: @FormatNumber(report.Total) clientes con @report.ThresholdDays días o más sin actividad.
     </p>
@@ -51,6 +54,7 @@ else if (report is not null)
     }
     else
     {
+        <section class="kb-report-panel"><div class="kb-panel-heading"><div><span class="kb-eyebrow">Prioridad</span><h2>Días sin actividad</h2></div></div><ReportBarChart Labels="@report.Items.Take(10).Select(x => x.CustomerName).ToList()" Values="@report.Items.Take(10).Select(x => (decimal)x.DaysWithoutActivity).ToList()" AriaLabel="Clientes con mayor tiempo sin actividad" /></section>
         <div class="kb-table-shell"><div class="kb-table-responsive"><table class="kb-table kb-table--compact">
             <thead>
                 <tr>
