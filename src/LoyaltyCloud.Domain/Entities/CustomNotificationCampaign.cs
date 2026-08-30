@@ -131,15 +131,15 @@ public class CustomNotificationCampaign : Entity, ITenantOwned
         if (title.Trim().Length > 80)
             throw new ArgumentOutOfRangeException(nameof(title), "El titulo no puede exceder 80 caracteres.");
         if (string.IsNullOrWhiteSpace(shortMessage))
-            throw new ArgumentException("Mensaje corto requerido.", nameof(shortMessage));
+            throw new ArgumentException("La notificacion es requerida.", nameof(shortMessage));
         if (shortMessage.Trim().Length > 40)
-            throw new ArgumentOutOfRangeException(nameof(shortMessage), "El mensaje corto no puede exceder 40 caracteres.");
+            throw new ArgumentOutOfRangeException(nameof(shortMessage), "La notificacion no puede exceder 40 caracteres.");
         if (shortMessage.Contains('\n') || shortMessage.Contains('\r') || shortMessage.Contains('\t'))
-            throw new ArgumentException("El mensaje corto no admite saltos de linea ni tabs.", nameof(shortMessage));
+            throw new ArgumentException("La notificacion no admite saltos de linea ni tabs.", nameof(shortMessage));
         if (string.IsNullOrWhiteSpace(longMessage))
-            throw new ArgumentException("Mensaje largo requerido.", nameof(longMessage));
+            throw new ArgumentException("El detalle del mensaje es requerido.", nameof(longMessage));
         if (longMessage.Trim().Length > 500)
-            throw new ArgumentOutOfRangeException(nameof(longMessage), "El mensaje largo no puede exceder 500 caracteres.");
+            throw new ArgumentOutOfRangeException(nameof(longMessage), "El detalle del mensaje no puede exceder 500 caracteres.");
         if (minimumPoints.HasValue && minimumPoints.Value < 0)
             throw new ArgumentOutOfRangeException(nameof(minimumPoints), "El monto minimo debe ser mayor o igual a cero.");
         if (pointsExpiringDaysAhead.HasValue && pointsExpiringDaysAhead.Value <= 0)

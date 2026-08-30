@@ -234,6 +234,8 @@ All normal Admin API calls are tenant-aware via HMAC middleware when their route
 | POST | `/api/custom-notification-campaigns/{id}/send` | Send/process campaign now. |
 | PUT | `/api/custom-notification-campaigns/{id}/cancel` | Cancel scheduled/unprocessed campaign. |
 
+Custom campaigns store a short notification text and a longer message detail. Tenant Admin UI labels them `Notificación` and `Detalle del mensaje`. Keep those concepts provider-neutral; Apple Wallet and Google Wallet adapt them per channel.
+
 ### Notifications
 
 | Method | Route | Purpose |
@@ -327,6 +329,7 @@ Important implementation details:
 - `LevelChanged`, `PointsAdded`, `PointsExpiring`, `MonthlyProductStarted`, `BirthdayBenefitStarted`, `PointCampaignStarted` and `Custom` can create visible events.
 - Apple Wallet `changeMessage` must contain `%@`.
 - For `PointsAdded`, the temporary field is used for points earned in the operation; permanent `points` remains total balance without changeMessage.
+- For `Custom`, the short notification text is used on the temporary visible/changeMessage field and the long detail is shown on the back of the pass.
 - Tenant logos are read from Blob Storage through `TenantWalletAssetProvider`; fallback is neutral bundled assets.
 - Apple Pass Type ID may still be `pass.com.kbeautymx.loyalty`.
 - Apple Key Vault secret names may still be `kbeauty-*`.
@@ -337,6 +340,8 @@ Important implementation details:
 Google Wallet is implemented as a separate provider from Apple Wallet.
 
 Current status: Production Approved.
+
+Custom Wallet messages use Google Wallet `Message.header` for LoyaltyCloud's short notification text and `Message.body` for the long message detail. `TEXT_AND_NOTIFY` is used when adding a message that should also notify Android users.
 
 Flow:
 

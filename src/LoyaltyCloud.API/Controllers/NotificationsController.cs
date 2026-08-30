@@ -81,7 +81,9 @@ public sealed class NotificationsController : ControllerBase
             body.CorrelationId,
             body.Source ?? "api",
             body.MetadataJson,
-            body.ProcessImmediately), ct);
+            body.ProcessImmediately,
+            body.ShortMessage,
+            body.LongMessage), ct);
 
         if (result.IsFailure)
             return BadRequest(new ProblemDetails { Title = "Crear notificacion", Detail = result.Error });
@@ -136,5 +138,7 @@ public sealed class NotificationsController : ControllerBase
         string? CorrelationId,
         string? Source,
         string? MetadataJson,
+        string? ShortMessage,
+        string? LongMessage,
         bool ProcessImmediately = true);
 }

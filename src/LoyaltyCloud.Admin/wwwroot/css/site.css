@@ -631,6 +631,7 @@ input[type=color].kb-color-picker {
 .kb-form-row--horizontal { flex-direction: row; align-items: end; max-width: 100%; flex-wrap: wrap; }
 .kb-form-error { color: #B23B3B; background: #FDEDED; padding: 12px 16px; border-radius: var(--kb-radius-sm); margin-bottom: 16px; }
 .kb-form-success { color: var(--kb-sage); background: #ECF3EF; padding: 12px 16px; border-radius: var(--kb-radius-sm); margin-bottom: 16px; }
+.kb-form-warning { color: #9A6B16; font-size: 0.85rem; }
 .kb-reports-filters {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));

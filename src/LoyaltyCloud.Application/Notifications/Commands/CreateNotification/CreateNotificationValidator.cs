@@ -9,6 +9,8 @@ internal sealed class CreateNotificationValidator : AbstractValidator<CreateNoti
         RuleFor(x => x.SerialNumber).NotEmpty();
         RuleFor(x => x.Title).NotEmpty().MaximumLength(200);
         RuleFor(x => x.Message).NotEmpty().MaximumLength(1000);
+        RuleFor(x => x.ShortMessage).MaximumLength(40);
+        RuleFor(x => x.LongMessage).MaximumLength(500);
         RuleFor(x => x.Channels).NotEmpty();
         RuleFor(x => x.DisplayUntilUtc)
             .GreaterThan(DateTime.UtcNow.AddMinutes(-5))

@@ -58,10 +58,17 @@ internal sealed class GoogleWalletNotificationChannelProcessor : INotificationCh
 
         try
         {
+            var header = string.IsNullOrWhiteSpace(notification.ShortMessage)
+                ? notification.Title
+                : notification.ShortMessage;
+            var body = string.IsNullOrWhiteSpace(notification.LongMessage)
+                ? notification.Message
+                : notification.LongMessage;
+
             await _client.AddMessageAsync(
                 wallet.ExternalObjectId,
-                notification.Title,
-                notification.LongMessage ?? notification.Message,
+                header,
+                body,
                 $"notification-{notification.Id:N}",
                 ct);
 
