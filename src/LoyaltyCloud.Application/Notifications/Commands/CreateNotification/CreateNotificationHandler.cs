@@ -25,7 +25,9 @@ public sealed class CreateNotificationHandler : IRequestHandler<CreateNotificati
                 command.CorrelationId,
                 command.Source,
                 command.MetadataJson,
-                command.ProcessImmediately), ct);
+                command.ProcessImmediately,
+                ShortMessage: command.ShortMessage,
+                LongMessage: command.LongMessage), ct);
             return Result.Ok(dto);
         }
         catch (Exception ex)
