@@ -493,8 +493,7 @@ public sealed class AdminRoutingTests : IClassFixture<AdminRoutingTests.AdminWeb
             "href=\"/redeem\"",
             "<span class=\"kb-sidebar-section\">Reportes</span>",
             "href=\"/customers\"",
-            "href=\"/reports/inactive-customers\"",
-            "href=\"/reports/top-rewards\"",
+            "href=\"/reports/activity-trends\"",
             "<span class=\"kb-sidebar-section\">Programa</span>",
             "href=\"/redemptions\"",
             "href=\"/rewards\"",
@@ -1081,11 +1080,17 @@ public sealed class AdminRoutingTests : IClassFixture<AdminRoutingTests.AdminWeb
         var reportsPage = File.ReadAllText(Path.Combine(root, "src", "LoyaltyCloud.Admin", "Pages", "Reports.razor"));
         var inactivePage = File.ReadAllText(Path.Combine(root, "src", "LoyaltyCloud.Admin", "Pages", "InactiveCustomersReport.razor"));
         var topRewardsPage = File.ReadAllText(Path.Combine(root, "src", "LoyaltyCloud.Admin", "Pages", "TopRewardsReport.razor"));
+        var advancedPages = new[] { "TopCustomersReport.razor", "VisitFrequencyReport.razor", "ReturningCustomersReport.razor", "ActivityTrendsReport.razor", "LevelDistributionReport.razor" }.Select(file => File.ReadAllText(Path.Combine(root, "src", "LoyaltyCloud.Admin", "Pages", file))).ToArray();
+        var reportSubnav = File.ReadAllText(Path.Combine(root, "src", "LoyaltyCloud.Admin", "Components", "Reports", "ReportSubnav.razor"));
+        var visitFrequencyPage = File.ReadAllText(Path.Combine(root, "src", "LoyaltyCloud.Admin", "Pages", "VisitFrequencyReport.razor"));
 
         Assert.Contains("<span class=\"kb-sidebar-section\">Reportes</span>", layout);
         Assert.DoesNotContain("href=\"/reports\"", layout);
-        Assert.Contains("href=\"/reports/inactive-customers\"", layout);
-        Assert.Contains("href=\"/reports/top-rewards\"", layout);
+        Assert.Contains("href=\"/customers\"", layout);
+        Assert.Contains("href=\"/reports/activity-trends\"", layout);
+        Assert.DoesNotContain("href=\"/reports/top-customers\"", layout);
+        Assert.DoesNotContain("href=\"/reports/inactive-customers\"", layout);
+        Assert.DoesNotContain("href=\"/reports/top-rewards\"", layout);
         Assert.Contains("@page \"/reports\"", reportsPage);
         Assert.Contains("@attribute [Authorize]", reportsPage);
         Assert.Contains("href=\"/customers\"", reportsPage);
@@ -1098,6 +1103,15 @@ public sealed class AdminRoutingTests : IClassFixture<AdminRoutingTests.AdminWeb
         Assert.Contains("GetTopRewardsReportQuery", topRewardsPage);
         Assert.Contains("Sin actividad durante", inactivePage);
         Assert.Contains("Últimos 30 días", topRewardsPage);
+        Assert.All(advancedPages, page => Assert.Contains("<ReportSubnav />", page));
+        Assert.Contains(advancedPages, page => page.Contains("@page \"/reports/visit-frequency\"", StringComparison.Ordinal));
+        Assert.Contains(advancedPages, page => page.Contains("@page \"/reports/returning-customers\"", StringComparison.Ordinal));
+        Assert.Contains(advancedPages, page => page.Contains("@page \"/reports/level-distribution\"", StringComparison.Ordinal));
+        foreach (var route in new[] { "/reports/top-customers", "/reports/inactive-customers", "/reports/visit-frequency", "/reports/returning-customers", "/reports/activity-trends", "/reports/level-distribution", "/reports/top-rewards" })
+            Assert.Contains($"href=\"{route}\"", reportSubnav);
+        Assert.Contains("@FormatNumber(report.FourToSixVisits + report.SevenPlusVisits)", visitFrequencyPage);
+        Assert.Contains("private static string FormatNumber(int value) => value.ToString(\"N0\")", visitFrequencyPage);
+        Assert.DoesNotContain("@(report.FourToSixVisits + report.SevenPlusVisits).ToString", visitFrequencyPage);
     }
 
     [Fact]

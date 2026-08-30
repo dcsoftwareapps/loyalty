@@ -10,6 +10,8 @@
 
 <header class="kb-page-header"><div><span class="kb-eyebrow">Reportes</span><h1>Recompensas más canjeadas</h1><p>Ranking de recompensas de catálogo canjeadas dentro del periodo seleccionado.</p></div></header>
 
+<ReportSubnav />
+
 <section class="kb-card kb-reports-filters">
     <div>
         <label for="periodPreset">Periodo</label>
@@ -59,11 +61,13 @@ else if (rewards is not null)
     }
     else
     {
+        <section class="kb-kpi-grid"><article class="kb-kpi-card"><span>Canjes del periodo</span><strong>@rewards.Sum(x => x.Redemptions).ToString("N0")</strong><small>recompensas entregadas</small></article><article class="kb-kpi-card"><span>Favorita</span><strong class="kb-kpi-text">@rewards[0].RewardName</strong><small>@rewards[0].Redemptions.ToString("N0") canjes</small></article></section>
+        <section class="kb-report-panel"><div class="kb-panel-heading"><div><span class="kb-eyebrow">Preferencias</span><h2>Popularidad del catálogo</h2></div></div><ReportBarChart Labels="@rewards.Take(10).Select(x => x.RewardName).ToList()" Values="@rewards.Take(10).Select(x => (decimal)x.Redemptions).ToList()" AriaLabel="Recompensas más canjeadas" /></section>
         <div class="kb-table-shell"><div class="kb-table-responsive"><table class="kb-table kb-table--compact">
             <thead>
                 <tr>
                     <th>Recompensa</th>
-                    <th class="kb-cell-number">Número de canjes</th>
+                    <th class="kb-cell-number">Número de canjes</th><th class="kb-cell-number">% del total</th>
                 </tr>
             </thead>
             <tbody>
@@ -71,7 +75,7 @@ else if (rewards is not null)
             {
                 <tr>
                     <td>@reward.RewardName</td>
-                    <td class="kb-cell-number">@FormatNumber(reward.Redemptions)</td>
+                    <td class="kb-cell-number">@FormatNumber(reward.Redemptions)</td><td class="kb-cell-number">@((reward.Redemptions * 100m / rewards.Sum(x => x.Redemptions)).ToString("N1"))%</td>
                 </tr>
             }
             </tbody>
