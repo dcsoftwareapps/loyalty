@@ -144,6 +144,44 @@ public sealed class WalletPassJsonUpdateStructureTests
     }
 
     [Fact]
+    [Trait("Category", "WalletProductionUpdate")]
+    public void Custom_message_uses_short_notification_and_long_detail()
+    {
+        var now = new DateTime(2026, 8, 29, 12, 0, 0, DateTimeKind.Utc);
+        var customer = NewCustomer(now);
+        var card = NewCard(customer.Id, now);
+        var snapshot = ProgramConfigSnapshot.FromEntries([]);
+        card.EarnPoints(225, TransactionType.Purchase, snapshot, new FixedClock(now));
+
+        var notificationId = Guid.NewGuid();
+        var context = new WalletNotificationContext(
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            new WalletCustomMessage(
+                notificationId,
+                "NOVEDAD",
+                "Brillitos hoy",
+                "Hoy tenemos brillitos de regalo al visitar la tienda.",
+                now.AddDays(2),
+                "\ud83d\udce3 %@"),
+            null,
+            new WalletRecentVisibleEvent(notificationId, NotificationType.Custom, now, now, now.AddDays(2)));
+
+        var pass = BuildPassJson(card, customer, context);
+        var frontMessage = SingleField(pass, "custom_message");
+        var detail = SingleField(pass, "custom_message_detail");
+
+        Assert.Equal("NOVEDAD", frontMessage["label"]!.GetValue<string>());
+        Assert.Equal("Brillitos hoy", frontMessage["value"]!.GetValue<string>());
+        Assert.Equal("\ud83d\udce3 %@", frontMessage["changeMessage"]!.GetValue<string>());
+        Assert.Equal("NOVEDAD\n\nHoy tenemos brillitos de regalo al visitar la tienda.", detail["value"]!.GetValue<string>());
+    }
+
+    [Fact]
     [Trait("Category", "MTLevel4")]
     public void Pass_json_uses_dynamic_next_and_remaining_level_fields()
     {

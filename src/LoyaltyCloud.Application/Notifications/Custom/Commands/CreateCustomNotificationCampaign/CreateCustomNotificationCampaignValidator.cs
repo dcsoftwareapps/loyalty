@@ -14,7 +14,7 @@ internal sealed class CreateCustomNotificationCampaignValidator : AbstractValida
             .NotEmpty()
             .MaximumLength(40)
             .Must(value => value is null || (!value.Contains('\n') && !value.Contains('\r') && !value.Contains('\t')))
-            .WithMessage("ShortMessage no debe contener saltos de linea ni tabuladores.");
+            .WithMessage("La notificacion no debe contener saltos de linea ni tabuladores.");
         RuleFor(x => x.LongMessage).NotEmpty().MaximumLength(500);
         RuleFor(x => x.AudienceType)
             .MustAsync((audienceType, ct) => IsValidAudienceTypeAsync(audienceType, levels, ct))

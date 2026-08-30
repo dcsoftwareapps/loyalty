@@ -1,10 +1,33 @@
 # LoyaltyCloud - AI Handoff
 
-Last updated: 2026-08-26
+Last updated: 2026-08-29
 
-Branch: `feature/reports-summary`
+Branch: `feature/message-notification-details`
 
-Last task worked: Reports v1 UX and navigation refactor.
+Last task worked: custom Wallet messages split short notification text from long message detail.
+
+## 2026-08-29 - Custom message notification/detail split
+
+Current branch for this work: `feature/message-notification-details`.
+
+Scope:
+
+- Tenant Admin `/marketing-notifications` now collects two business-facing fields:
+  - `Notificación`: short text for phone notifications.
+  - `Detalle del mensaje`: longer content shown when the customer opens/consults the message.
+- Existing technical model already had `CustomNotificationCampaign.ShortMessage`, `CustomNotificationCampaign.LongMessage`, `LoyaltyNotification.ShortMessage` and `LoyaltyNotification.LongMessage`; no schema change was required.
+- Custom campaign creation sends the short text and long detail explicitly instead of deriving a short message from one textarea.
+- Apple Wallet keeps using the short text for the temporary visible field/changeMessage and the long detail in pass back fields.
+- Google Wallet notification delivery now maps short text to `Message.header` and long detail to `Message.body`, with `TEXT_AND_NOTIFY` still handled by the Google Wallet client.
+- Backward compatibility: legacy notifications without short/long values fall back to existing `Title`/`Message`.
+
+Validation expected for this task:
+
+- focused Admin marketing notification tests;
+- Google Wallet notification tests;
+- Wallet pass JSON update tests;
+- `dotnet build .\LoyaltyCloud.sln -c Release`;
+- no database update, deploy, commit or push.
 
 ## 2026-08-27 - Reusable temporary STG deploy workflow
 

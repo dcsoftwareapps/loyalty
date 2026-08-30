@@ -15,4 +15,6 @@ public sealed record CreateNotificationCommand(
     string? CorrelationId,
     string? Source,
     string? MetadataJson,
-    bool ProcessImmediately = true) : IRequest<Result<NotificationDto>>;
+    bool ProcessImmediately = true,
+    string? ShortMessage = null,
+    string? LongMessage = null) : IRequest<Result<NotificationDto>>;

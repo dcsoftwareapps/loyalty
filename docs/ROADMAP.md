@@ -47,6 +47,7 @@ La base activa de produccion/UAT es `LoyaltyCloudFree`.
 - Campanas de puntos.
 - Producto del mes.
 - Mensajes personalizados Apple Wallet.
+- Mensajes personalizados con notificación corta y detalle largo para Apple Wallet y Google Wallet.
 - Motor base de notificaciones.
 - Notificaciones visibles Apple Wallet con `changeMessage`.
 - LevelChanged, PointsAdded, PointsExpiring, MonthlyProductStarted, BirthdayBenefitStarted, PointCampaignStarted y Custom.

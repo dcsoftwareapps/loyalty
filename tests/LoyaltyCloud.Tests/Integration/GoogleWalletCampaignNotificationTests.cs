@@ -77,8 +77,8 @@ public sealed class GoogleWalletCampaignNotificationTests : IClassFixture<Custom
                 TenantSeed.KBeautyTenantId,
                 "Mixed wallet campaign",
                 "NOVEDAD",
-                "A entrenar!",
-                "A entrenar!",
+                "Brillitos hoy",
+                "Hoy tenemos brillitos de regalo al visitar la tienda.",
                 CustomNotificationCampaign.AudienceAllWalletUsers,
                 null,
                 null,
@@ -93,7 +93,10 @@ public sealed class GoogleWalletCampaignNotificationTests : IClassFixture<Custom
 
         Assert.True(result.IsSuccess, result.Error);
         Assert.True(result.Value.NotificationsSucceeded >= 2);
-        Assert.Contains(_factory.GoogleWallet.Messages, m => m.ObjectId == ObjectId(TenantSeed.KBeautyTenantId, GoogleSerial));
+        Assert.Contains(_factory.GoogleWallet.Messages, m =>
+            m.ObjectId == ObjectId(TenantSeed.KBeautyTenantId, GoogleSerial) &&
+            m.Header == "Brillitos hoy" &&
+            m.Body == "Hoy tenemos brillitos de regalo al visitar la tienda.");
         Assert.Contains(_factory.Apn.Calls, call => call.Token == $"push-{AppleSerial}");
 
         await WithTenantAsync(TenantSeed.KBeautyTenantId, TenantSeed.KBeautySlug, async sp =>
