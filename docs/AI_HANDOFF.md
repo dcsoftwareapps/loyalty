@@ -1,10 +1,31 @@
 # LoyaltyCloud - AI Handoff
 
-Last updated: 2026-08-29
+Last updated: 2026-08-30
 
-Branch: `feature/message-notification-details`
+Branch: `feature/apple-wallet-logo-scale`
 
-Last task worked: custom Wallet messages split short notification text from long message detail.
+Last task worked: Apple Wallet logo scale per tenant.
+
+## 2026-08-30 - Apple Wallet logo scale per tenant
+
+Current branch for this work: `feature/apple-wallet-logo-scale`.
+
+Scope:
+
+- Added `TenantBranding.WalletLogoScalePercent` for Apple Wallet visual logo sizing.
+- Range is 60-100, default 100. Default 100 preserves the previous rendering.
+- Tenant Admin `/config` shows a 60-100 slider with step 5 in the Tarjeta digital section.
+- Apple Wallet logo scaling is implemented by rendering the logo inside a smaller centered box while keeping final PNG dimensions unchanged: `logo.png` 160x50, `logo@2x.png` 320x100 and `logo@3x.png` 480x150.
+- Existing wallet logos can be regenerated from the stored original blob when only the slider changes; users do not need to reupload the logo.
+- Apple Wallet branding changes continue to use the existing best-effort installed-pass refresh/APNs path.
+- Google Wallet is intentionally not affected by this feature. Google continues to use the unscaled shared wallet logo asset.
+
+Validation expected for this task:
+
+- focused TenantBranding / WalletProductionUpdate / Google Wallet mapper tests;
+- `dotnet build .\LoyaltyCloud.sln -c Release`;
+- `git diff --check`;
+- no database update, deploy, commit or push.
 
 ## 2026-08-29 - Custom message notification/detail split
 
@@ -178,7 +199,7 @@ Active product status:
 - API STG, Admin STG and Wallet were manually validated after the STG SQL migration.
 - Quick Help registration QR/poster now uses `Admin:PublicBaseUrl` when configured; PROD should use `https://admin.loyaltycloud.net`.
 - Tenant Admin `/config` now owns Apple Wallet card branding only: optional wallet background color, optional wallet-specific logo, contrast preview and fallback to main tenant logo/color.
-- Google Wallet tenant branding was intentionally not changed in this phase.
+- Google Wallet tenant branding is implemented. Apple Wallet logo scale changes intentionally do not alter the Google Wallet logo asset.
 - `Admin__PublicBaseUrl=https://admin.loyaltycloud.net` was also configured intentionally on the legacy PROD Admin Windows app so newly printed Quick Help QR posters point to the new Admin domain during transition.
 - New PROD Admin Linux `Admin__ApiBaseUrl` uses `https://api.loyaltycloud.net`.
 - Do not change `Apple__WebServiceURL` yet; Apple Wallet hostname migration needs a separate impact review.

@@ -1,5 +1,6 @@
 using LoyaltyCloud.Application.Common.Interfaces;
 using LoyaltyCloud.Application.Common.Branding;
+using LoyaltyCloud.Domain.Entities;
 using LoyaltyCloud.Infrastructure.Configuration;
 using LoyaltyCloud.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
@@ -48,6 +49,9 @@ internal sealed class TenantWalletBrandingReadService : ITenantWalletBrandingRea
                 LogoBlobName = tenant.Branding == null ? null : tenant.Branding.LogoBlobName,
                 WalletBackgroundColor = tenant.Branding == null ? null : tenant.Branding.WalletBackgroundColor,
                 WalletLogoBlobName = tenant.Branding == null ? null : tenant.Branding.WalletLogoBlobName,
+                WalletLogoScalePercent = tenant.Branding == null
+                    ? TenantBranding.DefaultWalletLogoScalePercent
+                    : tenant.Branding.WalletLogoScalePercent,
                 PrimaryColor = tenant.Branding == null ? null : tenant.Branding.PrimaryColor,
                 SecondaryColor = tenant.Branding == null ? null : tenant.Branding.SecondaryColor,
                 SupportPhone = tenant.Branding == null ? null : tenant.Branding.SupportPhone,
@@ -93,6 +97,7 @@ internal sealed class TenantWalletBrandingReadService : ITenantWalletBrandingRea
             BackgroundHex: backgroundHex,
             LogoBlobName: row.LogoBlobName,
             WalletLogoBlobName: row.WalletLogoBlobName,
+            WalletLogoScalePercent: NormalizeWalletLogoScale(row.WalletLogoScalePercent),
             ContactValue: contactValue!,
             CustomerFallbackName: $"Cliente {row.DisplayName}",
             UsesBundledAssetsFallback: false,
@@ -111,5 +116,10 @@ internal sealed class TenantWalletBrandingReadService : ITenantWalletBrandingRea
             ? null
             : string.Join("\n\n", lines);
     }
+
+    private static int NormalizeWalletLogoScale(int value) =>
+        value is >= TenantBranding.MinWalletLogoScalePercent and <= TenantBranding.MaxWalletLogoScalePercent
+            ? value
+            : TenantBranding.DefaultWalletLogoScalePercent;
 
 }

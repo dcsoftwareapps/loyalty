@@ -45,13 +45,12 @@ public sealed class WalletAssetsController : ControllerBase
             return NotFound();
         }
 
-        var assets = await _assets.LoadAssetsAsync(
+        var logo = await _assets.LoadGoogleLogoAsync(
             branding.TenantId,
             branding.TenantSlug,
             branding.WalletLogoBlobName,
             branding.LogoBlobName,
             ct);
-        var logo = assets.Single(asset => string.Equals(asset.Name, "logo@3x.png", StringComparison.OrdinalIgnoreCase));
 
         Response.Headers.CacheControl = "no-store";
         return File(logo.Bytes, "image/png");

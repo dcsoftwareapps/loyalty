@@ -15,6 +15,9 @@ internal sealed class TenantBrandingConfiguration : IEntityTypeConfiguration<Ten
         builder.Property(b => b.LogoBlobName).HasMaxLength(500);
         builder.Property(b => b.WalletBackgroundColor).HasMaxLength(7);
         builder.Property(b => b.WalletLogoBlobName).HasMaxLength(500);
+        builder.Property(b => b.WalletLogoScalePercent)
+            .HasDefaultValue(TenantBranding.DefaultWalletLogoScalePercent)
+            .IsRequired();
         builder.Property(b => b.PrimaryColor).HasMaxLength(20).IsRequired();
         builder.Property(b => b.SecondaryColor).HasMaxLength(20).IsRequired();
         builder.Property(b => b.SupportPhone).HasMaxLength(50);

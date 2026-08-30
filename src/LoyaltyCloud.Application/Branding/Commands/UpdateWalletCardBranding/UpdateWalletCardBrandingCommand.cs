@@ -5,4 +5,5 @@ using MediatR;
 namespace LoyaltyCloud.Application.Branding.Commands.UpdateWalletCardBranding;
 
 public sealed record UpdateWalletCardBrandingCommand(
-    string? WalletBackgroundColor) : IRequest<Result<TenantBrandingInfo>>;
+    string? WalletBackgroundColor,
+    int? WalletLogoScalePercent) : IRequest<Result<TenantBrandingInfo>>;

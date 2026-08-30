@@ -10,6 +10,7 @@ using LoyaltyCloud.Domain.Entities;
 using LoyaltyCloud.Domain.Enums;
 using LoyaltyCloud.Infrastructure.Persistence;
 using LoyaltyCloud.Infrastructure.Persistence.Seed;
+using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
@@ -200,7 +201,7 @@ public sealed class AdminApiPointsFlowTests : IClassFixture<CustomWebApplication
         using var request = CreateSignedRequest(
             HttpMethod.Put,
             "/api/config/wallet-branding",
-            new { walletBackgroundColor = "#1c1c1c" },
+            new { walletBackgroundColor = "#1c1c1c", walletLogoScalePercent = 80 },
             tenantSlug: TenantSeed.KBeautySlug);
         using var response = await _client.SendAsync(request);
 
@@ -209,6 +210,7 @@ public sealed class AdminApiPointsFlowTests : IClassFixture<CustomWebApplication
         Assert.NotNull(branding);
         Assert.Equal(TenantSeed.KBeautyTenantId, branding!.TenantId);
         Assert.Equal("#1C1C1C", branding.WalletBackgroundColor);
+        Assert.Equal(80, branding.WalletLogoScalePercent);
 
         using var scope = _factory.Services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
@@ -232,6 +234,26 @@ public sealed class AdminApiPointsFlowTests : IClassFixture<CustomWebApplication
         Assert.Equal(HttpStatusCode.OK, registrations.StatusCode);
         var payload = await registrations.Content.ReadAsStringAsync();
         Assert.Contains(kbeautySerial, payload, StringComparison.Ordinal);
+    }
+
+    [Theory]
+    [Trait("Category", "TenantBranding")]
+    [Trait("Category", "WalletProductionUpdate")]
+    [InlineData(55)]
+    [InlineData(105)]
+    public async Task Signed_admin_wallet_branding_request_rejects_invalid_logo_scale(int scale)
+    {
+        using var request = CreateSignedRequest(
+            HttpMethod.Put,
+            "/api/config/wallet-branding",
+            new { walletBackgroundColor = "#1c1c1c", walletLogoScalePercent = scale },
+            tenantSlug: TenantSeed.KBeautySlug);
+
+        using var response = await _client.SendAsync(request);
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        var problem = await response.Content.ReadFromJsonAsync<ProblemDetails>();
+        Assert.Contains("tamaño del logo", problem!.Detail, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]

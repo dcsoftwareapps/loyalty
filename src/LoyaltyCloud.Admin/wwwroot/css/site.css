@@ -383,6 +383,15 @@ input[type=color].kb-color-picker {
 .kb-wallet-form {
     min-width: 0;
 }
+.kb-range {
+    width: 100%;
+    accent-color: var(--kb-accent);
+}
+.kb-range-value {
+    color: var(--kb-ink-muted);
+    font-size: 0.86rem;
+    font-weight: 700;
+}
 .kb-wallet-preview-shell {
     min-width: 0;
 }

@@ -5,10 +5,13 @@ using LoyaltyCloud.Domain.Entities;
 using LoyaltyCloud.Domain.Enums;
 using LoyaltyCloud.Infrastructure;
 using LoyaltyCloud.Infrastructure.Persistence;
+using LoyaltyCloud.Infrastructure.Services;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
+using SixLabors.ImageSharp;
+using SixLabors.ImageSharp.PixelFormats;
 using Xunit;
 
 namespace LoyaltyCloud.Tests.Integration;
@@ -93,6 +96,7 @@ public sealed class TenantBrandingTests
         Assert.Equal("rgb(139,92,246)", wallet.BackgroundColor);
         Assert.Equal("rgb(17,24,39)", wallet.ForegroundColor);
         Assert.Equal("rgb(17,24,39)", wallet.LabelColor);
+        Assert.Equal(TenantBranding.DefaultWalletLogoScalePercent, wallet.WalletLogoScalePercent);
         Assert.Contains("instagram.com/bella_salon", wallet.ContactValue);
     }
 
@@ -206,6 +210,12 @@ public sealed class TenantBrandingTests
         Assert.Contains("Reglas de puntos y beneficios", page);
         Assert.Contains("Define cómo se acumulan, vencen y bonifican los puntos de tu programa.", page);
         Assert.Contains("Cambiar logo", page);
+        Assert.Contains("Tamaño del logo", page);
+        Assert.Contains("min=\"60\"", page);
+        Assert.Contains("max=\"100\"", page);
+        Assert.Contains("step=\"5\"", page);
+        Assert.Contains("Ajusta qué tan grande se verá el logo en Apple Wallet.", page);
+        Assert.Contains("kb-range-value", page);
         Assert.DoesNotContain("Usar logo principal", page);
         Assert.DoesNotContain("Usar color principal", page);
         Assert.DoesNotContain("RemoveWalletLogoAsync", page);
@@ -238,6 +248,42 @@ public sealed class TenantBrandingTests
         Assert.DoesNotContain(".kb-wallet-preview-qr-pattern", css);
         Assert.Contains(".kb-wallet-preview-field-labels", css);
         Assert.Contains(".kb-wallet-preview-field-values", css);
+        Assert.Contains(".kb-range", css);
+    }
+
+    [Fact]
+    [Trait("Category", "TenantBranding")]
+    public void Apple_wallet_logo_scale_keeps_canvas_dimensions_and_reduces_visual_bounds()
+    {
+        var original = CreateSolidPng(width: 500, height: 100);
+
+        var full = TenantBrandingLogoService.RenderPngForTesting(original, 160, 50, transparentCanvas: true, logoScalePercent: 100);
+        var scaled = TenantBrandingLogoService.RenderPngForTesting(original, 160, 50, transparentCanvas: true, logoScalePercent: 80);
+
+        Assert.Equal((160, 50), ReadDimensions(full));
+        Assert.Equal((160, 50), ReadDimensions(scaled));
+
+        var fullBounds = ReadContentBounds(full);
+        var scaledBounds = ReadContentBounds(scaled);
+
+        Assert.True(scaledBounds.Width < fullBounds.Width);
+        Assert.True(scaledBounds.Height < fullBounds.Height);
+        Assert.InRange(scaledBounds.Width, (int)Math.Round(fullBounds.Width * 0.8) - 4, (int)Math.Round(fullBounds.Width * 0.8) + 4);
+    }
+
+    [Fact]
+    [Trait("Category", "TenantBranding")]
+    public void Apple_wallet_logo_scale_preserves_square_logo_aspect_ratio()
+    {
+        var original = CreateSolidPng(width: 120, height: 120);
+
+        var rendered = TenantBrandingLogoService.RenderPngForTesting(original, 160, 50, transparentCanvas: true, logoScalePercent: 60);
+
+        Assert.Equal((160, 50), ReadDimensions(rendered));
+        var bounds = ReadContentBounds(rendered);
+        Assert.InRange(bounds.Width, 28, 32);
+        Assert.InRange(bounds.Height, 28, 32);
+        Assert.InRange(Math.Abs(bounds.Width - bounds.Height), 0, 2);
     }
 
     [Fact]
@@ -432,6 +478,52 @@ public sealed class TenantBrandingTests
             current = current.Parent;
 
         return current?.FullName ?? throw new InvalidOperationException("Repository root was not found.");
+    }
+
+    private static byte[] CreateSolidPng(int width, int height)
+    {
+        using var image = new Image<Rgba32>(width, height, new Rgba32(20, 100, 220, 255));
+        using var stream = new MemoryStream();
+        image.SaveAsPng(stream);
+        return stream.ToArray();
+    }
+
+    private static (int Width, int Height) ReadDimensions(byte[] bytes)
+    {
+        using var image = Image.Load<Rgba32>(bytes);
+        return (image.Width, image.Height);
+    }
+
+    private static (int Width, int Height) ReadContentBounds(byte[] bytes)
+    {
+        using var image = Image.Load<Rgba32>(bytes);
+        var minX = image.Width;
+        var minY = image.Height;
+        var maxX = -1;
+        var maxY = -1;
+
+        image.ProcessPixelRows(accessor =>
+        {
+            for (var y = 0; y < accessor.Height; y++)
+            {
+                var row = accessor.GetRowSpan(y);
+                for (var x = 0; x < row.Length; x++)
+                {
+                    if (row[x].A <= 10)
+                        continue;
+
+                    minX = Math.Min(minX, x);
+                    minY = Math.Min(minY, y);
+                    maxX = Math.Max(maxX, x);
+                    maxY = Math.Max(maxY, y);
+                }
+            }
+        });
+
+        if (maxX < 0 || maxY < 0)
+            return (0, 0);
+
+        return (maxX - minX + 1, maxY - minY + 1);
     }
 
     private sealed class TestHostEnvironment : IHostEnvironment

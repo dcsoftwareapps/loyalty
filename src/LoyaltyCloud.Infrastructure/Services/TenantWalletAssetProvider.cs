@@ -41,7 +41,13 @@ internal sealed class TenantWalletAssetProvider : ITenantWalletAssetProvider
             : tenantSlug.Trim().ToLowerInvariant();
 
         var tenantAssets = !string.IsNullOrWhiteSpace(walletLogoBlobName)
+            ? await TryLoadTenantBlobAssetsAsync(tenantId, normalizedSlug, "wallet-branding/apple", cancellationToken)
+            : null;
+        tenantAssets ??= !string.IsNullOrWhiteSpace(walletLogoBlobName)
             ? await TryLoadTenantBlobAssetsAsync(tenantId, normalizedSlug, "wallet-branding", cancellationToken)
+            : null;
+        tenantAssets ??= !string.IsNullOrWhiteSpace(logoBlobName)
+            ? await TryLoadTenantBlobAssetsAsync(tenantId, normalizedSlug, "wallet/apple", cancellationToken)
             : null;
         tenantAssets ??= !string.IsNullOrWhiteSpace(logoBlobName)
             ? await TryLoadTenantBlobAssetsAsync(tenantId, normalizedSlug, "wallet", cancellationToken)
@@ -50,6 +56,31 @@ internal sealed class TenantWalletAssetProvider : ITenantWalletAssetProvider
             return tenantAssets;
 
         return LoadLocalAssets(Path.Combine(AppContext.BaseDirectory, "Assets", "AppleWalletGeneric"), "generic-loyaltycloud", normalizedSlug);
+    }
+
+    public async Task<WalletPassAsset> LoadGoogleLogoAsync(
+        Guid tenantId,
+        string tenantSlug,
+        string? walletLogoBlobName,
+        string? logoBlobName,
+        CancellationToken cancellationToken = default)
+    {
+        var normalizedSlug = string.IsNullOrWhiteSpace(tenantSlug)
+            ? "unknown"
+            : tenantSlug.Trim().ToLowerInvariant();
+        var spec = RequiredAssets.Single(asset => string.Equals(asset.Name, "logo@3x.png", StringComparison.OrdinalIgnoreCase));
+
+        var logo = !string.IsNullOrWhiteSpace(walletLogoBlobName)
+            ? await TryLoadTenantBlobAssetAsync(tenantId, normalizedSlug, "wallet-branding", spec, cancellationToken)
+            : null;
+        logo ??= !string.IsNullOrWhiteSpace(logoBlobName)
+            ? await TryLoadTenantBlobAssetAsync(tenantId, normalizedSlug, "wallet", spec, cancellationToken)
+            : null;
+        if (logo is not null)
+            return logo;
+
+        return LoadLocalAssets(Path.Combine(AppContext.BaseDirectory, "Assets", "AppleWalletGeneric"), "generic-loyaltycloud", normalizedSlug)
+            .Single(asset => string.Equals(asset.Name, spec.Name, StringComparison.OrdinalIgnoreCase));
     }
 
     private async Task<IReadOnlyList<WalletPassAsset>?> TryLoadTenantBlobAssetsAsync(
@@ -154,6 +185,68 @@ internal sealed class TenantWalletAssetProvider : ITenantWalletAssetProvider
         }
 
         return assets;
+    }
+
+    private async Task<WalletPassAsset?> TryLoadTenantBlobAssetAsync(
+        Guid tenantId,
+        string tenantSlug,
+        string folderName,
+        WalletAssetSpec spec,
+        CancellationToken cancellationToken)
+    {
+        if (string.IsNullOrWhiteSpace(_options.ConnectionString))
+            return null;
+
+        try
+        {
+            var service = new BlobServiceClient(_options.ConnectionString);
+            var container = service.GetBlobContainerClient(_options.PassContainer);
+            var blobName = $"{TenantBrandingLogoService.GetTenantBrandingPrefix(tenantId)}/{folderName}/{spec.Name}";
+            var blob = container.GetBlobClient(blobName);
+            if (!await blob.ExistsAsync(cancellationToken))
+                return null;
+
+            using var ms = new MemoryStream();
+            await blob.DownloadToAsync(ms, cancellationToken);
+            var bytes = ms.ToArray();
+            ValidatePngDimensions(bytes, spec, blobName);
+            _logger.LogInformation(
+                "Loaded tenant wallet asset from Blob Storage. TenantSlug={TenantSlug}, Folder={Folder}, File={File}",
+                tenantSlug,
+                folderName,
+                spec.Name);
+            return new WalletPassAsset(spec.Name, bytes);
+        }
+        catch (RequestFailedException ex)
+        {
+            _logger.LogDebug(
+                ex,
+                "Tenant wallet asset could not be loaded from Blob Storage. TenantSlug={TenantSlug}, Folder={Folder}, File={File}; falling back.",
+                tenantSlug,
+                folderName,
+                spec.Name);
+            return null;
+        }
+        catch (InvalidOperationException ex)
+        {
+            _logger.LogDebug(
+                ex,
+                "Tenant wallet asset was invalid. TenantSlug={TenantSlug}, Folder={Folder}, File={File}; falling back.",
+                tenantSlug,
+                folderName,
+                spec.Name);
+            return null;
+        }
+        catch (IOException ex)
+        {
+            _logger.LogDebug(
+                ex,
+                "Tenant wallet asset stream failed. TenantSlug={TenantSlug}, Folder={Folder}, File={File}; falling back.",
+                tenantSlug,
+                folderName,
+                spec.Name);
+            return null;
+        }
     }
 
     private static void ValidatePngDimensions(byte[] bytes, WalletAssetSpec spec, string path)

@@ -16,6 +16,7 @@ public sealed record TenantBrandingInfo(
     string ResolvedWalletBackgroundColor,
     string? WalletLogoUrl,
     bool HasWalletLogo,
+    int WalletLogoScalePercent,
     string? SupportPhone,
     string? WhatsAppUrl,
     string? InstagramUrl,

@@ -1,5 +1,6 @@
 using LoyaltyCloud.Application.Common.Interfaces;
 using LoyaltyCloud.Application.Common.Branding;
+using LoyaltyCloud.Domain.Entities;
 using LoyaltyCloud.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
@@ -46,6 +47,9 @@ internal sealed class TenantBrandingReadService : ITenantBrandingReadService
                 LogoBlobName = tenant.Branding == null ? null : tenant.Branding.LogoBlobName,
                 WalletBackgroundColor = tenant.Branding == null ? null : tenant.Branding.WalletBackgroundColor,
                 WalletLogoBlobName = tenant.Branding == null ? null : tenant.Branding.WalletLogoBlobName,
+                WalletLogoScalePercent = tenant.Branding == null
+                    ? TenantBranding.DefaultWalletLogoScalePercent
+                    : tenant.Branding.WalletLogoScalePercent,
                 PrimaryColor = tenant.Branding == null ? null : tenant.Branding.PrimaryColor,
                 SecondaryColor = tenant.Branding == null ? null : tenant.Branding.SecondaryColor,
                 SupportPhone = tenant.Branding == null ? null : tenant.Branding.SupportPhone,
@@ -77,6 +81,7 @@ internal sealed class TenantBrandingReadService : ITenantBrandingReadService
                 ?? _logoUrls.GetDisplayUrl(row.LogoBlobName)
                 ?? TenantBrandingSanitizer.UrlOrNull(row.LogoUrl, row.Id, "LogoUrl", _logger, Uri.UriSchemeHttps, Uri.UriSchemeHttp),
             !string.IsNullOrWhiteSpace(row.WalletLogoBlobName),
+            NormalizeWalletLogoScale(row.WalletLogoScalePercent),
             TenantBrandingSanitizer.TextOrNull(row.SupportPhone),
             TenantBrandingSanitizer.UrlOrNull(row.WhatsAppUrl, row.Id, "WhatsAppUrl", _logger, Uri.UriSchemeHttps, Uri.UriSchemeHttp, "tel"),
             TenantBrandingSanitizer.UrlOrNull(row.InstagramUrl, row.Id, "InstagramUrl", _logger, Uri.UriSchemeHttps, Uri.UriSchemeHttp),
@@ -95,8 +100,14 @@ internal sealed class TenantBrandingReadService : ITenantBrandingReadService
             ResolvedWalletBackgroundColor: WalletColorContrast.DefaultBackgroundHex,
             WalletLogoUrl: null,
             HasWalletLogo: false,
+            WalletLogoScalePercent: TenantBranding.DefaultWalletLogoScalePercent,
             SupportPhone: null,
             WhatsAppUrl: null,
             InstagramUrl: null,
             TermsUrl: null);
+
+    private static int NormalizeWalletLogoScale(int value) =>
+        value is >= TenantBranding.MinWalletLogoScalePercent and <= TenantBranding.MaxWalletLogoScalePercent
+            ? value
+            : TenantBranding.DefaultWalletLogoScalePercent;
 }

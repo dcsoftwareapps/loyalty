@@ -71,6 +71,20 @@ else
                     }
                 </div>
 
+                <div class="kb-form-row">
+                    <label for="wallet-logo-scale">Tamaño del logo <span class="kb-range-value">@walletLogoScalePercent%</span></label>
+                    <input id="wallet-logo-scale"
+                           class="kb-range"
+                           type="range"
+                           min="60"
+                           max="100"
+                           step="5"
+                           value="@walletLogoScalePercent"
+                           @oninput="OnWalletLogoScaleChanged"
+                           disabled="@brandingBusy" />
+                    <small class="kb-muted">Ajusta qué tan grande se verá el logo en Apple Wallet.</small>
+                </div>
+
                 <div class="kb-form-row kb-form-row--horizontal">
                     <button class="kb-btn kb-btn--primary kb-config-save"
                             @onclick="SaveWalletBrandingAsync"
@@ -86,7 +100,7 @@ else
                     <div class="kb-wallet-preview-logo">
                         @if (!string.IsNullOrWhiteSpace(branding?.WalletLogoUrl))
                         {
-                            <img src="@branding.WalletLogoUrl" alt="" />
+                            <img src="@branding.WalletLogoUrl" alt="" style="@WalletLogoPreviewStyle" />
                         }
                         else
                         {
@@ -176,6 +190,7 @@ else
     private bool busy;
     private TenantBrandingInfo? branding;
     private string? walletBackgroundColor;
+    private int walletLogoScalePercent = 100;
     private bool brandingBusy;
     private string? selectedWalletLogoFileName;
     private const long MaxLogoBytes = 2 * 1024 * 1024;
@@ -190,6 +205,7 @@ else
         string.IsNullOrWhiteSpace(walletBackgroundColor) ? branding?.ResolvedWalletBackgroundColor : walletBackgroundColor,
         WalletColorContrast.DefaultBackgroundHex);
     private string ResolvedWalletText => WalletColorContrast.ResolveTextColors(ResolvedWalletBackground).ForegroundHex;
+    private string WalletLogoPreviewStyle => $"width:{Math.Round(180 * (walletLogoScalePercent / 100d)):0}px;";
 
     protected override async Task OnInitializedAsync() => await LoadAsync();
 
@@ -206,6 +222,7 @@ else
 
         branding = await BrandingRead.GetCurrentAsync();
         walletBackgroundColor = branding.WalletBackgroundColor ?? string.Empty;
+        walletLogoScalePercent = branding.WalletLogoScalePercent;
         selectedWalletLogoFileName = null;
     }
 
@@ -246,6 +263,14 @@ else
         walletBackgroundColor = args.Value?.ToString()?.Trim() ?? string.Empty;
     }
 
+    private void OnWalletLogoScaleChanged(ChangeEventArgs args)
+    {
+        if (int.TryParse(args.Value?.ToString(), out var value))
+        {
+            walletLogoScalePercent = Math.Clamp(value, 60, 100);
+        }
+    }
+
     private async Task SaveWalletBrandingAsync()
     {
         successMsg = errorMsg = null;
@@ -260,11 +285,12 @@ else
         {
             var result = await Api.PutAsJsonAsync<WalletBrandingRequest, TenantBrandingInfo>(
                 "api/config/wallet-branding",
-                new WalletBrandingRequest(walletBackgroundColor));
+                new WalletBrandingRequest(walletBackgroundColor, walletLogoScalePercent));
             if (result.IsSuccess)
             {
                 branding = result.Value;
                 walletBackgroundColor = branding.WalletBackgroundColor ?? string.Empty;
+                walletLogoScalePercent = branding.WalletLogoScalePercent;
                 successMsg = "Tarjeta digital actualizada.";
             }
             else
@@ -323,6 +349,7 @@ else
             }
 
             branding = result.Value;
+            walletLogoScalePercent = branding.WalletLogoScalePercent;
             successMsg = "Logo de tarjeta actualizado.";
             selectedWalletLogoFileName = null;
         }
@@ -359,7 +386,9 @@ else
         _ => key
     };
 
-    private sealed record WalletBrandingRequest(string? WalletBackgroundColor);
+    private sealed record WalletBrandingRequest(
+        string? WalletBackgroundColor,
+        int WalletLogoScalePercent);
 
     private sealed record WalletLogoUploadRequest(
         string FileName,

@@ -8,6 +8,13 @@ public interface ITenantWalletAssetProvider
         string? walletLogoBlobName,
         string? logoBlobName,
         CancellationToken cancellationToken = default);
+
+    Task<WalletPassAsset> LoadGoogleLogoAsync(
+        Guid tenantId,
+        string tenantSlug,
+        string? walletLogoBlobName,
+        string? logoBlobName,
+        CancellationToken cancellationToken = default);
 }
 
 public sealed record WalletPassAsset(string Name, byte[] Bytes);

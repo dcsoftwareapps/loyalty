@@ -4,8 +4,9 @@ namespace LoyaltyCloud.Application.Common.Interfaces;
 
 public interface ITenantWalletCardBrandingService
 {
-    Task<Result<TenantBrandingInfo>> UpdateBackgroundColorAsync(
+    Task<Result<TenantBrandingInfo>> UpdateAsync(
         string? walletBackgroundColor,
+        int? walletLogoScalePercent,
         CancellationToken cancellationToken = default);
 
     Task RefreshInstalledApplePassesBestEffortAsync(

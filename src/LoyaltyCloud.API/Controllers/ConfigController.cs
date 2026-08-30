@@ -60,7 +60,9 @@ public sealed class ConfigController : ControllerBase
         CancellationToken ct)
     {
         var result = await _sender.Send(
-            new UpdateWalletCardBrandingCommand(body.WalletBackgroundColor),
+            new UpdateWalletCardBrandingCommand(
+                body.WalletBackgroundColor,
+                body.WalletLogoScalePercent),
             ct);
 
         if (result.IsFailure)
@@ -117,7 +119,9 @@ public sealed class ConfigController : ControllerBase
 
     public sealed record UpdateConfigRequest(IReadOnlyList<ConfigEntry> Entries);
 
-    public sealed record WalletBrandingRequest(string? WalletBackgroundColor);
+    public sealed record WalletBrandingRequest(
+        string? WalletBackgroundColor,
+        int? WalletLogoScalePercent);
 
     public sealed record WalletLogoUploadRequest(
         string FileName,

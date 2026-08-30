@@ -22,6 +22,10 @@ public interface ITenantBrandingLogoService
         long contentLength,
         CancellationToken cancellationToken = default);
 
+    Task<Result> RegenerateAppleWalletLogoAssetsAsync(
+        Guid tenantId,
+        CancellationToken cancellationToken = default);
+
     Task<Result> RemoveWalletLogoAsync(Guid tenantId, CancellationToken cancellationToken = default);
 }
 

@@ -17,5 +17,8 @@ internal sealed class UpdateWalletCardBrandingHandler
     public Task<Result<TenantBrandingInfo>> Handle(
         UpdateWalletCardBrandingCommand request,
         CancellationToken cancellationToken) =>
-        _service.UpdateBackgroundColorAsync(request.WalletBackgroundColor, cancellationToken);
+        _service.UpdateAsync(
+            request.WalletBackgroundColor,
+            request.WalletLogoScalePercent,
+            cancellationToken);
 }

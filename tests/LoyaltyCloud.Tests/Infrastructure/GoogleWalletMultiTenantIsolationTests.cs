@@ -146,7 +146,7 @@ public sealed class GoogleWalletMultiTenantIsolationTests
 
     private static TenantWalletBrandingDto Branding(Guid tenantId, string slug, string name, string color) => new(
         tenantId, slug, name, name, $"Tarjeta {name}", "rgb(0,0,0)", "rgb(255,255,255)",
-        "rgb(255,255,255)", color, null, null, "LoyaltyCloud", $"Cliente {name}", false, false);
+        "rgb(255,255,255)", color, null, null, 100, "LoyaltyCloud", $"Cliente {name}", false, false);
 
     private static MemberWalletData Member(Guid tenantId, string serial) => new(
         tenantId, Guid.NewGuid(), Guid.NewGuid(), serial, "Cliente", null, null, 10, 10, "Nivel",

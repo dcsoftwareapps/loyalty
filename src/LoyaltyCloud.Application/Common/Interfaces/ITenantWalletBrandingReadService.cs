@@ -18,6 +18,7 @@ public sealed record TenantWalletBrandingDto(
     string BackgroundHex,
     string? LogoBlobName,
     string? WalletLogoBlobName,
+    int WalletLogoScalePercent,
     string ContactValue,
     string CustomerFallbackName,
     bool UsesBundledAssetsFallback,

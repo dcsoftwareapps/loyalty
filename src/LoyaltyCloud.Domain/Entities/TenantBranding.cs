@@ -2,11 +2,16 @@ namespace LoyaltyCloud.Domain.Entities;
 
 public sealed class TenantBranding
 {
+    public const int DefaultWalletLogoScalePercent = 100;
+    public const int MinWalletLogoScalePercent = 60;
+    public const int MaxWalletLogoScalePercent = 100;
+
     public Guid TenantId { get; private set; }
     public string? LogoUrl { get; private set; }
     public string? LogoBlobName { get; private set; }
     public string? WalletBackgroundColor { get; private set; }
     public string? WalletLogoBlobName { get; private set; }
+    public int WalletLogoScalePercent { get; private set; } = DefaultWalletLogoScalePercent;
     public string PrimaryColor { get; private set; } = "#1C1C1C";
     public string SecondaryColor { get; private set; } = "#E8668E";
     public string? SupportPhone { get; private set; }
@@ -73,6 +78,18 @@ public sealed class TenantBranding
     public void ClearWalletLogo()
     {
         WalletLogoBlobName = null;
+    }
+
+    public void SetWalletLogoScalePercent(int walletLogoScalePercent)
+    {
+        if (walletLogoScalePercent < MinWalletLogoScalePercent || walletLogoScalePercent > MaxWalletLogoScalePercent)
+        {
+            throw new ArgumentOutOfRangeException(
+                nameof(walletLogoScalePercent),
+                $"WalletLogoScalePercent debe estar entre {MinWalletLogoScalePercent} y {MaxWalletLogoScalePercent}.");
+        }
+
+        WalletLogoScalePercent = walletLogoScalePercent;
     }
 
     private static string NormalizeColor(string? value, string fallback, string paramName)
