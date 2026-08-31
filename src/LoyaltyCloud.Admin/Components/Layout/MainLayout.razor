@@ -114,7 +114,7 @@
             catch { branding = null; }
         }
 
-        try { giftCardsEnabled = (await GiftCards.GetSettingsAsync()).IsEnabled; }
+        try { giftCardsEnabled = await GiftCards.IsEnabledAsync(); }
         catch { giftCardsEnabled = false; }
 
         canRender = true;

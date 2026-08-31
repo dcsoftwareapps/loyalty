@@ -12,6 +12,15 @@ namespace LoyaltyCloud.Infrastructure.Services;
 internal sealed class GiftCardService(AppDbContext db, ITenantContext tenant, IDateTimeProvider clock, ICurrentUserService user, IGiftCardWalletService wallets, IGiftCardAppleWalletService appleWallets) : IGiftCardService
 {
     private static readonly Guid SystemUserId = Guid.Parse("FFFFFFFF-FFFF-FFFF-FFFF-FFFFFFFFFFF1");
+    public Task<bool> IsEnabledAsync(CancellationToken ct = default) => db.GiftCardConfigurations.AsNoTracking().AnyAsync(x => x.IsEnabled, ct);
+
+    public async Task SetEnabledAsync(bool enabled, CancellationToken ct = default)
+    {
+        var config = await ConfigurationAsync(create: true, ct);
+        config.SetEnabled(enabled, clock.UtcNow);
+        await db.SaveChangesAsync(ct);
+    }
+
     public async Task<GiftCardSettingsDto> GetSettingsAsync(CancellationToken ct = default)
     {
         var config = await ConfigurationAsync(create: true, ct);

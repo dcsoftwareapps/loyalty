@@ -1,5 +1,5 @@
 @page "/giftcards/reports"
-@attribute [Authorize]
+@attribute [Authorize(Policy = LoyaltyCloud.Admin.Auth.GiftCardsAuthorization.Policy)]
 @rendermode InteractiveServer
 @inject LoyaltyCloud.Application.GiftCards.IGiftCardService Service
 <PageTitle>Reportes Gift Cards - LoyaltyCloud</PageTitle>
