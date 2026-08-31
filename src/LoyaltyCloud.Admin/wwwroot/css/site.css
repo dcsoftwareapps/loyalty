@@ -1397,6 +1397,8 @@ input[type="checkbox"], input[type="radio"] { width: 18px; height: 18px; accent-
 .kb-platform .kb-sidebar { background: #F7F5F0; }
 .kb-platform .kb-brand-mark { background: var(--lc-text-primary); }
 .kb-platform .kb-main { background: var(--lc-background); }
+.kb-platform-tenants-table-shell { max-width: 100%; }
+.kb-platform-tenants-table { min-width: 1320px; }
 
 @media (max-width: 768px) {
     .kb-filter-bar, .kb-reports-filters { align-items: stretch; flex-direction: column; }
