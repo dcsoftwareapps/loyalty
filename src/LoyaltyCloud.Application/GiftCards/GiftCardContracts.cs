@@ -18,6 +18,8 @@ public sealed record GiftCardClaimDto(GiftCardDto Card, string DisplayName, stri
 
 public interface IGiftCardService
 {
+    Task<bool> IsEnabledAsync(CancellationToken ct = default);
+    Task SetEnabledAsync(bool enabled, CancellationToken ct = default);
     Task<GiftCardSettingsDto> GetSettingsAsync(CancellationToken ct = default);
     Task<GiftCardSettingsDto> UpdateSettingsAsync(UpdateGiftCardSettingsRequest request, CancellationToken ct = default);
     Task<GiftCardDenominationDto> AddDenominationAsync(decimal amount, CancellationToken ct = default);

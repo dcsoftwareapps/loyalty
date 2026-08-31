@@ -12,6 +12,8 @@
 @inject ISender Sender
 @inject ITenantBrandingReadService BrandingRead
 @inject AdminApiClient Api
+@inject LoyaltyCloud.Application.GiftCards.IGiftCardService GiftCards
+@inject NavigationManager Navigation
 
 <PageTitle>Configuración · LoyaltyCloud</PageTitle>
 
@@ -202,6 +204,18 @@ else
         </div>
     </section>
 
+    <section class="kb-card kb-config-card" aria-labelledby="gift-cards-feature-title">
+        <h2 id="gift-cards-feature-title">Gift Cards</h2>
+        <p class="kb-muted">Permite emitir y administrar tarjetas con saldo, Apple Wallet y Google Wallet.</p>
+        <label class="kb-feature-toggle" for="gift-cards-enabled">
+            <input id="gift-cards-enabled" type="checkbox" @bind="giftCardsEnabled" disabled="@giftCardsBusy" />
+            <span>Habilitar Gift Cards</span>
+        </label>
+        <p class="kb-muted">La configuración de denominaciones, vigencia y Wallet permanece dentro del módulo Gift Cards.</p>
+        <button class="kb-btn kb-btn--primary kb-config-save" @onclick="SaveGiftCardsEnabledAsync" disabled="@giftCardsBusy">
+            @(giftCardsBusy ? "Guardando…" : "Guardar Gift Cards")
+        </button>
+    </section>
     <section class="kb-card kb-config-card kb-config-card--rules">
         <h2>Reglas de puntos y beneficios</h2>
         <p class="kb-muted">Define cómo se acumulan, vencen y bonifican los puntos de tu programa.</p>
@@ -260,6 +274,8 @@ else
     private int walletLogoScalePercent = 100;
     private string appleWalletPrimaryContentMode = PrimaryContentCustomerName;
     private bool brandingBusy;
+    private bool giftCardsEnabled;
+    private bool giftCardsBusy;
     private string? selectedWalletLogoFileName;
     private string? selectedAppleWalletStripFileName;
     private const long MaxLogoBytes = 2 * 1024 * 1024;
@@ -293,6 +309,7 @@ else
             edited = entries.ToDictionary(e => e.Key, e => e.Value);
         }
 
+        giftCardsEnabled = await GiftCards.IsEnabledAsync();
         branding = await BrandingRead.GetCurrentAsync();
         walletBackgroundColor = branding.WalletBackgroundColor ?? string.Empty;
         walletLogoScalePercent = branding.WalletLogoScalePercent;
@@ -333,6 +350,25 @@ else
         }
     }
 
+    private async Task SaveGiftCardsEnabledAsync()
+    {
+        successMsg = errorMsg = null;
+        giftCardsBusy = true;
+        try
+        {
+            await GiftCards.SetEnabledAsync(giftCardsEnabled);
+            successMsg = giftCardsEnabled ? "Gift Cards habilitado." : "Gift Cards deshabilitado.";
+            Navigation.NavigateTo(Navigation.Uri, forceLoad: true);
+        }
+        catch (Exception ex)
+        {
+            errorMsg = ex.Message;
+        }
+        finally
+        {
+            giftCardsBusy = false;
+        }
+    }
     private void OnWalletColorChanged(ChangeEventArgs args)
     {
         walletBackgroundColor = args.Value?.ToString()?.Trim() ?? string.Empty;

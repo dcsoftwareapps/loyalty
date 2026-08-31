@@ -24,6 +24,7 @@ public sealed class GiftCardConfiguration : Entity, ITenantOwned
     public DateTime UpdatedAtUtc { get; private set; }
     private GiftCardConfiguration() { }
     public GiftCardConfiguration(Guid id, Guid tenantId, DateTime nowUtc) : base(id) { TenantId = tenantId; UpdatedAtUtc = nowUtc; }
+    public void SetEnabled(bool enabled, DateTime nowUtc) { IsEnabled = enabled; UpdatedAtUtc = nowUtc; }
     public void Update(bool enabled, bool custom, bool partial, bool promotional, GiftCardExpirationMode expirationMode, int? months, string currency, string displayName, string primaryColor, string textColor, string? logoUrl, string? secondaryText, string? terms, string? footer, DateTime nowUtc)
     {
         if (tenantIdInvalid(TenantId)) throw new InvalidOperationException("Tenant inválido.");
