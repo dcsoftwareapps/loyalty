@@ -108,6 +108,42 @@ internal sealed class GoogleWalletClient : IGoogleWalletClient
         throw await CreateExceptionAsync("actualizar LoyaltyObject", updated, ct);
     }
 
+    public async Task EnsureGiftCardClassAsync(GoogleGiftCardClassData walletClass, CancellationToken ct = default)
+    {
+        var existing = await SendAsync(HttpMethod.Get, $"genericClass/{Uri.EscapeDataString(walletClass.Id)}", null, ct);
+        if (existing.StatusCode == HttpStatusCode.OK) return;
+        if (existing.StatusCode != HttpStatusCode.NotFound) throw await CreateExceptionAsync("consultar GenericClass Gift Card", existing, ct);
+        var payload = new { id = walletClass.Id, issuerName = walletClass.IssuerName };
+        var created = await SendAsync(HttpMethod.Post, "genericClass", payload, ct);
+        if (created.StatusCode is not (HttpStatusCode.OK or HttpStatusCode.Created or HttpStatusCode.Conflict))
+            throw await CreateExceptionAsync("crear GenericClass Gift Card", created, ct);
+    }
+
+    public async Task CreateOrUpdateGiftCardObjectAsync(GoogleGiftCardObjectData value, CancellationToken ct = default)
+    {
+        var payload = new
+        {
+            id = value.Id, classId = value.ClassId, state = value.Status == "Active" ? "ACTIVE" : "INACTIVE",
+            cardTitle = new { defaultValue = new { language = "es", value = value.DisplayName } },
+            header = new { defaultValue = new { language = "es", value = $"{value.Balance:N2} {value.Currency}" } },
+            subheader = new { defaultValue = new { language = "es", value = value.RecipientName } },
+            barcode = new { type = "QR_CODE", value = value.Code, alternateText = value.Code },
+            hexBackgroundColor = value.HexBackgroundColor,
+            logo = string.IsNullOrWhiteSpace(value.LogoUri) ? null : new { sourceUri = new { uri = value.LogoUri }, contentDescription = new { defaultValue = new { language = "es", value = value.DisplayName } } },
+            textModulesData = new[] { new { id = "balance", header = "Saldo disponible", body = $"{value.Balance:N2} {value.Currency}" }, new { id = "status", header = "Estado", body = value.Status }, new { id = "expiry", header = "Vigencia", body = value.ExpiresAtUtc?.ToString("yyyy-MM-dd") ?? "Sin expiración" } }
+        };
+        var existing = await SendAsync(HttpMethod.Get, $"genericObject/{Uri.EscapeDataString(value.Id)}", null, ct);
+        if (existing.StatusCode == HttpStatusCode.NotFound)
+        {
+            var created = await SendAsync(HttpMethod.Post, "genericObject", payload, ct);
+            if (created.StatusCode is HttpStatusCode.OK or HttpStatusCode.Created) return;
+            if (created.StatusCode != HttpStatusCode.Conflict) throw await CreateExceptionAsync("crear GenericObject Gift Card", created, ct);
+        }
+        else if (existing.StatusCode != HttpStatusCode.OK) throw await CreateExceptionAsync("consultar GenericObject Gift Card", existing, ct);
+        var updated = await SendAsync(new HttpMethod("PATCH"), $"genericObject/{Uri.EscapeDataString(value.Id)}", payload, ct);
+        if (updated.StatusCode != HttpStatusCode.OK) throw await CreateExceptionAsync("actualizar GenericObject Gift Card", updated, ct);
+    }
+
     public async Task AddMessageAsync(
         string objectId,
         string header,

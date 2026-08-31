@@ -1,0 +1,20 @@
+@page "/giftcards"
+@attribute [Authorize]
+@rendermode InteractiveServer
+@inject LoyaltyCloud.Application.GiftCards.IGiftCardService Service
+
+<PageTitle>Gift Cards - LoyaltyCloud</PageTitle>
+<header class="kb-page-header"><div><span class="kb-eyebrow">Gift Cards</span><h1>Resumen</h1><p>Emisión, saldo pendiente y canjes en una sola vista.</p></div><a class="kb-button kb-button--primary" href="/giftcards/issue">Emitir Gift Card</a></header>
+@if (error is not null) { <div class="alert alert-danger">@error</div> }
+else if (dashboard is null) { <p>Cargando…</p> }
+else
+{
+    <section class="kb-stat-grid">
+        <article class="kb-stat-card"><span>Saldo pendiente</span><strong>@dashboard.OutstandingBalance.ToString("C2")</strong><small>@dashboard.ActiveCards activas</small></article>
+        <article class="kb-stat-card"><span>Valor emitido</span><strong>@dashboard.IssuedValue.ToString("C2")</strong></article>
+        <article class="kb-stat-card"><span>Valor canjeado</span><strong>@dashboard.RedeemedValue.ToString("C2")</strong></article>
+        <article class="kb-stat-card"><span>Completadas</span><strong>@dashboard.FullyRedeemedCards</strong><small>@dashboard.ExpiredCards expiradas · @dashboard.CancelledCards canceladas</small></article>
+    </section>
+    <section class="kb-card"><h2>Operación rápida</h2><div class="kb-actions"><a class="kb-button kb-button--primary" href="/giftcards/redeem">Consultar o canjear</a><a class="kb-button" href="/giftcards/cards">Ver tarjetas</a><a class="kb-button" href="/giftcards/reports">Reportes</a></div></section>
+}
+@code { private LoyaltyCloud.Application.GiftCards.GiftCardDashboardDto? dashboard; private string? error; protected override async Task OnInitializedAsync(){try{dashboard=await Service.GetDashboardAsync();}catch(Exception ex){error=ex.Message;}} }

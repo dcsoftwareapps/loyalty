@@ -1,4 +1,5 @@
 using LoyaltyCloud.Application.Common.Interfaces;
+using LoyaltyCloud.Application.GiftCards;
 using LoyaltyCloud.Common.Constants;
 using LoyaltyCloud.Domain.Repositories;
 using LoyaltyCloud.Infrastructure.Configuration;
@@ -26,6 +27,7 @@ public sealed class ApplePassAuthMiddleware
         HttpContext context,
         ILoyaltyCardRepository cards,
         IWalletTenantContextResolver tenantResolver,
+        IGiftCardAppleWalletService giftCards,
         IOptions<ApplePassOptions> options)
     {
         var route = ParseWalletRoute(context.Request.Path.Value ?? string.Empty);
@@ -70,6 +72,15 @@ public sealed class ApplePassAuthMiddleware
             context.RequestAborted);
         if (tenant is null)
         {
+            if (await giftCards.AuthenticateAndSetTenantAsync(
+                    route.SerialNumber!,
+                    auth.Token!,
+                    context.RequestAborted))
+            {
+                await _next(context);
+                return;
+            }
+
             context.Response.StatusCode = StatusCodes.Status401Unauthorized;
             return;
         }

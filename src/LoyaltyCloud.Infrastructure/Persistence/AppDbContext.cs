@@ -46,6 +46,12 @@ public class AppDbContext : DbContext, IUnitOfWork
     public DbSet<PaymentTransaction> PaymentTransactions => Set<PaymentTransaction>();
     public DbSet<PaymentWebhookEvent> PaymentWebhookEvents => Set<PaymentWebhookEvent>();
     public DbSet<TenantBillingProfile> TenantBillingProfiles => Set<TenantBillingProfile>();
+    public DbSet<GiftCardConfiguration> GiftCardConfigurations => Set<GiftCardConfiguration>();
+    public DbSet<GiftCardDenomination> GiftCardDenominations => Set<GiftCardDenomination>();
+    public DbSet<GiftCard> GiftCards => Set<GiftCard>();
+    public DbSet<GiftCardTransaction> GiftCardTransactions => Set<GiftCardTransaction>();
+    public DbSet<GiftCardWallet> GiftCardWallets => Set<GiftCardWallet>();
+    public DbSet<GiftCardDeviceRegistration> GiftCardDeviceRegistrations => Set<GiftCardDeviceRegistration>();
 
     public AppDbContext(DbContextOptions<AppDbContext> options) : base(options) { }
 
@@ -230,6 +236,12 @@ public class AppDbContext : DbContext, IUnitOfWork
         ApplyTenantQueryFilter<BillingOrder>(modelBuilder);
         ApplyTenantQueryFilter<PaymentTransaction>(modelBuilder);
         ApplyTenantQueryFilter<TenantBillingProfile>(modelBuilder);
+        ApplyTenantQueryFilter<GiftCardConfiguration>(modelBuilder);
+        ApplyTenantQueryFilter<GiftCardDenomination>(modelBuilder);
+        ApplyTenantQueryFilter<GiftCard>(modelBuilder);
+        ApplyTenantQueryFilter<GiftCardTransaction>(modelBuilder);
+        ApplyTenantQueryFilter<GiftCardWallet>(modelBuilder);
+        ApplyTenantQueryFilter<GiftCardDeviceRegistration>(modelBuilder);
     }
 
     private void ApplyTenantQueryFilter<TEntity>(ModelBuilder modelBuilder)

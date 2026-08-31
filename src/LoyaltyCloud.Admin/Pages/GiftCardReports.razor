@@ -1,0 +1,8 @@
+@page "/giftcards/reports"
+@attribute [Authorize]
+@rendermode InteractiveServer
+@inject LoyaltyCloud.Application.GiftCards.IGiftCardService Service
+<PageTitle>Reportes Gift Cards - LoyaltyCloud</PageTitle>
+<header class="kb-page-header"><div><span class="kb-eyebrow">Gift Cards</span><h1>Reportes</h1><p>Valor emitido y canjeado dentro del periodo seleccionado.</p></div></header>
+<section class="kb-card"><div class="kb-filter-bar"><label>Desde<input type="date" @bind="from" /></label><label>Hasta<input type="date" @bind="to" /></label><button class="kb-button" @onclick="Load">Aplicar</button></div><div class="kb-table-wrap"><table class="kb-table"><thead><tr><th>Fecha</th><th>Emitido</th><th>Canjeado</th><th>Emisiones</th><th>Canjes</th></tr></thead><tbody>@foreach(var row in rows){<tr><td>@row.DateUtc.ToString("d")</td><td>@row.Issued.ToString("C2")</td><td>@row.Redeemed.ToString("C2")</td><td>@row.IssuedCount</td><td>@row.RedemptionCount</td></tr>}</tbody></table></div></section>
+@code { DateTime from=DateTime.UtcNow.Date.AddDays(-30),to=DateTime.UtcNow.Date.AddDays(1); IReadOnlyList<LoyaltyCloud.Application.GiftCards.GiftCardReportPoint> rows=[]; protected override Task OnInitializedAsync()=>Load(); async Task Load()=>rows=await Service.GetReportAsync(from,to.AddDays(1)); }

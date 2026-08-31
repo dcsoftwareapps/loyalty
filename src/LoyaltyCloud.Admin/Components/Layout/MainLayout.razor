@@ -4,6 +4,7 @@
 @inject LoyaltyCloud.Admin.Auth.AdminAuthService Auth
 @inject AuthenticationStateProvider AuthenticationStateProvider
 @inject NavigationManager Navigation
+@inject LoyaltyCloud.Application.GiftCards.IGiftCardService GiftCards
 
 @if (canRender)
 {
@@ -49,6 +50,17 @@
                 <NavLink href="/campaigns"><NavIcon Name="spark" /><span>Campañas</span></NavLink>
                 <NavLink href="/marketing-notifications"><NavIcon Name="message" /><span>Mensajes</span></NavLink>
 
+                @if (giftCardsEnabled)
+                {
+                    <span class="kb-sidebar-section">Gift Cards</span>
+                    <NavLink href="/giftcards"><NavIcon Name="gift" /><span>Resumen</span></NavLink>
+                    <NavLink href="/giftcards/issue"><NavIcon Name="plus" /><span>Emitir</span></NavLink>
+                    <NavLink href="/giftcards/redeem"><NavIcon Name="scan" /><span>Consultar y canjear</span></NavLink>
+                    <NavLink href="/giftcards/cards"><NavIcon Name="card" /><span>Tarjetas</span></NavLink>
+                    <NavLink href="/giftcards/reports"><NavIcon Name="history" /><span>Reportes</span></NavLink>
+                    <NavLink href="/giftcards/settings"><NavIcon Name="settings" /><span>Configuración</span></NavLink>
+                }
+
                 <span class="kb-sidebar-section">Gestión</span>
                 <NavLink href="/levels"><NavIcon Name="levels" /><span>Niveles</span></NavLink>
                 <NavLink href="/config"><NavIcon Name="settings" /><span>Diseño y configuración</span></NavLink>
@@ -76,6 +88,7 @@
     private LoyaltyCloud.Application.Common.Interfaces.TenantBrandingInfo? branding;
     private bool canRender;
     private bool menuOpen;
+    private bool giftCardsEnabled;
 
     private string TenantName => branding?.DisplayName ?? "LoyaltyCloud";
     private string TenantInitial => TenantName.Trim()[..1].ToUpperInvariant();
@@ -100,6 +113,9 @@
             try { branding = await Branding.GetCurrentAsync(); }
             catch { branding = null; }
         }
+
+        try { giftCardsEnabled = (await GiftCards.GetSettingsAsync()).IsEnabled; }
+        catch { giftCardsEnabled = false; }
 
         canRender = true;
     }
