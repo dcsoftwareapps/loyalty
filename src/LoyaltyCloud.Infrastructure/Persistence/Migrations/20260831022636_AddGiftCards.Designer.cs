@@ -4,6 +4,7 @@ using LoyaltyCloud.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
 #nullable disable
@@ -11,9 +12,11 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace LoyaltyCloud.Infrastructure.Persistence.Migrations
 {
     [DbContext(typeof(AppDbContext))]
-    partial class AppDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260831022636_AddGiftCards")]
+    partial class AddGiftCards
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -633,58 +636,6 @@ namespace LoyaltyCloud.Infrastructure.Persistence.Migrations
                     b.ToTable("GiftCardDenominations", (string)null);
                 });
 
-            modelBuilder.Entity("LoyaltyCloud.Domain.Entities.GiftCardDeviceRegistration", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uniqueidentifier");
-
-                    b.Property<DateTime>("CreatedAtUtc")
-                        .HasColumnType("datetime2(3)");
-
-                    b.Property<string>("DeviceLibraryIdentifier")
-                        .IsRequired()
-                        .HasMaxLength(100)
-                        .HasColumnType("nvarchar(100)");
-
-                    b.Property<Guid>("GiftCardId")
-                        .HasColumnType("uniqueidentifier");
-
-                    b.Property<string>("PassTypeIdentifier")
-                        .IsRequired()
-                        .HasMaxLength(100)
-                        .HasColumnType("nvarchar(100)");
-
-                    b.Property<string>("PushToken")
-                        .IsRequired()
-                        .HasMaxLength(500)
-                        .HasColumnType("nvarchar(500)");
-
-                    b.Property<string>("SerialNumber")
-                        .IsRequired()
-                        .HasMaxLength(128)
-                        .HasColumnType("nvarchar(128)");
-
-                    b.Property<Guid>("TenantId")
-                        .HasColumnType("uniqueidentifier");
-
-                    b.Property<DateTime>("UpdatedAtUtc")
-                        .HasColumnType("datetime2(3)");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("TenantId", "DeviceLibraryIdentifier");
-
-                    b.HasIndex("TenantId", "GiftCardId");
-
-                    b.HasIndex("TenantId", "SerialNumber");
-
-                    b.HasIndex("DeviceLibraryIdentifier", "PassTypeIdentifier", "SerialNumber")
-                        .IsUnique();
-
-                    b.ToTable("GiftCardDeviceRegistrations", (string)null);
-                });
-
             modelBuilder.Entity("LoyaltyCloud.Domain.Entities.GiftCardTransaction", b =>
                 {
                     b.Property<Guid>("Id")
@@ -750,10 +701,6 @@ namespace LoyaltyCloud.Infrastructure.Persistence.Migrations
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uniqueidentifier");
-
-                    b.Property<string>("AuthenticationToken")
-                        .HasMaxLength(128)
-                        .HasColumnType("nvarchar(128)");
 
                     b.Property<string>("ExternalClassId")
                         .IsRequired()
@@ -1808,17 +1755,6 @@ namespace LoyaltyCloud.Infrastructure.Persistence.Migrations
                     b.Property<Guid>("TenantId")
                         .HasColumnType("uniqueidentifier");
 
-                    b.Property<string>("AppleWalletPrimaryContentMode")
-                        .IsRequired()
-                        .ValueGeneratedOnAdd()
-                        .HasMaxLength(30)
-                        .HasColumnType("nvarchar(30)")
-                        .HasDefaultValue("CustomerName");
-
-                    b.Property<string>("AppleWalletStripImageBlobName")
-                        .HasMaxLength(500)
-                        .HasColumnType("nvarchar(500)");
-
                     b.Property<string>("InstagramUrl")
                         .HasMaxLength(1000)
                         .HasColumnType("nvarchar(1000)");
@@ -1856,11 +1792,6 @@ namespace LoyaltyCloud.Infrastructure.Persistence.Migrations
                     b.Property<string>("WalletLogoBlobName")
                         .HasMaxLength(500)
                         .HasColumnType("nvarchar(500)");
-
-                    b.Property<int>("WalletLogoScalePercent")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("int")
-                        .HasDefaultValue(100);
 
                     b.Property<string>("WhatsAppUrl")
                         .HasMaxLength(1000)
@@ -2033,22 +1964,6 @@ namespace LoyaltyCloud.Infrastructure.Persistence.Migrations
                     b.HasOne("LoyaltyCloud.Domain.Entities.Tenant", null)
                         .WithMany()
                         .HasForeignKey("TenantId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-                });
-
-            modelBuilder.Entity("LoyaltyCloud.Domain.Entities.GiftCardDeviceRegistration", b =>
-                {
-                    b.HasOne("LoyaltyCloud.Domain.Entities.Tenant", null)
-                        .WithMany()
-                        .HasForeignKey("TenantId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-
-                    b.HasOne("LoyaltyCloud.Domain.Entities.GiftCard", null)
-                        .WithMany()
-                        .HasForeignKey("TenantId", "GiftCardId")
-                        .HasPrincipalKey("TenantId", "Id")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
                 });

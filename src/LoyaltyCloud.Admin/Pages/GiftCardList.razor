@@ -1,0 +1,9 @@
+@page "/giftcards/cards"
+@attribute [Authorize]
+@rendermode InteractiveServer
+@inject LoyaltyCloud.Application.GiftCards.IGiftCardService Service
+
+<PageTitle>Tarjetas Gift Card - LoyaltyCloud</PageTitle>
+<header class="kb-page-header"><div><span class="kb-eyebrow">Gift Cards</span><h1>Tarjetas</h1><p>Consulta saldo, destinatario, estado e historial.</p></div><a class="kb-button kb-button--primary" href="/giftcards/issue">Emitir</a></header>
+<section class="kb-card"><div class="kb-toolbar"><input @bind="search" placeholder="Código, nombre o email" /><button class="kb-button" @onclick="Load">Buscar</button></div>@if(resultPage is null){<p>Cargando…</p>}else{<div class="kb-table-wrap"><table class="kb-table"><thead><tr><th>Código</th><th>Destinatario</th><th>Emitida</th><th>Saldo</th><th>Estado</th><th></th></tr></thead><tbody>@foreach(var card in resultPage.Items){<tr><td><strong>@card.Code</strong></td><td>@card.RecipientName</td><td>@card.IssuedAtUtc.ToString("d")</td><td>@card.CurrentBalance.ToString("C2") @card.Currency</td><td>@card.Status</td><td><a href="/giftcards/cards/@card.Id">Detalle</a></td></tr>}</tbody></table></div><p>@resultPage.Total tarjetas</p>}</section>
+@code { string? search; LoyaltyCloud.Application.GiftCards.GiftCardPage? resultPage; protected override Task OnInitializedAsync()=>Load(); async Task Load()=>resultPage=await Service.SearchAsync(search,null,null,null); }

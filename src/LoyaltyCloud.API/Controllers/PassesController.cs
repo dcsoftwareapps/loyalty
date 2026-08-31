@@ -1,4 +1,5 @@
 using LoyaltyCloud.Application.Common.Interfaces;
+using LoyaltyCloud.Application.GiftCards;
 using LoyaltyCloud.Application.Devices.Commands.RegisterDevice;
 using LoyaltyCloud.Application.Devices.Commands.UnregisterDevice;
 using LoyaltyCloud.Common.Constants;
@@ -23,6 +24,7 @@ public sealed class PassesController : ControllerBase
     private readonly ILoyaltyCardRepository _cards;
     private readonly ICustomerRepository _customers;
     private readonly IPassGeneratorService _passes;
+    private readonly IGiftCardAppleWalletService _giftCardPasses;
     private readonly IWalletTenantContextResolver _walletTenantResolver;
     private readonly IDeviceRegistrationPlatformReadService _deviceRegistrations;
     private readonly IWebHostEnvironment _environment;
@@ -34,6 +36,7 @@ public sealed class PassesController : ControllerBase
         ILoyaltyCardRepository cards,
         ICustomerRepository customers,
         IPassGeneratorService passes,
+        IGiftCardAppleWalletService giftCardPasses,
         IWalletTenantContextResolver walletTenantResolver,
         IDeviceRegistrationPlatformReadService deviceRegistrations,
         IWebHostEnvironment environment,
@@ -44,6 +47,7 @@ public sealed class PassesController : ControllerBase
         _cards = cards;
         _customers = customers;
         _passes = passes;
+        _giftCardPasses = giftCardPasses;
         _walletTenantResolver = walletTenantResolver;
         _deviceRegistrations = deviceRegistrations;
         _environment = environment;
@@ -63,6 +67,13 @@ public sealed class PassesController : ControllerBase
     {
         if (!IsConfiguredPassType(passTypeIdentifier))
             return NotFound();
+
+        var giftPass = await _giftCardPasses.GetPassAsync(serialNumber, ct);
+        if (giftPass is not null)
+        {
+            Response.Headers.LastModified = giftPass.LastModifiedUtc.ToString("R");
+            return File(giftPass.Bytes, LoyaltyConstants.ApplePass.ContentType, $"{serialNumber}.pkpass");
+        }
 
         var tenant = await ResolveOperationalTenantAsync(serialNumber, ct);
         if (tenant is null) return NotFound();
@@ -161,6 +172,10 @@ public sealed class PassesController : ControllerBase
         if (string.IsNullOrWhiteSpace(body?.PushToken))
             return BadRequest();
 
+        var giftRegistration = await _giftCardPasses.RegisterAsync(deviceLibraryIdentifier, passTypeIdentifier, serialNumber, body.PushToken, ct);
+        if (giftRegistration.Found)
+            return giftRegistration.WasNew ? StatusCode(StatusCodes.Status201Created) : Ok();
+
         var tenant = await ResolveOperationalTenantAsync(serialNumber, ct);
         if (tenant is null) return NotFound();
         if (!tenant.IsOperational) return StatusCode(StatusCodes.Status403Forbidden);
@@ -189,6 +204,9 @@ public sealed class PassesController : ControllerBase
     {
         if (!IsConfiguredPassType(passTypeIdentifier))
             return NotFound();
+
+        var giftUnregistered = await _giftCardPasses.UnregisterAsync(deviceLibraryIdentifier, passTypeIdentifier, serialNumber, ct);
+        if (giftUnregistered) return Ok();
 
         var tenant = await ResolveOperationalTenantAsync(serialNumber, ct);
         if (tenant is null) return NotFound();
@@ -234,7 +252,12 @@ public sealed class PassesController : ControllerBase
             since,
             ct);
 
-        if (result.SerialNumbers.Count == 0)
+        var giftUpdates = await _giftCardPasses.GetUpdatesAsync(deviceLibraryIdentifier, passTypeIdentifier, since, ct);
+        var serialNumbers = result.SerialNumbers.Concat(giftUpdates.SerialNumbers).Distinct(StringComparer.Ordinal).ToList();
+        var lastUpdated = result.SerialNumbers.Count == 0 ? giftUpdates.LastUpdatedUtc : result.LastUpdated;
+        if (giftUpdates.SerialNumbers.Count > 0 && giftUpdates.LastUpdatedUtc > lastUpdated) lastUpdated = giftUpdates.LastUpdatedUtc;
+
+        if (serialNumbers.Count == 0)
         {
             _logger.LogInformation(
                 "Apple Wallet GET registrations result for device {Device} and pass type {PassType}: status=204, passesUpdatedSince={Since}, serialNumbers=[].",
@@ -248,13 +271,13 @@ public sealed class PassesController : ControllerBase
             "Apple Wallet GET registrations result for device {Device} and pass type {PassType}: status=200, serialNumbers=[{SerialNumbers}], lastUpdated={LastUpdated:O}.",
             SafeDeviceIdentifier(deviceLibraryIdentifier),
             passTypeIdentifier,
-            string.Join(", ", result.SerialNumbers),
-            result.LastUpdated);
+            string.Join(", ", serialNumbers),
+            lastUpdated);
 
         return Ok(new
         {
-            serialNumbers = result.SerialNumbers,
-            lastUpdated = ((DateTimeOffset)result.LastUpdated).ToUnixTimeSeconds().ToString()
+            serialNumbers,
+            lastUpdated = ((DateTimeOffset)lastUpdated).ToUnixTimeSeconds().ToString()
         });
     }
 
