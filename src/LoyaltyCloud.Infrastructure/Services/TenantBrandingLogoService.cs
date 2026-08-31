@@ -1,3 +1,4 @@
+using Azure;
 using Azure.Storage.Blobs;
 using Azure.Storage.Blobs.Models;
 using Azure.Storage.Sas;
@@ -22,6 +23,8 @@ internal sealed class TenantBrandingLogoService :
 {
     public const long MaxLogoBytes = 2 * 1024 * 1024;
     private const string OriginalBlobName = "logo-original";
+    private const string StripOriginalBlobName = "strip-original";
+    private const string AppleWalletAssetsFolder = "apple";
     private static readonly HashSet<string> AllowedContentTypes = new(StringComparer.OrdinalIgnoreCase)
     {
         "image/png",
@@ -37,6 +40,13 @@ internal sealed class TenantBrandingLogoService :
         new("icon.png", 29, 29, TransparentCanvas: false),
         new("icon@2x.png", 58, 58, TransparentCanvas: false),
         new("icon@3x.png", 87, 87, TransparentCanvas: false)
+    ];
+
+    private static readonly WalletLogoAssetSpec[] AppleWalletStripAssets =
+    [
+        new("strip.png", 375, 144, TransparentCanvas: false),
+        new("strip@2x.png", 750, 288, TransparentCanvas: false),
+        new("strip@3x.png", 1125, 432, TransparentCanvas: false)
     ];
 
     private readonly AppDbContext _db;
@@ -91,6 +101,71 @@ internal sealed class TenantBrandingLogoService :
             contentLength,
             walletSpecific: true,
             cancellationToken);
+
+    public async Task<Result<TenantBrandingLogoResult>> UploadAppleWalletStripImageAsync(
+        Guid tenantId,
+        string fileName,
+        string contentType,
+        Stream content,
+        long contentLength,
+        CancellationToken cancellationToken = default)
+    {
+        if (tenantId == Guid.Empty)
+            return Result.Fail<TenantBrandingLogoResult>("TenantId requerido.");
+        if (contentLength <= 0 || contentLength > MaxLogoBytes)
+            return Result.Fail<TenantBrandingLogoResult>("La imagen de portada debe pesar máximo 2 MB.");
+        if (!AllowedContentTypes.Contains(contentType))
+            return Result.Fail<TenantBrandingLogoResult>("La imagen de portada debe ser PNG o JPG.");
+        if (_container is null)
+            return Result.Fail<TenantBrandingLogoResult>("Azure Blob Storage no esta configurado para subir imagenes de portada.");
+
+        await _container.CreateIfNotExistsAsync(PublicAccessType.None, cancellationToken: cancellationToken);
+
+        var branding = await _db.TenantBrandings
+            .SingleOrDefaultAsync(b => b.TenantId == tenantId, cancellationToken);
+        if (branding is null)
+            return Result.Fail<TenantBrandingLogoResult>("Branding del tenant no encontrado.");
+
+        byte[] originalBytes;
+        await using (var ms = new MemoryStream())
+        {
+            await content.CopyToAsync(ms, cancellationToken);
+            originalBytes = ms.ToArray();
+        }
+
+        Image<Rgba32> original;
+        try
+        {
+            original = Image.Load<Rgba32>(originalBytes);
+        }
+        catch
+        {
+            return Result.Fail<TenantBrandingLogoResult>("El archivo no es una imagen valida.");
+        }
+
+        using (original)
+        {
+            var extension = GetSafeExtension(fileName, contentType);
+            var originalBlobName = $"{GetTenantBrandingPrefix(tenantId)}/wallet-strip/{StripOriginalBlobName}{extension}";
+            await UploadPngOrOriginalAsync(originalBlobName, originalBytes, contentType, cancellationToken);
+
+            await RenderAndUploadAppleWalletStripAssetsAsync(original, tenantId, cancellationToken);
+
+            branding.SetAppleWalletStripImage(originalBlobName);
+            await _db.SaveChangesAsync(cancellationToken);
+
+            _logger.LogInformation(
+                "Tenant Apple Wallet strip image uploaded. TenantId={TenantId}, OriginalBlob={OriginalBlob}, StripAssets={StripAssetCount}.",
+                tenantId,
+                originalBlobName,
+                AppleWalletStripAssets.Length);
+
+            return Result.Ok(new TenantBrandingLogoResult(
+                tenantId,
+                originalBlobName,
+                GetDisplayUrl(originalBlobName)));
+        }
+    }
 
     private async Task<Result<TenantBrandingLogoResult>> UploadCoreAsync(
         Guid tenantId,
@@ -150,15 +225,19 @@ internal sealed class TenantBrandingLogoService :
                 : $"{GetTenantBrandingPrefix(tenantId)}/{OriginalBlobName}{extension}";
             await UploadPngOrOriginalAsync(originalBlobName, originalBytes, contentType, cancellationToken);
 
-            foreach (var spec in WalletAssets)
-            {
-                var bytes = RenderPng(original, spec);
-                await UploadPngOrOriginalAsync(
-                    $"{GetTenantBrandingPrefix(tenantId)}/{folder}/{spec.Name}",
-                    bytes,
-                    "image/png",
-                    cancellationToken);
-            }
+            await RenderAndUploadWalletAssetsAsync(
+                original,
+                tenantId,
+                folder,
+                TenantBranding.DefaultWalletLogoScalePercent,
+                cancellationToken);
+
+            await RenderAndUploadWalletAssetsAsync(
+                original,
+                tenantId,
+                $"{folder}/{AppleWalletAssetsFolder}",
+                NormalizeWalletLogoScale(branding.WalletLogoScalePercent),
+                cancellationToken);
 
             if (walletSpecific)
                 branding.SetWalletLogo(originalBlobName);
@@ -194,6 +273,64 @@ internal sealed class TenantBrandingLogoService :
         await _db.SaveChangesAsync(cancellationToken);
 
         _logger.LogInformation("Tenant logo reference removed. TenantId={TenantId}.", tenantId);
+        return Result.Ok();
+    }
+
+    public async Task<Result> RegenerateAppleWalletLogoAssetsAsync(
+        Guid tenantId,
+        CancellationToken cancellationToken = default)
+    {
+        if (tenantId == Guid.Empty)
+            return Result.Fail("TenantId requerido.");
+
+        var branding = await _db.TenantBrandings
+            .SingleOrDefaultAsync(b => b.TenantId == tenantId, cancellationToken);
+        if (branding is null)
+            return Result.Fail("Branding del tenant no encontrado.");
+
+        var sourceBlobName = branding.WalletLogoBlobName ?? branding.LogoBlobName;
+        if (string.IsNullOrWhiteSpace(sourceBlobName))
+            return Result.Ok();
+        if (_container is null)
+            return Result.Fail("Azure Blob Storage no esta configurado para regenerar logos.");
+
+        byte[] originalBytes;
+        try
+        {
+            originalBytes = await DownloadBlobBytesAsync(sourceBlobName, cancellationToken);
+        }
+        catch (RequestFailedException ex) when (ex.Status == 404)
+        {
+            return Result.Fail("El logo fuente de la tarjeta no se encontro en Blob Storage.");
+        }
+
+        Image<Rgba32> original;
+        try
+        {
+            original = Image.Load<Rgba32>(originalBytes);
+        }
+        catch
+        {
+            return Result.Fail("El logo fuente de la tarjeta no es una imagen valida.");
+        }
+
+        using (original)
+        {
+            var folder = branding.WalletLogoBlobName is not null
+                ? "wallet-branding"
+                : "wallet";
+            await RenderAndUploadWalletAssetsAsync(
+                original,
+                tenantId,
+                $"{folder}/{AppleWalletAssetsFolder}",
+                NormalizeWalletLogoScale(branding.WalletLogoScalePercent),
+                cancellationToken);
+        }
+
+        _logger.LogInformation(
+            "Tenant Apple Wallet logo assets regenerated. TenantId={TenantId}, ScalePercent={ScalePercent}.",
+            tenantId,
+            NormalizeWalletLogoScale(branding.WalletLogoScalePercent));
         return Result.Ok();
     }
 
@@ -254,6 +391,53 @@ internal sealed class TenantBrandingLogoService :
             cancellationToken);
     }
 
+    private async Task<byte[]> DownloadBlobBytesAsync(
+        string blobName,
+        CancellationToken cancellationToken)
+    {
+        var blob = _container!.GetBlobClient(blobName);
+        using var stream = new MemoryStream();
+        await blob.DownloadToAsync(stream, cancellationToken);
+        return stream.ToArray();
+    }
+
+    private async Task RenderAndUploadWalletAssetsAsync(
+        Image<Rgba32> original,
+        Guid tenantId,
+        string folder,
+        int logoScalePercent,
+        CancellationToken cancellationToken)
+    {
+        foreach (var spec in WalletAssets)
+        {
+            var scale = spec.Name.StartsWith("logo", StringComparison.OrdinalIgnoreCase)
+                ? logoScalePercent
+                : TenantBranding.DefaultWalletLogoScalePercent;
+            var bytes = RenderPng(original, spec, scale);
+            await UploadPngOrOriginalAsync(
+                $"{GetTenantBrandingPrefix(tenantId)}/{folder}/{spec.Name}",
+                bytes,
+                "image/png",
+                cancellationToken);
+        }
+    }
+
+    private async Task RenderAndUploadAppleWalletStripAssetsAsync(
+        Image<Rgba32> original,
+        Guid tenantId,
+        CancellationToken cancellationToken)
+    {
+        foreach (var spec in AppleWalletStripAssets)
+        {
+            var bytes = RenderStripPng(original, spec);
+            await UploadPngOrOriginalAsync(
+                $"{GetTenantBrandingPrefix(tenantId)}/wallet-strip/{spec.Name}",
+                bytes,
+                "image/png",
+                cancellationToken);
+        }
+    }
+
     private async Task DeletePrefixAsync(string prefix, CancellationToken cancellationToken)
     {
         if (_container is null)
@@ -263,15 +447,43 @@ internal sealed class TenantBrandingLogoService :
             await _container.DeleteBlobIfExistsAsync(blob.Name, DeleteSnapshotsOption.IncludeSnapshots, cancellationToken: cancellationToken);
     }
 
-    private static byte[] RenderPng(Image<Rgba32> original, WalletLogoAssetSpec spec)
+    internal static byte[] RenderPngForTesting(
+        byte[] originalBytes,
+        int width,
+        int height,
+        bool transparentCanvas,
+        int logoScalePercent)
+    {
+        using var original = Image.Load<Rgba32>(originalBytes);
+        return RenderPng(
+            original,
+            new WalletLogoAssetSpec("test.png", width, height, transparentCanvas),
+            logoScalePercent);
+    }
+
+    internal static byte[] RenderStripPngForTesting(byte[] originalBytes, int width, int height)
+    {
+        using var original = Image.Load<Rgba32>(originalBytes);
+        return RenderStripPng(
+            original,
+            new WalletLogoAssetSpec("test-strip.png", width, height, TransparentCanvas: false));
+    }
+
+    private static byte[] RenderPng(
+        Image<Rgba32> original,
+        WalletLogoAssetSpec spec,
+        int logoScalePercent)
     {
         using var canvas = new Image<Rgba32>(
             spec.Width,
             spec.Height,
             spec.TransparentCanvas ? Color.Transparent : Color.White);
+        var scale = NormalizeWalletLogoScale(logoScalePercent) / 100d;
+        var targetWidth = Math.Max(1, (int)Math.Round(spec.Width * scale));
+        var targetHeight = Math.Max(1, (int)Math.Round(spec.Height * scale));
         using var resized = original.Clone(ctx => ctx.Resize(new ResizeOptions
         {
-            Size = new Size(spec.Width, spec.Height),
+            Size = new Size(targetWidth, targetHeight),
             Mode = ResizeMode.Max
         }));
 
@@ -283,6 +495,26 @@ internal sealed class TenantBrandingLogoService :
         canvas.Save(ms, new PngEncoder());
         return ms.ToArray();
     }
+
+    private static byte[] RenderStripPng(Image<Rgba32> original, WalletLogoAssetSpec spec)
+    {
+        using var rendered = original.Clone(ctx => ctx.Resize(new ResizeOptions
+        {
+            Size = new Size(spec.Width, spec.Height),
+            Mode = ResizeMode.Crop,
+            Position = AnchorPositionMode.Center
+        }));
+
+        using var ms = new MemoryStream();
+        rendered.Save(ms, new PngEncoder());
+        return ms.ToArray();
+    }
+
+    private static int NormalizeWalletLogoScale(int value) =>
+        Math.Clamp(
+            value,
+            TenantBranding.MinWalletLogoScalePercent,
+            TenantBranding.MaxWalletLogoScalePercent);
 
     private static string GetSafeExtension(string fileName, string contentType)
     {

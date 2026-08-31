@@ -69,7 +69,72 @@ else
                             <img src="@branding.WalletLogoUrl" alt="Logo de la tarjeta" />
                         </div>
                     }
+                    <small class="kb-muted">Recomendado: PNG de alta resolución con fondo transparente y poco espacio vacío alrededor del logo. Mantén la proporción original.</small>
                 </div>
+
+                <div class="kb-form-row">
+                    <label for="wallet-logo-scale">Tamaño del logo <span class="kb-range-value">@walletLogoScalePercent%</span></label>
+                    <input id="wallet-logo-scale"
+                           class="kb-range"
+                           type="range"
+                           min="60"
+                           max="100"
+                           step="5"
+                           value="@walletLogoScalePercent"
+                           @oninput="OnWalletLogoScaleChanged"
+                           disabled="@brandingBusy" />
+                    <small class="kb-muted">Ajusta qué tan grande se verá el logo en Apple Wallet.</small>
+                </div>
+
+                <div class="kb-form-row">
+                    <label>Contenido principal</label>
+                    <div class="kb-radio-stack">
+                        <label class="kb-radio-option">
+                            <input type="radio"
+                                   name="apple-wallet-primary-content"
+                                   value="@PrimaryContentCustomerName"
+                                   checked="@IsCustomerNameMode"
+                                   @onchange="OnPrimaryContentModeChanged"
+                                   disabled="@brandingBusy" />
+                            <span>Nombre del cliente</span>
+                        </label>
+                        <label class="kb-radio-option">
+                            <input type="radio"
+                                   name="apple-wallet-primary-content"
+                                   value="@PrimaryContentImage"
+                                   checked="@IsImageMode"
+                                   @onchange="OnPrimaryContentModeChanged"
+                                   disabled="@brandingBusy" />
+                            <span>Imagen de portada</span>
+                        </label>
+                    </div>
+                </div>
+
+                @if (IsImageMode)
+                {
+                    <div class="kb-form-row">
+                        <label for="wallet-strip">Imagen de portada</label>
+                        <label class="kb-file-upload">
+                            <span class="kb-btn kb-btn--ghost kb-btn--small">Cambiar portada</span>
+                            <InputFile id="wallet-strip"
+                                       class="kb-file-input-hidden"
+                                       OnChange="UploadAppleWalletStripImageAsync"
+                                       accept="image/png,image/jpeg"
+                                       disabled="@brandingBusy" />
+                        </label>
+                        @if (!string.IsNullOrWhiteSpace(selectedAppleWalletStripFileName))
+                        {
+                            <span class="kb-file-name">@selectedAppleWalletStripFileName</span>
+                        }
+                        @if (!string.IsNullOrWhiteSpace(branding?.AppleWalletStripImageUrl))
+                        {
+                            <div class="kb-strip-preview">
+                                <img src="@branding.AppleWalletStripImageUrl" alt="Imagen de portada de Apple Wallet" />
+                            </div>
+                        }
+                        <small class="kb-muted">Tamaño recomendado: 1125 × 432 px. Usa una imagen horizontal. Se recortará automáticamente para ajustarse sin deformarse.</small>
+                    </div>
+                }
 
                 <div class="kb-form-row kb-form-row--horizontal">
                     <button class="kb-btn kb-btn--primary kb-config-save"
@@ -86,7 +151,7 @@ else
                     <div class="kb-wallet-preview-logo">
                         @if (!string.IsNullOrWhiteSpace(branding?.WalletLogoUrl))
                         {
-                            <img src="@branding.WalletLogoUrl" alt="" />
+                            <img src="@branding.WalletLogoUrl" alt="" style="@WalletLogoPreviewStyle" />
                         }
                         else
                         {
@@ -94,7 +159,23 @@ else
                         }
                     </div>
 
-                    <div class="kb-wallet-preview-name">Daniel</div>
+                    @if (IsCustomerNameMode)
+                    {
+                        <div class="kb-wallet-preview-name">Daniel</div>
+                    }
+                    else
+                    {
+                        <div class="kb-wallet-preview-strip">
+                            @if (!string.IsNullOrWhiteSpace(branding?.AppleWalletStripImageUrl))
+                            {
+                                <img src="@branding.AppleWalletStripImageUrl" alt="" />
+                            }
+                            else
+                            {
+                                <span>Imagen de portada</span>
+                            }
+                        </div>
+                    }
 
                     <div class="kb-wallet-preview-field-labels">
                         <span>PUNTOS</span>
@@ -176,9 +257,14 @@ else
     private bool busy;
     private TenantBrandingInfo? branding;
     private string? walletBackgroundColor;
+    private int walletLogoScalePercent = 100;
+    private string appleWalletPrimaryContentMode = PrimaryContentCustomerName;
     private bool brandingBusy;
     private string? selectedWalletLogoFileName;
+    private string? selectedAppleWalletStripFileName;
     private const long MaxLogoBytes = 2 * 1024 * 1024;
+    private const string PrimaryContentCustomerName = "CustomerName";
+    private const string PrimaryContentImage = "Image";
     private const string PreviewQrUrl = "https://www.instagram.com/loyaltycloud.app/";
     private static readonly string PreviewQrDataUri = QrCodeSvgGenerator.GenerateDataUri(PreviewQrUrl, scale: 7);
 
@@ -190,6 +276,9 @@ else
         string.IsNullOrWhiteSpace(walletBackgroundColor) ? branding?.ResolvedWalletBackgroundColor : walletBackgroundColor,
         WalletColorContrast.DefaultBackgroundHex);
     private string ResolvedWalletText => WalletColorContrast.ResolveTextColors(ResolvedWalletBackground).ForegroundHex;
+    private string WalletLogoPreviewStyle => $"width:{Math.Round(180 * (walletLogoScalePercent / 100d)):0}px;";
+    private bool IsCustomerNameMode => !string.Equals(appleWalletPrimaryContentMode, PrimaryContentImage, StringComparison.OrdinalIgnoreCase);
+    private bool IsImageMode => string.Equals(appleWalletPrimaryContentMode, PrimaryContentImage, StringComparison.OrdinalIgnoreCase);
 
     protected override async Task OnInitializedAsync() => await LoadAsync();
 
@@ -206,7 +295,10 @@ else
 
         branding = await BrandingRead.GetCurrentAsync();
         walletBackgroundColor = branding.WalletBackgroundColor ?? string.Empty;
+        walletLogoScalePercent = branding.WalletLogoScalePercent;
+        appleWalletPrimaryContentMode = NormalizePrimaryContentMode(branding.AppleWalletPrimaryContentMode);
         selectedWalletLogoFileName = null;
+        selectedAppleWalletStripFileName = null;
     }
 
     private async Task SaveAsync()
@@ -246,6 +338,19 @@ else
         walletBackgroundColor = args.Value?.ToString()?.Trim() ?? string.Empty;
     }
 
+    private void OnWalletLogoScaleChanged(ChangeEventArgs args)
+    {
+        if (int.TryParse(args.Value?.ToString(), out var value))
+        {
+            walletLogoScalePercent = Math.Clamp(value, 60, 100);
+        }
+    }
+
+    private void OnPrimaryContentModeChanged(ChangeEventArgs args)
+    {
+        appleWalletPrimaryContentMode = NormalizePrimaryContentMode(args.Value?.ToString());
+    }
+
     private async Task SaveWalletBrandingAsync()
     {
         successMsg = errorMsg = null;
@@ -254,17 +359,24 @@ else
             errorMsg = "El color de la tarjeta debe usar formato #RRGGBB.";
             return;
         }
+        if (IsImageMode && branding?.HasAppleWalletStripImage != true)
+        {
+            errorMsg = "Sube una imagen de portada antes de seleccionar esta opción.";
+            return;
+        }
 
         brandingBusy = true;
         try
         {
             var result = await Api.PutAsJsonAsync<WalletBrandingRequest, TenantBrandingInfo>(
                 "api/config/wallet-branding",
-                new WalletBrandingRequest(walletBackgroundColor));
+                new WalletBrandingRequest(walletBackgroundColor, walletLogoScalePercent, appleWalletPrimaryContentMode));
             if (result.IsSuccess)
             {
                 branding = result.Value;
                 walletBackgroundColor = branding.WalletBackgroundColor ?? string.Empty;
+                walletLogoScalePercent = branding.WalletLogoScalePercent;
+                appleWalletPrimaryContentMode = NormalizePrimaryContentMode(branding.AppleWalletPrimaryContentMode);
                 successMsg = "Tarjeta digital actualizada.";
             }
             else
@@ -323,8 +435,63 @@ else
             }
 
             branding = result.Value;
+            walletLogoScalePercent = branding.WalletLogoScalePercent;
             successMsg = "Logo de tarjeta actualizado.";
             selectedWalletLogoFileName = null;
+        }
+        finally
+        {
+            brandingBusy = false;
+        }
+    }
+
+    private async Task UploadAppleWalletStripImageAsync(InputFileChangeEventArgs args)
+    {
+        successMsg = errorMsg = null;
+        var file = args.File;
+        selectedAppleWalletStripFileName = file.Name;
+        if (file.Size <= 0 || file.Size > MaxLogoBytes)
+        {
+            errorMsg = "La imagen de portada debe pesar máximo 2 MB.";
+            return;
+        }
+
+        if (!file.ContentType.Equals("image/png", StringComparison.OrdinalIgnoreCase)
+            && !file.ContentType.Equals("image/jpeg", StringComparison.OrdinalIgnoreCase)
+            && !file.ContentType.Equals("image/jpg", StringComparison.OrdinalIgnoreCase))
+        {
+            errorMsg = "La imagen de portada debe ser PNG o JPG.";
+            return;
+        }
+
+        brandingBusy = true;
+        try
+        {
+            byte[] bytes;
+            await using (var stream = file.OpenReadStream(MaxLogoBytes))
+            await using (var ms = new MemoryStream())
+            {
+                await stream.CopyToAsync(ms);
+                bytes = ms.ToArray();
+            }
+
+            var result = await Api.PostAsJsonAsync<WalletLogoUploadRequest, TenantBrandingInfo>(
+                "api/config/wallet-branding/strip-image",
+                new WalletLogoUploadRequest(
+                    file.Name,
+                    file.ContentType,
+                    Convert.ToBase64String(bytes),
+                    file.Size));
+
+            if (result.IsFailure)
+            {
+                errorMsg = string.Join(" ", result.Errors);
+                return;
+            }
+
+            branding = result.Value;
+            selectedAppleWalletStripFileName = null;
+            successMsg = "Imagen de portada actualizada.";
         }
         finally
         {
@@ -359,11 +526,19 @@ else
         _ => key
     };
 
-    private sealed record WalletBrandingRequest(string? WalletBackgroundColor);
+    private sealed record WalletBrandingRequest(
+        string? WalletBackgroundColor,
+        int WalletLogoScalePercent,
+        string AppleWalletPrimaryContentMode);
 
     private sealed record WalletLogoUploadRequest(
         string FileName,
         string ContentType,
         string ContentBase64,
         long ContentLength);
+
+    private static string NormalizePrimaryContentMode(string? value) =>
+        string.Equals(value, PrimaryContentImage, StringComparison.OrdinalIgnoreCase)
+            ? PrimaryContentImage
+            : PrimaryContentCustomerName;
 }
