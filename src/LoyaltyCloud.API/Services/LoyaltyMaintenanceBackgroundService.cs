@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using LoyaltyCloud.API.Configuration;
 using LoyaltyCloud.Application.Common.Interfaces;
+using LoyaltyCloud.Application.GiftCards;
 using LoyaltyCloud.Application.Levels.Commands.RecalculateLevels;
 using LoyaltyCloud.Application.Notifications.Commands.CreateBirthdayBenefitStartedNotifications;
 using LoyaltyCloud.Application.Notifications.Commands.CreateMonthlyProductStartedNotifications;
@@ -88,6 +89,8 @@ public sealed class LoyaltyMaintenanceBackgroundService : BackgroundService
                     var sender = serviceProvider.GetRequiredService<ISender>();
 
                     await RunExpirationAsync(sender, tenantCt);
+                    var giftCards = serviceProvider.GetRequiredService<IGiftCardService>();
+                    await giftCards.ExpireDueAsync(tenantCt);
                     await RunLevelRecalculationAsync(sender, tenantCt);
                     await RunPointExpirationNotificationsAsync(sender, tenant.TimeZoneId, tenantCt);
                     await RunMonthlyProductNotificationsAsync(sender, tenant.TimeZoneId, tenantCt);

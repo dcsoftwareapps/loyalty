@@ -1,0 +1,25 @@
+@implements IAsyncDisposable
+@inject IJSRuntime JS
+
+<button type="button" class="kb-button kb-button--primary kb-gift-scan-button" disabled="@scanning" @onclick="StartAsync">@(scanning ? "Escaneando…" : "Escanear con cámara")</button>
+@if(scanning)
+{
+    <section class="kb-qr-scanner kb-gift-scanner" aria-label="Escáner de Gift Card">
+        <div class="kb-gift-scanner-frame"><video @ref="video" class="kb-qr-video" autoplay muted playsinline></video><span aria-hidden="true"></span></div>
+        <p>Centra el QR de la Gift Card dentro del marco.</p>
+        <div class="kb-actions"><button type="button" class="kb-button" @onclick="SwitchAsync">Cambiar cámara</button><button type="button" class="kb-button" @onclick="CancelAsync">Cancelar</button></div>
+    </section>
+}
+@if(message is not null){<p class="kb-form-error">@message</p>}
+
+@code {
+    [Parameter, EditorRequired] public EventCallback<string> OnDetected { get; set; }
+    private ElementReference video; private bool scanning; private string? message; private DotNetObjectReference<GiftCardQrScanner>? reference;
+    private async Task StartAsync(){message=null;scanning=true;await InvokeAsync(StateHasChanged);await Task.Yield();reference??=DotNetObjectReference.Create(this);var result=await JS.InvokeAsync<StartResult>("kbeautyQrScanner.start",video,reference);if(!result.Ok){scanning=false;message=result.Message;}}
+    private async Task SwitchAsync(){var result=await JS.InvokeAsync<StartResult>("kbeautyQrScanner.switchCamera",video,reference);if(!result.Ok)message=result.Message;}
+    private async Task CancelAsync(){await StopAsync();message=null;}
+    [JSInvokable] public async Task OnQrDetected(string value){await InvokeAsync(async()=>{await StopAsync();await OnDetected.InvokeAsync(value);});}
+    private async Task StopAsync(){scanning=false;try{await JS.InvokeVoidAsync("kbeautyQrScanner.stop");}catch(JSDisconnectedException){}}
+    public async ValueTask DisposeAsync(){await StopAsync();reference?.Dispose();}
+    private sealed record StartResult(bool Ok,string? Message);
+}

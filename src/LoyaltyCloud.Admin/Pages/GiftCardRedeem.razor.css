@@ -1,0 +1,5 @@
+.kb-gift-balance-preview { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:.75rem; margin:1.25rem 0; }
+.kb-gift-balance-preview span { padding:1rem; border:1px solid var(--kb-border, #ddd); border-radius:.85rem; color:var(--kb-ink-muted); }
+.kb-gift-balance-preview strong { display:block; margin-top:.3rem; font-size:1.35rem; color:var(--kb-ink); }
+.kb-gift-amount { min-height:3.5rem; font-size:1.35rem; }
+@media (max-width: 600px) { .kb-gift-balance-preview { grid-template-columns:1fr; } .kb-gift-balance-preview span { display:flex; justify-content:space-between; align-items:center; } .kb-gift-balance-preview strong { margin:0; } }

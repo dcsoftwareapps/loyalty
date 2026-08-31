@@ -1,0 +1,24 @@
+@page "/giftcards/settings"
+@attribute [Authorize]
+@rendermode InteractiveServer
+@inject LoyaltyCloud.Application.GiftCards.IGiftCardService Service
+
+<PageTitle>Configuración Gift Cards - LoyaltyCloud</PageTitle>
+<header class="kb-page-header"><div><span class="kb-eyebrow">Gift Cards</span><h1>Configuración</h1><p>Activa el módulo y define reglas, moneda y presentación.</p></div></header>
+@if (settings is null) { <p>Cargando…</p> }
+else
+{
+<section class="kb-card"><div class="kb-form-grid">
+<label><input type="checkbox" @bind="enabled" /> Módulo habilitado</label><label><input type="checkbox" @bind="custom" /> Permitir monto personalizado</label><label><input type="checkbox" @bind="partial" /> Permitir canje parcial</label><label><input type="checkbox" @bind="promotional" /> Permitir emisión promocional</label>
+<label>Moneda<input maxlength="3" @bind="currency" /></label><label>Nombre visible<input @bind="displayName" /></label><label>Color principal<input type="color" @bind="primaryColor" /></label><label>Color de texto<input type="color" @bind="textColor" /></label><label>Expiración<select @bind="expiration"><option value="Never">Sin expiración</option><option value="MonthsAfterIssue">Meses después de emitir</option><option value="SelectAtIssue">Elegir al emitir</option></select></label>@if(expiration=="MonthsAfterIssue"){<label>Meses<input type="number" min="1" max="120" @bind="months" /></label>}<label class="kb-field--wide">Términos<textarea @bind="terms"></textarea></label></div>
+@if(message is not null){<div class="alert alert-info">@message</div>}<button class="kb-button kb-button--primary" @onclick="Save">Guardar configuración</button></section>
+<section class="kb-card"><h2>Denominaciones</h2><div class="kb-actions"><input type="number" min="0.01" step="0.01" @bind="newAmount" /><button class="kb-button" @onclick="Add">Agregar</button></div><div class="kb-actions">@foreach(var d in settings.Denominations){<button class="kb-button" @onclick="()=>Toggle(d)">@d.Amount.ToString("C2") @d.Currency · @(d.IsActive?"Activa":"Inactiva")</button>}</div></section>
+}
+@code {
+ LoyaltyCloud.Application.GiftCards.GiftCardSettingsDto? settings; bool enabled,custom,partial,promotional; string currency="MXN",displayName="Gift Card",primaryColor="#1C1B18",textColor="#FFFFFF",expiration="Never"; int? months; string? terms,message; decimal newAmount;
+ protected override async Task OnInitializedAsync(){settings=await Service.GetSettingsAsync();Copy();}
+ void Copy(){if(settings is null)return;enabled=settings.IsEnabled;custom=settings.AllowCustomAmount;partial=settings.AllowPartialRedemption;promotional=settings.AllowPromotionalIssuance;currency=settings.Currency;displayName=settings.DisplayName;primaryColor=settings.PrimaryColor;textColor=settings.TextColor;expiration=settings.ExpirationMode.ToString();months=settings.DefaultExpirationMonths;terms=settings.Terms;}
+ async Task Save(){try{settings=await Service.UpdateSettingsAsync(new(enabled,custom,partial,promotional,Enum.Parse<LoyaltyCloud.Domain.Enums.GiftCardExpirationMode>(expiration),months,currency,displayName,primaryColor,textColor,settings?.LogoUrl,settings?.SecondaryText,terms,settings?.FooterMessage));message="Configuración guardada.";}catch(Exception ex){message=ex.Message;}}
+ async Task Add(){try{await Service.AddDenominationAsync(newAmount);settings=await Service.GetSettingsAsync();newAmount=0;}catch(Exception ex){message=ex.Message;}}
+ async Task Toggle(LoyaltyCloud.Application.GiftCards.GiftCardDenominationDto d){await Service.SetDenominationActiveAsync(d.Id,!d.IsActive);settings=await Service.GetSettingsAsync();}
+}
