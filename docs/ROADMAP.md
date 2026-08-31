@@ -60,6 +60,7 @@ La base activa de produccion/UAT es `LoyaltyCloudFree`.
 - Branding tenant-aware en Admin.
 - Logo por tenant para Apple Wallet.
 - Tamaño visual del logo de Apple Wallet configurable por tenant.
+- Contenido principal configurable de Apple Wallet: nombre del cliente o imagen de portada.
 - Fallback grafico neutral de Wallet sin texto `LC`.
 - Wallet pass con fondo claro, valores negros y labels en PrimaryColor.
 - Colores del pass en Google Wallet / Android usando branding tenant-aware.

@@ -19,6 +19,8 @@ public sealed record TenantWalletBrandingDto(
     string? LogoBlobName,
     string? WalletLogoBlobName,
     int WalletLogoScalePercent,
+    string AppleWalletPrimaryContentMode,
+    string? AppleWalletStripImageBlobName,
     string ContactValue,
     string CustomerFallbackName,
     bool UsesBundledAssetsFallback,

@@ -1,6 +1,7 @@
 using LoyaltyCloud.Application.Common.Interfaces;
 using LoyaltyCloud.Application.Common.Branding;
 using LoyaltyCloud.Domain.Entities;
+using LoyaltyCloud.Domain.Enums;
 using LoyaltyCloud.Infrastructure.Configuration;
 using LoyaltyCloud.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
@@ -52,6 +53,10 @@ internal sealed class TenantWalletBrandingReadService : ITenantWalletBrandingRea
                 WalletLogoScalePercent = tenant.Branding == null
                     ? TenantBranding.DefaultWalletLogoScalePercent
                     : tenant.Branding.WalletLogoScalePercent,
+                AppleWalletPrimaryContentMode = tenant.Branding == null
+                    ? AppleWalletPrimaryContentMode.CustomerName
+                    : tenant.Branding.AppleWalletPrimaryContentMode,
+                AppleWalletStripImageBlobName = tenant.Branding == null ? null : tenant.Branding.AppleWalletStripImageBlobName,
                 PrimaryColor = tenant.Branding == null ? null : tenant.Branding.PrimaryColor,
                 SecondaryColor = tenant.Branding == null ? null : tenant.Branding.SecondaryColor,
                 SupportPhone = tenant.Branding == null ? null : tenant.Branding.SupportPhone,
@@ -98,6 +103,8 @@ internal sealed class TenantWalletBrandingReadService : ITenantWalletBrandingRea
             LogoBlobName: row.LogoBlobName,
             WalletLogoBlobName: row.WalletLogoBlobName,
             WalletLogoScalePercent: NormalizeWalletLogoScale(row.WalletLogoScalePercent),
+            AppleWalletPrimaryContentMode: NormalizePrimaryContentMode(row.AppleWalletPrimaryContentMode),
+            AppleWalletStripImageBlobName: row.AppleWalletStripImageBlobName,
             ContactValue: contactValue!,
             CustomerFallbackName: $"Cliente {row.DisplayName}",
             UsesBundledAssetsFallback: false,
@@ -121,5 +128,10 @@ internal sealed class TenantWalletBrandingReadService : ITenantWalletBrandingRea
         value is >= TenantBranding.MinWalletLogoScalePercent and <= TenantBranding.MaxWalletLogoScalePercent
             ? value
             : TenantBranding.DefaultWalletLogoScalePercent;
+
+    private static string NormalizePrimaryContentMode(AppleWalletPrimaryContentMode value) =>
+        Enum.IsDefined(typeof(AppleWalletPrimaryContentMode), value)
+            ? value.ToString()
+            : AppleWalletPrimaryContentMode.CustomerName.ToString();
 
 }

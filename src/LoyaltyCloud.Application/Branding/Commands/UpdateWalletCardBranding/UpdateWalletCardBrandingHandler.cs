@@ -20,5 +20,6 @@ internal sealed class UpdateWalletCardBrandingHandler
         _service.UpdateAsync(
             request.WalletBackgroundColor,
             request.WalletLogoScalePercent,
+            request.AppleWalletPrimaryContentMode,
             cancellationToken);
 }

@@ -6,4 +6,5 @@ namespace LoyaltyCloud.Application.Branding.Commands.UpdateWalletCardBranding;
 
 public sealed record UpdateWalletCardBrandingCommand(
     string? WalletBackgroundColor,
-    int? WalletLogoScalePercent) : IRequest<Result<TenantBrandingInfo>>;
+    int? WalletLogoScalePercent,
+    string? AppleWalletPrimaryContentMode) : IRequest<Result<TenantBrandingInfo>>;

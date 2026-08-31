@@ -1,6 +1,7 @@
 using LoyaltyCloud.Application.Common.Interfaces;
 using LoyaltyCloud.Application.Common.Branding;
 using LoyaltyCloud.Domain.Entities;
+using LoyaltyCloud.Domain.Enums;
 using LoyaltyCloud.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
@@ -50,6 +51,10 @@ internal sealed class TenantBrandingReadService : ITenantBrandingReadService
                 WalletLogoScalePercent = tenant.Branding == null
                     ? TenantBranding.DefaultWalletLogoScalePercent
                     : tenant.Branding.WalletLogoScalePercent,
+                AppleWalletPrimaryContentMode = tenant.Branding == null
+                    ? AppleWalletPrimaryContentMode.CustomerName
+                    : tenant.Branding.AppleWalletPrimaryContentMode,
+                AppleWalletStripImageBlobName = tenant.Branding == null ? null : tenant.Branding.AppleWalletStripImageBlobName,
                 PrimaryColor = tenant.Branding == null ? null : tenant.Branding.PrimaryColor,
                 SecondaryColor = tenant.Branding == null ? null : tenant.Branding.SecondaryColor,
                 SupportPhone = tenant.Branding == null ? null : tenant.Branding.SupportPhone,
@@ -82,6 +87,9 @@ internal sealed class TenantBrandingReadService : ITenantBrandingReadService
                 ?? TenantBrandingSanitizer.UrlOrNull(row.LogoUrl, row.Id, "LogoUrl", _logger, Uri.UriSchemeHttps, Uri.UriSchemeHttp),
             !string.IsNullOrWhiteSpace(row.WalletLogoBlobName),
             NormalizeWalletLogoScale(row.WalletLogoScalePercent),
+            NormalizePrimaryContentMode(row.AppleWalletPrimaryContentMode),
+            _logoUrls.GetDisplayUrl(row.AppleWalletStripImageBlobName),
+            !string.IsNullOrWhiteSpace(row.AppleWalletStripImageBlobName),
             TenantBrandingSanitizer.TextOrNull(row.SupportPhone),
             TenantBrandingSanitizer.UrlOrNull(row.WhatsAppUrl, row.Id, "WhatsAppUrl", _logger, Uri.UriSchemeHttps, Uri.UriSchemeHttp, "tel"),
             TenantBrandingSanitizer.UrlOrNull(row.InstagramUrl, row.Id, "InstagramUrl", _logger, Uri.UriSchemeHttps, Uri.UriSchemeHttp),
@@ -101,6 +109,9 @@ internal sealed class TenantBrandingReadService : ITenantBrandingReadService
             WalletLogoUrl: null,
             HasWalletLogo: false,
             WalletLogoScalePercent: TenantBranding.DefaultWalletLogoScalePercent,
+            AppleWalletPrimaryContentMode: AppleWalletPrimaryContentMode.CustomerName.ToString(),
+            AppleWalletStripImageUrl: null,
+            HasAppleWalletStripImage: false,
             SupportPhone: null,
             WhatsAppUrl: null,
             InstagramUrl: null,
@@ -110,4 +121,9 @@ internal sealed class TenantBrandingReadService : ITenantBrandingReadService
         value is >= TenantBranding.MinWalletLogoScalePercent and <= TenantBranding.MaxWalletLogoScalePercent
             ? value
             : TenantBranding.DefaultWalletLogoScalePercent;
+
+    private static string NormalizePrimaryContentMode(AppleWalletPrimaryContentMode value) =>
+        Enum.IsDefined(typeof(AppleWalletPrimaryContentMode), value)
+            ? value.ToString()
+            : AppleWalletPrimaryContentMode.CustomerName.ToString();
 }

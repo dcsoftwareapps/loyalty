@@ -7,6 +7,7 @@ public interface ITenantWalletCardBrandingService
     Task<Result<TenantBrandingInfo>> UpdateAsync(
         string? walletBackgroundColor,
         int? walletLogoScalePercent,
+        string? appleWalletPrimaryContentMode,
         CancellationToken cancellationToken = default);
 
     Task RefreshInstalledApplePassesBestEffortAsync(

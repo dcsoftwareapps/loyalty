@@ -1,5 +1,7 @@
 namespace LoyaltyCloud.Domain.Entities;
 
+using LoyaltyCloud.Domain.Enums;
+
 public sealed class TenantBranding
 {
     public const int DefaultWalletLogoScalePercent = 100;
@@ -12,6 +14,9 @@ public sealed class TenantBranding
     public string? WalletBackgroundColor { get; private set; }
     public string? WalletLogoBlobName { get; private set; }
     public int WalletLogoScalePercent { get; private set; } = DefaultWalletLogoScalePercent;
+    public AppleWalletPrimaryContentMode AppleWalletPrimaryContentMode { get; private set; } =
+        AppleWalletPrimaryContentMode.CustomerName;
+    public string? AppleWalletStripImageBlobName { get; private set; }
     public string PrimaryColor { get; private set; } = "#1C1C1C";
     public string SecondaryColor { get; private set; } = "#E8668E";
     public string? SupportPhone { get; private set; }
@@ -90,6 +95,22 @@ public sealed class TenantBranding
         }
 
         WalletLogoScalePercent = walletLogoScalePercent;
+    }
+
+    public void SetAppleWalletPrimaryContentMode(AppleWalletPrimaryContentMode mode)
+    {
+        if (!Enum.IsDefined(typeof(AppleWalletPrimaryContentMode), mode))
+            throw new ArgumentOutOfRangeException(nameof(mode), "AppleWalletPrimaryContentMode invalido.");
+
+        AppleWalletPrimaryContentMode = mode;
+    }
+
+    public void SetAppleWalletStripImage(string stripImageBlobName)
+    {
+        if (string.IsNullOrWhiteSpace(stripImageBlobName))
+            throw new ArgumentException("AppleWalletStripImageBlobName requerido.", nameof(stripImageBlobName));
+
+        AppleWalletStripImageBlobName = NormalizeOptional(stripImageBlobName, 500);
     }
 
     private static string NormalizeColor(string? value, string fallback, string paramName)

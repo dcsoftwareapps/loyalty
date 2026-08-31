@@ -151,7 +151,7 @@ Blazor Admin pages:
 
 Visible Admin menu is grouped by operation, customers, loyalty program, communication and administration. Do not reintroduce any retired Admin hostname.
 
-Admin customer screens intentionally ignore `Customer.Email` as visible customer data. The field still exists for legacy/domain/API compatibility, but tenant Admin UI should show name, phone, customer ID/serial and operational data instead. Platform tenant creation has synchronized color picker and hex fields for tenant branding colors. Tenant Admin `/config` includes Apple Wallet card branding: optional `TenantBranding.WalletBackgroundColor` (`#RRGGBB`), optional wallet-specific logo and Apple Wallet logo scale. Quick Help registration QR/poster must continue using the same tenant join URL source (`Admin:PublicBaseUrl` when configured, otherwise current Admin base URI). The poster top uses `TenantBrandingInfo.LogoUrl` when available and falls back to tenant display name.
+Admin customer screens intentionally ignore `Customer.Email` as visible customer data. The field still exists for legacy/domain/API compatibility, but tenant Admin UI should show name, phone, customer ID/serial and operational data instead. Platform tenant creation has synchronized color picker and hex fields for tenant branding colors. Tenant Admin `/config` includes Apple Wallet card branding: optional `TenantBranding.WalletBackgroundColor` (`#RRGGBB`), optional wallet-specific logo, Apple Wallet logo scale and Apple Wallet primary content mode. Quick Help registration QR/poster must continue using the same tenant join URL source (`Admin:PublicBaseUrl` when configured, otherwise current Admin base URI). The poster top uses `TenantBrandingInfo.LogoUrl` when available and falls back to tenant display name.
 
 ## API Endpoints
 
@@ -307,11 +307,15 @@ Wallet card branding is tenant-aware:
 
 - `TenantBranding.WalletBackgroundColor` overrides the Apple Wallet background color.
 - `TenantBranding.WalletLogoScalePercent` controls the visual size of the Apple Wallet logo inside the fixed Apple `logo*.png` canvas. Range is 60-100 and default is 100, preserving historical rendering.
+- `TenantBranding.AppleWalletPrimaryContentMode` controls the mutually exclusive main Apple Wallet content: `CustomerName` keeps the existing primary field with the customer's first name; `Image` omits the customer-name primary field and includes Apple Wallet strip assets.
+- Default Apple Wallet primary content mode is `CustomerName` so existing tenants keep their current pass layout after migration/deploy without configuration changes.
+- `TenantBranding.AppleWalletStripImageBlobName` stores the independent source image for Apple Wallet strip/banner mode. The source remains stored when switching back to `CustomerName`, allowing tenants to switch back to `Image` without reuploading.
+- Image mode generates Apple Wallet storeCard strip assets named `strip.png`, `strip@2x.png` and `strip@3x.png` at 375x144, 750x288 and 1125x432 respectively, using centered cover crop with preserved aspect ratio.
 - If no wallet color is set, Apple Wallet falls back to `TenantBranding.PrimaryColor`, then white.
 - Apple Wallet `foregroundColor` and `labelColor` are derived automatically from background luminance for readable contrast.
 - `TenantBranding.WalletLogoBlobName` points to wallet-specific generated assets under `tenant-branding/{tenantId}/wallet-branding/...`.
 - If no wallet logo is set, Apple Wallet falls back to generated assets from the tenant's main `LogoBlobName`, then bundled generic LoyaltyCloud assets.
-- Changing wallet color or wallet logo marks installed Apple passes updated and sends APNs best-effort; no visible `changeMessage` is generated for visual branding changes.
+- Changing wallet color, wallet logo scale, Apple Wallet primary content mode or strip image marks installed Apple passes updated and sends APNs best-effort; no visible `changeMessage` is generated for visual branding changes.
 - Wallet branding refresh now uses the shared Apple Wallet pass refresh path: touch `LoyaltyCard.LastActivityAt`, save, inspect `DeviceRegistration`, send APNs, and log `NoRecipients`, `NoOp`/unsupported, accepted pushes and rejected pushes.
 - APNs responses are explicit results. HTTP 200 is success; HTTP 429/5xx and network/timeout failures are transient; APNs permanent reasons such as `BadDeviceToken`, `Unregistered` and `DeviceTokenNotForTopic` are permanent. Non-2xx APNs responses must never be counted as success.
 7. iPhone installs pass and calls PassKit registration route.

@@ -4,7 +4,39 @@ Last updated: 2026-08-30
 
 Branch: `feature/apple-wallet-logo-scale`
 
-Last task worked: Apple Wallet logo scale per tenant.
+Last task worked: Apple Wallet primary content mode per tenant.
+
+## 2026-08-30 - Apple Wallet primary content mode per tenant
+
+Current branch for this work: `feature/apple-wallet-logo-scale`.
+
+Scope:
+
+- Extended the Apple Wallet card branding feature with `TenantBranding.AppleWalletPrimaryContentMode`.
+- Supported modes are `CustomerName` and `Image`.
+- Default is `CustomerName`, preserving current Apple Wallet primary-field behavior for all existing tenants after migration/deploy without config changes.
+- `CustomerName` mode keeps the existing `storeCard.primaryFields` name field: `key=name`, empty label, value from the existing customer display-name logic.
+- `Image` mode omits the customer-name primary field and includes Apple Wallet strip assets.
+- Added independent source storage for Apple Wallet strip/banner images through `TenantBranding.AppleWalletStripImageBlobName`.
+- Strip upload generates `strip.png` 375x144, `strip@2x.png` 750x288 and `strip@3x.png` 1125x432 using centered cover crop and preserving aspect ratio.
+- Switching from `Image` back to `CustomerName` does not delete the stored strip source, so the tenant can return to `Image` without reuploading.
+- Apple Wallet branding changes continue to use the existing best-effort installed-pass refresh/APNs path.
+- Google Wallet remains intentionally unchanged and does not consume Apple strip assets.
+
+Migration:
+
+- `20260831064349_AddAppleWalletPrimaryContentMode`.
+- Adds `TenantBrandings.AppleWalletPrimaryContentMode` as required `nvarchar(30)` with default `CustomerName`.
+- Adds nullable `TenantBrandings.AppleWalletStripImageBlobName`.
+- No database update was executed during implementation.
+
+Validation expected for this task:
+
+- focused TenantBranding / WalletProductionUpdate / Google Wallet mapper tests;
+- `dotnet build .\LoyaltyCloud.sln -c Release`;
+- `git diff --check`;
+- `dotnet ef migrations list --no-connect`;
+- no database update, deploy, commit or push.
 
 ## 2026-08-30 - Apple Wallet logo scale per tenant
 

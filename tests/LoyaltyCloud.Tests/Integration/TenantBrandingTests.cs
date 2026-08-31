@@ -97,6 +97,8 @@ public sealed class TenantBrandingTests
         Assert.Equal("rgb(17,24,39)", wallet.ForegroundColor);
         Assert.Equal("rgb(17,24,39)", wallet.LabelColor);
         Assert.Equal(TenantBranding.DefaultWalletLogoScalePercent, wallet.WalletLogoScalePercent);
+        Assert.Equal(AppleWalletPrimaryContentMode.CustomerName.ToString(), wallet.AppleWalletPrimaryContentMode);
+        Assert.Null(wallet.AppleWalletStripImageBlobName);
         Assert.Contains("instagram.com/bella_salon", wallet.ContactValue);
     }
 
@@ -198,6 +200,23 @@ public sealed class TenantBrandingTests
 
     [Fact]
     [Trait("Category", "TenantBranding")]
+    public void Wallet_asset_provider_loads_strip_assets_only_when_requested()
+    {
+        var root = GetRepositoryRoot();
+        var provider = File.ReadAllText(Path.Combine(root, "src", "LoyaltyCloud.Infrastructure", "Services", "TenantWalletAssetProvider.cs"));
+        var walletAssetsController = File.ReadAllText(Path.Combine(root, "src", "LoyaltyCloud.API", "Controllers", "WalletAssetsController.cs"));
+
+        Assert.Contains("includeStripImage", provider);
+        Assert.Contains("strip.png", provider);
+        Assert.Contains("strip@2x.png", provider);
+        Assert.Contains("strip@3x.png", provider);
+        Assert.Contains("wallet-strip", provider);
+        Assert.Contains("if (!includeStripImage)", provider);
+        Assert.DoesNotContain("includeStripImage", walletAssetsController);
+    }
+
+    [Fact]
+    [Trait("Category", "TenantBranding")]
     public void Config_wallet_preview_matches_real_pass_structure_and_uses_api_for_mutations()
     {
         var root = GetRepositoryRoot();
@@ -211,6 +230,12 @@ public sealed class TenantBrandingTests
         Assert.Contains("Define cómo se acumulan, vencen y bonifican los puntos de tu programa.", page);
         Assert.Contains("Cambiar logo", page);
         Assert.Contains("Tamaño del logo", page);
+        Assert.Contains("Contenido principal", page);
+        Assert.Contains("Nombre del cliente", page);
+        Assert.Contains("Imagen de portada", page);
+        Assert.Contains("Recomendado: PNG de alta resolución con fondo transparente y poco espacio vacío alrededor del logo. Mantén la proporción original.", page);
+        Assert.Contains("Tamaño recomendado: 1125 × 432 px. Usa una imagen horizontal. Se recortará automáticamente para ajustarse sin deformarse.", page);
+        Assert.Contains("Sube una imagen de portada antes de seleccionar esta opción.", page);
         Assert.Contains("min=\"60\"", page);
         Assert.Contains("max=\"100\"", page);
         Assert.Contains("step=\"5\"", page);
@@ -239,6 +264,7 @@ public sealed class TenantBrandingTests
         Assert.DoesNotContain("La apariencia final puede variar ligeramente en Apple Wallet.", page);
         Assert.Contains("api/config/wallet-branding", page);
         Assert.Contains("api/config/wallet-branding/logo", page);
+        Assert.Contains("api/config/wallet-branding/strip-image", page);
         Assert.DoesNotContain("new UpdateWalletCardBrandingCommand", page);
         Assert.DoesNotContain("new UploadTenantWalletLogoCommand", page);
         Assert.DoesNotContain("new RemoveTenantWalletLogoCommand", page);
@@ -248,6 +274,8 @@ public sealed class TenantBrandingTests
         Assert.DoesNotContain(".kb-wallet-preview-qr-pattern", css);
         Assert.Contains(".kb-wallet-preview-field-labels", css);
         Assert.Contains(".kb-wallet-preview-field-values", css);
+        Assert.Contains(".kb-wallet-preview-strip", css);
+        Assert.Contains(".kb-strip-preview", css);
         Assert.Contains(".kb-range", css);
     }
 
@@ -284,6 +312,32 @@ public sealed class TenantBrandingTests
         Assert.InRange(bounds.Width, 28, 32);
         Assert.InRange(bounds.Height, 28, 32);
         Assert.InRange(Math.Abs(bounds.Width - bounds.Height), 0, 2);
+    }
+
+    [Fact]
+    [Trait("Category", "TenantBranding")]
+    public void Apple_wallet_strip_render_uses_required_dimensions_and_cover_crop()
+    {
+        var original = CreateGradientPng(width: 1200, height: 300);
+
+        var oneX = TenantBrandingLogoService.RenderStripPngForTesting(original, 375, 144);
+        var twoX = TenantBrandingLogoService.RenderStripPngForTesting(original, 750, 288);
+        var threeX = TenantBrandingLogoService.RenderStripPngForTesting(original, 1125, 432);
+
+        Assert.Equal((375, 144), ReadDimensions(oneX));
+        Assert.Equal((750, 288), ReadDimensions(twoX));
+        Assert.Equal((1125, 432), ReadDimensions(threeX));
+        Assert.Equal(ReadDimensions(oneX), ReadContentBounds(oneX));
+    }
+
+    [Fact]
+    [Trait("Category", "TenantBranding")]
+    public void Tenant_branding_defaults_to_customer_name_primary_content()
+    {
+        var branding = new TenantBranding(BellaTenantId);
+
+        Assert.Equal(AppleWalletPrimaryContentMode.CustomerName, branding.AppleWalletPrimaryContentMode);
+        Assert.Null(branding.AppleWalletStripImageBlobName);
     }
 
     [Fact]
@@ -483,6 +537,26 @@ public sealed class TenantBrandingTests
     private static byte[] CreateSolidPng(int width, int height)
     {
         using var image = new Image<Rgba32>(width, height, new Rgba32(20, 100, 220, 255));
+        using var stream = new MemoryStream();
+        image.SaveAsPng(stream);
+        return stream.ToArray();
+    }
+
+    private static byte[] CreateGradientPng(int width, int height)
+    {
+        using var image = new Image<Rgba32>(width, height);
+        image.ProcessPixelRows(accessor =>
+        {
+            for (var y = 0; y < accessor.Height; y++)
+            {
+                var row = accessor.GetRowSpan(y);
+                for (var x = 0; x < row.Length; x++)
+                {
+                    row[x] = new Rgba32((byte)(x % 255), (byte)(y % 255), 180, 255);
+                }
+            }
+        });
+
         using var stream = new MemoryStream();
         image.SaveAsPng(stream);
         return stream.ToArray();

@@ -18,6 +18,13 @@ internal sealed class TenantWalletAssetProvider : ITenantWalletAssetProvider
         new("logo@3x.png", 480, 150)
     ];
 
+    private static readonly WalletAssetSpec[] StripAssets =
+    [
+        new("strip.png", 375, 144),
+        new("strip@2x.png", 750, 288),
+        new("strip@3x.png", 1125, 432)
+    ];
+
     private readonly AzureStorageOptions _options;
     private readonly ILogger<TenantWalletAssetProvider> _logger;
 
@@ -34,6 +41,8 @@ internal sealed class TenantWalletAssetProvider : ITenantWalletAssetProvider
         string tenantSlug,
         string? walletLogoBlobName,
         string? logoBlobName,
+        bool includeStripImage,
+        string? stripImageBlobName,
         CancellationToken cancellationToken = default)
     {
         var normalizedSlug = string.IsNullOrWhiteSpace(tenantSlug)
@@ -52,10 +61,24 @@ internal sealed class TenantWalletAssetProvider : ITenantWalletAssetProvider
         tenantAssets ??= !string.IsNullOrWhiteSpace(logoBlobName)
             ? await TryLoadTenantBlobAssetsAsync(tenantId, normalizedSlug, "wallet", cancellationToken)
             : null;
-        if (tenantAssets is not null)
-            return tenantAssets;
+        IReadOnlyList<WalletPassAsset> baseAssets = tenantAssets
+            ?? LoadLocalAssets(Path.Combine(AppContext.BaseDirectory, "Assets", "AppleWalletGeneric"), "generic-loyaltycloud", normalizedSlug);
 
-        return LoadLocalAssets(Path.Combine(AppContext.BaseDirectory, "Assets", "AppleWalletGeneric"), "generic-loyaltycloud", normalizedSlug);
+        if (!includeStripImage)
+            return baseAssets;
+
+        var stripAssets = !string.IsNullOrWhiteSpace(stripImageBlobName)
+            ? await TryLoadTenantBlobAssetsAsync(tenantId, normalizedSlug, "wallet-strip", StripAssets, cancellationToken)
+            : null;
+        if (stripAssets is null)
+        {
+            _logger.LogWarning(
+                "Apple Wallet strip image mode is enabled but strip assets were not found. TenantSlug={TenantSlug}; pass will be generated without strip assets.",
+                normalizedSlug);
+            return baseAssets;
+        }
+
+        return baseAssets.Concat(stripAssets).ToArray();
     }
 
     public async Task<WalletPassAsset> LoadGoogleLogoAsync(
@@ -87,6 +110,19 @@ internal sealed class TenantWalletAssetProvider : ITenantWalletAssetProvider
         Guid tenantId,
         string tenantSlug,
         string folderName,
+        CancellationToken cancellationToken) =>
+        await TryLoadTenantBlobAssetsAsync(
+            tenantId,
+            tenantSlug,
+            folderName,
+            RequiredAssets,
+            cancellationToken);
+
+    private async Task<IReadOnlyList<WalletPassAsset>?> TryLoadTenantBlobAssetsAsync(
+        Guid tenantId,
+        string tenantSlug,
+        string folderName,
+        IReadOnlyList<WalletAssetSpec> specs,
         CancellationToken cancellationToken)
     {
         if (string.IsNullOrWhiteSpace(_options.ConnectionString))
@@ -96,9 +132,9 @@ internal sealed class TenantWalletAssetProvider : ITenantWalletAssetProvider
         {
             var service = new BlobServiceClient(_options.ConnectionString);
             var container = service.GetBlobContainerClient(_options.PassContainer);
-            var loaded = new List<WalletPassAsset>(RequiredAssets.Length);
+            var loaded = new List<WalletPassAsset>(specs.Count);
 
-            foreach (var spec in RequiredAssets)
+            foreach (var spec in specs)
             {
                 var blobName = $"{TenantBrandingLogoService.GetTenantBrandingPrefix(tenantId)}/{folderName}/{spec.Name}";
                 var blob = container.GetBlobClient(blobName);

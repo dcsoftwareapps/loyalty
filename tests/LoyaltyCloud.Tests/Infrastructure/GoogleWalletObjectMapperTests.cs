@@ -157,7 +157,7 @@ public sealed class GoogleWalletObjectMapperTests
     }
 
     [Fact]
-    public void ToClassPayload_ShouldIgnoreAppleWalletLogoScale()
+    public void ToClassPayload_ShouldIgnoreAppleWalletLogoScaleAndPrimaryContentMode()
     {
         var mapper = new GoogleWalletObjectMapper();
         var options = new GoogleWalletOptions
@@ -169,12 +169,21 @@ public sealed class GoogleWalletObjectMapperTests
         };
 
         var full = mapper.ToClassPayload(mapper.ToClassData("issuer.loyalty", options, Branding(100)));
-        var smaller = mapper.ToClassPayload(mapper.ToClassData("issuer.loyalty", options, Branding(60)));
+        var smaller = mapper.ToClassPayload(mapper.ToClassData(
+            "issuer.loyalty",
+            options,
+            Branding(
+                60,
+                "Image",
+                "tenant-branding/test/wallet-strip/strip-original.png")));
 
         Assert.Equal(JsonSerializer.Serialize(full), JsonSerializer.Serialize(smaller));
     }
 
-    private static TenantWalletBrandingDto Branding(int walletLogoScalePercent = 100) => new(
+    private static TenantWalletBrandingDto Branding(
+        int walletLogoScalePercent = 100,
+        string appleWalletPrimaryContentMode = "CustomerName",
+        string? appleWalletStripImageBlobName = null) => new(
         Guid.Parse("b1000000-0000-0000-0000-000000000001"),
         "kbeauty",
         "KBeauty Loyalty",
@@ -187,6 +196,8 @@ public sealed class GoogleWalletObjectMapperTests
         null,
         null,
         walletLogoScalePercent,
+        appleWalletPrimaryContentMode,
+        appleWalletStripImageBlobName,
         "LoyaltyCloud",
         "Cliente",
         false,

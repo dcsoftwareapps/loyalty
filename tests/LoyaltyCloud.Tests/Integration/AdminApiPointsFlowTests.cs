@@ -201,7 +201,7 @@ public sealed class AdminApiPointsFlowTests : IClassFixture<CustomWebApplication
         using var request = CreateSignedRequest(
             HttpMethod.Put,
             "/api/config/wallet-branding",
-            new { walletBackgroundColor = "#1c1c1c", walletLogoScalePercent = 80 },
+            new { walletBackgroundColor = "#1c1c1c", walletLogoScalePercent = 80, appleWalletPrimaryContentMode = "CustomerName" },
             tenantSlug: TenantSeed.KBeautySlug);
         using var response = await _client.SendAsync(request);
 
@@ -211,6 +211,7 @@ public sealed class AdminApiPointsFlowTests : IClassFixture<CustomWebApplication
         Assert.Equal(TenantSeed.KBeautyTenantId, branding!.TenantId);
         Assert.Equal("#1C1C1C", branding.WalletBackgroundColor);
         Assert.Equal(80, branding.WalletLogoScalePercent);
+        Assert.Equal("CustomerName", branding.AppleWalletPrimaryContentMode);
 
         using var scope = _factory.Services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
@@ -246,7 +247,7 @@ public sealed class AdminApiPointsFlowTests : IClassFixture<CustomWebApplication
         using var request = CreateSignedRequest(
             HttpMethod.Put,
             "/api/config/wallet-branding",
-            new { walletBackgroundColor = "#1c1c1c", walletLogoScalePercent = scale },
+            new { walletBackgroundColor = "#1c1c1c", walletLogoScalePercent = scale, appleWalletPrimaryContentMode = "CustomerName" },
             tenantSlug: TenantSeed.KBeautySlug);
 
         using var response = await _client.SendAsync(request);
@@ -268,7 +269,7 @@ public sealed class AdminApiPointsFlowTests : IClassFixture<CustomWebApplication
         using var request = CreateSignedRequest(
             HttpMethod.Put,
             "/api/config/wallet-branding",
-            new { walletBackgroundColor = "#222222" },
+            new { walletBackgroundColor = "#222222", appleWalletPrimaryContentMode = "CustomerName" },
             tenantSlug: TenantSeed.KBeautySlug);
         using var response = await _client.SendAsync(request);
 
@@ -281,6 +282,65 @@ public sealed class AdminApiPointsFlowTests : IClassFixture<CustomWebApplication
         Assert.Equal("#222222", branding.WalletBackgroundColor);
 
         _factory.Apn.NextResult = null;
+    }
+
+    [Fact]
+    [Trait("Category", "TenantBranding")]
+    [Trait("Category", "WalletProductionUpdate")]
+    public async Task Signed_admin_wallet_branding_request_rejects_image_mode_without_strip_image()
+    {
+        await ClearKBeautyStripImageAsync();
+
+        using var request = CreateSignedRequest(
+            HttpMethod.Put,
+            "/api/config/wallet-branding",
+            new { walletBackgroundColor = "#1c1c1c", walletLogoScalePercent = 100, appleWalletPrimaryContentMode = "Image" },
+            tenantSlug: TenantSeed.KBeautySlug);
+
+        using var response = await _client.SendAsync(request);
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        var problem = await response.Content.ReadFromJsonAsync<ProblemDetails>();
+        Assert.Contains("Sube una imagen de portada", problem!.Detail, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    [Trait("Category", "TenantBranding")]
+    [Trait("Category", "WalletProductionUpdate")]
+    public async Task Signed_admin_wallet_branding_request_allows_switching_back_to_customer_name_with_stored_strip_image()
+    {
+        await SetKBeautyStripImageAsync("tenant-branding/test/wallet-strip/strip-original.png");
+        var serial = "KB-MODE1";
+        var before = DateTime.UtcNow.AddHours(-2);
+        await SeedCardWithDeviceAsync(serial, "kbeauty-mode-device", "kbeauty-mode-token", before);
+        var initialApnCount = _factory.Apn.Calls.Count;
+
+        using var imageRequest = CreateSignedRequest(
+            HttpMethod.Put,
+            "/api/config/wallet-branding",
+            new { appleWalletPrimaryContentMode = "Image" },
+            tenantSlug: TenantSeed.KBeautySlug);
+        using var imageResponse = await _client.SendAsync(imageRequest);
+
+        Assert.Equal(HttpStatusCode.OK, imageResponse.StatusCode);
+        var imageBranding = await imageResponse.Content.ReadFromJsonAsync<TenantBrandingInfo>();
+        Assert.Equal("Image", imageBranding!.AppleWalletPrimaryContentMode);
+        Assert.True(imageBranding.HasAppleWalletStripImage);
+
+        using var textRequest = CreateSignedRequest(
+            HttpMethod.Put,
+            "/api/config/wallet-branding",
+            new { appleWalletPrimaryContentMode = "CustomerName" },
+            tenantSlug: TenantSeed.KBeautySlug);
+        using var textResponse = await _client.SendAsync(textRequest);
+
+        Assert.Equal(HttpStatusCode.OK, textResponse.StatusCode);
+        var textBranding = await textResponse.Content.ReadFromJsonAsync<TenantBrandingInfo>();
+        Assert.Equal("CustomerName", textBranding!.AppleWalletPrimaryContentMode);
+        Assert.True(textBranding.HasAppleWalletStripImage);
+        Assert.Contains(_factory.Apn.Calls.Skip(initialApnCount), call =>
+            call.Token == "kbeauty-mode-token"
+            && call.Reason == PassUpdateReason.BrandingUpdated);
     }
 
     private async Task EnsureTenantOperationalAsync()
@@ -421,6 +481,28 @@ public sealed class AdminApiPointsFlowTests : IClassFixture<CustomWebApplication
                 "test"));
             await db.SaveChangesAsync();
         }
+    }
+
+    private async Task SetKBeautyStripImageAsync(string blobName)
+    {
+        using var scope = _factory.Services.CreateScope();
+        var tenantContext = scope.ServiceProvider.GetRequiredService<IMutableTenantContext>();
+        tenantContext.SetTenant(TenantSeed.KBeautyTenantId, TenantSeed.KBeautySlug);
+        var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        var branding = await db.TenantBrandings.SingleAsync(b => b.TenantId == TenantSeed.KBeautyTenantId);
+        branding.SetAppleWalletStripImage(blobName);
+        await db.SaveChangesAsync();
+    }
+
+    private async Task ClearKBeautyStripImageAsync()
+    {
+        using var scope = _factory.Services.CreateScope();
+        var tenantContext = scope.ServiceProvider.GetRequiredService<IMutableTenantContext>();
+        tenantContext.SetTenant(TenantSeed.KBeautyTenantId, TenantSeed.KBeautySlug);
+        var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        var branding = await db.TenantBrandings.SingleAsync(b => b.TenantId == TenantSeed.KBeautyTenantId);
+        db.Entry(branding).Property(nameof(TenantBranding.AppleWalletStripImageBlobName)).CurrentValue = null;
+        await db.SaveChangesAsync();
     }
 
     private static HttpRequestMessage CreateSignedAddPointsRequest(string serial, decimal purchaseAmount) =>

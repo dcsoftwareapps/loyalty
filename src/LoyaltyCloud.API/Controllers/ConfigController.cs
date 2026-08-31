@@ -2,6 +2,7 @@ using LoyaltyCloud.Application.Config.Commands.UpdateProgramConfig;
 using LoyaltyCloud.Application.Config.Queries.GetProgramConfig;
 using LoyaltyCloud.Application.Branding.Commands.RemoveTenantWalletLogo;
 using LoyaltyCloud.Application.Branding.Commands.UpdateWalletCardBranding;
+using LoyaltyCloud.Application.Branding.Commands.UploadAppleWalletStripImage;
 using LoyaltyCloud.Application.Branding.Commands.UploadTenantWalletLogo;
 using LoyaltyCloud.Application.Common.Interfaces;
 using MediatR;
@@ -62,13 +63,47 @@ public sealed class ConfigController : ControllerBase
         var result = await _sender.Send(
             new UpdateWalletCardBrandingCommand(
                 body.WalletBackgroundColor,
-                body.WalletLogoScalePercent),
+                body.WalletLogoScalePercent,
+                body.AppleWalletPrimaryContentMode),
             ct);
 
         if (result.IsFailure)
             return BadRequest(new ProblemDetails { Title = "Tarjeta digital", Detail = result.Error });
 
         return Ok(result.Value);
+    }
+
+    /// <summary>POST /api/config/wallet-branding/strip-image - sube la imagen de portada para Apple Wallet.</summary>
+    [HttpPost("wallet-branding/strip-image")]
+    [ProducesResponseType(typeof(TenantBrandingInfo), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
+    public async Task<IActionResult> UploadAppleWalletStripImage(
+        [FromBody] WalletLogoUploadRequest body,
+        CancellationToken ct)
+    {
+        byte[] bytes;
+        try
+        {
+            bytes = Convert.FromBase64String(body.ContentBase64);
+        }
+        catch (FormatException)
+        {
+            return BadRequest(new ProblemDetails { Title = "Imagen de portada", Detail = "El archivo no tiene un formato valido." });
+        }
+
+        await using var stream = new MemoryStream(bytes);
+        var result = await _sender.Send(
+            new UploadAppleWalletStripImageCommand(
+                body.FileName,
+                body.ContentType,
+                stream,
+                body.ContentLength),
+            ct);
+
+        if (result.IsFailure)
+            return BadRequest(new ProblemDetails { Title = "Imagen de portada", Detail = string.Join(" ", result.Errors) });
+
+        return Ok(await _brandingRead.GetCurrentAsync(ct));
     }
 
     /// <summary>POST /api/config/wallet-branding/logo - sube un logo específico para Apple Wallet.</summary>
@@ -121,7 +156,8 @@ public sealed class ConfigController : ControllerBase
 
     public sealed record WalletBrandingRequest(
         string? WalletBackgroundColor,
-        int? WalletLogoScalePercent);
+        int? WalletLogoScalePercent,
+        string? AppleWalletPrimaryContentMode);
 
     public sealed record WalletLogoUploadRequest(
         string FileName,
