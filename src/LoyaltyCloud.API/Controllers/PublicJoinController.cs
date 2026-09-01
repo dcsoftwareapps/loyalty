@@ -131,7 +131,7 @@ public sealed class PublicJoinController : ControllerBase
 
     private static string BuildMessage(bool alreadyExists, string displayName) =>
         alreadyExists
-            ? $"Ya tienes una cuenta de {displayName}. Puedes volver a agregar tu tarjeta a Apple Wallet."
+            ? $"Ya tienes una tarjeta de {displayName}. Encontramos tu cuenta existente. Puedes volver a agregarla a tu Wallet."
             : $"Listo. Tu tarjeta de lealtad {displayName} está lista.";
 
     private string BuildPassDownloadUrl(string serialNumber)

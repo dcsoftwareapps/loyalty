@@ -1,10 +1,33 @@
 # LoyaltyCloud - AI Handoff
 
-Last updated: 2026-08-30
+Last updated: 2026-08-31
 
-Branch: `feature/apple-wallet-logo-scale`
+Branch: `feature/customer-phone-recovery`
 
-Last task worked: Apple Wallet primary content mode per tenant.
+Last task worked: Public join duplicate-phone recovery.
+
+## 2026-08-31 - Public join duplicate-phone recovery
+
+Current branch for this work: `feature/customer-phone-recovery`.
+
+Scope:
+
+- Public join continues to use `POST /api/public/{tenantSlug}/join`.
+- `Customer.NormalizedPhone` and the existing unique index on `(TenantId, NormalizedPhone)` remain the DB-level protection against same-tenant duplicate phones.
+- Rejoining with the same tenant, equivalent phone format and matching first/last name reuses the existing `Customer`, existing `LoyaltyCard`, serial, points and history.
+- Rejoining with the same tenant and same phone but different first/last name is rejected with the generic message: "Este número de teléfono ya está registrado."
+- Phone/name mismatch does not expose existing account name, points, serial or Wallet links.
+- Same phone across different tenants remains allowed.
+- No SMS/OTP provider was added.
+- No schema change or migration was required.
+
+Validation expected for this task:
+
+- focused PublicJoin / CustomerPhoneRecovery tests;
+- Google Wallet save-link regression;
+- `dotnet ef migrations has-pending-model-changes`;
+- `dotnet build .\LoyaltyCloud.sln -c Release`;
+- no database update, deploy, commit or push.
 
 ## 2026-08-30 - Apple Wallet primary content mode per tenant
 
