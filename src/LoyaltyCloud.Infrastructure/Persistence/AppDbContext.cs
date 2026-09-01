@@ -61,6 +61,7 @@ public class AppDbContext : DbContext, IUnitOfWork
         _publisher = publisher;
     }
 
+    [Microsoft.Extensions.DependencyInjection.ActivatorUtilitiesConstructor]
     public AppDbContext(
         DbContextOptions<AppDbContext> options,
         IPublisher publisher,

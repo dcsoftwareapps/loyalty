@@ -25,10 +25,12 @@ public sealed class GiftCardDeliveryTests
         var sender = new RecordingSender();
         var service = new GiftCardDeliveryService(sender, new Configuration(true));
 
+        var canonicalUrl = await service.GetClaimUrlAsync("claim-token-123");
         await service.SendEmailAsync(Card("Daniel <script>", "Disfruta & celebra"), "recipient@example.test");
 
         var email = Assert.Single(sender.Messages);
-        Assert.Contains("/giftcards/claim/claim-token-123", email.TextBody);
+        Assert.Equal("https://admin.example.test/giftcards/claim/claim-token-123", canonicalUrl);
+        Assert.Contains(canonicalUrl!, email.TextBody);
         Assert.Contains("Daniel &lt;script&gt;", email.HtmlBody);
         Assert.Contains("Disfruta &amp; celebra", email.HtmlBody);
         Assert.DoesNotContain("<script>", email.HtmlBody);

@@ -170,6 +170,15 @@ public class RegisterCustomerHandlerTests
                  .ReturnsAsync(false);
 
         var referrerCard = NewCard(serial: "KB-REFER001");
+        var referrer = new Customer(
+            referrerCard.CustomerId,
+            referrerCard.TenantId,
+            "Cliente Referidor",
+            "referidor@test.com",
+            new DateTime(1990, 1, 1),
+            DateTime.UtcNow);
+        customers.Setup(r => r.GetByIdAsync(referrerCard.CustomerId, It.IsAny<CancellationToken>()))
+                 .ReturnsAsync(referrer);
         var cards = new Mock<ILoyaltyCardRepository>();
         cards.Setup(r => r.GetBySerialNumberAsync("KB-REFER001", It.IsAny<CancellationToken>()))
              .ReturnsAsync(referrerCard);
@@ -223,3 +232,4 @@ public class RegisterCustomerHandlerTests
         Assert.Contains("referido", result.Error);
     }
 }
+

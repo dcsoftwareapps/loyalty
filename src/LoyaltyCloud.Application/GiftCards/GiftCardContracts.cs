@@ -5,7 +5,7 @@ namespace LoyaltyCloud.Application.GiftCards;
 public sealed record GiftCardSettingsDto(Guid Id, bool IsEnabled, bool AllowCustomAmount, bool AllowPartialRedemption, bool AllowPromotionalIssuance, GiftCardExpirationMode ExpirationMode, int? DefaultExpirationMonths, string Currency, string DisplayName, string PrimaryColor, string TextColor, string? LogoUrl, string? SecondaryText, string? Terms, string? FooterMessage, IReadOnlyList<GiftCardDenominationDto> Denominations);
 public sealed record GiftCardDenominationDto(Guid Id, decimal Amount, string Currency, bool IsActive);
 public sealed record UpdateGiftCardSettingsRequest(bool IsEnabled, bool AllowCustomAmount, bool AllowPartialRedemption, bool AllowPromotionalIssuance, GiftCardExpirationMode ExpirationMode, int? DefaultExpirationMonths, string Currency, string DisplayName, string PrimaryColor, string TextColor, string? LogoUrl, string? SecondaryText, string? Terms, string? FooterMessage);
-public sealed record IssueGiftCardRequest(decimal Amount, Guid? RecipientMemberId, string RecipientName, string? RecipientEmail, string? RecipientPhone, string? SenderName, string? PersonalMessage, GiftCardSource Source, DateTime? ExpiresAtUtc);
+public sealed record IssueGiftCardRequest(decimal Amount, Guid? RecipientMemberId, string RecipientName, string? RecipientEmail, string? RecipientPhone, string? SenderName, string? PersonalMessage, GiftCardSource Source = GiftCardSource.Manual, DateTime? ExpiresAtUtc = null);
 public sealed record GiftCardDto(Guid Id, string Code, decimal InitialValue, decimal CurrentBalance, string Currency, GiftCardStatus Status, Guid? RecipientMemberId, string RecipientName, string? RecipientEmail, string? RecipientPhone, string? SenderName, string? PersonalMessage, GiftCardSource Source, DateTime IssuedAtUtc, DateTime? ExpiresAtUtc, DateTime UpdatedAtUtc);
 public sealed record GiftCardTransactionDto(Guid Id, GiftCardTransactionType Type, decimal Amount, decimal BalanceBefore, decimal BalanceAfter, Guid PerformedByUserId, DateTime CreatedAtUtc, string? Reference, string? Notes, string? IdempotencyKey);
 public sealed record GiftCardDetailDto(GiftCardDto Card, IReadOnlyList<GiftCardTransactionDto> Transactions);
@@ -39,11 +39,14 @@ public interface IGiftCardService
 public interface IGiftCardClaimService
 {
     Task<GiftCardClaimDto?> GetAsync(string claimToken, CancellationToken ct = default);
+    Task<GiftCardApplePassResult> GetApplePassAsync(string claimToken, CancellationToken ct = default);
+    Task<GiftCardWalletLinkDto> GetGoogleWalletLinkAsync(string claimToken, CancellationToken ct = default);
 }
 
 public interface IGiftCardDeliveryService
 {
-    Task SendEmailAsync(IssuedGiftCardDto giftCard, string recipient, CancellationToken ct = default);
+    Task<string?> GetClaimUrlAsync(string claimToken, CancellationToken ct = default);
+Task SendEmailAsync(IssuedGiftCardDto giftCard, string recipient, CancellationToken ct = default);
 }
 
 

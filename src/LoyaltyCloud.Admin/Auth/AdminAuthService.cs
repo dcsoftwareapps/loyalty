@@ -5,8 +5,10 @@ using LoyaltyCloud.Common.Services;
 using LoyaltyCloud.Domain.Entities;
 using LoyaltyCloud.Domain.Repositories;
 using LoyaltyCloud.Domain.Enums;
+using LoyaltyCloud.Infrastructure.Persistence;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
 
 namespace LoyaltyCloud.Admin.Auth;
@@ -23,6 +25,7 @@ public sealed class AdminAuthService
     private readonly IPasswordHashingService _passwords;
     private readonly IDateTimeProvider _clock;
     private readonly IUnitOfWork _uow;
+    private readonly IDbContextFactory<AppDbContext> _dbContextFactory;
     private readonly AdminAuthOptions _options;
     private readonly ILogger<AdminAuthService> _logger;
 
@@ -33,6 +36,7 @@ public sealed class AdminAuthService
         IPasswordHashingService passwords,
         IDateTimeProvider clock,
         IUnitOfWork uow,
+        IDbContextFactory<AppDbContext> dbContextFactory,
         IOptions<AdminAuthOptions> options,
         ILogger<AdminAuthService> logger)
     {
@@ -42,6 +46,7 @@ public sealed class AdminAuthService
         _passwords = passwords;
         _clock = clock;
         _uow = uow;
+        _dbContextFactory = dbContextFactory;
         _options = options.Value;
         _logger = logger;
     }
@@ -194,7 +199,11 @@ public sealed class AdminAuthService
         if (!Guid.TryParse(principal.FindFirstValue(AdminClaimTypes.TenantId), out var tenantId))
             return false;
 
-        var tenant = await _tenants.GetByIdAsync(tenantId, ct);
+        await using var db = await _dbContextFactory.CreateDbContextAsync(ct);
+        var tenant = await db.Tenants
+            .AsNoTracking()
+            .Include(candidate => candidate.Subscription)
+            .SingleOrDefaultAsync(candidate => candidate.Id == tenantId, ct);
         return tenant is not null && !IsOperational(tenant) && CanAccessBilling(tenant);
     }
 
@@ -246,7 +255,12 @@ public sealed class AdminAuthService
     {
         try
         {
-            return await _tenants.GetBySlugAsync(tenantSlug, ct);
+            var normalizedSlug = Tenant.NormalizeSlug(tenantSlug);
+            await using var db = await _dbContextFactory.CreateDbContextAsync(ct);
+            return await db.Tenants
+                .AsNoTracking()
+                .Include(tenant => tenant.Subscription)
+                .SingleOrDefaultAsync(tenant => tenant.Slug == normalizedSlug, ct);
         }
         catch (ArgumentException)
         {

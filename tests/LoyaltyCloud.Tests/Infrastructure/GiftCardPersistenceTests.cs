@@ -59,7 +59,7 @@ public sealed class GiftCardPersistenceTests
         var google = new Mock<IGiftCardWalletService>(); google.Setup(x => x.SynchronizeAsync(It.IsAny<Guid>(), It.IsAny<CancellationToken>())).Returns(Task.CompletedTask);
         var apple = new Mock<IGiftCardAppleWalletService>(); apple.Setup(x => x.SynchronizeAsync(It.IsAny<Guid>(), It.IsAny<CancellationToken>())).Returns(Task.CompletedTask);
         var tenant = new Mock<ITenantContext>(); tenant.SetupGet(x => x.TenantId).Returns(TenantId); tenant.SetupGet(x => x.HasTenant).Returns(true);
-        return new GiftCardService(db, tenant.Object, clock.Object, user.Object, google.Object, apple.Object);
+        return new GiftCardService(db, new Mock<IDbContextFactory<AppDbContext>>().Object, tenant.Object, clock.Object, user.Object, google.Object, apple.Object);
     }
 
     private sealed class TestDatabase : IAsyncDisposable

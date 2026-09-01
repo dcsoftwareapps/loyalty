@@ -1,25 +1,18 @@
 @implements IAsyncDisposable
 @inject IJSRuntime JS
 
-<button type="button" class="kb-button kb-button--primary kb-gift-scan-button" disabled="@scanning" @onclick="StartAsync">@(scanning ? "Escaneando…" : "Escanear con cámara")</button>
-@if(scanning)
-{
-    <section class="kb-qr-scanner kb-gift-scanner" aria-label="Escáner de Gift Card">
-        <div class="kb-gift-scanner-frame"><video @ref="video" class="kb-qr-video" autoplay muted playsinline></video><span aria-hidden="true"></span></div>
-        <p>Centra el QR de la Gift Card dentro del marco.</p>
-        <div class="kb-actions"><button type="button" class="kb-button" @onclick="SwitchAsync">Cambiar cámara</button><button type="button" class="kb-button" @onclick="CancelAsync">Cancelar</button></div>
-    </section>
-}
-@if(message is not null){<p class="kb-form-error">@message</p>}
-
+<button type="button" class="kb-btn kb-btn--primary kb-gift-scan-button" disabled="@(scanning || starting)" @onclick="StartAsync">@(starting ? "Iniciando cámara…" : scanning ? "Escaneando…" : "Escanear con cámara")</button>
+@if(scanning){<section class="kb-qr-scanner kb-gift-scanner" aria-label="Escáner de Gift Card"><div class="kb-gift-scanner-frame"><video @ref="video" class="kb-qr-video" autoplay muted playsinline></video><span aria-hidden="true"></span></div><p>Centra el QR de la Gift Card dentro del marco.</p><div class="kb-actions"><button type="button" class="kb-btn kb-btn--ghost" @onclick="SwitchAsync">Cambiar cámara</button><button type="button" class="kb-btn kb-btn--ghost" @onclick="CancelAsync">Cancelar</button></div></section>}
+@if(message is not null){<p class="kb-form-error" role="alert">@message</p>}
 @code {
-    [Parameter, EditorRequired] public EventCallback<string> OnDetected { get; set; }
-    private ElementReference video; private bool scanning; private string? message; private DotNetObjectReference<GiftCardQrScanner>? reference;
-    private async Task StartAsync(){message=null;scanning=true;await InvokeAsync(StateHasChanged);await Task.Yield();reference??=DotNetObjectReference.Create(this);var result=await JS.InvokeAsync<StartResult>("kbeautyQrScanner.start",video,reference);if(!result.Ok){scanning=false;message=result.Message;}}
-    private async Task SwitchAsync(){var result=await JS.InvokeAsync<StartResult>("kbeautyQrScanner.switchCamera",video,reference);if(!result.Ok)message=result.Message;}
-    private async Task CancelAsync(){await StopAsync();message=null;}
-    [JSInvokable] public async Task OnQrDetected(string value){await InvokeAsync(async()=>{await StopAsync();await OnDetected.InvokeAsync(value);});}
-    private async Task StopAsync(){scanning=false;try{await JS.InvokeVoidAsync("kbeautyQrScanner.stop");}catch(JSDisconnectedException){}}
-    public async ValueTask DisposeAsync(){await StopAsync();reference?.Dispose();}
-    private sealed record StartResult(bool Ok,string? Message);
+ [Parameter,EditorRequired]public EventCallback<string> OnDetected{get;set;}
+ ElementReference video;bool scanning,starting,jsStarted,disposed;string? message;DotNetObjectReference<GiftCardQrScanner>? reference;
+ async Task StartAsync(){if(starting||scanning||disposed)return;starting=true;scanning=true;message=null;await InvokeAsync(StateHasChanged);try{reference??=DotNetObjectReference.Create(this);var result=await JS.InvokeAsync<StartResult>("kbeautyQrScanner.start",video,reference);jsStarted=result.Ok;scanning=result.Ok;if(!result.Ok)message=Friendly(result.Message);}catch(InvalidOperationException){scanning=false;message="La cámara estará disponible cuando termine de cargar la página.";}catch(JSException){scanning=false;message="No fue posible iniciar la cámara. Puedes capturar el código manualmente.";}finally{starting=false;if(!disposed)await InvokeAsync(StateHasChanged);}}
+ async Task SwitchAsync(){if(!jsStarted||disposed)return;try{var result=await JS.InvokeAsync<StartResult>("kbeautyQrScanner.switchCamera",video,reference);if(!result.Ok)message=Friendly(result.Message);}catch(JSException){scanning=false;message="No fue posible cambiar de cámara.";}}
+ async Task CancelAsync(){await StopAsync();message=null;}
+ [JSInvokable]public async Task OnQrDetected(string value){if(disposed)return;await InvokeAsync(async()=>{await StopAsync();await OnDetected.InvokeAsync(value);});}
+ async Task StopAsync(){scanning=false;starting=false;if(!jsStarted||disposed)return;jsStarted=false;try{await JS.InvokeVoidAsync("kbeautyQrScanner.stop");}catch(JSDisconnectedException){}catch(ObjectDisposedException){}}
+ public async ValueTask DisposeAsync(){if(disposed)return;await StopAsync();disposed=true;reference?.Dispose();reference=null;}
+ static string Friendly(string? value)=>string.IsNullOrWhiteSpace(value)?"No fue posible iniciar la cámara. Puedes capturar el código manualmente.":"No fue posible usar la cámara. Revisa el permiso del navegador o captura el código manualmente.";
+ sealed record StartResult(bool Ok,string? Message);
 }
