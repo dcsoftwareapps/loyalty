@@ -45,9 +45,15 @@ internal sealed class DashboardReadService : IDashboardReadService
             .AsNoTracking()
             .CountAsync(r => r.TenantId == tenantId && r.RedeemedAt >= monthStart, ct);
 
-        var byLevelList = await _db.LoyaltyCards
-            .AsNoTracking()
-            .Where(c => c.TenantId == tenantId && c.IsActive)
+        var byLevelList = await (
+            from card in _db.LoyaltyCards.AsNoTracking()
+            join customer in _db.Customers.AsNoTracking()
+                on new { card.TenantId, Id = card.CustomerId }
+                equals new { customer.TenantId, customer.Id }
+            where card.TenantId == tenantId
+                && card.IsActive
+                && customer.IsActive
+            select card)
             .GroupBy(c => c.Level)
             .Select(g => new { Level = g.Key, Count = g.Count() })
             .ToListAsync(ct);
@@ -60,7 +66,11 @@ internal sealed class DashboardReadService : IDashboardReadService
             from t in _db.PointTransactions.AsNoTracking()
             join c in _db.LoyaltyCards.AsNoTracking() on t.LoyaltyCardId equals c.Id
             join cust in _db.Customers.AsNoTracking() on c.CustomerId equals cust.Id
-            where c.TenantId == tenantId && cust.TenantId == tenantId && t.Type == TransactionType.Purchase
+            where c.TenantId == tenantId
+               && cust.TenantId == tenantId
+               && c.IsActive
+               && cust.IsActive
+               && t.Type == TransactionType.Purchase
             orderby t.CreatedAt descending
             select new RecentVisitDto(
                 t.Id,
@@ -89,18 +99,11 @@ internal sealed class DashboardReadService : IDashboardReadService
 
         var totalCustomers = await _db.Customers
             .AsNoTracking()
-            .CountAsync(c => c.TenantId == tenantId, ct);
+            .CountAsync(c => c.TenantId == tenantId && c.IsActive, ct);
 
         var newCustomersThisMonth = await _db.Customers
             .AsNoTracking()
-            .CountAsync(c => c.TenantId == tenantId && c.CreatedAt >= monthStart, ct);
-
-        var customersWithWallet = await _db.LoyaltyCards
-            .AsNoTracking()
-            .Where(c => c.TenantId == tenantId)
-            .Select(c => c.CustomerId)
-            .Distinct()
-            .CountAsync(ct);
+            .CountAsync(c => c.TenantId == tenantId && c.IsActive && c.CreatedAt >= monthStart, ct);
 
         var customersWithPointActivity = _db.PointTransactions
             .AsNoTracking()
@@ -109,13 +112,26 @@ internal sealed class DashboardReadService : IDashboardReadService
 
         var customersWithRedemptions = _db.Redemptions
             .AsNoTracking()
+            .Where(r => r.TenantId == tenantId)
             .Select(r => r.LoyaltyCardId);
 
-        var activeCustomerIds = await _db.LoyaltyCards
+        var activeCustomerCards = _db.LoyaltyCards
             .AsNoTracking()
-            .Where(c => c.TenantId == tenantId && (
-                customersWithPointActivity.Contains(c.Id) ||
-                customersWithRedemptions.Contains(c.Id)))
+            .Where(c => c.TenantId == tenantId
+                     && c.IsActive
+                     && _db.Customers.AsNoTracking().Any(customer =>
+                         customer.TenantId == tenantId
+                         && customer.Id == c.CustomerId
+                         && customer.IsActive));
+
+        var customersWithWallet = await activeCustomerCards
+            .Select(c => c.CustomerId)
+            .Distinct()
+            .CountAsync(ct);
+
+        var activeCustomerIds = await activeCustomerCards
+            .Where(c => customersWithPointActivity.Contains(c.Id)
+                     || customersWithRedemptions.Contains(c.Id))
             .Select(c => c.CustomerId)
             .Distinct()
             .CountAsync(ct);
@@ -137,7 +153,12 @@ internal sealed class DashboardReadService : IDashboardReadService
 
         var currentPointBalance = await _db.LoyaltyCards
             .AsNoTracking()
-            .Where(c => c.TenantId == tenantId)
+            .Where(c => c.TenantId == tenantId
+                     && c.IsActive
+                     && _db.Customers.AsNoTracking().Any(customer =>
+                         customer.TenantId == tenantId
+                         && customer.Id == c.CustomerId
+                         && customer.IsActive))
             .SumAsync(c => (int?)c.CurrentPoints, ct) ?? 0;
 
         var pendingRedemptions = await _db.Redemptions
@@ -171,6 +192,8 @@ internal sealed class DashboardReadService : IDashboardReadService
             where redemption.TenantId == tenantId
                && card.TenantId == tenantId
                && customer.TenantId == tenantId
+               && card.IsActive
+               && customer.IsActive
                && (reward == null || reward.TenantId == tenantId)
             orderby redemption.RedeemedAt descending
             select new DashboardRecentActivityItemDto(
@@ -188,7 +211,11 @@ internal sealed class DashboardReadService : IDashboardReadService
             from transaction in _db.PointTransactions.AsNoTracking()
             join card in _db.LoyaltyCards.AsNoTracking() on transaction.LoyaltyCardId equals card.Id
             join customer in _db.Customers.AsNoTracking() on card.CustomerId equals customer.Id
-            where transaction.TenantId == tenantId && card.TenantId == tenantId && customer.TenantId == tenantId
+            where transaction.TenantId == tenantId
+               && card.TenantId == tenantId
+               && customer.TenantId == tenantId
+               && card.IsActive
+               && customer.IsActive
             orderby transaction.CreatedAt descending
             select new DashboardRecentActivityItemDto(
                 "Puntos",

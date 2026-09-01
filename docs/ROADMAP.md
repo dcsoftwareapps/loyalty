@@ -94,6 +94,9 @@ La base activa de produccion/UAT es `LoyaltyCloudFree`.
 
 - Terminar pagos recurrentes
 - Dashboard de valor
+- Vista de clientes eliminados
+- Restaurar cliente
+- Hard delete permanente de cliente
 
 ## DEFERRED
 

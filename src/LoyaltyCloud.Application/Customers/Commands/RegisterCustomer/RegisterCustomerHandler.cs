@@ -104,6 +104,15 @@ public sealed class RegisterCustomerHandler
             if (referrerCard is null)
                 return Result.Fail<RegisterCustomerResponse>(
                     $"No se encontró la tarjeta de referido '{command.ReferredBySerialNumber}'.");
+            if (referrerCard.TenantId != tenantId || !referrerCard.IsActive)
+                return Result.Fail<RegisterCustomerResponse>(
+                    $"No se encontró la tarjeta de referido '{command.ReferredBySerialNumber}'.");
+
+            var referrer = await _customers.GetByIdAsync(referrerCard.CustomerId, ct);
+            if (referrer is null || !referrer.IsActive)
+                return Result.Fail<RegisterCustomerResponse>(
+                    $"No se encontró la tarjeta de referido '{command.ReferredBySerialNumber}'.");
+
             referredBy = referrerCard.CustomerId;
         }
 

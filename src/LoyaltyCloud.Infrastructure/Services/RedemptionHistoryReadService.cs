@@ -31,6 +31,8 @@ internal sealed class RedemptionHistoryReadService : IRedemptionHistoryReadServi
                     where redemption.TenantId == tenantId
                        && card.TenantId == tenantId
                        && customer.TenantId == tenantId
+                       && card.IsActive
+                       && customer.IsActive
                        && (reward == null || reward.TenantId == tenantId)
                     select new
                     {

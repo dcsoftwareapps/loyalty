@@ -50,6 +50,8 @@ public sealed class GetCustomerBySerialHandler
         var customer = await _customers.GetByIdAsync(card.CustomerId, ct);
         if (customer is null)
             return Result.Fail<CustomerDetailDto>("La tarjeta existe pero su cliente no — datos inconsistentes.");
+        if (!customer.IsActive || !card.IsActive)
+            return Result.Fail<CustomerDetailDto>($"No se encontró tarjeta con serial '{query.SerialNumber}'.");
 
         var tenantLevels = await _tenantLevels.GetActiveLevelsAsync(ct);
         var rollingPoints = await _transactions.GetEligibleLevelPointsAsync(card.Id, _dt.UtcNow.AddMonths(-12), ct);
