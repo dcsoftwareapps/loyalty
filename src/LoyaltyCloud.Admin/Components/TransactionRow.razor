@@ -1,5 +1,6 @@
 @using LoyaltyCloud.Application.Customers.Queries.GetCustomerTransactions
 @using LoyaltyCloud.Domain.Enums
+@inject AdminDateTimeFormatter Dates
 
 <tr>
     <td>
@@ -11,7 +12,7 @@
             @(Transaction.Points > 0 ? "+" : "")@Transaction.Points
         </span>
     </td>
-    <td style="color: var(--kb-ink-muted);">@Transaction.CreatedAt.ToLocalTime().ToString("dd MMM yyyy HH:mm")</td>
+    <td style="color: var(--kb-ink-muted);">@Dates.DateTime(Transaction.CreatedAt)</td>
 </tr>
 
 @code {

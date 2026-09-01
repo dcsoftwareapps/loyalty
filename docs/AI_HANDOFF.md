@@ -1,10 +1,64 @@
 # LoyaltyCloud - AI Handoff
 
-Last updated: 2026-08-30
+Last updated: 2026-09-01
 
-Branch: `feature/apple-wallet-logo-scale`
+Branch: `feature/customer-soft-delete`
 
-Last task worked: Apple Wallet primary content mode per tenant.
+Last task worked: Customer soft delete.
+
+## 2026-09-01 - Customer soft delete
+
+Current branch for this work: `feature/customer-soft-delete`.
+
+Scope:
+
+- Reuses existing `Customer.IsActive` and `LoyaltyCard.IsActive`; no model change or migration is expected.
+- Adds `DeleteCustomerCommand` for tenant Admin use.
+- Tenant Admin customer detail now has a confirmable delete action.
+- Delete deactivates the customer and their loyalty card; it does not remove customer/card rows, point ledger, redemptions, device registrations or digital-wallet records.
+- No global `IsActive` query filter was added. Operational reads were tightened explicitly.
+- Soft-deleted customers are hidden/blocked from normal customer list/search/detail, serial lookup, points, redemption catalog, public join phone recovery, Apple Wallet pass download/update registration lookups, Google Wallet save link, current dashboard metrics, current report metrics and notification audiences.
+- Historical ledger rows remain in the database. Historical aggregate metrics that intentionally summarize past point/redemption activity may still include already-recorded operations; current customer/card state excludes deleted members.
+- Public join with the same phone as a deleted customer fails safely with a generic recovery message instead of creating a duplicate or throwing a unique-index error.
+- Multi-tenant isolation remains tenant-context based; deleting a customer ID from another tenant is rejected by tenant-scoped repository lookup.
+
+Backlog added to `docs/ROADMAP.md`:
+
+- Vista de clientes eliminados.
+- Restaurar cliente.
+- Hard delete permanente de cliente.
+
+Validation expected for this task:
+
+- `Category=CustomerSoftDelete`.
+- PublicJoin/CustomerPhoneRecovery regressions.
+- WalletProductionUpdate regressions.
+- Reports/Dashboard regressions.
+- `dotnet build .\LoyaltyCloud.sln -c Release`.
+- No database update, deploy, commit or push.
+
+## 2026-08-31 - Public join duplicate-phone recovery
+
+Current branch for this work: `feature/customer-phone-recovery`.
+
+Scope:
+
+- Public join continues to use `POST /api/public/{tenantSlug}/join`.
+- `Customer.NormalizedPhone` and the existing unique index on `(TenantId, NormalizedPhone)` remain the DB-level protection against same-tenant duplicate phones.
+- Rejoining with the same tenant, equivalent phone format and matching first/last name reuses the existing `Customer`, existing `LoyaltyCard`, serial, points and history.
+- Rejoining with the same tenant and same phone but different first/last name is rejected with the generic message: "Este número de teléfono ya está registrado."
+- Phone/name mismatch does not expose existing account name, points, serial or Wallet links.
+- Same phone across different tenants remains allowed.
+- No SMS/OTP provider was added.
+- No schema change or migration was required.
+
+Validation expected for this task:
+
+- focused PublicJoin / CustomerPhoneRecovery tests;
+- Google Wallet save-link regression;
+- `dotnet ef migrations has-pending-model-changes`;
+- `dotnet build .\LoyaltyCloud.sln -c Release`;
+- no database update, deploy, commit or push.
 
 ## 2026-08-30 - Apple Wallet primary content mode per tenant
 

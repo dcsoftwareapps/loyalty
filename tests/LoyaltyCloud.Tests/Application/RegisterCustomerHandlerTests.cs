@@ -109,6 +109,32 @@ public class RegisterCustomerHandlerTests
     }
 
     [Fact]
+    public async Task Handle_ShouldReturnFail_WhenNormalizedPhoneUniqueConstraintWinsRace()
+    {
+        var customers = new Mock<ICustomerRepository>();
+        customers.Setup(r => r.EmailExistsAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
+                 .ReturnsAsync(false);
+        customers.Setup(r => r.GetByNormalizedPhoneAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
+                 .ReturnsAsync((Customer?)null);
+
+        var cards = new Mock<ILoyaltyCardRepository>();
+        var transactions = new Mock<IPointTransactionRepository>();
+        var uow = NoOpUnitOfWork();
+        uow.Setup(u => u.SaveChangesAsync(It.IsAny<CancellationToken>()))
+            .ThrowsAsync(new InvalidOperationException(
+                "Cannot insert duplicate key row in object 'dbo.Customers' with unique index 'IX_Customers_TenantId_NormalizedPhone'."));
+
+        var handler = BuildHandler(customers, cards, transactions, uow);
+
+        var result = await handler.Handle(
+            new RegisterCustomerCommand("Ana López", "ana-race@test.com", new DateTime(1990, 1, 1), "646 123 4567"),
+            CancellationToken.None);
+
+        Assert.True(result.IsFailure);
+        Assert.Contains("Ya existe un cliente con ese telefono", result.Error);
+    }
+
+    [Fact]
     public async Task Handle_ShouldAddWelcomeBonus_OnRegistration()
     {
         var customers = new Mock<ICustomerRepository>();
@@ -144,6 +170,15 @@ public class RegisterCustomerHandlerTests
                  .ReturnsAsync(false);
 
         var referrerCard = NewCard(serial: "KB-REFER001");
+        var referrer = new Customer(
+            referrerCard.CustomerId,
+            referrerCard.TenantId,
+            "Cliente Referidor",
+            "referidor@test.com",
+            new DateTime(1990, 1, 1),
+            DateTime.UtcNow);
+        customers.Setup(r => r.GetByIdAsync(referrerCard.CustomerId, It.IsAny<CancellationToken>()))
+                 .ReturnsAsync(referrer);
         var cards = new Mock<ILoyaltyCardRepository>();
         cards.Setup(r => r.GetBySerialNumberAsync("KB-REFER001", It.IsAny<CancellationToken>()))
              .ReturnsAsync(referrerCard);
@@ -197,3 +232,4 @@ public class RegisterCustomerHandlerTests
         Assert.Contains("referido", result.Error);
     }
 }
+

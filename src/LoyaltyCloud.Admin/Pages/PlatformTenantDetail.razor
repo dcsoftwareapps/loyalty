@@ -20,6 +20,7 @@
 @using Microsoft.AspNetCore.Components.Forms
 @inject ISender Sender
 @inject NavigationManager Nav
+@inject AdminDateTimeFormatter Dates
 
 <PageTitle>Tenant - LoyaltyCloud Platform</PageTitle>
 
@@ -473,11 +474,11 @@ else
         }
     }
 
-    private static bool TryParseDate(string? value, out DateTime utc)
+    private bool TryParseDate(string? value, out DateTime utc)
     {
         if (DateTime.TryParse(value, out var parsed))
         {
-            utc = DateTime.SpecifyKind(parsed.Date, DateTimeKind.Utc);
+            utc = Dates.LocalDateStartToUtc(parsed.Date);
             return true;
         }
 
@@ -485,14 +486,14 @@ else
         return false;
     }
 
-    private static string? ToDateInput(DateTime? value) =>
-        value.HasValue ? value.Value.ToString("yyyy-MM-dd") : null;
+    private string? ToDateInput(DateTime? value) =>
+        value.HasValue ? Dates.DateInput(value.Value) : null;
 
-    private static string FormatDate(DateTime? value) =>
-        value.HasValue ? value.Value.ToString("dd MMM yyyy") : "No disponible";
+    private string FormatDate(DateTime? value) =>
+        Dates.Date(value);
 
-    private static string FormatDateTime(DateTime? value) =>
-        value.HasValue ? value.Value.ToString("dd MMM yyyy HH:mm") : "No disponible";
+    private string FormatDateTime(DateTime? value) =>
+        Dates.DateTime(value);
 
     private static string Display(string? value) =>
         string.IsNullOrWhiteSpace(value) ? "No disponible" : value;

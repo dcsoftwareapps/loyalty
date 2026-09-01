@@ -9,6 +9,7 @@
 @inject IBillingService Billing
 @inject AuthenticationStateProvider AuthenticationStateProvider
 @inject NavigationManager Nav
+@inject AdminDateTimeFormatter Dates
 
 <PageTitle>Resultado del pago - LoyaltyCloud</PageTitle>
 
@@ -38,7 +39,7 @@
                     <p>Tu suscripción está activa.</p>
                     @if (result.PaidThroughUtc.HasValue)
                     {
-                        <p class="kb-payment-result-validity">Vigente hasta: <strong>@result.PaidThroughUtc.Value.ToLocalTime().ToString("dd/MM/yyyy")</strong></p>
+                        <p class="kb-payment-result-validity">Vigente hasta: <strong>@Dates.DateNumeric(result.PaidThroughUtc.Value)</strong></p>
                     }
                     @ResultNavigation()
                     break;

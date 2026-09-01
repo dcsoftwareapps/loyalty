@@ -5,6 +5,7 @@
 @using System.Globalization
 @using LoyaltyCloud.Application.Admin.Queries.GetReportsSummary
 @inject ISender Sender
+@inject AdminDateTimeFormatter Dates
 
 <PageTitle>Recompensas más canjeadas - LoyaltyCloud</PageTitle>
 
@@ -90,12 +91,17 @@ else if (rewards is not null)
     private string? errorMsg;
     private bool isLoading;
     private string periodPreset = "30";
-    private DateTime customStartDate = DateTime.UtcNow.Date.AddDays(-30);
-    private DateTime customEndDate = DateTime.UtcNow.Date;
+    private DateTime customStartDate;
+    private DateTime customEndDate;
     private DateTime periodStartUtc;
     private DateTime periodEndUtc;
 
-    protected override async Task OnInitializedAsync() => await LoadAsync();
+    protected override async Task OnInitializedAsync()
+    {
+        customStartDate = Dates.LocalToday.AddDays(-30);
+        customEndDate = Dates.LocalToday;
+        await LoadAsync();
+    }
 
     private async Task ReloadAsync() => await LoadAsync();
 
@@ -124,30 +130,30 @@ else if (rewards is not null)
 
     private (DateTime StartUtc, DateTime EndUtc) GetPeriod()
     {
-        var todayUtc = DateTime.UtcNow.Date;
+        var today = Dates.LocalToday;
         return periodPreset switch
         {
-            "7" => (todayUtc.AddDays(-7), todayUtc.AddDays(1)),
-            "90" => (todayUtc.AddDays(-90), todayUtc.AddDays(1)),
-            "month" => (new DateTime(todayUtc.Year, todayUtc.Month, 1, 0, 0, 0, DateTimeKind.Utc), todayUtc.AddDays(1)),
+            "7" => (Dates.LocalDateStartToUtc(today.AddDays(-7)), Dates.LocalDateExclusiveEndToUtc(today)),
+            "90" => (Dates.LocalDateStartToUtc(today.AddDays(-90)), Dates.LocalDateExclusiveEndToUtc(today)),
+            "month" => (Dates.LocalDateStartToUtc(new DateTime(today.Year, today.Month, 1)), Dates.LocalDateExclusiveEndToUtc(today)),
             "custom" => BuildCustomPeriod(),
-            _ => (todayUtc.AddDays(-30), todayUtc.AddDays(1))
+            _ => (Dates.LocalDateStartToUtc(today.AddDays(-30)), Dates.LocalDateExclusiveEndToUtc(today))
         };
     }
 
     private (DateTime StartUtc, DateTime EndUtc) BuildCustomPeriod()
     {
-        var start = DateTime.SpecifyKind(customStartDate.Date, DateTimeKind.Utc);
-        var end = DateTime.SpecifyKind(customEndDate.Date.AddDays(1), DateTimeKind.Utc);
+        var start = Dates.LocalDateStartToUtc(customStartDate);
+        var end = Dates.LocalDateExclusiveEndToUtc(customEndDate);
         if (start >= end)
         {
-            end = start.AddDays(1);
-            customEndDate = start;
+            customEndDate = customStartDate;
+            end = Dates.LocalDateExclusiveEndToUtc(customEndDate);
         }
 
         return (start, end);
     }
 
     private static string FormatNumber(int value) => value.ToString("N0");
-    private static string FormatDate(DateTime value) => value.ToLocalTime().ToString("dd MMM yyyy", CultureInfo.GetCultureInfo("es-MX"));
+    private string FormatDate(DateTime value) => Dates.Date(value);
 }

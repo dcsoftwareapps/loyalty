@@ -28,7 +28,10 @@ internal sealed class CustomerListReadService : ICustomerListReadService
         var tenantId = _tenantContext.RequireTenantId();
         var query = from c in _db.Customers.AsNoTracking()
                     join card in _db.LoyaltyCards.AsNoTracking() on c.Id equals card.CustomerId
-                    where c.TenantId == tenantId && card.TenantId == tenantId && c.IsActive
+                    where c.TenantId == tenantId
+                        && card.TenantId == tenantId
+                        && c.IsActive
+                        && card.IsActive
                     select new { c, card };
 
         if (!string.IsNullOrWhiteSpace(searchTerm))

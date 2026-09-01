@@ -29,6 +29,8 @@ public sealed class UpdateCustomerBirthdayHandler
 
         if (customer is null)
             return Result.Fail<UpdateCustomerBirthdayResponse>("Cliente no encontrado.");
+        if (!customer.IsActive)
+            return Result.Fail<UpdateCustomerBirthdayResponse>("Cliente no encontrado.");
 
         try
         {

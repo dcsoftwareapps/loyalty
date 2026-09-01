@@ -12,17 +12,20 @@ public sealed class RegisterDeviceHandler
 {
     private readonly IDeviceRegistrationRepository _devices;
     private readonly ILoyaltyCardRepository _cards;
+    private readonly ICustomerRepository _customers;
     private readonly IDateTimeProvider _dt;
     private readonly IUnitOfWork _uow;
 
     public RegisterDeviceHandler(
         IDeviceRegistrationRepository devices,
         ILoyaltyCardRepository cards,
+        ICustomerRepository customers,
         IDateTimeProvider dt,
         IUnitOfWork uow)
     {
         _devices = devices;
         _cards = cards;
+        _customers = customers;
         _dt = dt;
         _uow = uow;
     }
@@ -34,6 +37,12 @@ public sealed class RegisterDeviceHandler
         // pero un 404 explícito es mejor que silenciar).
         var card = await _cards.GetBySerialNumberAsync(command.SerialNumber, ct);
         if (card is null)
+            return Result.Fail<RegisterDeviceResponse>("Serial no encontrado.");
+        if (!card.IsActive)
+            return Result.Fail<RegisterDeviceResponse>("Serial no encontrado.");
+
+        var customer = await _customers.GetByIdAsync(card.CustomerId, ct);
+        if (customer is null || !customer.IsActive)
             return Result.Fail<RegisterDeviceResponse>("Serial no encontrado.");
 
         var existing = await _devices.GetAsync(

@@ -37,8 +37,8 @@ internal sealed partial class ReportsReadService
     public async Task<VisitFrequencyReportDto> GetVisitFrequencyAsync(GetVisitFrequencyReportQuery query, CancellationToken ct = default)
     {
         var tenantId = _tenantContext.RequireTenantId();
-        var pointEvents = await (from t in _db.PointTransactions.AsNoTracking() join c in _db.LoyaltyCards.AsNoTracking() on new { t.TenantId, Id = t.LoyaltyCardId } equals new { c.TenantId, c.Id } where t.TenantId == tenantId && t.CreatedAt >= query.StartUtc && t.CreatedAt < query.EndUtc select new ActivityEvent(c.CustomerId, t.CreatedAt)).ToListAsync(ct);
-        var redemptionEvents = await (from r in _db.Redemptions.AsNoTracking() join c in _db.LoyaltyCards.AsNoTracking() on new { r.TenantId, Id = r.LoyaltyCardId } equals new { c.TenantId, c.Id } where r.TenantId == tenantId && r.Status != RedemptionStatus.Cancelled && r.RedeemedAt >= query.StartUtc && r.RedeemedAt < query.EndUtc select new ActivityEvent(c.CustomerId, r.RedeemedAt)).ToListAsync(ct);
+        var pointEvents = await (from t in _db.PointTransactions.AsNoTracking() join c in _db.LoyaltyCards.AsNoTracking() on new { t.TenantId, Id = t.LoyaltyCardId } equals new { c.TenantId, c.Id } join customer in _db.Customers.AsNoTracking() on new { c.TenantId, Id = c.CustomerId } equals new { customer.TenantId, customer.Id } where t.TenantId == tenantId && c.IsActive && customer.IsActive && t.CreatedAt >= query.StartUtc && t.CreatedAt < query.EndUtc select new ActivityEvent(c.CustomerId, t.CreatedAt)).ToListAsync(ct);
+        var redemptionEvents = await (from r in _db.Redemptions.AsNoTracking() join c in _db.LoyaltyCards.AsNoTracking() on new { r.TenantId, Id = r.LoyaltyCardId } equals new { c.TenantId, c.Id } join customer in _db.Customers.AsNoTracking() on new { c.TenantId, Id = c.CustomerId } equals new { customer.TenantId, customer.Id } where r.TenantId == tenantId && c.IsActive && customer.IsActive && r.Status != RedemptionStatus.Cancelled && r.RedeemedAt >= query.StartUtc && r.RedeemedAt < query.EndUtc select new ActivityEvent(c.CustomerId, r.RedeemedAt)).ToListAsync(ct);
         var visits = pointEvents.Concat(redemptionEvents).GroupBy(x => x.CustomerId).ToDictionary(g => g.Key, g => g.Select(x => x.OccurredAtUtc.Date).Distinct().Order().ToArray());
         var ids = visits.Keys.ToList();
         var customers = await (from c in _db.Customers.AsNoTracking() join card in _db.LoyaltyCards.AsNoTracking() on new { c.TenantId, Id = c.Id } equals new { card.TenantId, Id = card.CustomerId } where c.TenantId == tenantId && c.IsActive && card.IsActive && ids.Contains(c.Id) select new { c.Id, c.FullName, card.Level }).ToListAsync(ct);
@@ -54,12 +54,14 @@ internal sealed partial class ReportsReadService
         var tenantId = _tenantContext.RequireTenantId();
         var firstPointDates = await (from t in _db.PointTransactions.AsNoTracking()
             join card in _db.LoyaltyCards.AsNoTracking() on new { t.TenantId, Id = t.LoyaltyCardId } equals new { card.TenantId, card.Id }
-            where t.TenantId == tenantId && t.CreatedAt < query.EndUtc
+            join customer in _db.Customers.AsNoTracking() on new { card.TenantId, Id = card.CustomerId } equals new { customer.TenantId, customer.Id }
+            where t.TenantId == tenantId && card.IsActive && customer.IsActive && t.CreatedAt < query.EndUtc
             group t by card.CustomerId into events
             select new { CustomerId = events.Key, FirstUtc = events.Min(x => x.CreatedAt) }).ToListAsync(ct);
         var firstRedemptionDates = await (from r in _db.Redemptions.AsNoTracking()
             join card in _db.LoyaltyCards.AsNoTracking() on new { r.TenantId, Id = r.LoyaltyCardId } equals new { card.TenantId, card.Id }
-            where r.TenantId == tenantId && r.Status != RedemptionStatus.Cancelled && r.RedeemedAt < query.EndUtc
+            join customer in _db.Customers.AsNoTracking() on new { card.TenantId, Id = card.CustomerId } equals new { customer.TenantId, customer.Id }
+            where r.TenantId == tenantId && card.IsActive && customer.IsActive && r.Status != RedemptionStatus.Cancelled && r.RedeemedAt < query.EndUtc
             group r by card.CustomerId into events
             select new { CustomerId = events.Key, FirstUtc = events.Min(x => x.RedeemedAt) }).ToListAsync(ct);
         var firstActivity = firstPointDates.Select(x => (x.CustomerId, x.FirstUtc))
@@ -68,11 +70,13 @@ internal sealed partial class ReportsReadService
 
         var pointEvents = await (from t in _db.PointTransactions.AsNoTracking()
             join card in _db.LoyaltyCards.AsNoTracking() on new { t.TenantId, Id = t.LoyaltyCardId } equals new { card.TenantId, card.Id }
-            where t.TenantId == tenantId && t.CreatedAt >= query.StartUtc && t.CreatedAt < query.EndUtc
+            join customer in _db.Customers.AsNoTracking() on new { card.TenantId, Id = card.CustomerId } equals new { customer.TenantId, customer.Id }
+            where t.TenantId == tenantId && card.IsActive && customer.IsActive && t.CreatedAt >= query.StartUtc && t.CreatedAt < query.EndUtc
             select new ActivityEvent(card.CustomerId, t.CreatedAt)).ToListAsync(ct);
         var redemptionEvents = await (from r in _db.Redemptions.AsNoTracking()
             join card in _db.LoyaltyCards.AsNoTracking() on new { r.TenantId, Id = r.LoyaltyCardId } equals new { card.TenantId, card.Id }
-            where r.TenantId == tenantId && r.Status != RedemptionStatus.Cancelled && r.RedeemedAt >= query.StartUtc && r.RedeemedAt < query.EndUtc
+            join customer in _db.Customers.AsNoTracking() on new { card.TenantId, Id = card.CustomerId } equals new { customer.TenantId, customer.Id }
+            where r.TenantId == tenantId && card.IsActive && customer.IsActive && r.Status != RedemptionStatus.Cancelled && r.RedeemedAt >= query.StartUtc && r.RedeemedAt < query.EndUtc
             select new ActivityEvent(card.CustomerId, r.RedeemedAt)).ToListAsync(ct);
         var visits = pointEvents.Concat(redemptionEvents).GroupBy(x => x.CustomerId)
             .ToDictionary(x => x.Key, x => x.Select(y => y.OccurredAtUtc.Date).Distinct().ToArray());
@@ -92,8 +96,8 @@ internal sealed partial class ReportsReadService
     public async Task<ActivityTrendsReportDto> GetActivityTrendsAsync(GetActivityTrendsReportQuery query, CancellationToken ct = default)
     {
         var tenantId = _tenantContext.RequireTenantId();
-        var points = await (from t in _db.PointTransactions.AsNoTracking() join c in _db.LoyaltyCards.AsNoTracking() on new { t.TenantId, Id = t.LoyaltyCardId } equals new { c.TenantId, c.Id } where t.TenantId == tenantId && t.CreatedAt >= query.StartUtc && t.CreatedAt < query.EndUtc select new { c.CustomerId, t.CreatedAt, t.Points, t.Type, t.PurchaseAmount }).ToListAsync(ct);
-        var redemptions = await (from r in _db.Redemptions.AsNoTracking() join c in _db.LoyaltyCards.AsNoTracking() on new { r.TenantId, Id = r.LoyaltyCardId } equals new { c.TenantId, c.Id } where r.TenantId == tenantId && r.Status != RedemptionStatus.Cancelled && r.RedeemedAt >= query.StartUtc && r.RedeemedAt < query.EndUtc select new { c.CustomerId, r.RedeemedAt, r.PointsSpent }).ToListAsync(ct);
+        var points = await (from t in _db.PointTransactions.AsNoTracking() join c in _db.LoyaltyCards.AsNoTracking() on new { t.TenantId, Id = t.LoyaltyCardId } equals new { c.TenantId, c.Id } join customer in _db.Customers.AsNoTracking() on new { c.TenantId, Id = c.CustomerId } equals new { customer.TenantId, customer.Id } where t.TenantId == tenantId && c.IsActive && customer.IsActive && t.CreatedAt >= query.StartUtc && t.CreatedAt < query.EndUtc select new { c.CustomerId, t.CreatedAt, t.Points, t.Type, t.PurchaseAmount }).ToListAsync(ct);
+        var redemptions = await (from r in _db.Redemptions.AsNoTracking() join c in _db.LoyaltyCards.AsNoTracking() on new { r.TenantId, Id = r.LoyaltyCardId } equals new { c.TenantId, c.Id } join customer in _db.Customers.AsNoTracking() on new { c.TenantId, Id = c.CustomerId } equals new { customer.TenantId, customer.Id } where r.TenantId == tenantId && c.IsActive && customer.IsActive && r.Status != RedemptionStatus.Cancelled && r.RedeemedAt >= query.StartUtc && r.RedeemedAt < query.EndUtc select new { c.CustomerId, r.RedeemedAt, r.PointsSpent }).ToListAsync(ct);
         var periods = BuildMonths(query.StartUtc, query.EndUtc).Select(month => { var end = month.AddMonths(1); var p = points.Where(x => x.CreatedAt >= month && x.CreatedAt < end).ToList(); var r = redemptions.Where(x => x.RedeemedAt >= month && x.RedeemedAt < end).ToList(); return new ActivityTrendPeriodDto(month, month.ToString("MMM yy", System.Globalization.CultureInfo.GetCultureInfo("es-MX")), p.Select(x => x.CustomerId).Concat(r.Select(x => x.CustomerId)).Distinct().Count(), p.Where(x => x.Points > 0 && PointsIssuedTypes.Contains(x.Type)).Sum(x => x.Points), r.Sum(x => x.PointsSpent), r.Count, p.Count(x => x.Type == TransactionType.Purchase), p.Where(x => x.Type == TransactionType.Purchase).Sum(x => x.PurchaseAmount ?? 0m)); }).ToList().AsReadOnly();
         return new(query.StartUtc, query.EndUtc, periods);
     }
@@ -101,7 +105,7 @@ internal sealed partial class ReportsReadService
     public async Task<LevelDistributionReportDto> GetLevelDistributionAsync(GetLevelDistributionReportQuery query, CancellationToken ct = default)
     {
         var tenantId = _tenantContext.RequireTenantId();
-        var groups = await _db.LoyaltyCards.AsNoTracking().Where(c => c.TenantId == tenantId && c.IsActive).GroupBy(c => c.Level).Select(g => new { Level = g.Key, Customers = g.Count(), AveragePoints = g.Average(c => (decimal)c.CurrentPoints) }).OrderByDescending(x => x.Customers).ToListAsync(ct);
+        var groups = await (from card in _db.LoyaltyCards.AsNoTracking() join customer in _db.Customers.AsNoTracking() on new { card.TenantId, Id = card.CustomerId } equals new { customer.TenantId, customer.Id } where card.TenantId == tenantId && card.IsActive && customer.IsActive select card).GroupBy(c => c.Level).Select(g => new { Level = g.Key, Customers = g.Count(), AveragePoints = g.Average(c => (decimal)c.CurrentPoints) }).OrderByDescending(x => x.Customers).ToListAsync(ct);
         var total = groups.Sum(x => x.Customers);
         var rows = groups.Select(x => new LevelDistributionRowDto(x.Level, x.Customers, total == 0 ? 0 : decimal.Round(x.Customers * 100m / total, 1), decimal.Round(x.AveragePoints, 1))).ToList().AsReadOnly();
         return new(total, rows.FirstOrDefault()?.Level, rows.Count == 0 ? 0 : rows.Max(x => x.Percentage), rows);

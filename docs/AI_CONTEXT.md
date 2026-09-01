@@ -74,8 +74,8 @@ Main entities:
 | `TenantSubscription` | Trial/active/past-due/suspended/cancelled subscription state and billing dates. |
 | `TenantAdminUser` | Tenant admin/cashier login user. Passwords use `IPasswordHashingService`. |
 | `TenantLoyaltyLevel` | Dynamic loyalty level per tenant: name, normalized name, threshold, sort order, active flag. |
-| `Customer` | Tenant customer/member. Phone is normalized for lookup/deduplication. |
-| `LoyaltyCard` | Central loyalty card aggregate: serial, current balance, lifetime points, level, auth token, last activity. |
+| `Customer` | Tenant customer/member. Phone is normalized for lookup/deduplication and same-tenant card recovery. `IsActive` is reused for customer soft delete. |
+| `LoyaltyCard` | Central loyalty card aggregate: serial, current balance, lifetime points, level, auth token, last activity. `IsActive` is reused with `Customer.IsActive` for soft-deleted members. |
 | `PointTransaction` | Point ledger movement. Includes transaction type, points, campaign and tenant context. |
 | `PointLot` | FIFO lot created by positive earn transactions, with expiry and remaining amount. |
 | `PointLotConsumption` | FIFO consumption record linked to lot, consuming transaction and redemption when applicable. |
@@ -152,6 +152,8 @@ Blazor Admin pages:
 Visible Admin menu is grouped by operation, customers, loyalty program, communication and administration. Do not reintroduce any retired Admin hostname.
 
 Admin customer screens intentionally ignore `Customer.Email` as visible customer data. The field still exists for legacy/domain/API compatibility, but tenant Admin UI should show name, phone, customer ID/serial and operational data instead. Platform tenant creation has synchronized color picker and hex fields for tenant branding colors. Tenant Admin `/config` includes Apple Wallet card branding: optional `TenantBranding.WalletBackgroundColor` (`#RRGGBB`), optional wallet-specific logo, Apple Wallet logo scale and Apple Wallet primary content mode. Quick Help registration QR/poster must continue using the same tenant join URL source (`Admin:PublicBaseUrl` when configured, otherwise current Admin base URI). The poster top uses `TenantBrandingInfo.LogoUrl` when available and falls back to tenant display name.
+
+Customer soft delete uses existing `Customer.IsActive` plus `LoyaltyCard.IsActive`. It intentionally does not add a global EF query filter; operational reads must filter explicitly so historical ledger rows remain queryable where appropriate. Deleted customers are hidden from normal customer lists/search/detail, points, redemptions, Wallet download/update flows, current dashboard/report metrics and marketing audiences. Historical point/redemption records are preserved in SQL. Future backlog items are: deleted-customer view, restore customer and permanent hard delete.
 
 ## API Endpoints
 
@@ -252,7 +254,7 @@ Custom campaigns store a short notification text and a longer message detail. Te
 
 | Method | Route | Purpose |
 | --- | --- | --- |
-| POST | `/api/public/{tenantSlug}/join` | Public tenant-aware customer join. |
+| POST | `/api/public/{tenantSlug}/join` | Public tenant-aware customer join. Reuses an existing same-tenant card only when normalized phone and normalized first/last name match. |
 | PUT | `/api/public/{tenantSlug}/join/{serialNumber}/birthday` | Public birthday update after join. |
 
 ### Apple Wallet and PassKit
@@ -298,7 +300,7 @@ Customer iPhone flow:
 
 1. Customer opens `/{tenantSlug}/join`.
 2. Admin/public join page calls `POST /api/public/{tenantSlug}/join`.
-3. API resolves tenant from slug and creates/reuses customer/card.
+3. API resolves tenant from slug and creates/reuses customer/card. Existing cards are reused only when normalized phone and normalized first/last name match.
 4. Response includes `PassDownloadUrl`.
 5. Safari opens `GET /api/passes/{serialNumber}`.
 6. `PassGeneratorService` resolves tenant by card serial, reads tenant branding and dynamic levels, builds `pass.json`, signs manifest with Apple certificate, returns `.pkpass`.
@@ -337,6 +339,7 @@ Important implementation details:
 - For `Custom`, the short notification text is used on the temporary visible/changeMessage field and the long detail is shown on the back of the pass.
 - Tenant logos are read from Blob Storage through `TenantWalletAssetProvider`; fallback is neutral bundled assets.
 - Scaled Apple Wallet logo assets are stored under the Apple-specific asset folder so Google Wallet keeps using its unscaled logo asset.
+- Public join recovery does not use SMS/OTP. It permits re-adding the same card when phone plus first/last name match after normalization, and returns a generic rejection for phone/name mismatch without exposing serial, points or existing account details.
 - Apple Pass Type ID may still be `pass.com.kbeautymx.loyalty`.
 - Apple Key Vault secret names may still be `kbeauty-*`.
 - WWDR secret is optional. Production works without `kbeauty-wwdr-certificate` because the implementation first uses the certificate chain in the `.p12` or bundled `Certificates/AppleWWDRCAG4.cer`, then Key Vault as fallback.
@@ -352,7 +355,7 @@ Custom Wallet messages use Google Wallet `Message.header` for LoyaltyCloud's sho
 Flow:
 
 1. Customer joins through `/{tenantSlug}/join`.
-2. Join UI uses platform detection.
+2. Join UI uses platform detection. If the same tenant/phone/name already exists, the existing loyalty card serial is reused.
 3. Android path calls `POST /api/customers/{serialNumber}/wallets/google/save-link`.
 4. `WalletsController` resolves and sets tenant by card serial through `IWalletTenantContextResolver`.
 5. `CreateGoogleWalletSaveLinkCommand` calls `IGoogleWalletService`.
@@ -775,6 +778,7 @@ Done:
 - Reports v1 with separate report pages for inactive customers and top redeemed rewards.
 - QR add-points and redemption flows.
 - Direct monetary discount redemption.
+- Customer soft delete using existing active flags while preserving point/redemption history.
 - Reward catalog/monthly product.
 - Point campaigns.
 - Custom Wallet messages.
@@ -810,6 +814,7 @@ Known current/pending:
 - Provisioning defaults may still be legacy `Mist/Glow/Radiance`; update defaults/templates before generic onboarding if not already handled.
 - Serial format still uses `KB-`; do not change without a PassKit/Wallet migration plan.
 - Review diagnostic logs before GA.
+- Customer soft-delete follow-ups remain pending: deleted-customer view, restore customer and permanent hard delete.
 
 ## Working Conventions
 

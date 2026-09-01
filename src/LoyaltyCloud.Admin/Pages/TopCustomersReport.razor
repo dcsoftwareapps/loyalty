@@ -2,6 +2,7 @@
 @attribute [Authorize]
 @rendermode InteractiveServer
 @inject ISender Sender
+@inject AdminDateTimeFormatter Dates
 
 <PageTitle>Mejores clientes - LoyaltyCloud</PageTitle>
 <header class="kb-page-header"><div><span class="kb-eyebrow">Reportes avanzados</span><h1>Mejores clientes</h1><p>Identifica a tus clientes de mayor valor por puntos, consumo o actividad.</p></div></header>
@@ -30,10 +31,10 @@ else if (report is not null)
     }
 }
 @code {
-    private TopCustomersReportDto? report; private bool loading; private string? error; private string period = "90"; private string metric = "PointsEarned"; private int limit = 20; private string? level; private DateTime customStart = DateTime.UtcNow.Date.AddDays(-30); private DateTime customEnd = DateTime.UtcNow.Date;
+    private TopCustomersReportDto? report; private bool loading; private string? error; private string period = "90"; private string metric = "PointsEarned"; private int limit = 20; private string? level; private DateTime customStart; private DateTime customEnd;
     private TopCustomerMetric SelectedMetric => Enum.TryParse<TopCustomerMetric>(metric, out var value) ? value : TopCustomerMetric.PointsEarned;
     private string MetricLabel => SelectedMetric switch { TopCustomerMetric.PointsRedeemed => "puntos canjeados", TopCustomerMetric.Activity => "movimientos", TopCustomerMetric.PurchaseAmount => "monto registrado", _ => "puntos generados" };
-    protected override Task OnInitializedAsync() => LoadAsync();
-    private async Task LoadAsync() { loading = true; error = null; var (start,end)=GetPeriod(); var result = await Sender.Send(new GetTopCustomersReportQuery(start, end, SelectedMetric, string.IsNullOrWhiteSpace(level)?null:level.Trim(), limit)); if (result.IsSuccess) report = result.Value; else error = result.Error; loading = false; } private (DateTime,DateTime) GetPeriod(){var today=DateTime.UtcNow.Date;return period switch{"year"=>(new DateTime(today.Year,1,1,0,0,0,DateTimeKind.Utc),today.AddDays(1)),"custom"=>(DateTime.SpecifyKind(customStart.Date,DateTimeKind.Utc),DateTime.SpecifyKind(customEnd.Date.AddDays(1),DateTimeKind.Utc)),_=>(today.AddDays(-int.Parse(period)),today.AddDays(1))};}
+    protected override Task OnInitializedAsync() { customStart = Dates.LocalToday.AddDays(-30); customEnd = Dates.LocalToday; return LoadAsync(); }
+    private async Task LoadAsync() { loading = true; error = null; var (start,end)=GetPeriod(); var result = await Sender.Send(new GetTopCustomersReportQuery(start, end, SelectedMetric, string.IsNullOrWhiteSpace(level)?null:level.Trim(), limit)); if (result.IsSuccess) report = result.Value; else error = result.Error; loading = false; } private (DateTime,DateTime) GetPeriod(){var today=Dates.LocalToday;return period switch{"year"=>(Dates.LocalDateStartToUtc(new DateTime(today.Year,1,1)),Dates.LocalDateExclusiveEndToUtc(today)),"custom"=>(Dates.LocalDateStartToUtc(customStart),Dates.LocalDateExclusiveEndToUtc(customEnd)),_=>(Dates.LocalDateStartToUtc(today.AddDays(-int.Parse(period))),Dates.LocalDateExclusiveEndToUtc(today))};}
     private string FormatValue(decimal value) => SelectedMetric == TopCustomerMetric.PurchaseAmount ? value.ToString("C0") : value.ToString("N0");
 }

@@ -66,6 +66,7 @@ La base activa de produccion/UAT es `LoyaltyCloudFree`.
 - Colores del pass en Google Wallet / Android usando branding tenant-aware.
 - Google Wallet aprobado para produccion.
 - Google Wallet Save Link validado en STG.
+- Prevencion de clientes duplicados por telefono y recuperacion segura de tarjeta existente cuando nombre/apellido coinciden.
 
 ### Estado de Reportes
 
@@ -93,6 +94,9 @@ La base activa de produccion/UAT es `LoyaltyCloudFree`.
 
 - Terminar pagos recurrentes
 - Dashboard de valor
+- Vista de clientes eliminados
+- Restaurar cliente
+- Hard delete permanente de cliente
 
 ## DEFERRED
 

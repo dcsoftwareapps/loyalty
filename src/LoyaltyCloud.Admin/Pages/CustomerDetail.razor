@@ -5,9 +5,11 @@
 
 @using LoyaltyCloud.Application.Customers.Queries.GetCustomerDetail
 @using LoyaltyCloud.Application.Customers.Commands.UpdateCustomerBirthday
+@using LoyaltyCloud.Application.Customers.Commands.DeleteCustomer
 @using LoyaltyCloud.Domain.Enums
 @inject ISender Sender
 @inject NavigationManager Nav
+@inject AdminDateTimeFormatter Dates
 
 <PageTitle>@(detail?.Summary.FullName ?? "Cliente") - LoyaltyCloud</PageTitle>
 
@@ -360,6 +362,34 @@ else
             </table>
         }
     </section>
+
+    <section class="kb-card kb-danger-zone" style="margin-top:32px;">
+        <h2>Eliminar cliente</h2>
+        <p class="kb-muted">
+            El cliente dejará de aparecer en búsquedas, reportes operativos, puntos, canjes y Wallet. Su historial se conserva.
+        </p>
+        @if (deleteError is not null)
+        {
+            <div class="kb-form-error">@deleteError</div>
+        }
+        @if (!deleteConfirmationVisible)
+        {
+            <button class="kb-btn kb-btn--danger" @onclick="ShowDeleteConfirmation" disabled="@deleteBusy">
+                Eliminar cliente
+            </button>
+        }
+        else
+        {
+            <div class="kb-actions">
+                <button class="kb-btn kb-btn--danger" @onclick="DeleteCustomerAsync" disabled="@deleteBusy">
+                    @(deleteBusy ? "Eliminando..." : "Confirmar eliminación")
+                </button>
+                <button class="kb-btn kb-btn--ghost" @onclick="CancelDeleteConfirmation" disabled="@deleteBusy">
+                    Cancelar
+                </button>
+            </div>
+        }
+    </section>
 }
 
 @code {
@@ -371,6 +401,9 @@ else
     private string? birthdaySuccess;
     private string? birthdayError;
     private bool birthdayBusy;
+    private string? deleteError;
+    private bool deleteBusy;
+    private bool deleteConfirmationVisible;
     private int birthdayDay = 1;
     private int birthdayMonth = 1;
 
@@ -404,10 +437,10 @@ else
 
     private static string FormatNumber(int value) => value.ToString("N0");
     private static string FormatNullableNumber(int? value) => value.HasValue ? value.Value.ToString("N0") : "No disponible";
-    private static string FormatDate(DateTime value) => value.ToLocalTime().ToString("dd MMM yyyy");
-    private static string FormatDateTime(DateTime value) => value.ToLocalTime().ToString("dd MMM yyyy HH:mm");
-    private static string FormatNullableDate(DateTime? value) => value.HasValue ? FormatDate(value.Value) : "No disponible";
-    private static string FormatNullableDateTime(DateTime? value) => value.HasValue ? FormatDateTime(value.Value) : "No disponible";
+    private string FormatDate(DateTime value) => Dates.Date(value);
+    private string FormatDateTime(DateTime value) => Dates.DateTime(value);
+    private string FormatNullableDate(DateTime? value) => Dates.Date(value);
+    private string FormatNullableDateTime(DateTime? value) => Dates.DateTime(value);
     private static string DisplayText(string? value) => string.IsNullOrWhiteSpace(value) ? "No disponible" : value;
     private static string CampaignText(string? campaignName, decimal? appliedMultiplier) =>
         string.IsNullOrWhiteSpace(campaignName)
@@ -464,6 +497,42 @@ else
         finally
         {
             birthdayBusy = false;
+        }
+    }
+
+    private void ShowDeleteConfirmation()
+    {
+        deleteError = null;
+        deleteConfirmationVisible = true;
+    }
+
+    private void CancelDeleteConfirmation()
+    {
+        deleteError = null;
+        deleteConfirmationVisible = false;
+    }
+
+    private async Task DeleteCustomerAsync()
+    {
+        if (detail is null || deleteBusy)
+            return;
+
+        deleteError = null;
+        deleteBusy = true;
+        try
+        {
+            var result = await Sender.Send(new DeleteCustomerCommand(detail.Summary.CustomerId));
+            if (result.IsFailure)
+            {
+                deleteError = result.Error;
+                return;
+            }
+
+            Nav.NavigateTo("/customers");
+        }
+        finally
+        {
+            deleteBusy = false;
         }
     }
 

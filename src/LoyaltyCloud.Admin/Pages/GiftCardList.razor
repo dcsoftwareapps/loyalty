@@ -3,6 +3,7 @@
 @rendermode InteractiveServer
 @using LoyaltyCloud.Domain.Enums
 @inject LoyaltyCloud.Application.GiftCards.IGiftCardService Service
+@inject AdminDateTimeFormatter Dates
 
 <PageTitle>Tarjetas Gift Card - LoyaltyCloud</PageTitle>
 <header class="kb-page-header"><div><span class="kb-eyebrow">Gift Cards</span><h1>Tarjetas</h1><p>Consulta saldos, destinatarios, vigencia e historial de cada tarjeta.</p></div><a class="kb-btn kb-btn--primary" href="/giftcards/issue">Emitir Gift Card</a></header>
@@ -18,7 +19,7 @@
  else if (resultPage is not null && resultPage.Items.Count == 0) { <div class="kb-empty-state"><h2>No encontramos tarjetas</h2><p>Prueba con otros filtros o emite una nueva Gift Card.</p><a class="kb-btn kb-btn--primary" href="/giftcards/issue">Emitir Gift Card</a></div> }
  else if (resultPage is not null) {
   <div class="kb-table-shell kb-table-responsive"><table class="kb-table"><thead><tr><th>Código</th><th>Destinatario</th><th>Emitida</th><th>Saldo</th><th>Estado</th><th><span class="visually-hidden">Acciones</span></th></tr></thead><tbody>
-  @foreach (var card in resultPage.Items) { <tr><td data-label="Código"><strong>@card.Code</strong></td><td data-label="Destinatario"><span>@card.RecipientName</span>@if(!string.IsNullOrWhiteSpace(card.RecipientEmail)){<small>@card.RecipientEmail</small>}</td><td data-label="Emitida">@card.IssuedAtUtc.ToLocalTime().ToString("dd MMM yyyy")</td><td data-label="Saldo"><strong>@card.CurrentBalance.ToString("N2")</strong> @card.Currency</td><td data-label="Estado"><span class="kb-badge @StatusClass(card.Status)">@StatusLabel(card.Status)</span></td><td><a class="kb-btn kb-btn--ghost" href="/giftcards/cards/@card.Id">Ver detalle</a></td></tr> }
+  @foreach (var card in resultPage.Items) { <tr><td data-label="Código"><strong>@card.Code</strong></td><td data-label="Destinatario"><span>@card.RecipientName</span>@if(!string.IsNullOrWhiteSpace(card.RecipientEmail)){<small>@card.RecipientEmail</small>}</td><td data-label="Emitida">@Dates.DateNumeric(card.IssuedAtUtc)</td><td data-label="Saldo"><strong>@card.CurrentBalance.ToString("N2")</strong> @card.Currency</td><td data-label="Estado"><span class="kb-badge @StatusClass(card.Status)">@StatusLabel(card.Status)</span></td><td><a class="kb-btn kb-btn--ghost" href="/giftcards/cards/@card.Id">Ver detalle</a></td></tr> }
   </tbody></table></div><p class="kb-table-summary">@resultPage.Total tarjeta@(resultPage.Total == 1 ? "" : "s")</p>
  }
 </section>
