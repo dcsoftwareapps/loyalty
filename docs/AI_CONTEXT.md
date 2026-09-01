@@ -74,7 +74,7 @@ Main entities:
 | `TenantSubscription` | Trial/active/past-due/suspended/cancelled subscription state and billing dates. |
 | `TenantAdminUser` | Tenant admin/cashier login user. Passwords use `IPasswordHashingService`. |
 | `TenantLoyaltyLevel` | Dynamic loyalty level per tenant: name, normalized name, threshold, sort order, active flag. |
-| `Customer` | Tenant customer/member. Phone is normalized for lookup/deduplication. |
+| `Customer` | Tenant customer/member. Phone is normalized for lookup/deduplication and same-tenant card recovery. |
 | `LoyaltyCard` | Central loyalty card aggregate: serial, current balance, lifetime points, level, auth token, last activity. |
 | `PointTransaction` | Point ledger movement. Includes transaction type, points, campaign and tenant context. |
 | `PointLot` | FIFO lot created by positive earn transactions, with expiry and remaining amount. |
@@ -252,7 +252,7 @@ Custom campaigns store a short notification text and a longer message detail. Te
 
 | Method | Route | Purpose |
 | --- | --- | --- |
-| POST | `/api/public/{tenantSlug}/join` | Public tenant-aware customer join. |
+| POST | `/api/public/{tenantSlug}/join` | Public tenant-aware customer join. Reuses an existing same-tenant card only when normalized phone and normalized first/last name match. |
 | PUT | `/api/public/{tenantSlug}/join/{serialNumber}/birthday` | Public birthday update after join. |
 
 ### Apple Wallet and PassKit
@@ -298,7 +298,7 @@ Customer iPhone flow:
 
 1. Customer opens `/{tenantSlug}/join`.
 2. Admin/public join page calls `POST /api/public/{tenantSlug}/join`.
-3. API resolves tenant from slug and creates/reuses customer/card.
+3. API resolves tenant from slug and creates/reuses customer/card. Existing cards are reused only when normalized phone and normalized first/last name match.
 4. Response includes `PassDownloadUrl`.
 5. Safari opens `GET /api/passes/{serialNumber}`.
 6. `PassGeneratorService` resolves tenant by card serial, reads tenant branding and dynamic levels, builds `pass.json`, signs manifest with Apple certificate, returns `.pkpass`.
@@ -337,6 +337,7 @@ Important implementation details:
 - For `Custom`, the short notification text is used on the temporary visible/changeMessage field and the long detail is shown on the back of the pass.
 - Tenant logos are read from Blob Storage through `TenantWalletAssetProvider`; fallback is neutral bundled assets.
 - Scaled Apple Wallet logo assets are stored under the Apple-specific asset folder so Google Wallet keeps using its unscaled logo asset.
+- Public join recovery does not use SMS/OTP. It permits re-adding the same card when phone plus first/last name match after normalization, and returns a generic rejection for phone/name mismatch without exposing serial, points or existing account details.
 - Apple Pass Type ID may still be `pass.com.kbeautymx.loyalty`.
 - Apple Key Vault secret names may still be `kbeauty-*`.
 - WWDR secret is optional. Production works without `kbeauty-wwdr-certificate` because the implementation first uses the certificate chain in the `.p12` or bundled `Certificates/AppleWWDRCAG4.cer`, then Key Vault as fallback.
@@ -352,7 +353,7 @@ Custom Wallet messages use Google Wallet `Message.header` for LoyaltyCloud's sho
 Flow:
 
 1. Customer joins through `/{tenantSlug}/join`.
-2. Join UI uses platform detection.
+2. Join UI uses platform detection. If the same tenant/phone/name already exists, the existing loyalty card serial is reused.
 3. Android path calls `POST /api/customers/{serialNumber}/wallets/google/save-link`.
 4. `WalletsController` resolves and sets tenant by card serial through `IWalletTenantContextResolver`.
 5. `CreateGoogleWalletSaveLinkCommand` calls `IGoogleWalletService`.

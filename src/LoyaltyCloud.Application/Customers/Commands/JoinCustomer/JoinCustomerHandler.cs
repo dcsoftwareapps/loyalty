@@ -31,6 +31,9 @@ public sealed class JoinCustomerHandler : IRequestHandler<JoinCustomerCommand, R
         var existingCustomer = await _customers.GetByNormalizedPhoneAsync(phone, ct);
         if (existingCustomer is not null)
         {
+            if (!CustomerNameNormalizer.Matches(existingCustomer.FullName, command.FirstName, command.LastName))
+                return Result.Fail<JoinCustomerResponse>("Este número de teléfono ya está registrado.");
+
             var existingCard = await _cards.GetByCustomerIdAsync(existingCustomer.Id, ct);
             if (existingCard is null)
                 return Result.Fail<JoinCustomerResponse>("El cliente existe pero no tiene tarjeta Loyalty.");
@@ -41,7 +44,7 @@ public sealed class JoinCustomerHandler : IRequestHandler<JoinCustomerCommand, R
                 existingCustomer.FullName,
                 phone,
                 AlreadyExists: true,
-                "Ya tienes una cuenta. Puedes volver a agregar tu tarjeta a Apple Wallet."));
+                "Ya tienes una tarjeta. Encontramos tu cuenta existente. Puedes volver a agregarla a tu Wallet."));
         }
 
         var fullName = $"{command.FirstName.Trim()} {command.LastName.Trim()}".Trim();
@@ -53,7 +56,10 @@ public sealed class JoinCustomerHandler : IRequestHandler<JoinCustomerCommand, R
             ReferredBySerialNumber: null), ct);
 
         if (registerResult.IsFailure)
-            return Result.Fail<JoinCustomerResponse>(registerResult.Errors);
+        {
+            var recoveryResult = await TryRecoverExistingCustomerAsync(phone, command, ct);
+            return recoveryResult ?? Result.Fail<JoinCustomerResponse>(registerResult.Errors);
+        }
 
         var createdCustomer = await _customers.GetByNormalizedPhoneAsync(phone, ct);
         if (createdCustomer is null)
@@ -66,6 +72,31 @@ public sealed class JoinCustomerHandler : IRequestHandler<JoinCustomerCommand, R
             Phone: phone,
             AlreadyExists: false,
             "Listo. Tu tarjeta de lealtad esta lista."));
+    }
+
+    private async Task<Result<JoinCustomerResponse>?> TryRecoverExistingCustomerAsync(
+        string normalizedPhone,
+        JoinCustomerCommand command,
+        CancellationToken ct)
+    {
+        var existingCustomer = await _customers.GetByNormalizedPhoneAsync(normalizedPhone, ct);
+        if (existingCustomer is null)
+            return null;
+
+        if (!CustomerNameNormalizer.Matches(existingCustomer.FullName, command.FirstName, command.LastName))
+            return Result.Fail<JoinCustomerResponse>("Este número de teléfono ya está registrado.");
+
+        var existingCard = await _cards.GetByCustomerIdAsync(existingCustomer.Id, ct);
+        if (existingCard is null)
+            return Result.Fail<JoinCustomerResponse>("El cliente existe pero no tiene tarjeta Loyalty.");
+
+        return Result.Ok(new JoinCustomerResponse(
+            existingCustomer.Id,
+            existingCard.SerialNumber,
+            existingCustomer.FullName,
+            normalizedPhone,
+            AlreadyExists: true,
+            "Ya tienes una tarjeta. Encontramos tu cuenta existente. Puedes volver a agregarla a tu Wallet."));
     }
 
     private static string BuildInternalEmail(string normalizedPhone) =>
