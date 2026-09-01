@@ -8,6 +8,7 @@
 @using LoyaltyCloud.Domain.Enums
 @inject ISender Sender
 @inject NavigationManager Nav
+@inject AdminDateTimeFormatter Dates
 
 <PageTitle>@(detail?.Summary.FullName ?? "Cliente") - LoyaltyCloud</PageTitle>
 
@@ -404,10 +405,10 @@ else
 
     private static string FormatNumber(int value) => value.ToString("N0");
     private static string FormatNullableNumber(int? value) => value.HasValue ? value.Value.ToString("N0") : "No disponible";
-    private static string FormatDate(DateTime value) => value.ToLocalTime().ToString("dd MMM yyyy");
-    private static string FormatDateTime(DateTime value) => value.ToLocalTime().ToString("dd MMM yyyy HH:mm");
-    private static string FormatNullableDate(DateTime? value) => value.HasValue ? FormatDate(value.Value) : "No disponible";
-    private static string FormatNullableDateTime(DateTime? value) => value.HasValue ? FormatDateTime(value.Value) : "No disponible";
+    private string FormatDate(DateTime value) => Dates.Date(value);
+    private string FormatDateTime(DateTime value) => Dates.DateTime(value);
+    private string FormatNullableDate(DateTime? value) => Dates.Date(value);
+    private string FormatNullableDateTime(DateTime? value) => Dates.DateTime(value);
     private static string DisplayText(string? value) => string.IsNullOrWhiteSpace(value) ? "No disponible" : value;
     private static string CampaignText(string? campaignName, decimal? appliedMultiplier) =>
         string.IsNullOrWhiteSpace(campaignName)

@@ -10,6 +10,7 @@
 @inject ISender Sender
 @inject AdminApiClient Api
 @inject ITenantLoyaltyLevelReadService TenantLevels
+@inject AdminDateTimeFormatter Dates
 
 <PageTitle>Recompensas - LoyaltyCloud</PageTitle>
 
@@ -474,21 +475,18 @@ else
         _ => "kb-badge"
     };
 
-    private static string FormatValidity(RewardAdminDto reward)
+    private string FormatValidity(RewardAdminDto reward)
     {
         if (!reward.ValidFrom.HasValue && !reward.ValidTo.HasValue)
             return "Sin vigencia";
 
-        var from = FormatUtcCalendarDate(reward.ValidFrom, "Inicio abierto");
-        var to = FormatUtcCalendarDate(reward.ValidTo, "Sin fin");
+        var from = Dates.Date(reward.ValidFrom, "Inicio abierto");
+        var to = Dates.Date(reward.ValidTo, "Sin fin");
         return $"{from} - {to}";
     }
 
-    private static string FormatUtcCalendarDate(DateTime? date, string fallback) =>
-        date.HasValue ? date.Value.ToString("dd MMM yyyy", CultureInfo.InvariantCulture) : fallback;
-
-    private static string? ToDateInputValue(DateTime? date) =>
-        date.HasValue ? date.Value.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture) : null;
+    private string? ToDateInputValue(DateTime? date) =>
+        date.HasValue ? Dates.DateInput(date.Value) : null;
 
     private static bool TryParseDateInput(string? value, out DateTime? date)
     {
@@ -503,7 +501,7 @@ else
         return true;
     }
 
-    private static DateTime? BuildDateForSave(string? value, DateTime? originalValue, bool endOfDay)
+    private DateTime? BuildDateForSave(string? value, DateTime? originalValue, bool endOfDay)
     {
         if (!TryParseDateInput(value, out var parsedDate) || !parsedDate.HasValue)
             return null;
@@ -511,8 +509,9 @@ else
         if (ToDateInputValue(originalValue) == value)
             return originalValue;
 
-        var time = endOfDay ? new TimeSpan(23, 59, 59) : TimeSpan.Zero;
-        return DateTime.SpecifyKind(parsedDate.Value.Date.Add(time), DateTimeKind.Utc);
+        return endOfDay
+            ? Dates.LocalDateExclusiveEndToUtc(parsedDate.Value).AddSeconds(-1)
+            : Dates.LocalDateStartToUtc(parsedDate.Value);
     }
 
     private sealed class RewardFormModel

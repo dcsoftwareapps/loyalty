@@ -4,6 +4,7 @@
 
 @using LoyaltyCloud.Application.Admin.Queries.GetReportsSummary
 @inject ISender Sender
+@inject AdminDateTimeFormatter Dates
 
 <PageTitle>Clientes inactivos - LoyaltyCloud</PageTitle>
 
@@ -124,5 +125,5 @@ else if (report is not null)
             : int.TryParse(inactivePreset, out var days) ? days : 90;
 
     private static string FormatNumber(int value) => value.ToString("N0");
-    private static string FormatDateTime(DateTime value) => value.ToLocalTime().ToString("dd MMM yyyy HH:mm");
+    private string FormatDateTime(DateTime value) => Dates.DateTime(value);
 }

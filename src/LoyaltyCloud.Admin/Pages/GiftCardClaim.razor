@@ -2,6 +2,7 @@
 @attribute [AllowAnonymous]
 @layout EmptyLayout
 @inject LoyaltyCloud.Application.GiftCards.IGiftCardClaimService Claims
+@inject AdminDateTimeFormatter Dates
 
 <PageTitle>Mi Gift Card</PageTitle>
 @if (loading) { <main class="kb-public-page"><p>Cargando Gift Card…</p></main> }
@@ -13,7 +14,7 @@ else
   @if(!string.IsNullOrWhiteSpace(claim.LogoUrl)){<img src="@claim.LogoUrl" alt="@claim.DisplayName" style="max-height:64px;max-width:220px" />}
   <span class="kb-eyebrow">@claim.DisplayName</span><h1>@claim.Card.CurrentBalance.ToString("C2") @claim.Card.Currency</h1>
   <p>Para @claim.Card.RecipientName</p>@if(!string.IsNullOrWhiteSpace(claim.Card.SenderName)){<p>De @claim.Card.SenderName</p>}@if(!string.IsNullOrWhiteSpace(claim.Card.PersonalMessage)){<blockquote>@claim.Card.PersonalMessage</blockquote>}
-  <div class="kb-detail-grid"><div><span>Código</span><strong>@claim.Card.Code</strong></div><div><span>Estado</span><strong>@claim.Card.Status</strong></div><div><span>Vigencia</span><strong>@(claim.Card.ExpiresAtUtc?.ToString("d") ?? "Sin expiración")</strong></div></div>
+  <div class="kb-detail-grid"><div><span>Código</span><strong>@claim.Card.Code</strong></div><div><span>Estado</span><strong>@claim.Card.Status</strong></div><div><span>Vigencia</span><strong>@Dates.DateNumeric(claim.Card.ExpiresAtUtc, "Sin expiración")</strong></div></div>
   @if(!string.IsNullOrWhiteSpace(claim.Terms)){<details><summary>Términos y condiciones</summary><p>@claim.Terms</p></details>}
   @if(!string.IsNullOrWhiteSpace(claim.FooterMessage)){<p><small>@claim.FooterMessage</small></p>}
  </section>

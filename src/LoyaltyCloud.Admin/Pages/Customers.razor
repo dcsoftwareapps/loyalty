@@ -5,6 +5,7 @@
 @using LoyaltyCloud.Application.Customers.Queries.GetCustomers
 @using LoyaltyCloud.Common.Results
 @inject ISender Sender
+@inject AdminDateTimeFormatter Dates
 
 <PageTitle>Clientes · LoyaltyCloud</PageTitle>
 
@@ -57,7 +58,7 @@ else
                 <td><code>@c.SerialNumber</code></td>
                 <td><LevelBadge Level="@c.Level" /></td>
                 <td style="font-weight: 600;">@c.CurrentPoints.ToString("N0")</td>
-                <td style="color: var(--kb-ink-muted);">@c.CreatedAt.ToLocalTime().ToString("dd MMM yyyy")</td>
+                <td style="color: var(--kb-ink-muted);">@Dates.Date(c.CreatedAt)</td>
                 <td><a href="/customers/@c.CustomerId">Ver detalle</a></td>
             </tr>
         }
