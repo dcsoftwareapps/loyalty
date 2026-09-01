@@ -1,3 +1,4 @@
+using System.Text.Json;
 using LoyaltyCloud.Application.Common.Wallet;
 using LoyaltyCloud.Application.Common.Interfaces;
 using LoyaltyCloud.Infrastructure.Configuration;
@@ -154,7 +155,35 @@ public sealed class GoogleWalletObjectMapperTests
         Assert.Equal("UNDER_REVIEW", payload["reviewStatus"]);
         Assert.DoesNotContain(payload, item => Equals(item.Value, "APPROVED"));
     }
-    private static TenantWalletBrandingDto Branding() => new(
+
+    [Fact]
+    public void ToClassPayload_ShouldIgnoreAppleWalletLogoScaleAndPrimaryContentMode()
+    {
+        var mapper = new GoogleWalletObjectMapper();
+        var options = new GoogleWalletOptions
+        {
+            ProgramName = "KBeauty Loyalty",
+            IssuerName = "KBeauty MX",
+            LogoUri = "https://assets.example/logo.png",
+            HexBackgroundColor = "#FFFFFF"
+        };
+
+        var full = mapper.ToClassPayload(mapper.ToClassData("issuer.loyalty", options, Branding(100)));
+        var smaller = mapper.ToClassPayload(mapper.ToClassData(
+            "issuer.loyalty",
+            options,
+            Branding(
+                60,
+                "Image",
+                "tenant-branding/test/wallet-strip/strip-original.png")));
+
+        Assert.Equal(JsonSerializer.Serialize(full), JsonSerializer.Serialize(smaller));
+    }
+
+    private static TenantWalletBrandingDto Branding(
+        int walletLogoScalePercent = 100,
+        string appleWalletPrimaryContentMode = "CustomerName",
+        string? appleWalletStripImageBlobName = null) => new(
         Guid.Parse("b1000000-0000-0000-0000-000000000001"),
         "kbeauty",
         "KBeauty Loyalty",
@@ -166,6 +195,9 @@ public sealed class GoogleWalletObjectMapperTests
         "#FFFFFF",
         null,
         null,
+        walletLogoScalePercent,
+        appleWalletPrimaryContentMode,
+        appleWalletStripImageBlobName,
         "LoyaltyCloud",
         "Cliente",
         false,

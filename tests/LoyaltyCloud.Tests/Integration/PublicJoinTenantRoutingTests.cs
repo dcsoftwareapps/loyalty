@@ -89,6 +89,7 @@ public sealed class PublicJoinTenantRoutingTests : IClassFixture<CustomWebApplic
 
     [Fact]
     [Trait("Category", "PublicJoin")]
+    [Trait("Category", "CustomerPhoneRecovery")]
     public async Task Same_phone_can_join_two_different_tenants()
     {
         var phone = UniquePhone();
@@ -114,6 +115,7 @@ public sealed class PublicJoinTenantRoutingTests : IClassFixture<CustomWebApplic
 
     [Fact]
     [Trait("Category", "PublicJoin")]
+    [Trait("Category", "CustomerPhoneRecovery")]
     public async Task Rejoining_same_phone_reuses_customer_and_exposes_google_wallet_availability()
     {
         var phone = UniquePhone();
@@ -134,12 +136,104 @@ public sealed class PublicJoinTenantRoutingTests : IClassFixture<CustomWebApplic
         Assert.False(first.AlreadyExists);
         Assert.True(second.AlreadyExists);
         Assert.True(first.GoogleWalletEnabled);
+        Assert.Contains("Ya tienes una tarjeta", second.Message);
 
         using var scope = _factory.Services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
         Assert.Equal(1, await db.Customers
             .IgnoreQueryFilters()
             .CountAsync(c => c.TenantId == TenantSeed.KBeautyTenantId && c.NormalizedPhone == phone));
+        Assert.Equal(1, await db.LoyaltyCards
+            .IgnoreQueryFilters()
+            .CountAsync(c => c.TenantId == TenantSeed.KBeautyTenantId && c.CustomerId == first.CustomerId));
+        Assert.Equal(1, await db.PointTransactions
+            .IgnoreQueryFilters()
+            .CountAsync(t => t.TenantId == TenantSeed.KBeautyTenantId && t.LoyaltyCardId == db.LoyaltyCards
+                .IgnoreQueryFilters()
+                .Where(c => c.TenantId == TenantSeed.KBeautyTenantId && c.CustomerId == first.CustomerId)
+                .Select(c => c.Id)
+                .Single()));
+    }
+
+    [Fact]
+    [Trait("Category", "PublicJoin")]
+    [Trait("Category", "CustomerPhoneRecovery")]
+    public async Task Rejoining_same_phone_with_equivalent_format_and_name_reuses_existing_card()
+    {
+        var rawPhone = UniquePhone();
+        var formattedPhone = $"({rawPhone[..3]}) {rawPhone.Substring(3, 3)}-{rawPhone[6..]}";
+
+        var firstResponse = await JoinAsync("kbeauty", "Daniel", "Chavez", rawPhone);
+        var secondResponse = await JoinAsync("kbeauty", "  daniel  ", "  CHAVEZ ", formattedPhone);
+
+        Assert.Equal(HttpStatusCode.OK, firstResponse.StatusCode);
+        Assert.Equal(HttpStatusCode.OK, secondResponse.StatusCode);
+
+        var first = await firstResponse.Content.ReadFromJsonAsync<PublicJoinResponse>();
+        var second = await secondResponse.Content.ReadFromJsonAsync<PublicJoinResponse>();
+
+        Assert.NotNull(first);
+        Assert.NotNull(second);
+        Assert.Equal(first!.CustomerId, second!.CustomerId);
+        Assert.Equal(first.SerialNumber, second.SerialNumber);
+        Assert.True(second.AlreadyExists);
+    }
+
+    [Fact]
+    [Trait("Category", "PublicJoin")]
+    [Trait("Category", "CustomerPhoneRecovery")]
+    public async Task Rejoining_same_phone_ignores_name_accents()
+    {
+        var phone = UniquePhone();
+
+        var firstResponse = await JoinAsync("kbeauty", "José", "García", phone);
+        var secondResponse = await JoinAsync("kbeauty", "Jose", "Garcia", phone);
+
+        Assert.Equal(HttpStatusCode.OK, firstResponse.StatusCode);
+        Assert.Equal(HttpStatusCode.OK, secondResponse.StatusCode);
+
+        var first = await firstResponse.Content.ReadFromJsonAsync<PublicJoinResponse>();
+        var second = await secondResponse.Content.ReadFromJsonAsync<PublicJoinResponse>();
+
+        Assert.NotNull(first);
+        Assert.NotNull(second);
+        Assert.Equal(first!.CustomerId, second!.CustomerId);
+        Assert.Equal(first.SerialNumber, second.SerialNumber);
+        Assert.True(second.AlreadyExists);
+    }
+
+    [Fact]
+    [Trait("Category", "PublicJoin")]
+    [Trait("Category", "CustomerPhoneRecovery")]
+    public async Task Rejoining_same_phone_with_different_name_is_rejected_without_leaking_account_data()
+    {
+        var phone = UniquePhone();
+
+        var firstResponse = await JoinAsync("kbeauty", "Daniel", "Chavez", phone);
+        var secondResponse = await JoinAsync("kbeauty", "Danny", "Chavez", phone);
+
+        Assert.Equal(HttpStatusCode.OK, firstResponse.StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest, secondResponse.StatusCode);
+
+        var body = await secondResponse.Content.ReadAsStringAsync();
+        Assert.Contains("Este n", body);
+        Assert.Contains("mero de tel", body);
+        Assert.Contains("fono ya est", body);
+        Assert.DoesNotContain("Daniel", body);
+        Assert.DoesNotContain("KB-", body);
+
+        using var scope = _factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        Assert.Equal(1, await db.Customers
+            .IgnoreQueryFilters()
+            .CountAsync(c => c.TenantId == TenantSeed.KBeautyTenantId && c.NormalizedPhone == phone));
+        Assert.Equal(1, await db.LoyaltyCards
+            .IgnoreQueryFilters()
+            .CountAsync(c => c.TenantId == TenantSeed.KBeautyTenantId && c.CustomerId == db.Customers
+                .IgnoreQueryFilters()
+                .Where(customer => customer.TenantId == TenantSeed.KBeautyTenantId && customer.NormalizedPhone == phone)
+                .Select(customer => customer.Id)
+                .Single()));
     }
 
     [Fact]

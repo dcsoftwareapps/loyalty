@@ -1,6 +1,7 @@
 using System.Net;
 using LoyaltyCloud.Application.Common.Interfaces;
 using LoyaltyCloud.Application.Billing;
+using LoyaltyCloud.Application.GiftCards;
 using LoyaltyCloud.Common.Services;
 using LoyaltyCloud.Domain.Repositories;
 using LoyaltyCloud.Infrastructure.Configuration;
@@ -46,7 +47,7 @@ public static class DependencyInjection
             ?? throw new InvalidOperationException(
                 "Falta ConnectionStrings:DefaultConnection (en appsettings o Key Vault).");
 
-        services.AddDbContext<AppDbContext>(options =>
+        services.AddDbContextFactory<AppDbContext>(options =>
             options.UseSqlServer(connectionString, sql =>
             {
                 sql.EnableRetryOnFailure(
@@ -54,7 +55,7 @@ public static class DependencyInjection
                     maxRetryDelay: TimeSpan.FromSeconds(5),
                     errorNumbersToAdd: null);
                 sql.MigrationsAssembly(typeof(AppDbContext).Assembly.FullName);
-            }));
+            }), ServiceLifetime.Scoped);
 
         services.AddScoped<IUnitOfWork>(sp => sp.GetRequiredService<AppDbContext>());
     }
@@ -126,6 +127,11 @@ public static class DependencyInjection
         services.AddScoped<ISubscriptionMaintenanceService, SubscriptionMaintenanceService>();
         services.AddScoped<IBillingService, BillingService>();
         services.AddScoped<IBillingNotificationService, BillingNotificationService>();
+        services.AddScoped<IGiftCardService, GiftCardService>();
+        services.AddScoped<IGiftCardClaimService, GiftCardClaimService>();
+        services.AddScoped<IGiftCardDeliveryService, GiftCardDeliveryService>();
+        services.AddScoped<IGiftCardWalletService, GiftCardWalletService>();
+        services.AddScoped<IGiftCardAppleWalletService, GiftCardAppleWalletService>();
         services.AddScoped<IBillingEmailConfigurationProvider, BillingEmailConfigurationProvider>();
         services.AddScoped<ITransactionalEmailSender, SmtpEmailSender>();
         services.AddScoped<IPaymentGateway, StripePaymentGateway>();
@@ -163,6 +169,11 @@ public static class DependencyInjection
                 services.AddScoped<IAppleWalletSecretsProvider, LocalAppleWalletSecretsProvider>();
 
             if (useRealPassSigning)
+                services.AddScoped<IApplePassPackageBuilder, ApplePassPackageBuilder>();
+            else
+                services.AddScoped<IApplePassPackageBuilder, DevelopmentApplePassPackageBuilder>();
+
+            if (useRealPassSigning)
             {
                 services.AddScoped<PassGeneratorService>();
                 services.AddScoped<IPassGeneratorService>(sp => sp.GetRequiredService<PassGeneratorService>());
@@ -194,6 +205,7 @@ public static class DependencyInjection
 
         services.AddLoyaltyCloudKeyVaultClient(keyVaultUri);
         services.AddScoped<IAppleWalletSecretsProvider, KeyVaultAppleWalletSecretsProvider>();
+        services.AddScoped<IApplePassPackageBuilder, ApplePassPackageBuilder>();
         services.AddScoped<IPassGeneratorService, PassGeneratorService>();
         Console.WriteLine(
             "Wallet DI: Environment={0}, Wallet.UseRealApns={1}, Wallet.UseRealPassSigning={2}, Registering IApnService={3}",

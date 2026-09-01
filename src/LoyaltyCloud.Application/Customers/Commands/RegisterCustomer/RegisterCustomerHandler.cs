@@ -104,6 +104,15 @@ public sealed class RegisterCustomerHandler
             if (referrerCard is null)
                 return Result.Fail<RegisterCustomerResponse>(
                     $"No se encontró la tarjeta de referido '{command.ReferredBySerialNumber}'.");
+            if (referrerCard.TenantId != tenantId || !referrerCard.IsActive)
+                return Result.Fail<RegisterCustomerResponse>(
+                    $"No se encontró la tarjeta de referido '{command.ReferredBySerialNumber}'.");
+
+            var referrer = await _customers.GetByIdAsync(referrerCard.CustomerId, ct);
+            if (referrer is null || !referrer.IsActive)
+                return Result.Fail<RegisterCustomerResponse>(
+                    $"No se encontró la tarjeta de referido '{command.ReferredBySerialNumber}'.");
+
             referredBy = referrerCard.CustomerId;
         }
 
@@ -197,7 +206,15 @@ public sealed class RegisterCustomerHandler
         }
 
         // 6. Commit transaccional
-        await _uow.SaveChangesAsync(ct);
+        try
+        {
+            await _uow.SaveChangesAsync(ct);
+        }
+        catch (Exception ex) when (!string.IsNullOrWhiteSpace(normalizedPhone) && IsNormalizedPhoneUniqueViolation(ex))
+        {
+            return Result.Fail<RegisterCustomerResponse>(
+                "Ya existe un cliente con ese telefono en el tenant actual.");
+        }
 
         // 7. Generar y subir pase. Si falla, el cliente ya está creado — log y
         //    devolvemos URL vacía; podrá descargarlo después desde /api/customers/{serial}.
@@ -218,5 +235,23 @@ public sealed class RegisterCustomerHandler
             PassDownloadUrl: passUrl,
             CurrentPoints: card.CurrentPoints,
             Level: card.Level));
+    }
+
+    private static bool IsNormalizedPhoneUniqueViolation(Exception ex)
+    {
+        for (var current = ex; current is not null; current = current.InnerException)
+        {
+            if (current.Message.Contains("IX_Customers_TenantId_NormalizedPhone", StringComparison.OrdinalIgnoreCase)
+                || (current.Message.Contains("NormalizedPhone", StringComparison.OrdinalIgnoreCase)
+                    && (current.Message.Contains("UNIQUE", StringComparison.OrdinalIgnoreCase)
+                        || current.Message.Contains("duplicate", StringComparison.OrdinalIgnoreCase)
+                        || current.Message.Contains("2601", StringComparison.Ordinal)
+                        || current.Message.Contains("2627", StringComparison.Ordinal))))
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 }

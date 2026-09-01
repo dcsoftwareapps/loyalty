@@ -9,6 +9,7 @@
 @inject ITenantContext TenantContext
 @inject NavigationManager Nav
 @inject ILogger<Billing> Logger
+@inject AdminDateTimeFormatter Dates
 
 <PageTitle>Suscripción - LoyaltyCloud</PageTitle>
 
@@ -30,7 +31,7 @@ else
     <section class="kb-grid">
         <div class="kb-card"><div class="kb-card-label">Negocio</div><div class="kb-card-value">@model.TenantName</div></div>
         <div class="kb-card"><div class="kb-card-label">Estado</div><div class="kb-card-value">@model.SubscriptionStatus</div></div>
-        <div class="kb-card"><div class="kb-card-label">Pagado hasta</div><div class="kb-card-value">@(model.PaidThroughUtc?.ToLocalTime().ToString("dd/MM/yyyy") ?? "Sin vigencia")</div></div>
+        <div class="kb-card"><div class="kb-card-label">Pagado hasta</div><div class="kb-card-value">@Dates.DateNumeric(model.PaidThroughUtc, "Sin vigencia")</div></div>
     </section>
 
     <section class="kb-card kb-billing-auto-renew">
@@ -46,11 +47,11 @@ else
         </label>
         @if (model.CancelAtPeriodEnd)
         {
-            <p>La renovación automática está desactivada. Tu suscripción permanecerá activa hasta: @(model.NextChargeUtc?.ToLocalTime().ToString("dd/MM/yyyy") ?? model.PaidThroughUtc?.ToLocalTime().ToString("dd/MM/yyyy")). No se realizarán más cargos.</p>
+            <p>La renovación automática está desactivada. Tu suscripción permanecerá activa hasta: @(model.NextChargeUtc.HasValue ? Dates.DateNumeric(model.NextChargeUtc.Value) : Dates.DateNumeric(model.PaidThroughUtc)). No se realizarán más cargos.</p>
         }
         else if (model.AutoRenewEnabled)
         {
-            <p><strong>Próximo cobro:</strong> @(model.NextChargeUtc?.ToLocalTime().ToString("dd/MM/yyyy") ?? "Se mostrará después del primer pago")</p>
+            <p><strong>Próximo cobro:</strong> @Dates.DateNumeric(model.NextChargeUtc, "Se mostrará después del primer pago")</p>
             <p><strong>Monto:</strong> @(model.RecurringAmount.HasValue ? FormatMoney(model.RecurringAmount.Value, model.RecurringCurrency ?? "MXN") : "Por definir")</p>
         }
         <p><strong>Método:</strong> @(string.IsNullOrWhiteSpace(model.CardLast4) ? "Sin método de pago guardado" : $"{model.CardBrand} •••• {model.CardLast4}")</p>
@@ -160,7 +161,7 @@ else
                 @foreach (var order in model.Orders)
                 {
                     <tr>
-                        <td>@order.CreatedAt.ToLocalTime().ToString("dd/MM/yyyy")</td>
+                        <td>@Dates.DateNumeric(order.CreatedAt)</td>
                         <td>@FormatPeriod(order.Months)</td>
                         <td>@FormatMoney(order.Total, order.Currency)</td>
                         <td>@PaymentMethodLabel(order.PaymentMethod)</td>

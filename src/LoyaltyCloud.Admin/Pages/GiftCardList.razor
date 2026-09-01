@@ -1,0 +1,32 @@
+@page "/giftcards/cards"
+@attribute [Authorize(Policy = LoyaltyCloud.Admin.Auth.GiftCardsAuthorization.Policy)]
+@rendermode InteractiveServer
+@using LoyaltyCloud.Domain.Enums
+@inject LoyaltyCloud.Application.GiftCards.IGiftCardService Service
+@inject AdminDateTimeFormatter Dates
+
+<PageTitle>Tarjetas Gift Card - LoyaltyCloud</PageTitle>
+<header class="kb-page-header"><div><span class="kb-eyebrow">Gift Cards</span><h1>Tarjetas</h1><p>Consulta saldos, destinatarios, vigencia e historial de cada tarjeta.</p></div><a class="kb-btn kb-btn--primary" href="/giftcards/issue">Emitir Gift Card</a></header>
+<GiftCardNav />
+<section class="kb-panel">
+ <div class="kb-toolbar kb-gift-filterbar">
+  <label class="kb-field"><span>Buscar</span><input @bind="search" placeholder="Código, nombre o email" /></label>
+  <label class="kb-field"><span>Estado</span><select @bind="statusFilter"><option value="">Todos</option><option value="Active">Activa</option><option value="FullyRedeemed">Canjeada</option><option value="Expired">Expirada</option><option value="Cancelled">Cancelada</option></select></label>
+  <button class="kb-btn kb-btn--primary" disabled="@loading" @onclick="Load">@(loading ? "Buscando…" : "Aplicar filtros")</button>
+ </div>
+ @if (error is not null) { <div class="kb-form-error" role="alert">@error</div> }
+ @if (loading && resultPage is null) { <div class="kb-empty-state"><p>Cargando tarjetas…</p></div> }
+ else if (resultPage is not null && resultPage.Items.Count == 0) { <div class="kb-empty-state"><h2>No encontramos tarjetas</h2><p>Prueba con otros filtros o emite una nueva Gift Card.</p><a class="kb-btn kb-btn--primary" href="/giftcards/issue">Emitir Gift Card</a></div> }
+ else if (resultPage is not null) {
+  <div class="kb-table-shell kb-table-responsive"><table class="kb-table"><thead><tr><th>Código</th><th>Destinatario</th><th>Emitida</th><th>Saldo</th><th>Estado</th><th><span class="visually-hidden">Acciones</span></th></tr></thead><tbody>
+  @foreach (var card in resultPage.Items) { <tr><td data-label="Código"><strong>@card.Code</strong></td><td data-label="Destinatario"><span>@card.RecipientName</span>@if(!string.IsNullOrWhiteSpace(card.RecipientEmail)){<small>@card.RecipientEmail</small>}</td><td data-label="Emitida">@Dates.DateNumeric(card.IssuedAtUtc)</td><td data-label="Saldo"><strong>@card.CurrentBalance.ToString("N2")</strong> @card.Currency</td><td data-label="Estado"><span class="kb-badge @StatusClass(card.Status)">@StatusLabel(card.Status)</span></td><td><a class="kb-btn kb-btn--ghost" href="/giftcards/cards/@card.Id">Ver detalle</a></td></tr> }
+  </tbody></table></div><p class="kb-table-summary">@resultPage.Total tarjeta@(resultPage.Total == 1 ? "" : "s")</p>
+ }
+</section>
+@code {
+ string? search, statusFilter, error; bool loading; LoyaltyCloud.Application.GiftCards.GiftCardPage? resultPage;
+ protected override Task OnInitializedAsync() => Load();
+ async Task Load(){ try { loading=true; error=null; GiftCardStatus? status = Enum.TryParse<GiftCardStatus>(statusFilter, out var parsed) ? parsed : null; resultPage=await Service.SearchAsync(search,status,null,null); } catch(Exception){ error="No fue posible cargar las tarjetas. Intenta nuevamente."; } finally { loading=false; } }
+ static string StatusLabel(GiftCardStatus value)=>value switch{GiftCardStatus.Active=>"Activa",GiftCardStatus.FullyRedeemed=>"Canjeada",GiftCardStatus.Expired=>"Expirada",_=>"Cancelada"};
+ static string StatusClass(GiftCardStatus value)=>value==GiftCardStatus.Active?"kb-badge--success":value==GiftCardStatus.FullyRedeemed?"kb-badge--info":value==GiftCardStatus.Cancelled?"kb-badge--danger":"kb-badge--muted";
+}

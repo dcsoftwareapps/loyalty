@@ -7,6 +7,15 @@ public interface ITenantWalletAssetProvider
         string tenantSlug,
         string? walletLogoBlobName,
         string? logoBlobName,
+        bool includeStripImage,
+        string? stripImageBlobName,
+        CancellationToken cancellationToken = default);
+
+    Task<WalletPassAsset> LoadGoogleLogoAsync(
+        Guid tenantId,
+        string tenantSlug,
+        string? walletLogoBlobName,
+        string? logoBlobName,
         CancellationToken cancellationToken = default);
 }
 

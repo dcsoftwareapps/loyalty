@@ -13,6 +13,7 @@ public sealed class GetRedemptionCatalogHandler
 {
     private readonly ILoyaltyCardRepository _cards;
     private readonly IRewardCatalogRepository _rewards;
+    private readonly ICustomerRepository _customers;
     private readonly IPointTransactionRepository _transactions;
     private readonly ILevelCalculationService _levels;
     private readonly ITenantLoyaltyLevelReadService _tenantLevels;
@@ -21,6 +22,7 @@ public sealed class GetRedemptionCatalogHandler
     public GetRedemptionCatalogHandler(
         ILoyaltyCardRepository cards,
         IRewardCatalogRepository rewards,
+        ICustomerRepository customers,
         IPointTransactionRepository transactions,
         ILevelCalculationService levels,
         ITenantLoyaltyLevelReadService tenantLevels,
@@ -28,6 +30,7 @@ public sealed class GetRedemptionCatalogHandler
     {
         _cards = cards;
         _rewards = rewards;
+        _customers = customers;
         _transactions = transactions;
         _levels = levels;
         _tenantLevels = tenantLevels;
@@ -41,6 +44,14 @@ public sealed class GetRedemptionCatalogHandler
     {
         var card = await _cards.GetBySerialNumberAsync(query.SerialNumber, ct);
         if (card is null)
+            return Result.Fail<IReadOnlyList<RewardCatalogItemDto>>(
+                $"No se encontró tarjeta con serial '{query.SerialNumber}'.");
+        if (!card.IsActive)
+            return Result.Fail<IReadOnlyList<RewardCatalogItemDto>>(
+                $"No se encontró tarjeta con serial '{query.SerialNumber}'.");
+
+        var customer = await _customers.GetByIdAsync(card.CustomerId, ct);
+        if (customer is null || !customer.IsActive)
             return Result.Fail<IReadOnlyList<RewardCatalogItemDto>>(
                 $"No se encontró tarjeta con serial '{query.SerialNumber}'.");
 

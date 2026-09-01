@@ -10,6 +10,7 @@
 @using LoyaltyCloud.Application.Notifications.Queries.ListNotifications
 @using LoyaltyCloud.Domain.Enums
 @inject ISender Sender
+@inject AdminDateTimeFormatter Dates
 
 <PageTitle>Notificaciones - LoyaltyCloud</PageTitle>
 
@@ -217,7 +218,7 @@ else
         }
     }
 
-    private static string FormatDateTime(DateTime value) => value.ToLocalTime().ToString("dd MMM yyyy HH:mm");
+    private string FormatDateTime(DateTime value) => Dates.DateTime(value);
     private static string DisplayText(string? value) => string.IsNullOrWhiteSpace(value) ? "No disponible" : value;
 
     private static string WalletChannelText(NotificationChannel channel) => channel switch

@@ -37,6 +37,7 @@ builder.Services.AddHttpClient("LoyaltyCloudApi", client =>
 });
 builder.Services.AddScoped<AdminApiPointsClient>();
 builder.Services.AddScoped<AdminApiClient>();
+builder.Services.AddSingleton<AdminDateTimeFormatter>();
 
 // Blazor Web App con Interactive Server.
 builder.Services.AddRazorComponents()
@@ -119,11 +120,14 @@ builder.Services
 // requieran usan [AllowAnonymous] (Login).
 builder.Services.AddAuthorization(options =>
 {
+    options.AddPolicy(GiftCardsAuthorization.Policy, policy =>
+        policy.RequireAuthenticatedUser().AddRequirements(new GiftCardsEnabledRequirement()));
     options.FallbackPolicy = new AuthorizationPolicyBuilder()
         .RequireAuthenticatedUser()
         .Build();
 });
 
+builder.Services.AddScoped<IAuthorizationHandler, GiftCardsEnabledHandler>();
 builder.Services.AddCascadingAuthenticationState();
 
 // =============================================================================

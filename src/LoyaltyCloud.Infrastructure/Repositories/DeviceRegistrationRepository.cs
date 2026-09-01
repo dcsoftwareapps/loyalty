@@ -45,26 +45,39 @@ internal sealed class DeviceRegistrationRepository : IDeviceRegistrationReposito
         DateTime? since,
         CancellationToken ct = default)
     {
+        var tenantId = _tenantContext.RequireTenantId();
+
         // Apple pasa passesUpdatedSince — devolvemos los serials cuya LastActivityAt
         // (en la card) sea más reciente que ese timestamp.
         // Si Apple no pasa nada, devolvemos todos los registrados para ese device.
         var query = _db.DeviceRegistrations
             .AsNoTracking()
-            .Where(d => d.TenantId == _tenantContext.RequireTenantId()
+            .Where(d => d.TenantId == tenantId
                      && d.DeviceLibraryIdentifier == deviceLibraryIdentifier
                      && d.PassTypeIdentifier == passTypeIdentifier);
 
         var serialsForDevice = await query.Select(d => d.SerialNumber).ToListAsync(ct);
         if (serialsForDevice.Count == 0) return Array.Empty<string>();
 
-        if (since is null) return serialsForDevice.AsReadOnly();
+        var activeCards =
+            from card in _db.LoyaltyCards.AsNoTracking()
+            join customer in _db.Customers.AsNoTracking()
+                on new { card.TenantId, Id = card.CustomerId }
+                equals new { customer.TenantId, customer.Id }
+            where card.TenantId == tenantId
+                && card.IsActive
+                && customer.IsActive
+                && serialsForDevice.Contains(card.SerialNumber)
+            select card;
+
+        if (since is null)
+            return await activeCards
+                .Select(c => c.SerialNumber)
+                .ToListAsync(ct);
 
         // Filtra por actividad reciente
-        var changed = await _db.LoyaltyCards
-            .AsNoTracking()
-            .Where(c => c.TenantId == _tenantContext.RequireTenantId()
-                     && serialsForDevice.Contains(c.SerialNumber)
-                     && c.LastActivityAt > since)
+        var changed = await activeCards
+            .Where(c => c.LastActivityAt > since)
             .Select(c => c.SerialNumber)
             .ToListAsync(ct);
 

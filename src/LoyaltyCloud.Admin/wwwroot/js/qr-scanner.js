@@ -1,4 +1,4 @@
-﻿window.kbeautyQrScanner = (() => {
+window.kbeautyQrScanner = (() => {
     let stream = null;
     let animationFrame = null;
     let active = false;
@@ -7,7 +7,7 @@
     let context = null;
     let dotNetRef = null;
 
-    async function start(videoElement, dotNetObjectRef) {
+    async function start(videoElement, dotNetObjectRef, requestedDeviceId = null) {
         stop();
 
         if (!window.isSecureContext) {
@@ -39,7 +39,11 @@
         try {
             stream = await navigator.mediaDevices.getUserMedia({
                 audio: false,
-                video: {
+                video: requestedDeviceId ? {
+                    deviceId: { exact: requestedDeviceId },
+                    width: { ideal: 1280 },
+                    height: { ideal: 720 }
+                } : {
                     facingMode: { ideal: "environment" },
                     width: { ideal: 1280 },
                     height: { ideal: 720 }
@@ -91,6 +95,16 @@
         animationFrame = requestAnimationFrame(scanLoop);
     }
 
+    async function switchCamera(videoElement, dotNetObjectRef) {
+        if (!navigator.mediaDevices?.enumerateDevices) return { Ok: false, Message: "No hay otra cámara disponible." };
+        const devices = (await navigator.mediaDevices.enumerateDevices()).filter(d => d.kind === "videoinput");
+        if (devices.length < 2) return { Ok: false, Message: "No hay otra cámara disponible." };
+        const currentId = stream?.getVideoTracks()?.[0]?.getSettings()?.deviceId;
+        const currentIndex = Math.max(0, devices.findIndex(d => d.deviceId === currentId));
+        const next = devices[(currentIndex + 1) % devices.length];
+        return start(videoElement, dotNetObjectRef, next.deviceId);
+    }
+
     function stop() {
         active = false;
 
@@ -119,6 +133,7 @@
 
     return {
         start,
+        switchCamera,
         stop
     };
 })();

@@ -1,4 +1,4 @@
-﻿using System.Data;
+using System.Data;
 using LoyaltyCloud.Application.Common.Interfaces;
 using LoyaltyCloud.Common.Constants;
 using LoyaltyCloud.Common.Services;
@@ -30,6 +30,11 @@ public static class DevelopmentDataSeeder
     private const string BellaIsolationSerial = "BS-TEST-001";
     private static readonly Guid BellaTenantId = Guid.Parse("b2000000-0000-0000-0000-000000000001");
     private const string BellaSlug = "bella-salon";
+    private static readonly Guid GiftCardsQaTenantId = Guid.Parse("b3000000-0000-0000-0000-000000000001");
+    private static readonly Guid GiftCardsQaOperatorId = Guid.Parse("b3000000-0000-0000-0000-000000000002");
+    private const string GiftCardsQaSlug = "giftcards-qa";
+    private static readonly Guid GiftCardsQaMemberOneId = Guid.Parse("b3000000-0000-0000-0000-000000000011");
+    private static readonly Guid GiftCardsQaMemberTwoId = Guid.Parse("b3000000-0000-0000-0000-000000000012");
 
     private static readonly string[] DemoRewardNames =
     {
@@ -65,8 +70,9 @@ public static class DevelopmentDataSeeder
         if (!await db.Tenants.AsNoTracking().AnyAsync(t => t.Id == KBeautyTenantId && t.Slug == KBeautySlug, ct))
         {
             logger.LogInformation(
-                "Development demo seed skipped because tenant {TenantSlug} does not exist. Create tenants through Platform provisioning.",
+                "KBeauty demo seed skipped because tenant {TenantSlug} does not exist. Independent QA tenants will still be seeded.",
                 KBeautySlug);
+            await SeedGiftCardsQaDevelopmentTenantAsync(services, ct);
             return;
         }
 
@@ -129,6 +135,7 @@ public static class DevelopmentDataSeeder
             redemptionsCreated);
 
         await SeedBellaSalonDevelopmentTenantAsync(services, ct);
+        await SeedGiftCardsQaDevelopmentTenantAsync(services, ct);
     }
 
     private static async Task<int> EnsureProgramConfigAsync(AppDbContext db, CancellationToken ct)
@@ -594,6 +601,103 @@ public static class DevelopmentDataSeeder
             DateTime.UtcNow));
     }
 
+    private static async Task SeedGiftCardsQaDevelopmentTenantAsync(IServiceProvider services, CancellationToken ct)
+    {
+        using var scope = services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        var tenantContext = scope.ServiceProvider.GetRequiredService<IMutableTenantContext>();
+        var configuration = scope.ServiceProvider.GetRequiredService<IConfiguration>();
+        var passwordHasher = scope.ServiceProvider.GetRequiredService<IPasswordHashingService>();
+        var logger = scope.ServiceProvider.GetRequiredService<ILoggerFactory>().CreateLogger("LoyaltyCloud.DevelopmentDataSeeder");
+        var now = DateTime.UtcNow;
+
+        var strategy = db.Database.CreateExecutionStrategy();
+        await strategy.ExecuteAsync(async () =>
+        {
+            await using var tx = await db.Database.BeginTransactionAsync(IsolationLevel.Serializable, ct);
+
+            if (!await db.Tenants.IgnoreQueryFilters().AnyAsync(t => t.Id == GiftCardsQaTenantId, ct))
+                db.Tenants.Add(new Tenant(GiftCardsQaTenantId, GiftCardsQaSlug, "LoyaltyCloud Gift Cards QA", "America/Tijuana", now));
+
+            if (!await db.TenantSubscriptions.IgnoreQueryFilters().AnyAsync(s => s.TenantId == GiftCardsQaTenantId, ct))
+                db.TenantSubscriptions.Add(new TenantSubscription(GiftCardsQaTenantId, TenantSubscriptionStatus.Active, "development", paidThroughUtc: now.AddYears(1)));
+
+            if (!await db.TenantBrandings.IgnoreQueryFilters().AnyAsync(b => b.TenantId == GiftCardsQaTenantId, ct))
+                db.TenantBrandings.Add(new TenantBranding(GiftCardsQaTenantId, "#17324D", "#D7A64A", "+52 646 000 0000", null, null, null));
+
+            await db.SaveChangesAsync(ct);
+            tenantContext.SetTenant(GiftCardsQaTenantId, GiftCardsQaSlug);
+
+            await EnsureDevelopmentAdminUserAsync(db, passwordHasher, logger, GiftCardsQaTenantId, "GiftCardsQA",
+                configuration["DevelopmentTenants:GiftCardsQA:AdminUsername"] ?? configuration["DevelopmentTenants:KBeauty:AdminUsername"],
+                configuration["DevelopmentTenants:GiftCardsQA:AdminPassword"] ?? configuration["DevelopmentTenants:KBeauty:AdminPassword"], ct);
+
+            if (!await db.GiftCardConfigurations.AnyAsync(ct))
+            {
+                var config = new GiftCardConfiguration(Guid.NewGuid(), GiftCardsQaTenantId, now);
+                config.Update(true, true, true, true, GiftCardExpirationMode.MonthsAfterIssue, 12, "MXN", "Gift Cards QA", "#17324D", "#FFFFFF", null,
+                    "Saldo almacenado para pruebas locales", "Uso exclusivo de QA local.", "Gracias por probar Gift Cards.", now);
+                db.GiftCardConfigurations.Add(config);
+            }
+
+            var existingAmounts = await db.GiftCardDenominations.Select(d => d.Amount).ToListAsync(ct);
+            foreach (var amount in new[] { 250m, 500m, 1000m })
+                if (!existingAmounts.Contains(amount)) db.GiftCardDenominations.Add(new GiftCardDenomination(Guid.NewGuid(), GiftCardsQaTenantId, amount, "MXN", now));
+
+            if (!await db.Customers.AnyAsync(c => c.Id == GiftCardsQaMemberOneId, ct))
+                db.Customers.Add(new Customer(GiftCardsQaMemberOneId, GiftCardsQaTenantId, "Member QA One", "member.qa.one@giftcards.local", new DateTime(1990, 1, 15), now.AddMonths(-3)));
+            if (!await db.Customers.AnyAsync(c => c.Id == GiftCardsQaMemberTwoId, ct))
+                db.Customers.Add(new Customer(GiftCardsQaMemberTwoId, GiftCardsQaTenantId, "Member QA Two", "member.qa.two@giftcards.local", new DateTime(1992, 6, 20), now.AddMonths(-2)));
+
+            await db.SaveChangesAsync(ct);
+
+            if (!await db.GiftCards.AnyAsync(ct))
+                SeedGiftCardsQaCards(db, now);
+
+            var seededExpiredCard = await db.GiftCards.SingleOrDefaultAsync(c => c.PublicCode == "GC-QA-EXPIRED-500", ct);
+            seededExpiredCard?.EvaluateExpiration(now);
+
+            await db.SaveChangesAsync(ct);
+            await tx.CommitAsync(ct);
+        });
+
+        logger.LogInformation("Gift Cards QA development tenant seed completed for {TenantSlug}. Admin credentials are loaded only from DevelopmentTenants:GiftCardsQA configuration.", GiftCardsQaSlug);
+    }
+
+    private static void SeedGiftCardsQaCards(AppDbContext db, DateTime now)
+    {
+        GiftCard Create(string code, decimal amount, string recipient, DateTime? expires, GiftCardSource source, Guid? memberId = null)
+        {
+            var token = Convert.ToHexString(System.Security.Cryptography.RandomNumberGenerator.GetBytes(32));
+            var card = new GiftCard(Guid.NewGuid(), GiftCardsQaTenantId, code, GiftCard.HashClaimToken(token), amount, "MXN", memberId,
+                recipient, null, null, "LoyaltyCloud QA", "Tarjeta de prueba local", source, GiftCardsQaOperatorId, now.AddDays(-7), expires);
+            db.GiftCards.Add(card);
+            db.GiftCardTransactions.Add(new GiftCardTransaction(Guid.NewGuid(), GiftCardsQaTenantId, card.Id, GiftCardTransactionType.Issued,
+                amount, 0, amount, GiftCardsQaOperatorId, now.AddDays(-7), notes: "Seed QA local"));
+            return card;
+        }
+
+        Create("GC-QA-ACTIVE-500", 500m, "Member QA One", now.AddMonths(12), GiftCardSource.Manual, GiftCardsQaMemberOneId);
+
+        var partial = Create("GC-QA-PARTIAL-1000", 1000m, "Member QA Two", now.AddMonths(12), GiftCardSource.PurchasedExternally, GiftCardsQaMemberTwoId);
+        var partialBalances = partial.Redeem(250m, true, now.AddDays(-2));
+        db.GiftCardTransactions.Add(new GiftCardTransaction(Guid.NewGuid(), GiftCardsQaTenantId, partial.Id, GiftCardTransactionType.Redeemed,
+            -250m, partialBalances.Before, partialBalances.After, GiftCardsQaOperatorId, now.AddDays(-2), "QA-PARTIAL", "Canje parcial seed"));
+
+        var full = Create("GC-QA-FULL-250", 250m, "Caso C agotado", now.AddMonths(12), GiftCardSource.Manual);
+        var fullBalances = full.Redeem(250m, true, now.AddDays(-1));
+        db.GiftCardTransactions.Add(new GiftCardTransaction(Guid.NewGuid(), GiftCardsQaTenantId, full.Id, GiftCardTransactionType.Redeemed,
+            -250m, fullBalances.Before, fullBalances.After, GiftCardsQaOperatorId, now.AddDays(-1), "QA-FULL", "Canje total seed"));
+
+        var expired = Create("GC-QA-EXPIRED-500", 500m, "Caso D expirado", now.AddDays(-1), GiftCardSource.Promotional);
+        db.GiftCardTransactions.Add(new GiftCardTransaction(Guid.NewGuid(), GiftCardsQaTenantId, expired.Id, GiftCardTransactionType.Expired,
+            0, 500m, 500m, GiftCardsQaOperatorId, now, notes: "Expiración seed con saldo visible"));
+
+        var external = Create("GC-QA-EXTERNAL-1000", 1000m, "Caso E externo", now.AddMonths(6), GiftCardSource.PurchasedExternally);
+        var externalBalances = external.Redeem(400m, true, now.AddHours(-4));
+        db.GiftCardTransactions.Add(new GiftCardTransaction(Guid.NewGuid(), GiftCardsQaTenantId, external.Id, GiftCardTransactionType.Redeemed,
+            -400m, externalBalances.Before, externalBalances.After, GiftCardsQaOperatorId, now.AddHours(-4), "EXT-QA-001", "Compra externa seed"));
+    }
     private static async Task<int> EnsureBellaProgramConfigAsync(AppDbContext db, CancellationToken ct)
     {
         var now = DateTime.UtcNow;

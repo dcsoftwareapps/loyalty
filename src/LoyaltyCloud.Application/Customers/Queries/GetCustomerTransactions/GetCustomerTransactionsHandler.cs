@@ -9,13 +9,16 @@ public sealed class GetCustomerTransactionsHandler
     : IRequestHandler<GetCustomerTransactionsQuery, Result<PagedResult<TransactionDto>>>
 {
     private readonly ILoyaltyCardRepository _cards;
+    private readonly ICustomerRepository _customers;
     private readonly IPointTransactionRepository _transactions;
 
     public GetCustomerTransactionsHandler(
         ILoyaltyCardRepository cards,
+        ICustomerRepository customers,
         IPointTransactionRepository transactions)
     {
         _cards = cards;
+        _customers = customers;
         _transactions = transactions;
     }
 
@@ -26,6 +29,14 @@ public sealed class GetCustomerTransactionsHandler
     {
         var card = await _cards.GetBySerialNumberAsync(query.SerialNumber, ct);
         if (card is null)
+            return Result.Fail<PagedResult<TransactionDto>>(
+                $"No se encontró tarjeta con serial '{query.SerialNumber}'.");
+        if (!card.IsActive)
+            return Result.Fail<PagedResult<TransactionDto>>(
+                $"No se encontró tarjeta con serial '{query.SerialNumber}'.");
+
+        var customer = await _customers.GetByIdAsync(card.CustomerId, ct);
+        if (customer is null || !customer.IsActive)
             return Result.Fail<PagedResult<TransactionDto>>(
                 $"No se encontró tarjeta con serial '{query.SerialNumber}'.");
 

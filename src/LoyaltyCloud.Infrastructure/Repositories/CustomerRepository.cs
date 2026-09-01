@@ -43,8 +43,9 @@ internal sealed class CustomerRepository : ICustomerRepository
             .Where(c => _db.LoyaltyCards
                 .Any(card => card.TenantId == tenantId
                           && card.CustomerId == c.Id
-                          && card.SerialNumber == normalized))
-            .Where(c => c.TenantId == tenantId)
+                          && card.SerialNumber == normalized
+                          && card.IsActive))
+            .Where(c => c.TenantId == tenantId && c.IsActive)
             .FirstOrDefaultAsync(ct);
     }
 

@@ -59,10 +59,14 @@ La base activa de produccion/UAT es `LoyaltyCloudFree`.
 - Guardrail contra el hostname Admin retirado.
 - Branding tenant-aware en Admin.
 - Logo por tenant para Apple Wallet.
+- Tamaño visual del logo de Apple Wallet configurable por tenant.
+- Contenido principal configurable de Apple Wallet: nombre del cliente o imagen de portada.
 - Fallback grafico neutral de Wallet sin texto `LC`.
 - Wallet pass con fondo claro, valores negros y labels en PrimaryColor.
+- Colores del pass en Google Wallet / Android usando branding tenant-aware.
 - Google Wallet aprobado para produccion.
 - Google Wallet Save Link validado en STG.
+- Prevencion de clientes duplicados por telefono y recuperacion segura de tarjeta existente cuando nombre/apellido coinciden.
 
 ### Estado de Reportes
 
@@ -88,10 +92,11 @@ La base activa de produccion/UAT es `LoyaltyCloudFree`.
 
 ## TODO
 
-- Configurar tamaño del logo en el pass
-- Colores del pass en Google Wallet / Android
 - Terminar pagos recurrentes
 - Dashboard de valor
+- Vista de clientes eliminados
+- Restaurar cliente
+- Hard delete permanente de cliente
 
 ## DEFERRED
 

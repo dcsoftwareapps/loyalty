@@ -81,6 +81,7 @@ internal sealed class PassGeneratorService : IPassGeneratorService
         var rollingPoints = await _transactions.GetEligibleLevelPointsAsync(card.Id, _dt.UtcNow.AddMonths(-12), ct);
         var levelProgress = _levelProgress.Calculate(rollingPoints, tenantLevels);
         var progress = BuildLevelProgress(card, levelProgress);
+        var primaryContentMode = ResolveAppleWalletPrimaryContentMode(branding.AppleWalletPrimaryContentMode);
 
         _logger.LogInformation(
             "Wallet dynamic levels: tenant={TenantSlug} ({TenantId}), serial={Serial}, levels=[{Levels}], rollingPoints={RollingPoints}, cardCurrentPoints={CurrentPoints}, currentLevel={CurrentLevel}, nextLevel={NextLevel}, pointsToNextLevel={PointsToNextLevel}.",
@@ -101,6 +102,8 @@ internal sealed class PassGeneratorService : IPassGeneratorService
             branding.TenantSlug,
             branding.WalletLogoBlobName,
             branding.LogoBlobName,
+            includeStripImage: primaryContentMode == AppleWalletPrimaryContentMode.Image,
+            branding.AppleWalletStripImageBlobName,
             ct);
 
         var manifest = new Dictionary<string, string>(StringComparer.Ordinal)
@@ -159,9 +162,22 @@ internal sealed class PassGeneratorService : IPassGeneratorService
         EnsureRequiredOption(_options.OrganizationName, "Apple:OrganizationName");
 
         var displayName = GetWalletDisplayName(customer, branding.CustomerFallbackName);
+        var primaryContentMode = ResolveAppleWalletPrimaryContentMode(branding.AppleWalletPrimaryContentMode);
         var levelChangeMessage = walletContext.RecentVisibleEvent?.Type == NotificationType.LevelChanged
             ? BuildLevelChangeMessage(card, walletContext.LevelChange)
             : null;
+        var primaryFields = primaryContentMode == AppleWalletPrimaryContentMode.CustomerName
+            ? new object[]
+            {
+                new
+                {
+                    key = "name",
+                    label = string.Empty,
+                    value = displayName,
+                    textAlignment = "PKTextAlignmentCenter"
+                }
+            }
+            : Array.Empty<object>();
         var auxiliaryFields = BuildAuxiliaryFields(
             progress,
             levelChangeMessage,
@@ -176,8 +192,10 @@ internal sealed class PassGeneratorService : IPassGeneratorService
             branding.ContactValue);
 
         _logger.LogInformation(
-            "Apple Wallet pass fields for serial {Serial}: levelKey={LevelFieldKey}, levelValue={LevelValue}, levelChangeMessageIncluded={LevelChangeMessageIncluded}, pointsExpiringIncluded={PointsExpiringIncluded}, monthlyProductIncluded={MonthlyProductIncluded}, birthdayBenefitIncluded={BirthdayBenefitIncluded}, pointCampaignIncluded={PointCampaignIncluded}, recentVisibleEvent={RecentVisibleEvent}.",
+            "Apple Wallet pass fields for serial {Serial}: primaryContentMode={PrimaryContentMode}, primaryNameIncluded={PrimaryNameIncluded}, levelKey={LevelFieldKey}, levelValue={LevelValue}, levelChangeMessageIncluded={LevelChangeMessageIncluded}, pointsExpiringIncluded={PointsExpiringIncluded}, monthlyProductIncluded={MonthlyProductIncluded}, birthdayBenefitIncluded={BirthdayBenefitIncluded}, pointCampaignIncluded={PointCampaignIncluded}, recentVisibleEvent={RecentVisibleEvent}.",
             card.SerialNumber,
+            primaryContentMode,
+            primaryContentMode == AppleWalletPrimaryContentMode.CustomerName,
             LevelFieldKey,
             progress.LevelShortText,
             levelChangeMessage is not null,
@@ -202,16 +220,7 @@ internal sealed class PassGeneratorService : IPassGeneratorService
             labelColor = branding.LabelColor,
             storeCard = new
             {
-                primaryFields = new[]
-                {
-                    new
-                    {
-                        key = "name",
-                        label = string.Empty,
-                        value = displayName,
-                        textAlignment = "PKTextAlignmentCenter"
-                    }
-                },
+                primaryFields,
                 secondaryFields = Array.Empty<object>(),
                 auxiliaryFields,
                 backFields
@@ -634,6 +643,12 @@ internal sealed class PassGeneratorService : IPassGeneratorService
             ? fallbackName
             : firstName;
     }
+
+    private static AppleWalletPrimaryContentMode ResolveAppleWalletPrimaryContentMode(string? value) =>
+        Enum.TryParse<AppleWalletPrimaryContentMode>(value, ignoreCase: true, out var mode)
+            && Enum.IsDefined(typeof(AppleWalletPrimaryContentMode), mode)
+                ? mode
+                : AppleWalletPrimaryContentMode.CustomerName;
 
     private static PassProgress BuildLevelProgress(LoyaltyCard card, LevelProgressResult levelProgress)
     {

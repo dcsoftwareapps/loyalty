@@ -55,7 +55,12 @@ internal sealed partial class ReportsReadService : IReportsReadService
             join card in _db.LoyaltyCards.AsNoTracking()
                 on new { transaction.TenantId, Id = transaction.LoyaltyCardId }
                 equals new { card.TenantId, card.Id }
+            join customer in _db.Customers.AsNoTracking()
+                on new { card.TenantId, Id = card.CustomerId }
+                equals new { customer.TenantId, customer.Id }
             where transaction.TenantId == tenantId
+                && card.IsActive
+                && customer.IsActive
                 && transaction.CreatedAt >= periodStartUtc
                 && transaction.CreatedAt < periodEndUtc
             select card.CustomerId;
@@ -65,7 +70,12 @@ internal sealed partial class ReportsReadService : IReportsReadService
             join card in _db.LoyaltyCards.AsNoTracking()
                 on new { redemption.TenantId, Id = redemption.LoyaltyCardId }
                 equals new { card.TenantId, card.Id }
+            join customer in _db.Customers.AsNoTracking()
+                on new { card.TenantId, Id = card.CustomerId }
+                equals new { customer.TenantId, customer.Id }
             where redemption.TenantId == tenantId
+                && card.IsActive
+                && customer.IsActive
                 && redemption.RedeemedAt >= periodStartUtc
                 && redemption.RedeemedAt < periodEndUtc
             select card.CustomerId;
@@ -119,18 +129,45 @@ internal sealed partial class ReportsReadService : IReportsReadService
             .AsNoTracking()
             .CountAsync(c => c.TenantId == tenantId && c.IsActive, ct);
 
-        var currentPointBalance = await _db.LoyaltyCards
-            .AsNoTracking()
-            .Where(c => c.TenantId == tenantId && c.IsActive)
+        var currentPointBalance = await (
+            from card in _db.LoyaltyCards.AsNoTracking()
+            join customer in _db.Customers.AsNoTracking()
+                on new { card.TenantId, Id = card.CustomerId }
+                equals new { customer.TenantId, customer.Id }
+            where card.TenantId == tenantId
+                && card.IsActive
+                && customer.IsActive
+            select card)
             .SumAsync(c => (int?)c.CurrentPoints, ct) ?? 0;
 
-        var appleWalletRegistrations = await _db.DeviceRegistrations
-            .AsNoTracking()
-            .CountAsync(d => d.TenantId == tenantId, ct);
+        var appleWalletRegistrations = await (
+            from registration in _db.DeviceRegistrations.AsNoTracking()
+            join card in _db.LoyaltyCards.AsNoTracking()
+                on new { registration.TenantId, registration.SerialNumber }
+                equals new { card.TenantId, card.SerialNumber }
+            join customer in _db.Customers.AsNoTracking()
+                on new { card.TenantId, Id = card.CustomerId }
+                equals new { customer.TenantId, customer.Id }
+            where registration.TenantId == tenantId
+                && card.IsActive
+                && customer.IsActive
+            select registration.Id)
+            .CountAsync(ct);
 
-        var googleWalletRecords = await _db.MemberDigitalWallets
-            .AsNoTracking()
-            .CountAsync(w => w.TenantId == tenantId && w.Provider == DigitalWalletProvider.Google, ct);
+        var googleWalletRecords = await (
+            from wallet in _db.MemberDigitalWallets.AsNoTracking()
+            join card in _db.LoyaltyCards.AsNoTracking()
+                on new { wallet.TenantId, Id = wallet.LoyaltyCardId }
+                equals new { card.TenantId, card.Id }
+            join customer in _db.Customers.AsNoTracking()
+                on new { wallet.TenantId, Id = wallet.CustomerId }
+                equals new { customer.TenantId, customer.Id }
+            where wallet.TenantId == tenantId
+                && wallet.Provider == DigitalWalletProvider.Google
+                && card.IsActive
+                && customer.IsActive
+            select wallet.Id)
+            .CountAsync(ct);
 
         var inactive = await GetInactiveCustomersAsync(
             tenantId,

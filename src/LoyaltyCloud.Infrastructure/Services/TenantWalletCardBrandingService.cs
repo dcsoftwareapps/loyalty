@@ -2,6 +2,7 @@ using LoyaltyCloud.Application.Common.Branding;
 using LoyaltyCloud.Application.Common.Interfaces;
 using LoyaltyCloud.Common.Results;
 using LoyaltyCloud.Common.Services;
+using LoyaltyCloud.Domain.Entities;
 using LoyaltyCloud.Domain.Enums;
 using LoyaltyCloud.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
@@ -14,6 +15,7 @@ internal sealed class TenantWalletCardBrandingService : ITenantWalletCardBrandin
     private readonly AppDbContext _db;
     private readonly ITenantContext _tenantContext;
     private readonly ITenantBrandingReadService _brandingRead;
+    private readonly ITenantBrandingLogoService _logos;
     private readonly IAppleWalletPassRefreshService _passRefresh;
     private readonly ILogger<TenantWalletCardBrandingService> _logger;
 
@@ -21,37 +23,75 @@ internal sealed class TenantWalletCardBrandingService : ITenantWalletCardBrandin
         AppDbContext db,
         ITenantContext tenantContext,
         ITenantBrandingReadService brandingRead,
+        ITenantBrandingLogoService logos,
         IAppleWalletPassRefreshService passRefresh,
         ILogger<TenantWalletCardBrandingService> logger)
     {
         _db = db;
         _tenantContext = tenantContext;
         _brandingRead = brandingRead;
+        _logos = logos;
         _passRefresh = passRefresh;
         _logger = logger;
     }
 
-    public async Task<Result<TenantBrandingInfo>> UpdateBackgroundColorAsync(
+    public async Task<Result<TenantBrandingInfo>> UpdateAsync(
         string? walletBackgroundColor,
+        int? walletLogoScalePercent,
+        string? appleWalletPrimaryContentMode,
         CancellationToken cancellationToken = default)
     {
         var tenantId = _tenantContext.RequireTenantId();
+        var normalizedScale = walletLogoScalePercent ?? TenantBranding.DefaultWalletLogoScalePercent;
         var normalizedColor = string.IsNullOrWhiteSpace(walletBackgroundColor)
             ? null
             : WalletColorContrast.NormalizeHexOrDefault(walletBackgroundColor);
 
         if (!string.IsNullOrWhiteSpace(walletBackgroundColor) && !WalletColorContrast.IsHexColor(walletBackgroundColor))
             return Result.Fail<TenantBrandingInfo>("El color de la tarjeta debe usar formato #RRGGBB.");
+        if (normalizedScale is < TenantBranding.MinWalletLogoScalePercent or > TenantBranding.MaxWalletLogoScalePercent)
+        {
+            return Result.Fail<TenantBrandingInfo>(
+                $"El tamaño del logo debe estar entre {TenantBranding.MinWalletLogoScalePercent}% y {TenantBranding.MaxWalletLogoScalePercent}%.");
+        }
 
         var branding = await _db.TenantBrandings.SingleOrDefaultAsync(b => b.TenantId == tenantId, cancellationToken);
         if (branding is null)
             return Result.Fail<TenantBrandingInfo>("Branding del tenant no encontrado.");
 
-        var changed = !string.Equals(branding.WalletBackgroundColor, normalizedColor, StringComparison.OrdinalIgnoreCase);
+        var mode = branding.AppleWalletPrimaryContentMode;
+        if (!string.IsNullOrWhiteSpace(appleWalletPrimaryContentMode)
+            && !Enum.TryParse<AppleWalletPrimaryContentMode>(
+                appleWalletPrimaryContentMode,
+                ignoreCase: true,
+                out mode))
+        {
+            return Result.Fail<TenantBrandingInfo>("El contenido principal de Apple Wallet no es valido.");
+        }
+
+        if (mode == AppleWalletPrimaryContentMode.Image
+            && string.IsNullOrWhiteSpace(branding.AppleWalletStripImageBlobName))
+        {
+            return Result.Fail<TenantBrandingInfo>("Sube una imagen de portada antes de seleccionar esta opción.");
+        }
+
+        var colorChanged = !string.Equals(branding.WalletBackgroundColor, normalizedColor, StringComparison.OrdinalIgnoreCase);
+        var scaleChanged = branding.WalletLogoScalePercent != normalizedScale;
+        var modeChanged = branding.AppleWalletPrimaryContentMode != mode;
         branding.SetWalletBackgroundColor(normalizedColor);
+        branding.SetWalletLogoScalePercent(normalizedScale);
+        branding.SetAppleWalletPrimaryContentMode(mode);
+
+        if (scaleChanged)
+        {
+            var regenerate = await _logos.RegenerateAppleWalletLogoAssetsAsync(tenantId, cancellationToken);
+            if (regenerate.IsFailure)
+                return Result.Fail<TenantBrandingInfo>(regenerate.Errors);
+        }
+
         await _db.SaveChangesAsync(cancellationToken);
 
-        if (changed)
+        if (colorChanged || scaleChanged || modeChanged)
             await RefreshInstalledApplePassesBestEffortAsync(tenantId, cancellationToken);
 
         return Result.Ok(await _brandingRead.GetCurrentAsync(cancellationToken));

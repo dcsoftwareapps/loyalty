@@ -29,7 +29,12 @@ internal sealed class LoyaltyCardTenantLookup : ILoyaltyCardTenantLookup
         var row = await _db.LoyaltyCards
             .IgnoreQueryFilters()
             .AsNoTracking()
-            .Where(card => card.SerialNumber == normalized)
+            .Where(card => card.SerialNumber == normalized && card.IsActive)
+            .Join(
+                _db.Customers.IgnoreQueryFilters().AsNoTracking().Where(customer => customer.IsActive),
+                card => new { card.TenantId, Id = card.CustomerId },
+                customer => new { customer.TenantId, customer.Id },
+                (card, customer) => card)
             .Join(
                 _db.Tenants.AsNoTracking(),
                 card => card.TenantId,

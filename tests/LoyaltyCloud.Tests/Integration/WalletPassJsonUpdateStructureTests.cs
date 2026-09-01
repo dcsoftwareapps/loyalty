@@ -226,6 +226,9 @@ public sealed class WalletPassJsonUpdateStructureTests
                 "#1C1C1C",
                 "tenant-branding/test/wallet/logo-original.png",
                 "tenant-branding/test/wallet-branding/logo-original.png",
+                100,
+                "CustomerName",
+                null,
                 "@kbeauty_mx",
                 "Cliente K-Beauty",
                 UsesBundledAssetsFallback: false,
@@ -235,6 +238,67 @@ public sealed class WalletPassJsonUpdateStructureTests
         Assert.Equal("rgb(255,255,255)", pass["foregroundColor"]!.GetValue<string>());
         Assert.Equal("rgb(255,255,255)", pass["labelColor"]!.GetValue<string>());
         Assert.Equal("205 pts", SingleField(pass, "points")["value"]!.GetValue<string>());
+    }
+
+    [Fact]
+    [Trait("Category", "TenantBranding")]
+    [Trait("Category", "WalletProductionUpdate")]
+    public void Pass_json_defaults_to_customer_name_primary_content()
+    {
+        var now = new DateTime(2026, 8, 30, 12, 0, 0, DateTimeKind.Utc);
+        var customer = NewCustomer(now);
+        var card = NewCard(customer.Id, now);
+
+        var pass = BuildPassJson(card, customer);
+
+        var name = Assert.Single(pass["storeCard"]!["primaryFields"]!.AsArray())!.AsObject();
+        Assert.Equal("name", name["key"]!.GetValue<string>());
+        Assert.Equal(string.Empty, name["label"]!.GetValue<string>());
+        Assert.Equal("Daniel", name["value"]!.GetValue<string>());
+        Assert.Equal("PKTextAlignmentCenter", name["textAlignment"]!.GetValue<string>());
+    }
+
+    [Fact]
+    [Trait("Category", "TenantBranding")]
+    [Trait("Category", "WalletProductionUpdate")]
+    public void Pass_json_image_primary_content_removes_customer_name()
+    {
+        var now = new DateTime(2026, 8, 30, 12, 0, 0, DateTimeKind.Utc);
+        var customer = NewCustomer(now);
+        var card = NewCard(customer.Id, now);
+        var branding = DefaultBranding(card.TenantId) with
+        {
+            AppleWalletPrimaryContentMode = "Image",
+            AppleWalletStripImageBlobName = "tenant-branding/test/wallet-strip/strip-original.png"
+        };
+        card.EarnPoints(50, TransactionType.Purchase, ProgramConfigSnapshot.FromEntries([]), new FixedClock(now));
+
+        var pass = BuildPassJson(card, customer, branding: branding);
+
+        Assert.Empty(pass["storeCard"]!["primaryFields"]!.AsArray());
+        Assert.Equal(0, CountFields(pass, "name"));
+        Assert.Equal("50 pts", SingleField(pass, "points")["value"]!.GetValue<string>());
+    }
+
+    [Fact]
+    [Trait("Category", "TenantBranding")]
+    [Trait("Category", "WalletProductionUpdate")]
+    public void Pass_json_customer_name_mode_ignores_stored_strip_image()
+    {
+        var now = new DateTime(2026, 8, 30, 12, 0, 0, DateTimeKind.Utc);
+        var customer = NewCustomer(now);
+        var card = NewCard(customer.Id, now);
+        var branding = DefaultBranding(card.TenantId) with
+        {
+            AppleWalletPrimaryContentMode = "CustomerName",
+            AppleWalletStripImageBlobName = "tenant-branding/test/wallet-strip/strip-original.png"
+        };
+
+        var pass = BuildPassJson(card, customer, branding: branding);
+
+        var name = Assert.Single(pass["storeCard"]!["primaryFields"]!.AsArray())!.AsObject();
+        Assert.Equal("name", name["key"]!.GetValue<string>());
+        Assert.Equal("Daniel", name["value"]!.GetValue<string>());
     }
 
     [Fact]
@@ -363,22 +427,7 @@ public sealed class WalletPassJsonUpdateStructureTests
                 card,
                 customer,
                 walletContext ?? new WalletNotificationContext(null, null, null, null, null, null, null, null, null),
-                branding ?? new TenantWalletBrandingDto(
-                    card.TenantId,
-                    "kbeauty",
-                    "KBeauty",
-                    "KBeauty MX",
-                    "KBeauty Loyalty",
-                    "rgb(255,255,255)",
-                    "rgb(0,0,0)",
-                    "rgb(28,28,28)",
-                    "#FFFFFF",
-                    null,
-                    null,
-                    "@kbeauty_mx\n\nkbeautymx.com\n\n+52 646 238 6962",
-                    "Cliente K-Beauty",
-                    UsesBundledAssetsFallback: true,
-                    UsesLegacyContactFallback: false),
+                branding ?? DefaultBranding(card.TenantId),
                 CreatePassProgress(passGeneratorType, progressValue)
             ])!;
 
@@ -406,6 +455,26 @@ public sealed class WalletPassJsonUpdateStructureTests
                 yield return field!.AsObject();
         }
     }
+
+    private static TenantWalletBrandingDto DefaultBranding(Guid tenantId) => new(
+        tenantId,
+        "kbeauty",
+        "KBeauty",
+        "KBeauty MX",
+        "KBeauty Loyalty",
+        "rgb(255,255,255)",
+        "rgb(0,0,0)",
+        "rgb(28,28,28)",
+        "#FFFFFF",
+        null,
+        null,
+        100,
+        "CustomerName",
+        null,
+        "@kbeauty_mx\n\nkbeautymx.com\n\n+52 646 238 6962",
+        "Cliente K-Beauty",
+        UsesBundledAssetsFallback: true,
+        UsesLegacyContactFallback: false);
 
     private static object CreatePassProgress(Type passGeneratorType, PassProgressValues progress)
     {

@@ -1,0 +1,5 @@
+.kb-gift-scan-button { min-height: 48px; width: 100%; margin-bottom: 1rem; }
+.kb-gift-scanner { max-width: 42rem; margin: 0 auto 1rem; }
+.kb-gift-scanner-frame { position: relative; overflow: hidden; border-radius: 1rem; background: #111; }
+.kb-gift-scanner-frame span { position: absolute; inset: 16%; border: 3px solid rgba(255,255,255,.9); border-radius: 1rem; box-shadow: 0 0 0 999px rgba(0,0,0,.28); pointer-events: none; }
+@media (max-width: 480px) { .kb-gift-scanner .kb-actions { display: grid; grid-template-columns: 1fr 1fr; } .kb-gift-scanner-frame span { inset: 12%; } }

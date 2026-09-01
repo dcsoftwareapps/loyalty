@@ -22,6 +22,18 @@ public interface ITenantBrandingLogoService
         long contentLength,
         CancellationToken cancellationToken = default);
 
+    Task<Result<TenantBrandingLogoResult>> UploadAppleWalletStripImageAsync(
+        Guid tenantId,
+        string fileName,
+        string contentType,
+        Stream content,
+        long contentLength,
+        CancellationToken cancellationToken = default);
+
+    Task<Result> RegenerateAppleWalletLogoAssetsAsync(
+        Guid tenantId,
+        CancellationToken cancellationToken = default);
+
     Task<Result> RemoveWalletLogoAsync(Guid tenantId, CancellationToken cancellationToken = default);
 }
 

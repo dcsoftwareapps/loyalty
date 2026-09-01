@@ -13,6 +13,7 @@
 @using Microsoft.AspNetCore.Components.Forms
 @inject ISender Sender
 @inject NavigationManager Nav
+@inject AdminDateTimeFormatter Dates
 
 <PageTitle>Tenants - LoyaltyCloud Platform</PageTitle>
 
@@ -152,45 +153,49 @@ else if (tenants.Count == 0)
 }
 else
 {
-    <table class="kb-table kb-table--compact">
-        <thead>
-            <tr>
-                <th>Nombre</th>
-                <th>Slug</th>
-                <th>Activo</th>
-                <th>Suscripción</th>
-                <th>Razón</th>
-                <th>Trial termina</th>
-                <th>Pagado hasta</th>
-                <th>Gracia</th>
-                <th>Operativo</th>
-                <th>Atención</th>
-                <th>Zona horaria</th>
-                <th>Creado</th>
-                <th></th>
-            </tr>
-        </thead>
-        <tbody>
-        @foreach (var tenant in tenants)
-        {
-            <tr>
-                <td>@tenant.DisplayName</td>
-                <td><code>@tenant.Slug</code></td>
-                <td>@(tenant.IsActive ? "Sí" : "No")</td>
-                <td><span class="kb-badge @StatusClass(tenant.SubscriptionStatus?.ToString())">@(tenant.SubscriptionStatus?.ToString() ?? "Sin suscripción")</span></td>
-                <td>@DisplaySuspensionReason(tenant)</td>
-                <td>@FormatDate(tenant.TrialEndsAt)</td>
-                <td>@FormatDate(tenant.PaidThroughUtc)</td>
-                <td>@FormatDate(tenant.GracePeriodEndsAt)</td>
-                <td><span class="kb-badge @(tenant.IsOperational ? "kb-badge--success" : "kb-badge--muted")">@(tenant.IsOperational ? "Sí" : "No")</span></td>
-                <td>@ActionRequired(tenant)</td>
-                <td>@tenant.TimeZoneId</td>
-                <td>@FormatDate(tenant.CreatedAt)</td>
-                <td><a href="/platform/tenants/@tenant.TenantId">Ver detalle</a></td>
-            </tr>
-        }
-        </tbody>
-    </table>
+    <div class="kb-table-shell kb-platform-tenants-table-shell">
+        <div class="kb-table-responsive">
+            <table class="kb-table kb-table--compact kb-platform-tenants-table">
+                <thead>
+                    <tr>
+                        <th>Nombre</th>
+                        <th>Slug</th>
+                        <th>Activo</th>
+                        <th>Suscripción</th>
+                        <th>Razón</th>
+                        <th>Trial termina</th>
+                        <th>Pagado hasta</th>
+                        <th>Gracia</th>
+                        <th>Operativo</th>
+                        <th>Atención</th>
+                        <th>Zona horaria</th>
+                        <th>Creado</th>
+                        <th></th>
+                    </tr>
+                </thead>
+                <tbody>
+                @foreach (var tenant in tenants)
+                {
+                    <tr>
+                        <td>@tenant.DisplayName</td>
+                        <td><code>@tenant.Slug</code></td>
+                        <td>@(tenant.IsActive ? "Sí" : "No")</td>
+                        <td><span class="kb-badge @StatusClass(tenant.SubscriptionStatus?.ToString())">@(tenant.SubscriptionStatus?.ToString() ?? "Sin suscripción")</span></td>
+                        <td>@DisplaySuspensionReason(tenant)</td>
+                        <td>@FormatDate(tenant.TrialEndsAt)</td>
+                        <td>@FormatDate(tenant.PaidThroughUtc)</td>
+                        <td>@FormatDate(tenant.GracePeriodEndsAt)</td>
+                        <td><span class="kb-badge @(tenant.IsOperational ? "kb-badge--success" : "kb-badge--muted")">@(tenant.IsOperational ? "Sí" : "No")</span></td>
+                        <td>@ActionRequired(tenant)</td>
+                        <td>@tenant.TimeZoneId</td>
+                        <td>@FormatDate(tenant.CreatedAt)</td>
+                        <td><a href="/platform/tenants/@tenant.TenantId">Ver detalle</a></td>
+                    </tr>
+                }
+                </tbody>
+            </table>
+        </div>
+    </div>
 }
 
 @code {
@@ -298,8 +303,8 @@ else
         }
     }
 
-    private static string FormatDate(DateTime? value) =>
-        value.HasValue ? value.Value.ToString("dd MMM yyyy") : "No disponible";
+    private string FormatDate(DateTime? value) =>
+        Dates.Date(value);
 
     private static string StatusClass(string? status) =>
         status is "Active" or "Trial" ? "kb-badge--success"
