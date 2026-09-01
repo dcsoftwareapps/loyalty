@@ -1,11 +1,55 @@
 @page "/giftcards/issue"
 @attribute [Authorize(Policy = LoyaltyCloud.Admin.Auth.GiftCardsAuthorization.Policy)]
 @rendermode InteractiveServer
+@using System.ComponentModel.DataAnnotations
+@using LoyaltyCloud.Admin.Services
 @inject LoyaltyCloud.Application.GiftCards.IGiftCardService Service
 @inject LoyaltyCloud.Application.GiftCards.IGiftCardDeliveryService Delivery
+@inject NavigationManager Navigation
+@inject IJSRuntime JS
 
-<PageTitle>Emitir Gift Card - LoyaltyCloud</PageTitle>
-<header class="kb-page-header"><div><span class="kb-eyebrow">Gift Cards</span><h1>Emitir Gift Card</h1><p>Registra una venta externa, cortesía o compensación. LoyaltyCloud no procesa el cobro.</p></div></header>
-@if (result is not null) { <section class="kb-card"><h2>Gift Card emitida</h2><p><strong>@result.Card.Code</strong> · @result.Card.CurrentBalance.ToString("C2") @result.Card.Currency</p><p>Token seguro para enlace de entrega:</p><code>@result.ClaimToken</code><div class="kb-actions"><a class="kb-button" href="/giftcards/cards/@result.Card.Id">Ver detalle</a>@if(!string.IsNullOrWhiteSpace(result.Card.RecipientEmail)){<button class="kb-button" @onclick="SendEmail">Enviar por email</button>}<button class="kb-button kb-button--primary" @onclick="Reset">Emitir otra</button></div>@if(deliveryMessage is not null){<p>@deliveryMessage</p>}</section> }
-else { <section class="kb-card"><div class="kb-form-grid"><label>Monto<input type="number" step="0.01" min="0.01" @bind="amount" /></label><label>Nombre del destinatario<input @bind="recipientName" /></label><label>Email (opcional)<input type="email" @bind="email" /></label><label>Teléfono (opcional)<input @bind="phone" /></label><label>Nombre del remitente<input @bind="sender" /></label><label>Origen<select @bind="source"><option value="PurchasedExternally">Compra registrada externamente</option><option value="Promotional">Promocional</option><option value="Manual">Manual</option><option value="Compensation">Compensación</option></select></label><label class="kb-field--wide">Mensaje<textarea @bind="message"></textarea></label></div>@if(error is not null){<div class="alert alert-danger">@error</div>}<button class="kb-button kb-button--primary" disabled="@busy" @onclick="Issue">@(busy?"Emitiendo…":"Emitir Gift Card")</button></section> }
-@code { decimal amount; string recipientName=""; string? email,phone,sender,message,error,deliveryMessage; string source="PurchasedExternally"; bool busy; LoyaltyCloud.Application.GiftCards.IssuedGiftCardDto? result; async Task SendEmail(){try{await Delivery.SendEmailAsync(result!,result!.Card.RecipientEmail!);deliveryMessage="Email enviado.";}catch(Exception ex){deliveryMessage=ex.Message;}} async Task Issue(){try{busy=true;error=null;result=await Service.IssueAsync(new(amount,null,recipientName,email,phone,sender,message,Enum.Parse<LoyaltyCloud.Domain.Enums.GiftCardSource>(source),null));}catch(Exception ex){error=ex.Message;}finally{busy=false;}} void Reset(){result=null;amount=0;recipientName="";email=phone=sender=message=null;} }
+<PageTitle>Emitir Gift Card · LoyaltyCloud</PageTitle>
+<header class="kb-page-header"><div><span class="kb-eyebrow">Gift Cards</span><h1>Emitir Gift Card</h1><p>Crea una Gift Card con saldo para entregar a un cliente.</p></div></header>
+<GiftCardNav />
+@if (result is not null)
+{
+    <section class="kb-panel kb-gift-success">
+        <div class="kb-gift-success-copy"><span class="kb-gift-success-icon">✓</span><span class="kb-eyebrow">Emisión completada</span><h2>Gift Card emitida correctamente</h2><p>Comparte el enlace o permite que el destinatario escanee el código.</p>
+            <dl class="kb-stat-list"><div><dt>Código</dt><dd>@result.Card.Code</dd></div><div><dt>Saldo</dt><dd>@result.Card.CurrentBalance.ToString("N2") @result.Card.Currency</dd></div><div><dt>Destinatario</dt><dd>@result.Card.RecipientName</dd></div><div><dt>Vigencia</dt><dd>@(result.Card.ExpiresAtUtc?.ToString("d") ?? "Sin expiración")</dd></div></dl>
+        </div>
+        <div class="kb-gift-qr-card"><img src="@claimQr" alt="Código QR para abrir la Gift Card" /><strong>Escanea para recibir tu Gift Card.</strong><p>El destinatario podrá elegir Apple Wallet o Google Wallet.</p></div>
+    </section>
+    @if (deliveryMessage is not null) { <div class="@(deliveryError ? "kb-form-error" : "kb-form-success")">@deliveryMessage</div> }
+    <div class="kb-actions kb-gift-actions"><a class="kb-btn kb-btn--ghost" href="/giftcards/cards/@result.Card.Id">Ver detalle</a><a class="kb-btn kb-btn--ghost" href="@claimUrl" target="_blank" rel="noopener">Abrir página pública</a><button class="kb-btn kb-btn--ghost" @onclick="CopyLinkAsync">Copiar enlace</button>@if(!string.IsNullOrWhiteSpace(result.Card.RecipientEmail)){<button class="kb-btn kb-btn--ghost" disabled="@deliveryBusy" @onclick="SendEmailAsync">@(deliveryBusy ? "Enviando…" : "Enviar por email")</button>}<button class="kb-btn kb-btn--primary" @onclick="Reset">Emitir otra Gift Card</button></div>
+}
+else
+{
+    <EditForm Model="model" OnValidSubmit="IssueAsync" class="kb-gift-form">
+        <DataAnnotationsValidator />
+        <ValidationSummary class="kb-form-error" />
+        @if (error is not null) { <div class="kb-form-error">@error</div> }
+        <section class="kb-panel kb-gift-form-section">
+            <div class="kb-section-heading"><div><span class="kb-eyebrow">1. Saldo</span><h2>Monto de la Gift Card</h2><p>Define el saldo inicial que tendrá disponible.</p></div></div>
+            <div class="kb-gift-amount-field"><label for="gift-amount">Monto</label><div class="kb-money-input"><span>@currency</span><InputNumber id="gift-amount" @bind-Value="model.Amount" inputmode="decimal" placeholder="0.00" /></div><ValidationMessage For="@(() => model.Amount)" /></div>
+        </section>
+        <section class="kb-panel kb-gift-form-section">
+            <div class="kb-section-heading"><div><span class="kb-eyebrow">2. Destinatario</span><h2>Datos de entrega</h2><p>Usaremos estos datos para identificar y compartir la Gift Card.</p></div></div>
+            <div class="kb-gift-form-grid"><div class="kb-field--wide"><label for="recipient-name">Nombre del destinatario</label><InputText id="recipient-name" @bind-Value="model.RecipientName" maxlength="150" /><ValidationMessage For="@(() => model.RecipientName)" /></div><div><label for="recipient-email">Email <span class="kb-optional">Opcional</span></label><InputText id="recipient-email" type="email" @bind-Value="model.Email" maxlength="254" /><ValidationMessage For="@(() => model.Email)" /></div><div><label for="recipient-phone">Teléfono <span class="kb-optional">Opcional</span></label><InputText id="recipient-phone" type="tel" @bind-Value="model.Phone" maxlength="30" placeholder="+52 646 123 4567" /><ValidationMessage For="@(() => model.Phone)" /></div></div>
+        </section>
+        <section class="kb-panel kb-gift-form-section">
+            <div class="kb-section-heading"><div><span class="kb-eyebrow">3. Mensaje</span><h2>Personaliza la entrega</h2><p>Estos campos son opcionales.</p></div></div>
+            <div class="kb-gift-form-grid"><div><label for="sender-name">Nombre del remitente</label><InputText id="sender-name" @bind-Value="model.SenderName" maxlength="150" /><ValidationMessage For="@(() => model.SenderName)" /></div>@if(selectExpiration){<div><label for="expires">Fecha de expiración</label><InputDate id="expires" @bind-Value="model.ExpiresAtUtc" /><ValidationMessage For="@(() => model.ExpiresAtUtc)" /></div>}<div class="kb-field--wide"><label for="gift-message">Mensaje</label><InputTextArea id="gift-message" @bind-Value="model.Message" maxlength="500" /><small class="kb-muted">Máximo 500 caracteres.</small><ValidationMessage For="@(() => model.Message)" /></div></div>
+        </section>
+        <div class="kb-gift-submit"><button type="submit" class="kb-btn kb-btn--primary" disabled="@busy">@(busy ? "Emitiendo…" : "Emitir Gift Card")</button><a class="kb-btn kb-btn--ghost" href="/giftcards">Cancelar</a></div>
+    </EditForm>
+}
+@code {
+    private IssueModel model = new(); private bool busy,deliveryBusy,deliveryError,selectExpiration; private string currency="—"; private string? error,deliveryMessage,claimUrl,claimQr; private LoyaltyCloud.Application.GiftCards.IssuedGiftCardDto? result;
+    protected override async Task OnInitializedAsync(){var settings=await Service.GetSettingsAsync();currency=settings.Currency;selectExpiration=settings.ExpirationMode==LoyaltyCloud.Domain.Enums.GiftCardExpirationMode.SelectAtIssue;}
+    private async Task IssueAsync(){if(busy)return;try{busy=true;error=null;result=await Service.IssueAsync(new(model.Amount!.Value,null,model.RecipientName,model.Email,model.Phone,model.SenderName,model.Message,LoyaltyCloud.Domain.Enums.GiftCardSource.Manual,model.ExpiresAtUtc));claimUrl=await Delivery.GetClaimUrlAsync(result.ClaimToken)??Navigation.ToAbsoluteUri($"/giftcards/claim/{Uri.EscapeDataString(result.ClaimToken)}").ToString();claimQr=QrCodeSvgGenerator.GenerateDataUri(claimUrl,7);}catch(Exception ex){error=Friendly(ex);}finally{busy=false;}}
+    private async Task CopyLinkAsync(){if(claimUrl is null)return;await JS.InvokeVoidAsync("navigator.clipboard.writeText",claimUrl);deliveryError=false;deliveryMessage="Enlace copiado.";}
+    private async Task SendEmailAsync(){if(result?.Card.RecipientEmail is null||deliveryBusy)return;try{deliveryBusy=true;await Delivery.SendEmailAsync(result,result.Card.RecipientEmail);deliveryError=false;deliveryMessage="Email enviado correctamente.";}catch{deliveryError=true;deliveryMessage="No pudimos enviar el email. Verifica la configuración de notificaciones e inténtalo nuevamente.";}finally{deliveryBusy=false;}}
+    private void Reset(){result=null;model=new();error=deliveryMessage=claimUrl=claimQr=null;}
+    private static string Friendly(Exception ex)=>ex is ArgumentException or InvalidOperationException?ex.Message:"No pudimos emitir la Gift Card. Inténtalo nuevamente.";
+    private sealed class IssueModel { [Required(ErrorMessage="Ingresa un monto.")][Range(typeof(decimal),"0.01","79228162514264337593543950335",ErrorMessage="Ingresa un monto mayor a $0.")] public decimal? Amount{get;set;} [Required(ErrorMessage="Ingresa el nombre del destinatario.")][MaxLength(150,ErrorMessage="El nombre no puede exceder 150 caracteres.")] public string RecipientName{get;set;}=""; [EmailAddress(ErrorMessage="Ingresa un correo electrónico válido.")][MaxLength(254)] public string? Email{get;set;} [RegularExpression(@"^$|^[0-9+().\-\s]{7,30}$",ErrorMessage="Ingresa un número de teléfono válido.")] public string? Phone{get;set;} [MaxLength(150)] public string? SenderName{get;set;} [MaxLength(500,ErrorMessage="El mensaje no puede exceder 500 caracteres.")] public string? Message{get;set;} public DateTime? ExpiresAtUtc{get;set;} }
+}

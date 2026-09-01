@@ -47,7 +47,7 @@ public static class DependencyInjection
             ?? throw new InvalidOperationException(
                 "Falta ConnectionStrings:DefaultConnection (en appsettings o Key Vault).");
 
-        services.AddDbContext<AppDbContext>(options =>
+        services.AddDbContextFactory<AppDbContext>(options =>
             options.UseSqlServer(connectionString, sql =>
             {
                 sql.EnableRetryOnFailure(
@@ -55,7 +55,7 @@ public static class DependencyInjection
                     maxRetryDelay: TimeSpan.FromSeconds(5),
                     errorNumbersToAdd: null);
                 sql.MigrationsAssembly(typeof(AppDbContext).Assembly.FullName);
-            }));
+            }), ServiceLifetime.Scoped);
 
         services.AddScoped<IUnitOfWork>(sp => sp.GetRequiredService<AppDbContext>());
     }

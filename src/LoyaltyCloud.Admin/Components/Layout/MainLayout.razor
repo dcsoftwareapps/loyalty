@@ -52,13 +52,7 @@
 
                 @if (giftCardsEnabled)
                 {
-                    <span class="kb-sidebar-section">Gift Cards</span>
-                    <NavLink href="/giftcards"><NavIcon Name="gift" /><span>Resumen</span></NavLink>
-                    <NavLink href="/giftcards/issue"><NavIcon Name="plus" /><span>Emitir</span></NavLink>
-                    <NavLink href="/giftcards/redeem"><NavIcon Name="scan" /><span>Consultar y canjear</span></NavLink>
-                    <NavLink href="/giftcards/cards"><NavIcon Name="card" /><span>Tarjetas</span></NavLink>
-                    <NavLink href="/giftcards/reports"><NavIcon Name="history" /><span>Reportes</span></NavLink>
-                    <NavLink href="/giftcards/settings"><NavIcon Name="settings" /><span>Configuración</span></NavLink>
+                    <NavLink href="/giftcards" Match="NavLinkMatch.Prefix"><NavIcon Name="gift" /><span>Gift Cards</span></NavLink>
                 }
 
                 <span class="kb-sidebar-section">Gestión</span>

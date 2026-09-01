@@ -2,21 +2,10 @@
 @attribute [AllowAnonymous]
 @layout EmptyLayout
 @inject LoyaltyCloud.Application.GiftCards.IGiftCardClaimService Claims
-
+@inject IJSRuntime JS
+@inject NavigationManager Navigation
 <PageTitle>Mi Gift Card</PageTitle>
-@if (loading) { <main class="kb-public-page"><p>Cargando Gift Card…</p></main> }
-else if (claim is null) { <main class="kb-public-page"><section class="kb-card"><h1>Enlace no disponible</h1><p>La Gift Card no existe, fue cancelada o el enlace ya no es válido.</p></section></main> }
-else
-{
-<main class="kb-public-page" style="@($"--gift-primary:{claim.PrimaryColor};--gift-text:{claim.TextColor}")">
- <section class="kb-card" style="border-top:6px solid var(--gift-primary)">
-  @if(!string.IsNullOrWhiteSpace(claim.LogoUrl)){<img src="@claim.LogoUrl" alt="@claim.DisplayName" style="max-height:64px;max-width:220px" />}
-  <span class="kb-eyebrow">@claim.DisplayName</span><h1>@claim.Card.CurrentBalance.ToString("C2") @claim.Card.Currency</h1>
-  <p>Para @claim.Card.RecipientName</p>@if(!string.IsNullOrWhiteSpace(claim.Card.SenderName)){<p>De @claim.Card.SenderName</p>}@if(!string.IsNullOrWhiteSpace(claim.Card.PersonalMessage)){<blockquote>@claim.Card.PersonalMessage</blockquote>}
-  <div class="kb-detail-grid"><div><span>Código</span><strong>@claim.Card.Code</strong></div><div><span>Estado</span><strong>@claim.Card.Status</strong></div><div><span>Vigencia</span><strong>@(claim.Card.ExpiresAtUtc?.ToString("d") ?? "Sin expiración")</strong></div></div>
-  @if(!string.IsNullOrWhiteSpace(claim.Terms)){<details><summary>Términos y condiciones</summary><p>@claim.Terms</p></details>}
-  @if(!string.IsNullOrWhiteSpace(claim.FooterMessage)){<p><small>@claim.FooterMessage</small></p>}
- </section>
-</main>
-}
-@code { [Parameter] public string Token{get;set;}=""; bool loading=true; LoyaltyCloud.Application.GiftCards.GiftCardClaimDto? claim; protected override async Task OnParametersSetAsync(){loading=true;claim=await Claims.GetAsync(Token);loading=false;} }
+@if(loading){<main class="kb-public-page kb-gift-claim"><div class="kb-gift-claim__state"><p>Cargando tu Gift Card…</p></div></main>}
+else if(claim is null){<main class="kb-public-page kb-gift-claim"><section class="kb-gift-claim__state"><span class="kb-eyebrow">Gift Card</span><h1>Este enlace no está disponible</h1><p>Verifica el enlace recibido. La tarjeta también puede haber expirado o sido cancelada.</p></section></main>}
+else{<main class="kb-public-page kb-gift-claim" style="@($"--gift-primary:{claim.PrimaryColor};--gift-text:{claim.TextColor}")"><section class="kb-gift-claim__shell"><div class="kb-gift-card-preview" style="--gift-bg:var(--gift-primary)">@if(!string.IsNullOrWhiteSpace(claim.LogoUrl)){<img src="@claim.LogoUrl" alt="@claim.DisplayName" />}<div><small>GIFT CARD</small><h1>@claim.DisplayName</h1><p>@claim.SecondaryText</p></div><strong>@claim.Card.CurrentBalance.ToString("N2") @claim.Card.Currency</strong><span>@claim.Card.Code</span></div><div class="kb-gift-claim__content"><p class="kb-eyebrow">Un regalo para ti</p><h2>@claim.Card.RecipientName</h2>@if(!string.IsNullOrWhiteSpace(claim.Card.SenderName)){<p>De <strong>@claim.Card.SenderName</strong></p>}@if(!string.IsNullOrWhiteSpace(claim.Card.PersonalMessage)){<blockquote>“@claim.Card.PersonalMessage”</blockquote>}<dl><div><dt>Saldo disponible</dt><dd>@claim.Card.CurrentBalance.ToString("N2") @claim.Card.Currency</dd></div><div><dt>Estado</dt><dd>@StatusLabel</dd></div><div><dt>Vigencia</dt><dd>@(claim.Card.ExpiresAtUtc?.ToLocalTime().ToString("dd MMM yyyy")??"Sin expiración")</dd></div></dl><div class="kb-gift-wallet-actions"><button class="kb-btn kb-btn--primary" disabled="@walletBusy" @onclick="AddApple">Agregar a Apple Wallet</button><button class="kb-btn kb-btn--ghost" disabled="@walletBusy" @onclick="AddGoogle">Agregar a Google Wallet</button></div>@if(walletMessage is not null){<p class="kb-form-error" role="alert">@walletMessage</p>}@if(!string.IsNullOrWhiteSpace(claim.Terms)){<details><summary>Términos y condiciones</summary><p>@claim.Terms</p></details>}@if(!string.IsNullOrWhiteSpace(claim.FooterMessage)){<footer>@claim.FooterMessage</footer>}</div></section></main>}
+@code{[Parameter]public string Token{get;set;}="";bool loading=true,walletBusy;string? walletMessage;LoyaltyCloud.Application.GiftCards.GiftCardClaimDto? claim;string StatusLabel=>claim?.Card.Status switch{LoyaltyCloud.Domain.Enums.GiftCardStatus.Active=>"Activa",LoyaltyCloud.Domain.Enums.GiftCardStatus.FullyRedeemed=>"Canjeada",LoyaltyCloud.Domain.Enums.GiftCardStatus.Expired=>"Expirada",_=>"Cancelada"};async Task AddApple(){try{walletBusy=true;walletMessage=null;var pass=await Claims.GetApplePassAsync(Token);await JS.InvokeVoidAsync("giftCardWallet.downloadPass",pass.Bytes,$"giftcard-{claim?.Card.Code}.pkpass");}catch(Exception){walletMessage="Apple Wallet no está disponible en este momento.";}finally{walletBusy=false;}}async Task AddGoogle(){try{walletBusy=true;walletMessage=null;var link=await Claims.GetGoogleWalletLinkAsync(Token);Navigation.NavigateTo(link.Url,true);}catch(Exception){walletMessage="Google Wallet no está disponible en este momento.";}finally{walletBusy=false;}}protected override async Task OnParametersSetAsync(){loading=true;claim=await Claims.GetAsync(Token);loading=false;}}
