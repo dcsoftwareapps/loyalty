@@ -81,6 +81,7 @@ public sealed class GiftCardFeatureToggleTests
     public void GiftCardUi_PreservesCustomerDeliveryAndRemovesAdminCreditEntryPoints()
     {
         var detail = Read("src", "LoyaltyCloud.Admin", "Pages", "GiftCardDetail.razor");
+        var issue = Read("src", "LoyaltyCloud.Admin", "Pages", "GiftCardIssue.razor");
         var claim = Read("src", "LoyaltyCloud.Admin", "Pages", "GiftCardClaim.razor");
         Assert.DoesNotContain("AdjustAsync", detail);
         Assert.DoesNotContain("Agregar a Apple Wallet", detail);
@@ -88,6 +89,9 @@ public sealed class GiftCardFeatureToggleTests
         Assert.Contains("RedeemAsync", detail);
         Assert.Contains("Confirmar canje", detail);
         Assert.Contains("Cancelar Gift Card", detail);
+        Assert.Contains("Reenviar por email", detail);
+        Assert.Contains("RotateClaimTokenAsync", detail);
+        Assert.Contains("Delivery.SendEmailAsync", issue);
         Assert.Contains("Agregar a Apple Wallet", claim);
         Assert.Contains("Agregar a Google Wallet", claim);
     }

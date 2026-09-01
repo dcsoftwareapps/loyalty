@@ -7,6 +7,7 @@ using LoyaltyCloud.Domain.Entities;
 using LoyaltyCloud.Domain.Enums;
 using LoyaltyCloud.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
 
 namespace LoyaltyCloud.Infrastructure.Services;
 
@@ -67,7 +68,7 @@ internal sealed class GiftCardClaimService(
     }
 }
 
-internal sealed class GiftCardDeliveryService(ITransactionalEmailSender sender, IBillingEmailConfigurationProvider emailConfiguration) : IGiftCardDeliveryService
+internal sealed class GiftCardDeliveryService(ITransactionalEmailSender sender, IBillingEmailConfigurationProvider emailConfiguration, ILogger<GiftCardDeliveryService> logger) : IGiftCardDeliveryService
 {
     public async Task<string?> GetClaimUrlAsync(string claimToken, CancellationToken ct = default)
     {
@@ -78,20 +79,47 @@ internal sealed class GiftCardDeliveryService(ITransactionalEmailSender sender, 
             : $"{settings.ApplicationBaseUrl.TrimEnd('/')}/giftcards/claim/{Uri.EscapeDataString(claimToken.Trim())}";
     }
 
-    public async Task SendEmailAsync(IssuedGiftCardDto giftCard, string recipient, CancellationToken ct = default)
+    public async Task<GiftCardDeliveryResult> SendEmailAsync(IssuedGiftCardDto giftCard, string recipient, string businessName, CancellationToken ct = default)
     {
         var settings = await emailConfiguration.GetAsync(ct);
         if (!settings.IsComplete || !settings.Enabled || string.IsNullOrWhiteSpace(settings.FromAddress) || string.IsNullOrWhiteSpace(settings.ApplicationBaseUrl))
-            return;
-        if (string.IsNullOrWhiteSpace(recipient)) throw new ArgumentException("Email de destinatario requerido.");
+            return new(GiftCardDeliveryStatus.NotSent, "Email no enviado: la configuración de email está deshabilitada o incompleta.", null);
+        if (string.IsNullOrWhiteSpace(recipient))
+            return new(GiftCardDeliveryStatus.NotSent, "Email no enviado: falta el email del destinatario.", null);
+
         var url = $"{settings.ApplicationBaseUrl.TrimEnd('/')}/giftcards/claim/{Uri.EscapeDataString(giftCard.ClaimToken)}";
+        var displayName = string.IsNullOrWhiteSpace(businessName) ? "LoyaltyCloud" : businessName.Trim();
+        var subject = $"{displayName} te envió una Gift Card";
         var name = WebUtility.HtmlEncode(giftCard.Card.RecipientName);
         var code = WebUtility.HtmlEncode(giftCard.Card.Code);
+        var business = WebUtility.HtmlEncode(displayName);
         var amount = $"{giftCard.Card.CurrentBalance:N2} {giftCard.Card.Currency}";
-        var senderName = WebUtility.HtmlEncode(giftCard.Card.SenderName);
-        var personalMessage = WebUtility.HtmlEncode(giftCard.Card.PersonalMessage);
-        var text = $"Hola {giftCard.Card.RecipientName}, recibiste una Gift Card por {amount}. De: {giftCard.Card.SenderName}. Mensaje: {giftCard.Card.PersonalMessage}. Código: {giftCard.Card.Code}. Consultar: {url}";
-        var html = $"<h1>Recibiste una Gift Card</h1><p>Hola {name},</p><p>Tu saldo inicial es <strong>{amount}</strong>.</p><p>De: <strong>{senderName}</strong></p><p>{personalMessage}</p><p>Código: <strong>{code}</strong></p><p><a href=\"{WebUtility.HtmlEncode(url)}\">Ver mi Gift Card</a></p>";
-        await sender.SendAsync(new TransactionalEmail(recipient.Trim(), "Recibiste una Gift Card", text, html, settings.FromAddress, settings.FromName), ct);
+        var senderLine = string.IsNullOrWhiteSpace(giftCard.Card.SenderName) ? null : $"De: {giftCard.Card.SenderName}.";
+        var messageLine = string.IsNullOrWhiteSpace(giftCard.Card.PersonalMessage) ? null : $"Mensaje: {giftCard.Card.PersonalMessage}.";
+        var expiresLine = giftCard.Card.ExpiresAtUtc is null ? "Vigencia: sin expiración." : $"Vigencia: {giftCard.Card.ExpiresAtUtc.Value:dd/MM/yyyy}.";
+        var text = $"Hola {giftCard.Card.RecipientName}, {displayName} te envió una Gift Card por {amount}. {senderLine} {messageLine} Código: {giftCard.Card.Code}. {expiresLine} Ver mi Gift Card: {url}";
+        var html = $"<h1>{business} te envió una Gift Card</h1><p>Hola {name},</p><p>Recibiste una Gift Card por <strong>{amount}</strong>.</p>{HtmlParagraph("De:", giftCard.Card.SenderName)}{HtmlParagraph(null, giftCard.Card.PersonalMessage)}<p>Código: <strong>{code}</strong></p><p>{WebUtility.HtmlEncode(expiresLine)}</p><p><a href=\"{WebUtility.HtmlEncode(url)}\">Ver mi Gift Card</a></p>";
+
+        try
+        {
+            await sender.SendAsync(new TransactionalEmail(recipient.Trim(), subject, text, html, settings.FromAddress, settings.FromName), ct);
+            return new(GiftCardDeliveryStatus.Sent, "Email enviado correctamente.", url);
+        }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch (Exception ex)
+        {
+            logger.LogWarning(ex, "Gift Card email delivery failed for card {GiftCardId}.", giftCard.Card.Id);
+            return new(GiftCardDeliveryStatus.Failed, "No pudimos enviar el email. Verifica la configuración de email e inténtalo nuevamente.", url);
+        }
+    }
+
+    private static string HtmlParagraph(string? prefix, string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value)) return string.Empty;
+        var label = string.IsNullOrWhiteSpace(prefix) ? string.Empty : $"<strong>{WebUtility.HtmlEncode(prefix.Trim())}</strong> ";
+        return $"<p>{label}{WebUtility.HtmlEncode(value.Trim())}</p>";
     }
 }

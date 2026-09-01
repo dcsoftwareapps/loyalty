@@ -67,6 +67,7 @@ La base activa de produccion/UAT es `LoyaltyCloudFree`.
 - Google Wallet aprobado para produccion.
 - Google Wallet Save Link validado en STG.
 - Prevencion de clientes duplicados por telefono y recuperacion segura de tarjeta existente cuando nombre/apellido coinciden.
+- Gift Cards con entrega por email mediante SMTP provider-neutral, enlace publico seguro y rotacion de token al reenviar.
 
 ### Estado de Reportes
 
@@ -100,7 +101,8 @@ La base activa de produccion/UAT es `LoyaltyCloudFree`.
 
 ## DEFERRED
 
-- Canales externos: email, SMS, WhatsApp, mobile push.
+- Canales externos masivos: SMS, WhatsApp, mobile push.
+- Historial avanzado de entrega de emails, reintentos en background y webhooks de proveedor.
 - Plantillas por canal.
 - A/B testing.
 - Journeys automatizados.
