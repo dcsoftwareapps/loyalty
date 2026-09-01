@@ -7,6 +7,7 @@
 @using LoyaltyCloud.Application.Redemptions.Queries.ListRedemptions
 @using LoyaltyCloud.Domain.Enums
 @inject ISender Sender
+@inject AdminDateTimeFormatter Dates
 
 <PageTitle>Canjes - LoyaltyCloud</PageTitle>
 
@@ -266,11 +267,11 @@ else
         _ => "kb-badge"
     };
 
-    private static string FormatDate(DateTime value) =>
-        value.ToLocalTime().ToString("dd MMM yyyy HH:mm");
+    private string FormatDate(DateTime value) =>
+        Dates.DateTime(value);
 
-    private static string FormatDate(DateTime? value) =>
-        value.HasValue ? value.Value.ToLocalTime().ToString("dd MMM yyyy HH:mm") : "-";
+    private string FormatDate(DateTime? value) =>
+        Dates.DateTime(value, "-");
 
     private static string FormatMoney(decimal amount, string? currency) =>
         $"${amount:N2} {currency ?? "MXN"}";

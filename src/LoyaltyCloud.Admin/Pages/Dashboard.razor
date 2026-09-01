@@ -4,6 +4,7 @@
 
 @using LoyaltyCloud.Application.Admin.Queries.GetDashboardSummary
 @inject ISender Sender
+@inject AdminDateTimeFormatter Dates
 
 <PageTitle>Dashboard - LoyaltyCloud</PageTitle>
 
@@ -86,7 +87,7 @@ else
                             <td data-label="Cliente"><strong>@item.CustomerName</strong><small class="kb-table-secondary">@item.SerialNumber</small></td>
                             <td data-label="Puntos" class="kb-cell-number"><span class="kb-points-change @(item.Points >= 0 ? "kb-points-change--positive" : "kb-points-change--negative")">@(item.Points > 0 ? "+" : "")@item.Points.ToString("N0")</span></td>
                             <td data-label="Estado"><span class="kb-badge kb-badge--muted">@DisplayText(item.Status)</span></td>
-                            <td data-label="Fecha" class="kb-muted">@item.OccurredAt.ToLocalTime().ToString("dd MMM yyyy, HH:mm")</td>
+                            <td data-label="Fecha" class="kb-muted">@Dates.DateTimeWithComma(item.OccurredAt)</td>
                         </tr>
                     }
                     </tbody>

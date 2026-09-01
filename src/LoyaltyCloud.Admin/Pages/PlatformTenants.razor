@@ -13,6 +13,7 @@
 @using Microsoft.AspNetCore.Components.Forms
 @inject ISender Sender
 @inject NavigationManager Nav
+@inject AdminDateTimeFormatter Dates
 
 <PageTitle>Tenants - LoyaltyCloud Platform</PageTitle>
 
@@ -302,8 +303,8 @@ else
         }
     }
 
-    private static string FormatDate(DateTime? value) =>
-        value.HasValue ? value.Value.ToString("dd MMM yyyy") : "No disponible";
+    private string FormatDate(DateTime? value) =>
+        Dates.Date(value);
 
     private static string StatusClass(string? status) =>
         status is "Active" or "Trial" ? "kb-badge--success"

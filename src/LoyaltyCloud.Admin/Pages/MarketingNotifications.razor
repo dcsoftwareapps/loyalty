@@ -18,6 +18,7 @@
 @inject AuthenticationStateProvider AuthenticationStateProvider
 @inject ITenantRepository Tenants
 @inject ITenantLoyaltyLevelReadService TenantLevels
+@inject AdminDateTimeFormatter Dates
 
 <PageTitle>Mensajes - LoyaltyCloud</PageTitle>
 
@@ -244,7 +245,7 @@
 
     private List<CustomNotificationCampaignDto>? campaigns;
     private CustomNotificationAudiencePreviewDto? preview;
-    private CustomMessageForm form = CustomMessageForm.CreateDefault();
+    private CustomMessageForm form = new();
     private IReadOnlyList<TenantLoyaltyLevelDto> levelOptions = [];
     private readonly List<string> validationErrors = new();
     private string? successMsg;
@@ -255,6 +256,7 @@
 
     protected override async Task OnInitializedAsync()
     {
+        form = CustomMessageForm.CreateDefault(Dates);
         levelOptions = await TenantLevels.GetActiveLevelsAsync();
         await LoadAsync();
     }
@@ -357,7 +359,7 @@
             }
 
             successMsg = form.SendImmediately ? "Mensaje enviado." : "Mensaje programado.";
-            form = CustomMessageForm.CreateDefault();
+            form = CustomMessageForm.CreateDefault(Dates);
             preview = null;
             confirmSend = false;
             showForm = false;
@@ -480,18 +482,18 @@
         }
     }
 
-    private static DateTime? ParseLocalDateTime(string? value)
+    private DateTime? ParseLocalDateTime(string? value)
     {
         if (string.IsNullOrWhiteSpace(value) || !DateTime.TryParse(value, out var parsed))
             return null;
 
-        return DateTime.SpecifyKind(parsed, DateTimeKind.Local).ToUniversalTime();
+        return Dates.LocalDateTimeToUtc(parsed);
     }
 
-    private static string ToInputValue(DateTime utc) =>
-        utc.ToLocalTime().ToString("yyyy-MM-ddTHH:mm");
+    private string ToInputValue(DateTime utc) =>
+        Dates.DateTimeInput(utc);
 
-    private static string FormatDateTime(DateTime value) => value.ToLocalTime().ToString("dd MMM yyyy HH:mm");
+    private string FormatDateTime(DateTime value) => Dates.DateTime(value);
     private static string DisplayText(string? value) => string.IsNullOrWhiteSpace(value) ? "No disponible" : value;
 
     private static bool IsKnownAudience(string audienceType) =>
@@ -643,13 +645,13 @@
         public string? ScheduledAtLocal { get; set; }
         public string DisplayUntilLocal { get; set; } = string.Empty;
 
-        public static CustomMessageForm CreateDefault()
+        public static CustomMessageForm CreateDefault(AdminDateTimeFormatter dates)
         {
             var displayUntil = DateTime.UtcNow.AddDays(7);
             return new CustomMessageForm
             {
                 DisplayUntilUtc = displayUntil,
-                DisplayUntilLocal = ToInputValue(displayUntil)
+                DisplayUntilLocal = dates.DateTimeInput(displayUntil)
             };
         }
     }

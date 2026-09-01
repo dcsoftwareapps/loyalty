@@ -37,6 +37,7 @@ builder.Services.AddHttpClient("LoyaltyCloudApi", client =>
 });
 builder.Services.AddScoped<AdminApiPointsClient>();
 builder.Services.AddScoped<AdminApiClient>();
+builder.Services.AddSingleton<AdminDateTimeFormatter>();
 
 // Blazor Web App con Interactive Server.
 builder.Services.AddRazorComponents()
