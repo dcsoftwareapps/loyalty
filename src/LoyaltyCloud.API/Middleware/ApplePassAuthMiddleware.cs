@@ -93,6 +93,7 @@ public sealed class ApplePassAuthMiddleware
 
         var card = await cards.GetBySerialNumberAsync(route.SerialNumber!, context.RequestAborted);
         if (card is null ||
+            !card.IsActive ||
             !string.Equals(card.AuthenticationToken, auth.Token, StringComparison.Ordinal))
         {
             _logger.LogWarning(

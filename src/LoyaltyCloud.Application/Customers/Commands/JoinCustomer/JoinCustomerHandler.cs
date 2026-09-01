@@ -31,6 +31,9 @@ public sealed class JoinCustomerHandler : IRequestHandler<JoinCustomerCommand, R
         var existingCustomer = await _customers.GetByNormalizedPhoneAsync(phone, ct);
         if (existingCustomer is not null)
         {
+            if (!existingCustomer.IsActive)
+                return Result.Fail<JoinCustomerResponse>("No pudimos recuperar una tarjeta con estos datos. Contacta al negocio.");
+
             if (!CustomerNameNormalizer.Matches(existingCustomer.FullName, command.FirstName, command.LastName))
                 return Result.Fail<JoinCustomerResponse>("Este número de teléfono ya está registrado.");
 
@@ -82,6 +85,9 @@ public sealed class JoinCustomerHandler : IRequestHandler<JoinCustomerCommand, R
         var existingCustomer = await _customers.GetByNormalizedPhoneAsync(normalizedPhone, ct);
         if (existingCustomer is null)
             return null;
+
+        if (!existingCustomer.IsActive)
+            return Result.Fail<JoinCustomerResponse>("No pudimos recuperar una tarjeta con estos datos. Contacta al negocio.");
 
         if (!CustomerNameNormalizer.Matches(existingCustomer.FullName, command.FirstName, command.LastName))
             return Result.Fail<JoinCustomerResponse>("Este número de teléfono ya está registrado.");

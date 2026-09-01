@@ -35,10 +35,10 @@ internal sealed class CustomerDetailReadService : ICustomerDetailReadService
         var tenantId = _tenantContext.RequireTenantId();
         var baseInfo = await (
             from customer in _db.Customers.AsNoTracking()
-            where customer.TenantId == tenantId && customer.Id == customerId
+            where customer.TenantId == tenantId && customer.Id == customerId && customer.IsActive
             join card in _db.LoyaltyCards.AsNoTracking() on customer.Id equals card.CustomerId into cards
             from card in cards.DefaultIfEmpty()
-            where card == null || card.TenantId == tenantId
+            where card == null || (card.TenantId == tenantId && card.IsActive)
             select new
             {
                 customer.Id,

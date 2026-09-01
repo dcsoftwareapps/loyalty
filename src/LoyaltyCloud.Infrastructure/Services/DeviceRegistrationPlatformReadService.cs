@@ -34,10 +34,15 @@ internal sealed class DeviceRegistrationPlatformReadService : IDeviceRegistratio
             join card in _db.LoyaltyCards.IgnoreQueryFilters().AsNoTracking()
                 on new { registration.TenantId, registration.SerialNumber }
                 equals new { card.TenantId, card.SerialNumber }
+            join customer in _db.Customers.IgnoreQueryFilters().AsNoTracking()
+                on new { card.TenantId, Id = card.CustomerId }
+                equals new { customer.TenantId, customer.Id }
             join tenant in _db.Tenants.AsNoTracking()
                 on registration.TenantId equals tenant.Id
             where registration.DeviceLibraryIdentifier == deviceLibraryIdentifier
                && registration.PassTypeIdentifier == passTypeIdentifier
+               && card.IsActive
+               && customer.IsActive
                && (!passesUpdatedSince.HasValue || card.LastActivityAt > passesUpdatedSince.Value)
             select new
             {

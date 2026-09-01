@@ -74,8 +74,8 @@ Main entities:
 | `TenantSubscription` | Trial/active/past-due/suspended/cancelled subscription state and billing dates. |
 | `TenantAdminUser` | Tenant admin/cashier login user. Passwords use `IPasswordHashingService`. |
 | `TenantLoyaltyLevel` | Dynamic loyalty level per tenant: name, normalized name, threshold, sort order, active flag. |
-| `Customer` | Tenant customer/member. Phone is normalized for lookup/deduplication and same-tenant card recovery. |
-| `LoyaltyCard` | Central loyalty card aggregate: serial, current balance, lifetime points, level, auth token, last activity. |
+| `Customer` | Tenant customer/member. Phone is normalized for lookup/deduplication and same-tenant card recovery. `IsActive` is reused for customer soft delete. |
+| `LoyaltyCard` | Central loyalty card aggregate: serial, current balance, lifetime points, level, auth token, last activity. `IsActive` is reused with `Customer.IsActive` for soft-deleted members. |
 | `PointTransaction` | Point ledger movement. Includes transaction type, points, campaign and tenant context. |
 | `PointLot` | FIFO lot created by positive earn transactions, with expiry and remaining amount. |
 | `PointLotConsumption` | FIFO consumption record linked to lot, consuming transaction and redemption when applicable. |
@@ -152,6 +152,8 @@ Blazor Admin pages:
 Visible Admin menu is grouped by operation, customers, loyalty program, communication and administration. Do not reintroduce any retired Admin hostname.
 
 Admin customer screens intentionally ignore `Customer.Email` as visible customer data. The field still exists for legacy/domain/API compatibility, but tenant Admin UI should show name, phone, customer ID/serial and operational data instead. Platform tenant creation has synchronized color picker and hex fields for tenant branding colors. Tenant Admin `/config` includes Apple Wallet card branding: optional `TenantBranding.WalletBackgroundColor` (`#RRGGBB`), optional wallet-specific logo, Apple Wallet logo scale and Apple Wallet primary content mode. Quick Help registration QR/poster must continue using the same tenant join URL source (`Admin:PublicBaseUrl` when configured, otherwise current Admin base URI). The poster top uses `TenantBrandingInfo.LogoUrl` when available and falls back to tenant display name.
+
+Customer soft delete uses existing `Customer.IsActive` plus `LoyaltyCard.IsActive`. It intentionally does not add a global EF query filter; operational reads must filter explicitly so historical ledger rows remain queryable where appropriate. Deleted customers are hidden from normal customer lists/search/detail, points, redemptions, Wallet download/update flows, current dashboard/report metrics and marketing audiences. Historical point/redemption records are preserved in SQL. Future backlog items are: deleted-customer view, restore customer and permanent hard delete.
 
 ## API Endpoints
 
@@ -776,6 +778,7 @@ Done:
 - Reports v1 with separate report pages for inactive customers and top redeemed rewards.
 - QR add-points and redemption flows.
 - Direct monetary discount redemption.
+- Customer soft delete using existing active flags while preserving point/redemption history.
 - Reward catalog/monthly product.
 - Point campaigns.
 - Custom Wallet messages.
@@ -811,6 +814,7 @@ Known current/pending:
 - Provisioning defaults may still be legacy `Mist/Glow/Radiance`; update defaults/templates before generic onboarding if not already handled.
 - Serial format still uses `KB-`; do not change without a PassKit/Wallet migration plan.
 - Review diagnostic logs before GA.
+- Customer soft-delete follow-ups remain pending: deleted-customer view, restore customer and permanent hard delete.
 
 ## Working Conventions
 

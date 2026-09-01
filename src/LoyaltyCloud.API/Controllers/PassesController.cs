@@ -3,6 +3,7 @@ using LoyaltyCloud.Application.GiftCards;
 using LoyaltyCloud.Application.Devices.Commands.RegisterDevice;
 using LoyaltyCloud.Application.Devices.Commands.UnregisterDevice;
 using LoyaltyCloud.Common.Constants;
+using LoyaltyCloud.Domain.Entities;
 using LoyaltyCloud.Domain.Repositories;
 using LoyaltyCloud.Infrastructure.Configuration;
 using MediatR;
@@ -84,6 +85,7 @@ public sealed class PassesController : ControllerBase
 
         var customer = await _customers.GetByIdAsync(card.CustomerId, ct);
         if (customer is null) return NotFound();
+        if (!IsActiveMember(card, customer)) return NotFound();
 
         _logger.LogInformation(
             "Apple Wallet GET pass for serial {Serial}; passType={PassType}; level={Level}; lastActivityAt={LastActivityAt:O}.",
@@ -118,6 +120,7 @@ public sealed class PassesController : ControllerBase
 
         var customer = await _customers.GetByIdAsync(card.CustomerId, ct);
         if (customer is null) return NotFound();
+        if (!IsActiveMember(card, customer)) return NotFound();
 
         _logger.LogInformation(
             "Development pass download for serial {Serial}; level={Level}; lastActivityAt={LastActivityAt}.",
@@ -142,6 +145,7 @@ public sealed class PassesController : ControllerBase
 
         var customer = await _customers.GetByIdAsync(card.CustomerId, ct);
         if (customer is null) return NotFound();
+        if (!IsActiveMember(card, customer)) return NotFound();
 
         _logger.LogInformation(
             "Public pass download for serial {Serial}; level={Level}; lastActivityAt={LastActivityAt}.",
@@ -337,6 +341,9 @@ public sealed class PassesController : ControllerBase
 
     private static string SafeDeviceIdentifier(string value) =>
         value.Length <= 8 ? value : $"{value[..4]}...{value[^4..]}";
+
+    private static bool IsActiveMember(LoyaltyCard card, Customer customer) =>
+        card.IsActive && customer.IsActive;
 
     public sealed record PushTokenBody(string PushToken);
 
