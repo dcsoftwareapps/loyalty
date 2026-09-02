@@ -41,143 +41,128 @@
 {
     <section class="kb-card" style="margin-bottom:24px;">
         <h2>Mensaje</h2>
-        <div class="kb-grid" style="grid-template-columns:minmax(280px,1.2fr) minmax(260px,.8fr);gap:24px;">
-            <div>
-                @if (validationErrors.Count > 0)
+        @if (validationErrors.Count > 0)
+        {
+            <div class="kb-form-error">
+                @foreach (var error in validationErrors)
                 {
-                    <div class="kb-form-error">
-                        @foreach (var error in validationErrors)
-                        {
-                            <div>@error</div>
-                        }
-                    </div>
+                    <div>@error</div>
                 }
-
-                <div class="kb-form-row">
-                    <label for="short-message">Notificación</label>
-                    <input id="short-message" maxlength="@ShortMessageMaxLength" @bind="form.ShortMessage" @bind:event="oninput" />
-                    <div class="kb-muted">Este texto aparecerá en la notificación del teléfono.</div>
-                    <div class="@ShortMessageCounterClass">
-                        @($"{(form.ShortMessage?.Length ?? 0)}/{ShortMessageMaxLength} · recomendado {ShortMessageRecommendedLength}")
-                    </div>
-                </div>
-
-                <div class="kb-form-row">
-                    <label for="long-message">Detalle del mensaje</label>
-                    <textarea id="long-message" rows="5" maxlength="@LongMessageMaxLength" @bind="form.LongMessage" @bind:event="oninput"></textarea>
-                    <div class="kb-muted">Este contenido se mostrará al consultar el mensaje.</div>
-                    <div class="kb-muted">@($"{(form.LongMessage?.Length ?? 0)}/{LongMessageMaxLength}")</div>
-                </div>
-
-                <div class="kb-form-row kb-form-row--horizontal">
-                    <div style="flex:1;min-width:220px;">
-                        <label for="audience-type">Audiencia</label>
-                        <select id="audience-type" @bind="form.AudienceType">
-                            <option value="@CustomNotificationCampaign.AudienceAllWalletUsers">Todos los clientes</option>
-                            @foreach (var level in levelOptions)
-                            {
-                                <option value="@level.Name">Nivel minimo: @level.Name</option>
-                            }
-                            <option value="@CustomNotificationCampaign.AudienceMinimumPoints">Puntos minimos</option>
-                            <option value="@CustomNotificationCampaign.AudiencePointsExpiring">Puntos por expirar</option>
-                        </select>
-                    </div>
-                    @if (CustomNotificationCampaign.IsMinimumPointsAudience(form.AudienceType))
-                    {
-                        <div style="flex:1;min-width:180px;">
-                            <label for="minimum-points">Puntos mínimos</label>
-                            <input id="minimum-points" type="number" min="0" @bind="form.MinimumPoints" />
-                        </div>
-                    }
-                    @if (CustomNotificationCampaign.IsPointsExpiringAudience(form.AudienceType))
-                    {
-                        <div style="flex:1;min-width:180px;">
-                            <label for="days-ahead">Días adelante</label>
-                            <input id="days-ahead" type="number" min="1" @bind="form.PointsExpiringDaysAhead" />
-                        </div>
-                    }
-                </div>
-
-                <div class="kb-form-row kb-form-row--horizontal">
-                    <div style="flex:1;min-width:200px;">
-                        <label for="display-until">Mostrar hasta</label>
-                        <input id="display-until" type="datetime-local" value="@form.DisplayUntilLocal" @onchange="OnDisplayUntilChanged" />
-                    </div>
-                    <div style="flex:1;min-width:200px;">
-                        <label for="send-mode">Envío</label>
-                        <select id="send-mode" value="@form.SendMode" @onchange="OnSendModeChanged">
-                            <option value="@CustomMessageSendMode.SendNow">Enviar ahora</option>
-                            <option value="@CustomMessageSendMode.Schedule">Programar envío</option>
-                        </select>
-                    </div>
-                    @if (!form.SendImmediately)
-                    {
-                        <div style="flex:1;min-width:200px;">
-                            <label for="scheduled-at">Enviar en</label>
-                            <input id="scheduled-at" type="datetime-local" value="@form.ScheduledAtLocal" @onchange="OnScheduledAtChanged" />
-                        </div>
-                    }
-                </div>
-
-                <div class="kb-actions-inline">
-                    <button class="kb-btn kb-btn--ghost" @onclick="PreviewAsync" disabled="@busy">
-                        Preview audiencia
-                    </button>
-                    @if (preview is not null && !confirmSend)
-                    {
-                        <button class="kb-btn kb-btn--primary" @onclick="@(() => confirmSend = true)" disabled="@busy">
-                            Confirmar
-                        </button>
-                    }
-                    @if (confirmSend)
-                    {
-                        <button class="kb-btn kb-btn--primary" @onclick="CreateAsync" disabled="@busy">
-                            @(form.SendImmediately ? "Enviar mensaje" : "Programar mensaje")
-                        </button>
-                        <button class="kb-btn kb-btn--ghost" @onclick="@(() => confirmSend = false)" disabled="@busy">Cancelar confirmación</button>
-                    }
-                </div>
             </div>
+        }
 
-            <div>
-                <div class="kb-card" style="background:rgb(250,248,244);border-color:#eee;">
-                    <div class="kb-muted" style="font-size:.78rem;text-transform:uppercase;">Vista previa Wallet</div>
-                    <h3 style="margin-top:8px;">@GeneratedTitle</h3>
-                    @if (string.IsNullOrWhiteSpace(form.ShortMessage) && string.IsNullOrWhiteSpace(form.LongMessage))
-                    {
-                        <p class="kb-muted" style="margin-bottom:0;">Escribe un mensaje para previsualizarlo.</p>
-                    }
-                    else
-                    {
-                        <div class="kb-muted" style="font-size:.78rem;text-transform:uppercase;">Notificación</div>
-                        <p style="font-size:1.3rem;font-weight:700;margin:4px 0 16px;">@DisplayText(form.ShortMessage?.Trim())</p>
-                        <div class="kb-muted" style="font-size:.78rem;text-transform:uppercase;">Detalle</div>
-                        <div class="kb-muted" style="white-space:pre-line;">@DisplayText(form.LongMessage?.Trim())</div>
-                    }
-                </div>
-
-                @if (preview is not null)
-                {
-                    <div class="kb-card" style="margin-top:16px;">
-                        <h3>Audiencia</h3>
-                        <DetailItem Label="Destinatarios" Value="@preview.TotalRecipients.ToString("N0")" />
-                        <DetailItem Label="Apple Wallet" Value="@preview.AppleRecipients.ToString("N0")" />
-                        <DetailItem Label="Google Wallet" Value="@preview.GoogleRecipients.ToString("N0")" />
-                        <DetailItem Label="Sin Wallet" Value="@preview.ExcludedWithoutDeviceRegistration.ToString("N0")" />
-                        <DetailItem Label="Criterio" Value="@preview.Criteria" />
-                        @if (preview.Warnings.Count > 0)
-                        {
-                            <div class="kb-form-error">
-                                @foreach (var warning in preview.Warnings)
-                                {
-                                    <div>@warning</div>
-                                }
-                            </div>
-                        }
-                    </div>
-                }
+        <div class="kb-form-row">
+            <label for="short-message">Notificación</label>
+            <input id="short-message" maxlength="@ShortMessageMaxLength" @bind="form.ShortMessage" @bind:event="oninput" />
+            <div class="kb-muted">Este texto aparecerá en la notificación del teléfono.</div>
+            <div class="@ShortMessageCounterClass">
+                @($"{(form.ShortMessage?.Length ?? 0)}/{ShortMessageMaxLength} · recomendado {ShortMessageRecommendedLength}")
             </div>
         </div>
+
+        <div class="kb-form-row">
+            <label for="long-message">Detalle del mensaje</label>
+            <textarea id="long-message" rows="5" maxlength="@LongMessageMaxLength" @bind="form.LongMessage" @bind:event="oninput"></textarea>
+            <div class="kb-muted">Este contenido se mostrará al consultar el mensaje.</div>
+            <div class="kb-muted">@($"{(form.LongMessage?.Length ?? 0)}/{LongMessageMaxLength}")</div>
+        </div>
+
+        <div class="kb-form-row kb-form-row--horizontal">
+            <div style="flex:1;min-width:220px;">
+                <label for="audience-type">Audiencia</label>
+                <select id="audience-type" @bind="form.AudienceType">
+                    <option value="@CustomNotificationCampaign.AudienceAllWalletUsers">Todos los clientes</option>
+                    @foreach (var level in levelOptions)
+                    {
+                        <option value="@level.Name">Nivel minimo: @level.Name</option>
+                    }
+                    <option value="@CustomNotificationCampaign.AudienceMinimumPoints">Puntos minimos</option>
+                    <option value="@CustomNotificationCampaign.AudiencePointsExpiring">Puntos por expirar</option>
+                </select>
+            </div>
+            @if (CustomNotificationCampaign.IsMinimumPointsAudience(form.AudienceType))
+            {
+                <div style="flex:1;min-width:180px;">
+                    <label for="minimum-points">Puntos mínimos</label>
+                    <input id="minimum-points" type="number" min="0" @bind="form.MinimumPoints" />
+                </div>
+            }
+            @if (CustomNotificationCampaign.IsPointsExpiringAudience(form.AudienceType))
+            {
+                <div style="flex:1;min-width:180px;">
+                    <label for="days-ahead">Días adelante</label>
+                    <input id="days-ahead" type="number" min="1" @bind="form.PointsExpiringDaysAhead" />
+                </div>
+            }
+        </div>
+
+        <div class="kb-form-row kb-form-row--horizontal">
+            <div style="flex:1;min-width:220px;">
+                <label for="display-until">Fecha de expiración</label>
+                <input id="display-until" type="datetime-local" value="@form.DisplayUntilLocal" @onchange="OnDisplayUntilChanged" />
+                <div class="kb-muted">Después de esta fecha, el mensaje dejará de mostrarse en las siguientes actualizaciones de Wallet.</div>
+            </div>
+            <label class="kb-field" style="flex:1;min-width:220px;align-self:end;">
+                <span>Envío</span>
+                <span class="kb-actions-inline" style="gap:8px;">
+                    <input id="schedule-delivery" type="checkbox" @bind="form.ScheduleDelivery" />
+                    <span>Programar envío</span>
+                </span>
+            </label>
+            @if (!form.SendImmediately)
+            {
+                <div style="flex:1;min-width:220px;">
+                    <label for="scheduled-at">Fecha y hora de envío</label>
+                    <input id="scheduled-at" type="datetime-local" value="@form.ScheduledAtLocal" @onchange="OnScheduledAtChanged" />
+                </div>
+            }
+        </div>
+
+        <div class="kb-actions-inline">
+            <button class="kb-btn kb-btn--ghost" @onclick="PreviewAsync" disabled="@busy">
+                Ver audiencia
+            </button>
+            <button class="kb-btn kb-btn--primary" @onclick="RequestConfirmationAsync" disabled="@busy">
+                @(form.SendImmediately ? "Enviar mensaje" : "Programar mensaje")
+            </button>
+        </div>
+
+        @if (preview is not null)
+        {
+            <div style="margin-top:16px;padding:16px;border:1px solid #eee;border-radius:8px;background:rgb(250,248,244);">
+                <div class="kb-muted" style="font-size:.78rem;text-transform:uppercase;">Audiencia</div>
+                <p style="font-size:1.25rem;font-weight:700;margin:4px 0 12px;">@($"{preview.TotalRecipients:N0} destinatarios")</p>
+                <div class="kb-actions-inline" style="gap:16px;">
+                    <span class="kb-muted">@($"Apple Wallet: {preview.AppleRecipients:N0}")</span>
+                    <span class="kb-muted">@($"Google Wallet: {preview.GoogleRecipients:N0}")</span>
+                    <span class="kb-muted">@($"Sin Wallet: {preview.ExcludedWithoutDeviceRegistration:N0}")</span>
+                </div>
+                <p class="kb-muted" style="margin:10px 0 0;">@preview.Criteria</p>
+                @if (preview.Warnings.Count > 0)
+                {
+                    <div class="kb-form-error" style="margin-top:12px;">
+                        @foreach (var warning in preview.Warnings)
+                        {
+                            <div>@warning</div>
+                        }
+                    </div>
+                }
+            </div>
+        }
+
+        @if (confirmSend)
+        {
+            <div style="margin-top:16px;padding:16px;border:1px solid #eee;border-radius:8px;">
+                <h3 style="margin-top:0;">@(form.SendImmediately ? "¿Enviar este mensaje ahora?" : "¿Programar este mensaje?")</h3>
+                <p class="kb-muted">@ConfirmationSummary</p>
+                <div class="kb-actions-inline">
+                    <button class="kb-btn kb-btn--ghost" @onclick="@(() => confirmSend = false)" disabled="@busy">Cancelar</button>
+                    <button class="kb-btn kb-btn--primary" @onclick="CreateAsync" disabled="@busy">
+                        @(form.SendImmediately ? "Enviar mensaje" : "Programar mensaje")
+                    </button>
+                </div>
+            </div>
+        }
     </section>
 }
 
@@ -296,6 +281,22 @@
         if (!ValidateForm())
             return;
 
+        await LoadPreviewAsync();
+    }
+
+    private async Task RequestConfirmationAsync()
+    {
+        if (!ValidateForm())
+            return;
+
+        await LoadPreviewAsync();
+
+        if (errorMsg is null)
+            confirmSend = true;
+    }
+
+    private async Task LoadPreviewAsync()
+    {
         busy = true;
         errorMsg = null;
         successMsg = null;
@@ -468,20 +469,6 @@
         form.ScheduledAtUtc = ParseLocalDateTime(form.ScheduledAtLocal);
     }
 
-    private void OnSendModeChanged(ChangeEventArgs args)
-    {
-        var rawValue = args.Value?.ToString();
-        form.SendMode = Enum.TryParse<CustomMessageSendMode>(rawValue, out var mode)
-            ? mode
-            : CustomMessageSendMode.SendNow;
-
-        if (form.SendImmediately)
-        {
-            form.ScheduledAtLocal = null;
-            form.ScheduledAtUtc = null;
-        }
-    }
-
     private DateTime? ParseLocalDateTime(string? value)
     {
         if (string.IsNullOrWhiteSpace(value) || !DateTime.TryParse(value, out var parsed))
@@ -495,6 +482,12 @@
 
     private string FormatDateTime(DateTime value) => Dates.DateTime(value);
     private static string DisplayText(string? value) => string.IsNullOrWhiteSpace(value) ? "No disponible" : value;
+    private string ConfirmationSummary =>
+        preview is null
+            ? $"Audiencia: {AudienceText(form.AudienceType)}."
+            : form.SendImmediately
+                ? $"Se enviará a {preview.TotalRecipients:N0} destinatarios. Audiencia: {AudienceText(form.AudienceType)}."
+                : $"Se enviará el {DisplayText(form.ScheduledAtUtc.HasValue ? Dates.DateTime(form.ScheduledAtUtc.Value) : null)} a {preview.TotalRecipients:N0} destinatarios. Audiencia: {AudienceText(form.AudienceType)}.";
 
     private static bool IsKnownAudience(string audienceType) =>
         CustomNotificationCampaign.IsAllWalletUsersAudience(audienceType) ||
@@ -640,6 +633,19 @@
         public int? PointsExpiringDaysAhead { get; set; } = 15;
         public CustomMessageSendMode SendMode { get; set; } = CustomMessageSendMode.SendNow;
         public bool SendImmediately => SendMode == CustomMessageSendMode.SendNow;
+        public bool ScheduleDelivery
+        {
+            get => SendMode == CustomMessageSendMode.Schedule;
+            set
+            {
+                SendMode = value ? CustomMessageSendMode.Schedule : CustomMessageSendMode.SendNow;
+                if (!value)
+                {
+                    ScheduledAtLocal = null;
+                    ScheduledAtUtc = null;
+                }
+            }
+        }
         public DateTime? ScheduledAtUtc { get; set; }
         public DateTime DisplayUntilUtc { get; set; }
         public string? ScheduledAtLocal { get; set; }
