@@ -96,27 +96,26 @@
             }
         </div>
 
-        <div class="kb-form-row kb-form-row--horizontal">
-            <div style="flex:1;min-width:220px;">
-                <label for="display-until">Fecha de expiración</label>
-                <input id="display-until" type="datetime-local" value="@form.DisplayUntilLocal" @onchange="OnDisplayUntilChanged" />
-                <div class="kb-muted">Después de esta fecha, el mensaje dejará de mostrarse en las siguientes actualizaciones de Wallet.</div>
-            </div>
-            <label class="kb-field" style="flex:1;min-width:220px;align-self:end;">
-                <span>Envío</span>
-                <span class="kb-actions-inline" style="gap:8px;">
-                    <input id="schedule-delivery" type="checkbox" @bind="form.ScheduleDelivery" />
-                    <span>Programar envío</span>
-                </span>
-            </label>
-            @if (!form.SendImmediately)
-            {
-                <div style="flex:1;min-width:220px;">
-                    <label for="scheduled-at">Fecha y hora de envío</label>
-                    <input id="scheduled-at" type="datetime-local" value="@form.ScheduledAtLocal" @onchange="OnScheduledAtChanged" />
-                </div>
-            }
+        <div class="kb-form-row">
+            <label for="display-until">Fecha de expiración</label>
+            <input id="display-until" type="datetime-local" value="@form.DisplayUntilLocal" @onchange="OnDisplayUntilChanged" />
+            <div class="kb-muted">Después de esta fecha, el mensaje dejará de mostrarse en las siguientes actualizaciones de Wallet.</div>
         </div>
+
+        <div class="kb-form-row">
+            <label class="kb-checkbox-row" for="schedule-delivery">
+                <input id="schedule-delivery" class="kb-checkbox" type="checkbox" @bind="form.ScheduleDelivery" />
+                <span>Programar envío</span>
+            </label>
+        </div>
+
+        @if (!form.SendImmediately)
+        {
+            <div class="kb-form-row">
+                <label for="scheduled-at">Fecha y hora de envío</label>
+                <input id="scheduled-at" type="datetime-local" value="@form.ScheduledAtLocal" @onchange="OnScheduledAtChanged" />
+            </div>
+        }
 
         <div class="kb-actions-inline">
             <button class="kb-btn kb-btn--ghost" @onclick="PreviewAsync" disabled="@busy">
