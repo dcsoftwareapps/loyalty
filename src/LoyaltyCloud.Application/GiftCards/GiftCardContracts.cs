@@ -15,6 +15,11 @@ public sealed record GiftCardDashboardDto(int ActiveCards, decimal OutstandingBa
 public sealed record GiftCardReportPoint(DateTime DateUtc, decimal Issued, decimal Redeemed, int IssuedCount, int RedemptionCount);
 public sealed record GiftCardOperationResult(bool Success, string? Error, GiftCardDetailDto? Detail, bool WasIdempotent = false);
 public sealed record GiftCardClaimDto(GiftCardDto Card, string DisplayName, string PrimaryColor, string TextColor, string? LogoUrl, string? SecondaryText, string? Terms, string? FooterMessage);
+public enum GiftCardDeliveryStatus { Sent, NotSent, Failed }
+public sealed record GiftCardDeliveryResult(GiftCardDeliveryStatus Status, string? Message, string? ClaimUrl)
+{
+    public bool Sent => Status == GiftCardDeliveryStatus.Sent;
+}
 
 public interface IGiftCardService
 {
@@ -28,6 +33,7 @@ public interface IGiftCardService
     Task<GiftCardPage> SearchAsync(string? search, GiftCardStatus? status, DateTime? fromUtc, DateTime? toUtc, int page = 1, int pageSize = 25, CancellationToken ct = default);
     Task<GiftCardDetailDto?> GetAsync(Guid id, CancellationToken ct = default);
     Task<GiftCardDetailDto?> GetByCodeAsync(string code, CancellationToken ct = default);
+    Task<IssuedGiftCardDto> RotateClaimTokenAsync(Guid id, CancellationToken ct = default);
     Task<GiftCardOperationResult> RedeemAsync(string code, decimal amount, string idempotencyKey, string? reference, string? notes, CancellationToken ct = default);
     Task<GiftCardOperationResult> AdjustAsync(Guid id, decimal amount, string idempotencyKey, string? reference, string? notes, CancellationToken ct = default);
     Task<GiftCardOperationResult> CancelAsync(Guid id, string idempotencyKey, string? notes, CancellationToken ct = default);
@@ -46,7 +52,7 @@ public interface IGiftCardClaimService
 public interface IGiftCardDeliveryService
 {
     Task<string?> GetClaimUrlAsync(string claimToken, CancellationToken ct = default);
-Task SendEmailAsync(IssuedGiftCardDto giftCard, string recipient, CancellationToken ct = default);
+    Task<GiftCardDeliveryResult> SendEmailAsync(IssuedGiftCardDto giftCard, string recipient, string businessName, CancellationToken ct = default);
 }
 
 

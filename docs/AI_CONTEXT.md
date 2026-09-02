@@ -23,6 +23,7 @@ It lets each business tenant run a customer loyalty program with:
 - dynamic tenant loyalty levels;
 - customer audit/detail;
 - custom and automatic Wallet notifications;
+- Gift Cards with public claim pages, Apple/Google Wallet support and optional SMTP email delivery;
 - platform admin tenant management;
 - tenant admin cashier/admin workflows.
 
@@ -88,6 +89,10 @@ Main entities:
 | `NotificationDelivery` | Delivery attempt/status for a notification/channel. |
 | `DeviceRegistration` | Apple Wallet device registration and push token by pass serial. |
 | `MemberDigitalWallet` | Provider link/sync state for external wallets such as Google Wallet. |
+| `GiftCardConfiguration` | Tenant-owned Gift Card settings, branding, expiration mode and denominations. |
+| `GiftCard` | Tenant-owned Gift Card balance aggregate with public code, recipient data and hashed claim token. Plaintext claim tokens are never stored. |
+| `GiftCardTransaction` | Gift Card ledger for issue, redemption, cancellation, expiration and adjustments. |
+| `GiftCardWallet` | Gift Card wallet synchronization state for Apple and Google Wallet providers. |
 
 Important enums include `TransactionType`, `RedemptionType`, `RedemptionStatus`, `NotificationType`, `NotificationChannel`, `NotificationStatus`, `NotificationDeliveryStatus`, `DigitalWalletProvider`, `DigitalWalletStatus`, `CustomNotificationCampaignStatus`, `CampaignLevelEligibility`, `TenantSubscriptionStatus`, `TenantSuspensionReason` and `PassUpdateReason`.
 
@@ -148,6 +153,14 @@ Blazor Admin pages:
 | `/notifications` | `Notifications.razor` | Historical/admin notification page. Exists but is hidden from main menu. |
 | `/config` | `Config.razor` | Program configuration. Some legacy settings are visually hidden. |
 | `/quick-help` | `QuickHelp.razor` | Quick cashier/admin help, registration QR and printable poster. |
+| `/giftcards` | `GiftCards.razor` | Tenant Gift Card dashboard/landing. Requires Gift Cards feature authorization. |
+| `/giftcards/issue` | `GiftCardIssue.razor` | Issue a Gift Card. Optional recipient email triggers SMTP delivery after successful issuance. |
+| `/giftcards/cards` | `GiftCardList.razor` | Gift Card list/search by tenant. |
+| `/giftcards/cards/{Id:guid}` | `GiftCardDetail.razor` | Gift Card detail, redemption, cancellation and email resend. |
+| `/giftcards/redeem` | `GiftCardRedeem.razor` | Lookup/redeem a Gift Card by code or claim QR. |
+| `/giftcards/reports` | `GiftCardReports.razor` | Gift Card issue/redemption report. |
+| `/giftcards/settings` | `GiftCardSettings.razor` | Tenant Gift Card settings. |
+| `/giftcards/claim/{Token}` | `GiftCardClaim.razor` | Public recipient claim page from an opaque claim token. |
 
 Visible Admin menu is grouped by operation, customers, loyalty program, communication and administration. Do not reintroduce any retired Admin hostname.
 
@@ -407,6 +420,31 @@ Important review status rule:
 
 Do not log service account JSON, private keys, access tokens or Save JWTs.
 
+## Gift Card Flow
+
+Gift Cards are tenant-owned and run inside the Admin Blazor app through `IGiftCardService`.
+
+Admin flow:
+
+1. Tenant Admin opens `/giftcards/issue`.
+2. Admin enters amount, recipient name and optional recipient email/phone/sender/message.
+3. `GiftCardService.IssueAsync` validates tenant Gift Card settings, creates `GiftCard` and `GiftCardTransaction`, generates a cryptographically random claim token, stores only `GiftCard.HashClaimToken(token)` and returns the plaintext token only in the immediate issue result.
+4. Admin builds the public claim URL `/giftcards/claim/{token}` through `IGiftCardDeliveryService.GetClaimUrlAsync`.
+5. If `RecipientEmail` exists, Admin attempts email delivery after issuance. Email failure must not roll back issuance.
+6. The public claim page resolves the hashed token, sets tenant context from the owning active tenant and lets the recipient add the Gift Card to Apple Wallet or Google Wallet.
+
+Email delivery:
+
+- Uses `ITransactionalEmailSender`, currently implemented by `SmtpEmailSender` with MailKit.
+- Provider stays SMTP/provider-neutral. Resend can be used through SMTP configuration; do not add a Resend SDK unless explicitly decided later.
+- `IGiftCardDeliveryService.SendEmailAsync` returns `Sent`, `NotSent` or `Failed` so Admin UI does not treat disabled/incomplete SMTP configuration as success.
+- Email content includes tenant/business display name, recipient name, optional sender/message, amount/currency, expiration, CTA `Ver mi Gift Card` and the public claim URL.
+- Email sends the claim URL, not a direct Apple PassKit or Google Save URL.
+- Resending from `/giftcards/cards/{Id}` rotates the claim token first, persists only the new hash and invalidates the previous claim URL.
+- Token rotation must not modify Gift Card balance, status, tenant, recipient fields or ledger history.
+- Resend is tenant-scoped; another tenant cannot rotate or send a Gift Card it cannot query through tenant filters.
+- Advanced delivery history, queued retries and provider webhooks are not implemented yet.
+
 ## Points, Redemptions, Levels and Notifications
 
 Points:
@@ -506,6 +544,11 @@ Important App Settings:
 | `Provisioning:TrialDays` | API/Admin/Tools | Default tenant trial days. |
 | `Billing:GracePeriodDays` | API/Admin | Subscription grace behavior. |
 | `GoogleWallet:*` | API/Admin | Google Wallet provider settings. |
+| `Email:SmtpHost` | API/Admin | SMTP host for provider-neutral transactional email. Resend SMTP can be configured externally here. |
+| `Email:SmtpPort` | API/Admin | SMTP port, currently used with implicit TLS. |
+| `Email:Username` | API/Admin | SMTP username. For Resend SMTP this is normally a non-secret provider username. |
+| `Email:Password` | API/Admin | SMTP password/API key. Store as secret/Key Vault reference, never in source. |
+| Billing email settings | Admin/SQL | `BillingSettings` stores email enablement, provider label, From address/name and public application base URL used by transactional email links. |
 
 Key Vault secret names in current implementation/scripts:
 
@@ -523,6 +566,8 @@ Key Vault secret names in current implementation/scripts:
 | `kbeauty-apn-key-id` | APNs key ID. |
 | `kbeauty-apn-team-id` | APNs team ID. |
 | `loyaltycloud-google-wallet-service-account-json` | Google Wallet service account JSON. |
+
+No permanent Key Vault secret name has been standardized yet for SMTP provider API keys. If Resend SMTP is enabled, store the Resend API key in Key Vault and reference it from `Email__Password`; keep `Email__SmtpHost`, `Email__SmtpPort` and `Email__Username` as non-secret App Settings when possible.
 
 Never store secret values, tokens, private keys, connection strings or passwords in docs or source.
 
@@ -786,6 +831,7 @@ Done:
 - Tenant branding/logo for Admin and Apple Wallet.
 - Quick Help registration QR/poster.
 - Google Wallet first vertical slice.
+- Gift Card email delivery through provider-neutral SMTP, including safe Admin feedback and claim-token rotation on resend.
 - STG infrastructure scripts and STG setup documentation.
 
 Active/UAT focus:
@@ -802,6 +848,7 @@ Known current/pending:
 - Reports v1 is a tenant Admin section using the same in-process MediatR/read-service pattern as Dashboard. `/reports` is a lightweight landing, while individual report pages own their filters and queries. It does not add database schema, an API endpoint, charts or exports.
 - Google Wallet does not yet have a robust outbox/retry model.
 - Google Wallet sync is currently limited mainly to add-points sync once a member is linked.
+- Gift Card email delivery does not yet have persistent delivery history, background retry or provider webhooks.
 - Review whether Google Wallet has URLs/base URLs that should move to the new custom domains.
 - Analyze safe migration strategy before changing `Apple__WebServiceURL` to `https://api.loyaltycloud.net`.
 - Determine impact of changing `Apple__WebServiceURL` on already installed Apple Wallet passes, device registrations and `/v1/*` update flow.

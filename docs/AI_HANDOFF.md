@@ -2,9 +2,42 @@
 
 Last updated: 2026-09-01
 
-Branch: `feature/customer-soft-delete`
+Branch: `feature/gift-card-email-delivery`
 
-Last task worked: Customer soft delete.
+Last task worked: Gift Card email delivery.
+
+## 2026-09-01 - Gift Card email delivery
+
+Current branch for this work: `feature/gift-card-email-delivery`.
+
+Scope:
+
+- Gift Card issuance now attempts email delivery only after the Gift Card and issue ledger transaction are persisted.
+- Email delivery uses the existing provider-neutral `ITransactionalEmailSender` / `SmtpEmailSender` path. No Resend SDK was added.
+- `IGiftCardDeliveryService.SendEmailAsync` returns explicit `Sent`, `NotSent` or `Failed` results so Admin no longer reports success when SMTP is disabled, incomplete or rejected by the provider.
+- Email content includes the tenant/business display name, recipient name, optional sender/message, amount/currency, expiration, CTA `Ver mi Gift Card` and the public claim URL.
+- The email link points to `/giftcards/claim/{token}` and never directly to Apple PassKit or a Google Save URL.
+- Plaintext claim tokens are never stored. `GiftCard` stores only `ClaimTokenHash`.
+- Resending from Gift Card detail rotates the claim token, stores only the new hash and invalidates the previous public claim URL.
+- Token rotation preserves balance, status, recipient fields, tenant ownership and ledger/history.
+- Resend is tenant-scoped through existing tenant filters; a tenant cannot rotate/send another tenant's Gift Card.
+- Email failure does not roll back issuance and is shown as a safe Admin message.
+
+Configuration:
+
+- SMTP provider is configured through `Email:SmtpHost`, `Email:SmtpPort`, `Email:Username` and `Email:Password`.
+- Resend SMTP can be enabled by setting `Email__SmtpHost=smtp.resend.com`, `Email__SmtpPort=465`, `Email__Username=resend` and `Email__Password` from a Key Vault secret/App Setting.
+- Billing email settings still control enablement/from address/from name/application base URL through `BillingSettings`; `EmailNotificationsEnabled` and complete SMTP credentials are both required.
+- No SMTP secret value belongs in source or docs.
+- Defaults were not changed to Resend; provider choice remains external configuration.
+
+Validation expected for this task:
+
+- focused Gift Card/email tests;
+- `dotnet ef migrations has-pending-model-changes`;
+- `dotnet build .\LoyaltyCloud.sln -c Release`;
+- `git diff --check`;
+- no database update, deploy, commit or push.
 
 ## 2026-09-01 - Customer soft delete
 

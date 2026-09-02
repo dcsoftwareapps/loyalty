@@ -83,7 +83,7 @@ internal sealed class GiftCardService(AppDbContext db, IDbContextFactory<AppDbCo
             throw new InvalidOperationException("La emisión promocional está deshabilitada.");
         var now = clock.UtcNow;
         var expires = ResolveExpiration(config, request.ExpiresAtUtc, now);
-        var token = Convert.ToHexString(RandomNumberGenerator.GetBytes(32));
+        var token = GenerateClaimToken();
         var card = new GiftCard(Guid.NewGuid(), TenantId(), await UniqueCodeAsync(ct), GiftCard.HashClaimToken(token), amount, config.Currency, request.RecipientMemberId, recipientName, email, phone, senderName, personalMessage, request.Source, UserId(), now, expires);
         db.GiftCards.Add(card);
         db.GiftCardTransactions.Add(new GiftCardTransaction(Guid.NewGuid(), TenantId(), card.Id, GiftCardTransactionType.Issued, amount, 0, amount, UserId(), now, notes: personalMessage));
@@ -105,6 +105,23 @@ internal sealed class GiftCardService(AppDbContext db, IDbContextFactory<AppDbCo
 
     public async Task<GiftCardDetailDto?> GetAsync(Guid id, CancellationToken ct = default) { await EnabledConfigurationAsync(ct); var card = await db.GiftCards.AsNoTracking().SingleOrDefaultAsync(x => x.Id == id, ct); return card is null ? null : await DetailAsync(card, ct); }
     public async Task<GiftCardDetailDto?> GetByCodeAsync(string code, CancellationToken ct = default) { await EnabledConfigurationAsync(ct); var normalized = code.Trim().ToUpperInvariant(); var card = await db.GiftCards.SingleOrDefaultAsync(x => x.PublicCode == normalized, ct); if (card is null) return null; await PersistExpirationAsync(card, ct); return await DetailAsync(card, ct); }
+
+    public async Task<IssuedGiftCardDto> RotateClaimTokenAsync(Guid id, CancellationToken ct = default)
+    {
+        await EnabledConfigurationAsync(ct);
+        var card = await db.GiftCards.SingleOrDefaultAsync(x => x.Id == id, ct)
+            ?? throw new KeyNotFoundException("Gift Card no encontrada.");
+        card.EvaluateExpiration(clock.UtcNow);
+        if (card.Status != GiftCardStatus.Active)
+            throw new InvalidOperationException("Esta Gift Card ya no está disponible para entrega.");
+        if (string.IsNullOrWhiteSpace(card.RecipientEmail))
+            throw new InvalidOperationException("La Gift Card no tiene email de destinatario.");
+
+        var token = GenerateClaimToken();
+        card.ReplaceClaimTokenHash(GiftCard.HashClaimToken(token), clock.UtcNow);
+        await db.SaveChangesAsync(ct);
+        return new(ToDto(card), token);
+    }
 
     public async Task<GiftCardOperationResult> RedeemAsync(string code, decimal amount, string idempotencyKey, string? reference, string? notes, CancellationToken ct = default)
     {
@@ -180,6 +197,7 @@ internal sealed class GiftCardService(AppDbContext db, IDbContextFactory<AppDbCo
     private async Task PersistExpirationAsync(GiftCard card, CancellationToken ct) { var expired = card.EvaluateExpiration(clock.UtcNow); if (expired <= 0) return; var exists = await db.GiftCardTransactions.AnyAsync(x => x.GiftCardId == card.Id && x.Type == GiftCardTransactionType.Expired, ct); if (!exists) db.GiftCardTransactions.Add(new GiftCardTransaction(Guid.NewGuid(),TenantId(),card.Id,GiftCardTransactionType.Expired,0,expired,expired,UserId(),clock.UtcNow)); await db.SaveChangesAsync(ct); }
     private static DateTime? ResolveExpiration(GiftCardConfiguration c, DateTime? selected, DateTime now) => c.ExpirationMode switch { GiftCardExpirationMode.Never => null, GiftCardExpirationMode.MonthsAfterIssue => now.AddMonths(c.DefaultExpirationMonths!.Value), GiftCardExpirationMode.SelectAtIssue when selected is not null && selected > now => selected, GiftCardExpirationMode.SelectAtIssue => throw new InvalidOperationException("Selecciona una fecha de expiración futura."), _ => null };
     private async Task<string> UniqueCodeAsync(CancellationToken ct) { for (var i=0;i<10;i++) { var raw = Convert.ToHexString(RandomNumberGenerator.GetBytes(6)); var code = $"GC-{raw[..4]}-{raw[4..8]}-{raw[8..12]}"; if (!await db.GiftCards.AnyAsync(x => x.PublicCode == code,ct)) return code; } throw new InvalidOperationException("No se pudo generar un código único."); }
+    private static string GenerateClaimToken() => Convert.ToHexString(RandomNumberGenerator.GetBytes(32));
     private static readonly Regex PhonePattern = new(@"^[0-9+().\-\s]+$", RegexOptions.Compiled | RegexOptions.CultureInvariant);
     private static readonly Regex HexColorPattern = new(@"^#[0-9A-Fa-f]{6}$", RegexOptions.Compiled | RegexOptions.CultureInvariant);
 

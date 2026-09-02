@@ -93,6 +93,7 @@ public sealed class GiftCard : Entity, ITenantOwned
     public decimal Cancel(DateTime nowUtc) { EvaluateExpiration(nowUtc); EnsureActive(); Status = GiftCardStatus.Cancelled; ClaimRevoked = true; UpdatedAtUtc = nowUtc; return CurrentBalance; }
     public decimal EvaluateExpiration(DateTime nowUtc) { if (Status == GiftCardStatus.Active && ExpiresAtUtc is { } expires && expires <= nowUtc) { Status = GiftCardStatus.Expired; UpdatedAtUtc = nowUtc; return CurrentBalance; } return 0; }
     public void RevokeClaim(DateTime nowUtc) { ClaimRevoked = true; UpdatedAtUtc = nowUtc; }
+    public void ReplaceClaimTokenHash(string claimTokenHash, DateTime nowUtc) { if (string.IsNullOrWhiteSpace(claimTokenHash)) throw new ArgumentException("Token requerido.", nameof(claimTokenHash)); EnsureActive(); ClaimTokenHash = claimTokenHash; ClaimRevoked = false; UpdatedAtUtc = nowUtc; }
     private void EnsureActive() { if (Status != GiftCardStatus.Active) throw new InvalidOperationException("La Gift Card no está activa."); }
     private static string Required(string value, int max) => string.IsNullOrWhiteSpace(value) ? throw new ArgumentException("Valor requerido.") : value.Trim()[..Math.Min(value.Trim().Length, max)];
     private static string? Optional(string? value, int max) => string.IsNullOrWhiteSpace(value) ? null : value.Trim()[..Math.Min(value.Trim().Length, max)];
