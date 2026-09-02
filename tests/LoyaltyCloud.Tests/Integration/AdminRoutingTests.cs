@@ -816,15 +816,26 @@ public sealed class AdminRoutingTests : IClassFixture<AdminRoutingTests.AdminWeb
 
     [Fact]
     [Trait("Category", "AdminMarketingNotifications")]
-    public void Marketing_notifications_preview_separates_notification_and_detail_without_unavailable_filler()
+    public void Marketing_notifications_creation_flow_is_simplified_without_wallet_preview()
     {
         var source = File.ReadAllText(Path.Combine(GetRepositoryRoot(), "src", "LoyaltyCloud.Admin", "Pages", "MarketingNotifications.razor"));
 
-        Assert.Contains("<h3 style=\"margin-top:8px;\">@GeneratedTitle</h3>", source);
-        Assert.Contains("Notificación", source);
-        Assert.Contains("Detalle", source);
-        Assert.Contains("@DisplayText(form.ShortMessage?.Trim())", source);
-        Assert.Contains("@DisplayText(form.LongMessage?.Trim())", source);
+        Assert.Contains("<label for=\"display-until\">Fecha de expiración</label>", source);
+        Assert.Contains("Después de esta fecha, el mensaje dejará de mostrarse en las siguientes actualizaciones de Wallet.", source);
+        Assert.Contains("id=\"schedule-delivery\" type=\"checkbox\"", source);
+        Assert.Contains("Programar envío", source);
+        Assert.Contains("<label for=\"scheduled-at\">Fecha y hora de envío</label>", source);
+        Assert.Contains("Ver audiencia", source);
+        Assert.Contains("RequestConfirmationAsync", source);
+        Assert.Contains("¿Enviar este mensaje ahora?", source);
+        Assert.Contains("¿Programar este mensaje?", source);
+        Assert.Contains("Se enviará a {preview.TotalRecipients:N0} destinatarios.", source);
+        Assert.DoesNotContain("Mostrar hasta", source);
+        Assert.DoesNotContain("id=\"send-mode\"", source);
+        Assert.DoesNotContain("Preview audiencia", source);
+        Assert.DoesNotContain("Vista previa Wallet", source);
+        Assert.DoesNotContain("@DisplayText(form.ShortMessage?.Trim())", source);
+        Assert.DoesNotContain("@DisplayText(form.LongMessage?.Trim())", source);
         Assert.DoesNotContain("@BuildShortMessage(form.Message)", source);
     }
 
