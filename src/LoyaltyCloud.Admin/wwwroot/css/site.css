@@ -1369,6 +1369,8 @@ input:not([type="checkbox"]):not([type="radio"]):focus, select:focus, textarea:f
 }
 input:disabled, select:disabled, textarea:disabled, .kb-btn:disabled { opacity: .58; cursor: not-allowed; }
 input[type="checkbox"], input[type="radio"] { width: 18px; height: 18px; accent-color: var(--lc-primary); }
+.kb-checkbox-row { display: inline-flex; align-items: center; gap: var(--lc-space-2); width: fit-content; margin-bottom: 0; color: var(--lc-text-secondary); font-size: var(--lc-font-sm); font-weight: 700; cursor: pointer; }
+.kb-checkbox-row input[type="checkbox"], input.kb-checkbox { width: 18px; min-width: 18px; height: 18px; flex: 0 0 auto; margin: 0; padding: 0; }
 .validation-message, .kb-form-error { color: var(--lc-danger); font-size: var(--lc-font-sm); }
 .kb-form-error { margin: var(--lc-space-4) 0; padding: 12px 14px; border: 1px solid color-mix(in srgb, var(--lc-danger) 28%, transparent); border-radius: var(--lc-radius-sm); background: color-mix(in srgb, var(--lc-danger) 7%, white); }
 .kb-form-row { gap: var(--lc-space-4); }

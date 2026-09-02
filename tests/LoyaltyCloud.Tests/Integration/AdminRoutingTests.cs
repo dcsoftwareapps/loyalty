@@ -822,14 +822,19 @@ public sealed class AdminRoutingTests : IClassFixture<AdminRoutingTests.AdminWeb
 
         Assert.Contains("<label for=\"display-until\">Fecha de expiración</label>", source);
         Assert.Contains("Después de esta fecha, el mensaje dejará de mostrarse en las siguientes actualizaciones de Wallet.", source);
-        Assert.Contains("id=\"schedule-delivery\" type=\"checkbox\"", source);
+        Assert.Contains("class=\"kb-checkbox-row\" for=\"schedule-delivery\"", source);
+        Assert.Contains("id=\"schedule-delivery\" class=\"kb-checkbox\" type=\"checkbox\"", source);
         Assert.Contains("Programar envío", source);
         Assert.Contains("<label for=\"scheduled-at\">Fecha y hora de envío</label>", source);
+        Assert.True(
+            source.IndexOf("id=\"schedule-delivery\"", StringComparison.Ordinal) <
+            source.IndexOf("id=\"scheduled-at\"", StringComparison.Ordinal));
         Assert.Contains("Ver audiencia", source);
         Assert.Contains("RequestConfirmationAsync", source);
         Assert.Contains("¿Enviar este mensaje ahora?", source);
         Assert.Contains("¿Programar este mensaje?", source);
         Assert.Contains("Se enviará a {preview.TotalRecipients:N0} destinatarios.", source);
+        Assert.DoesNotContain("<span>Envío</span>", source);
         Assert.DoesNotContain("Mostrar hasta", source);
         Assert.DoesNotContain("id=\"send-mode\"", source);
         Assert.DoesNotContain("Preview audiencia", source);
@@ -837,6 +842,10 @@ public sealed class AdminRoutingTests : IClassFixture<AdminRoutingTests.AdminWeb
         Assert.DoesNotContain("@DisplayText(form.ShortMessage?.Trim())", source);
         Assert.DoesNotContain("@DisplayText(form.LongMessage?.Trim())", source);
         Assert.DoesNotContain("@BuildShortMessage(form.Message)", source);
+
+        var css = File.ReadAllText(Path.Combine(GetRepositoryRoot(), "src", "LoyaltyCloud.Admin", "wwwroot", "css", "site.css"));
+        Assert.Contains(".kb-checkbox-row", css);
+        Assert.Contains("input.kb-checkbox", css);
     }
 
     [Fact]
