@@ -111,7 +111,16 @@ internal sealed class GoogleWalletClient : IGoogleWalletClient
     public async Task EnsureGiftCardClassAsync(GoogleGiftCardClassData walletClass, CancellationToken ct = default)
     {
         var existing = await SendAsync(HttpMethod.Get, $"genericClass/{Uri.EscapeDataString(walletClass.Id)}", null, ct);
-        if (existing.StatusCode == HttpStatusCode.OK) return;
+        if (existing.StatusCode == HttpStatusCode.OK)
+        {
+            var patched = await SendAsync(
+                new HttpMethod("PATCH"),
+                $"genericClass/{Uri.EscapeDataString(walletClass.Id)}",
+                new { issuerName = walletClass.IssuerName },
+                ct);
+            if (patched.StatusCode == HttpStatusCode.OK) return;
+            throw await CreateExceptionAsync("actualizar GenericClass Gift Card", patched, ct);
+        }
         if (existing.StatusCode != HttpStatusCode.NotFound) throw await CreateExceptionAsync("consultar GenericClass Gift Card", existing, ct);
         var payload = new { id = walletClass.Id, issuerName = walletClass.IssuerName };
         var created = await SendAsync(HttpMethod.Post, "genericClass", payload, ct);
@@ -130,6 +139,7 @@ internal sealed class GoogleWalletClient : IGoogleWalletClient
             barcode = new { type = "QR_CODE", value = value.Code, alternateText = value.Code },
             hexBackgroundColor = value.HexBackgroundColor,
             logo = string.IsNullOrWhiteSpace(value.LogoUri) ? null : new { sourceUri = new { uri = value.LogoUri }, contentDescription = new { defaultValue = new { language = "es", value = value.DisplayName } } },
+            heroImage = string.IsNullOrWhiteSpace(value.HeroImageUri) ? null : new { sourceUri = new { uri = value.HeroImageUri }, contentDescription = new { defaultValue = new { language = "es", value = value.DisplayName } } },
             textModulesData = new[] { new { id = "balance", header = "Saldo disponible", body = $"{value.Balance:N2} {value.Currency}" }, new { id = "status", header = "Estado", body = value.Status }, new { id = "expiry", header = "Vigencia", body = value.ExpiresAtUtc?.ToString("yyyy-MM-dd") ?? "Sin expiración" } }
         };
         var existing = await SendAsync(HttpMethod.Get, $"genericObject/{Uri.EscapeDataString(value.Id)}", null, ct);

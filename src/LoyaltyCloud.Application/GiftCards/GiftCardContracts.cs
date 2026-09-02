@@ -2,7 +2,7 @@ using LoyaltyCloud.Domain.Enums;
 
 namespace LoyaltyCloud.Application.GiftCards;
 
-public sealed record GiftCardSettingsDto(Guid Id, bool IsEnabled, bool AllowCustomAmount, bool AllowPartialRedemption, bool AllowPromotionalIssuance, GiftCardExpirationMode ExpirationMode, int? DefaultExpirationMonths, string Currency, string DisplayName, string PrimaryColor, string TextColor, string? LogoUrl, string? SecondaryText, string? Terms, string? FooterMessage, IReadOnlyList<GiftCardDenominationDto> Denominations);
+public sealed record GiftCardSettingsDto(Guid Id, bool IsEnabled, bool AllowCustomAmount, bool AllowPartialRedemption, bool AllowPromotionalIssuance, GiftCardExpirationMode ExpirationMode, int? DefaultExpirationMonths, string Currency, string DisplayName, string PrimaryColor, string TextColor, string? LogoUrl, string? SecondaryText, string? Terms, string? FooterMessage, IReadOnlyList<GiftCardDenominationDto> Denominations, string? SyncWarning = null);
 public sealed record GiftCardDenominationDto(Guid Id, decimal Amount, string Currency, bool IsActive);
 public sealed record UpdateGiftCardSettingsRequest(bool IsEnabled, bool AllowCustomAmount, bool AllowPartialRedemption, bool AllowPromotionalIssuance, GiftCardExpirationMode ExpirationMode, int? DefaultExpirationMonths, string Currency, string DisplayName, string PrimaryColor, string TextColor, string? LogoUrl, string? SecondaryText, string? Terms, string? FooterMessage);
 public sealed record IssueGiftCardRequest(decimal Amount, Guid? RecipientMemberId, string RecipientName, string? RecipientEmail, string? RecipientPhone, string? SenderName, string? PersonalMessage, GiftCardSource Source = GiftCardSource.Manual, DateTime? ExpiresAtUtc = null);
@@ -58,10 +58,12 @@ public interface IGiftCardDeliveryService
 
 
 public sealed record GiftCardWalletLinkDto(GiftCardWalletProvider Provider, string Url, string ExternalClassId, string ExternalObjectId);
+public sealed record GiftCardWalletSyncResult(int Attempted, int Failed);
 public interface IGiftCardWalletService
 {
     Task<GiftCardWalletLinkDto> GetGoogleSaveLinkAsync(Guid giftCardId, CancellationToken ct = default);
     Task SynchronizeAsync(Guid giftCardId, CancellationToken ct = default);
+    Task<GiftCardWalletSyncResult> SynchronizeBrandingAsync(CancellationToken ct = default);
 }
 
 

@@ -25,11 +25,63 @@ public sealed class GiftCardFeatureToggleTests
         var source = Read("src", "LoyaltyCloud.Admin", "Components", "Layout", "MainLayout.razor");
         Assert.Contains("@if (giftCardsEnabled)", source);
         Assert.Equal(1, source.Split("<span>Gift Cards</span>", StringSplitOptions.None).Length - 1);
-        Assert.DoesNotContain("<span>Resumen</span>", source);
-        Assert.Contains("Match=\"NavLinkMatch.Prefix\"", source);
+        Assert.Contains("<span class=\"kb-sidebar-section\">Gift Cards</span>", source);
+        Assert.Contains("<span>Resumen</span>", source);
+        Assert.Contains("<span>Emitir</span>", source);
+        Assert.Contains("<span>Consultar y canjear</span>", source);
+        Assert.Contains("<span>Tarjetas</span>", source);
+        Assert.Contains("href=\"/giftcards/reports\"", source);
+        Assert.DoesNotContain("href=\"/giftcards/settings\"", source);
         Assert.Contains("giftCardsEnabled = await GiftCards.IsEnabledAsync()", source);
     }
 
+    [Fact]
+    public void Sidebar_OrderAndFeatureEntriesMatchFinalInformationArchitecture()
+    {
+        var source = Read("src", "LoyaltyCloud.Admin", "Components", "Layout", "MainLayout.razor");
+        var principal = source.IndexOf(">Principal</span>", StringComparison.Ordinal);
+        var programa = source.IndexOf(">Programa</span>", StringComparison.Ordinal);
+        var giftCards = source.IndexOf(">Gift Cards</span>", StringComparison.Ordinal);
+        var reportes = source.IndexOf(">Reportes</span>", StringComparison.Ordinal);
+        var gestion = source.IndexOf(">Gestión</span>", StringComparison.Ordinal);
+        Assert.True(principal < programa && programa < giftCards && giftCards < reportes && reportes < gestion);
+        Assert.Contains("GiftCardFeatureState.Changed", source);
+    }
+
+    [Fact]
+    public void DisabledFeatureUsesAuthenticatedRedirectInsteadOfLoginRedirect()
+    {
+        var routes = Read("src", "LoyaltyCloud.Admin", "Routes.razor");
+        var redirect = Read("src", "LoyaltyCloud.Admin", "Components", "RedirectUnauthorized.razor");
+        Assert.Contains("RedirectUnauthorized", routes);
+        Assert.Contains("IsAuthenticated == true", redirect);
+        Assert.Contains("NavigateTo(\"/dashboard\")", redirect);
+    }
+
+    [Fact]
+    public void IssuePageSupportsDenominationsAndUnambiguousCustomAmount()
+    {
+        var source = Read("src", "LoyaltyCloud.Admin", "Pages", "GiftCardIssue.razor");
+        Assert.Contains("activeDenominations", source);
+        Assert.Contains("SelectDenomination", source);
+        Assert.Contains("selectedDenomination", source);
+        Assert.Contains("CustomAmountChanged", source);
+        Assert.Contains("settings.AllowCustomAmount", source);
+        Assert.Contains("selectZero(this)", source);
+        Assert.DoesNotContain("model.Phone", source);
+    }
+
+    [Fact]
+    public void ClaimUsesDirectWalletNavigationAndCorrectAppleMimeType()
+    {
+        var claim = Read("src", "LoyaltyCloud.Admin", "Pages", "GiftCardClaim.razor");
+        var program = Read("src", "LoyaltyCloud.Admin", "Program.cs");
+        Assert.Contains("href=\"@WalletUrl\"", claim);
+        Assert.Contains("/wallet/apple", claim);
+        Assert.Contains("/wallet/google", claim);
+        Assert.Contains("application/vnd.apple.pkpass", program);
+        Assert.Contains("Results.Redirect(link.Url)", program);
+    }
     [Fact]
     public void CircuitLayoutReads_CreateIndependentDbContexts()
     {
@@ -42,13 +94,16 @@ public sealed class GiftCardFeatureToggleTests
     }
 
     [Fact]
-    public void GeneralConfiguration_AlwaysContainsOnlyTheBootstrapToggle()
+    public void GeneralConfiguration_UnifiesLoyaltyAndGiftCardDesigners()
     {
         var source = Read("src", "LoyaltyCloud.Admin", "Pages", "Config.razor");
-        Assert.Contains("Habilitar Gift Cards", source);
-        Assert.Contains("GiftCards.SetEnabledAsync(giftCardsEnabled)", source);
-        Assert.DoesNotContain("AllowPartialRedemption", source);
-        Assert.DoesNotContain("GiftCardDenomination", source);
+        var panel = Read("src", "LoyaltyCloud.Admin", "Components", "GiftCardSettingsPanel.razor");
+        Assert.Contains("GiftCardSettingsPanel", source);
+        Assert.Contains("section=giftcards", source);
+        Assert.Contains(">Loyalty</a>", source);
+        Assert.Contains("Gift Cards habilitadas", panel);
+        Assert.Contains("AllowPartialRedemption", panel);
+        Assert.Contains("GiftCardVisual", panel);
     }
 
     [Fact]
@@ -72,7 +127,7 @@ public sealed class GiftCardFeatureToggleTests
     [Fact]
     public void EveryAdministrativeGiftCardRoute_UsesFeaturePolicy()
     {
-        var pages = new[] { "GiftCards.razor", "GiftCardIssue.razor", "GiftCardRedeem.razor", "GiftCardList.razor", "GiftCardDetail.razor", "GiftCardReports.razor", "GiftCardSettings.razor" };
+        var pages = new[] { "GiftCards.razor", "GiftCardIssue.razor", "GiftCardRedeem.razor", "GiftCardList.razor", "GiftCardDetail.razor", "GiftCardReports.razor" };
         foreach (var page in pages)
             Assert.Contains("Authorize(Policy = LoyaltyCloud.Admin.Auth.GiftCardsAuthorization.Policy)", Read("src", "LoyaltyCloud.Admin", "Pages", page));
     }

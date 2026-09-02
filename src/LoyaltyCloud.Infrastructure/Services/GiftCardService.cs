@@ -39,7 +39,9 @@ internal sealed class GiftCardService(AppDbContext db, IDbContextFactory<AppDbCo
         var config = await ConfigurationAsync(create: true, ct);
         config.Update(request.IsEnabled, request.AllowCustomAmount, request.AllowPartialRedemption, request.AllowPromotionalIssuance, request.ExpirationMode, request.DefaultExpirationMonths, request.Currency.Trim(), request.DisplayName.Trim(), request.PrimaryColor.Trim(), request.TextColor.Trim(), Clean(request.LogoUrl), Clean(request.SecondaryText), Clean(request.Terms), Clean(request.FooterMessage), clock.UtcNow);
         await db.SaveChangesAsync(ct);
-        return await SettingsDtoAsync(config, ct);
+        var sync = await wallets.SynchronizeBrandingAsync(ct);
+        var result = await SettingsDtoAsync(config, ct);
+        return sync.Failed > 0 ? result with { SyncWarning = "La configuración se guardó, pero algunas tarjetas de Google Wallet no pudieron actualizarse." } : result;
     }
 
     public async Task<GiftCardDenominationDto> AddDenominationAsync(decimal amount, CancellationToken ct = default)
