@@ -29,8 +29,8 @@ internal sealed class GiftCardWalletService(
     public async Task<GiftCardWalletLinkDto> GetGoogleSaveLinkAsync(Guid giftCardId, CancellationToken ct = default)
     {
         var tenantId = TenantId();
-        var card = await db.GiftCards.SingleOrDefaultAsync(x => x.Id == giftCardId && x.TenantId == tenantId, ct) ?? throw new KeyNotFoundException("Gift Card no encontrada.");
-        var config = await db.GiftCardConfigurations.SingleOrDefaultAsync(x => x.TenantId == tenantId && x.IsEnabled, ct) ?? throw new InvalidOperationException("Gift Cards está deshabilitado.");
+        var card = await db.GiftCards.SingleOrDefaultAsync(x => x.Id == giftCardId && x.TenantId == tenantId, ct) ?? throw new KeyNotFoundException("Tarjeta de regalo no encontrada.");
+        var config = await db.GiftCardConfigurations.SingleOrDefaultAsync(x => x.TenantId == tenantId && x.IsEnabled, ct) ?? throw new InvalidOperationException("El módulo de tarjetas de regalo está deshabilitado para este tenant.");
         var issuerId = string.IsNullOrWhiteSpace(_options.IssuerId) ? throw new InvalidOperationException("Google Wallet no está disponible.") : _options.IssuerId.Trim();
         var classId = $"{issuerId}.giftcard_{tenantId:N}";
         var objectId = $"{issuerId}.giftcard_{tenantId:N}_{card.PublicCode.Replace('-', '_').ToLowerInvariant()}";

@@ -32,13 +32,13 @@ public sealed class GiftCardDeliveryTests
 
         var email = Assert.Single(sender.Messages);
         Assert.Equal(GiftCardDeliveryStatus.Sent, result.Status);
-        Assert.Equal("KBeauty <store> te envió una Gift Card", email.Subject);
+        Assert.Equal("KBeauty <store> te envió una tarjeta de regalo", email.Subject);
         Assert.Equal("recipient@example.test", email.Recipient);
         Assert.Equal("https://admin.example.test/giftcards/claim/claim-token-123", canonicalUrl);
         Assert.Contains(canonicalUrl!, email.TextBody);
         Assert.Contains("KBeauty &lt;store&gt;", email.HtmlBody);
         Assert.Contains("500.00 MXN", email.TextBody);
-        Assert.Contains("Ver mi Gift Card", email.HtmlBody);
+        Assert.Contains("Ver mi tarjeta de regalo", email.HtmlBody);
         Assert.Contains("Daniel &lt;script&gt;", email.HtmlBody);
         Assert.Contains("Disfruta &amp; celebra", email.HtmlBody);
         Assert.DoesNotContain("<script>", email.HtmlBody);

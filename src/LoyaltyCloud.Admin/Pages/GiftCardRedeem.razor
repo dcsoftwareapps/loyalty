@@ -6,12 +6,12 @@
 @inject LoyaltyCloud.Application.GiftCards.IGiftCardClaimService Claims
 @inject AdminDateTimeFormatter Dates
 
-<PageTitle>Canjear Gift Card - LoyaltyCloud</PageTitle>
-<header class="kb-page-header"><div><span class="kb-eyebrow">Gift Cards</span><h1>Consultar y canjear</h1><p>Escanea o escribe el código y confirma el saldo antes de completar el canje.</p></div></header>
+<PageTitle>Canjear tarjeta de regalo - LoyaltyCloud</PageTitle>
+<header class="kb-page-header"><div><span class="kb-eyebrow">Tarjetas de regalo</span><h1>Consultar y canjear</h1><p>Escanea o escribe el código y confirma el saldo antes de completar el canje.</p></div></header>
 <section class="kb-panel kb-gift-flow">
  <div class="kb-gift-flow__step"><span>1</span><div><h2>Identifica la tarjeta</h2><p>Usa el lector o captura el código impreso.</p></div></div>
  <GiftCardQrScanner OnDetected="OnScanned" />
- <div class="kb-gift-lookup"><label class="kb-field"><span>Código Gift Card</span><input @bind="code" placeholder="GC-0000-0000-0000" autocomplete="off" /></label><button class="kb-btn kb-btn--primary" disabled="@busy" @onclick="Lookup">Consultar saldo</button></div>
+ <div class="kb-gift-lookup"><label class="kb-field"><span>Código de tarjeta</span><input @bind="code" placeholder="GC-0000-0000-0000" autocomplete="off" /></label><button class="kb-btn kb-btn--primary" disabled="@busy" @onclick="Lookup">Consultar saldo</button></div>
  @if(error is not null){<div class="kb-form-error" role="alert">@error</div>}
  @if(success is not null){<div class="kb-form-success" role="status">@success</div>}
  @if(detail is not null){
@@ -27,8 +27,8 @@
 @code {
  string code=""; string? error,success; bool busy; RedeemModel model=new(); LoyaltyCloud.Application.GiftCards.GiftCardDetailDto? detail;
  decimal RemainingBalance=>detail is null?0:Math.Max(0,detail.Card.CurrentBalance-model.Amount);
- async Task OnScanned(string raw){var decoded=Uri.UnescapeDataString(raw??string.Empty);var match=System.Text.RegularExpressions.Regex.Match(decoded,@"GC-[A-Z0-9]{4}-[A-Z0-9]{4}-[A-Z0-9]{4}",System.Text.RegularExpressions.RegexOptions.IgnoreCase);if(match.Success){code=match.Value.ToUpperInvariant();await Lookup();return;}if(Uri.TryCreate(decoded,UriKind.Absolute,out var uri)){var marker="/giftcards/claim/";var index=uri.AbsolutePath.IndexOf(marker,StringComparison.OrdinalIgnoreCase);if(index>=0){var token=Uri.UnescapeDataString(uri.AbsolutePath[(index+marker.Length)..]);var claim=await Claims.GetAsync(token);if(claim is not null){code=claim.Card.Code;await Lookup();return;}}}error="Este QR no contiene una Gift Card válida.";}
- async Task Lookup(){try{busy=true;error=success=null;detail=await Service.GetByCodeAsync(code.Trim());if(detail is null){error="No encontramos una Gift Card con ese código.";return;}model.Amount=detail.Card.CurrentBalance;}catch(Exception){error="No fue posible consultar o procesar la Gift Card. Intenta nuevamente.";}finally{busy=false;}}
- async Task Redeem(){if(detail is null)return;try{busy=true;error=success=null;var r=await Service.RedeemAsync(code,model.Amount,Guid.NewGuid().ToString("N"),model.Reference,null);if(!r.Success){error=r.Error??"No fue posible completar el canje.";return;}detail=r.Detail;success="Canje completado correctamente.";model.Amount=0;}catch(Exception){error="No fue posible consultar o procesar la Gift Card. Intenta nuevamente.";}finally{busy=false;}}
+ async Task OnScanned(string raw){var decoded=Uri.UnescapeDataString(raw??string.Empty);var match=System.Text.RegularExpressions.Regex.Match(decoded,@"GC-[A-Z0-9]{4}-[A-Z0-9]{4}-[A-Z0-9]{4}",System.Text.RegularExpressions.RegexOptions.IgnoreCase);if(match.Success){code=match.Value.ToUpperInvariant();await Lookup();return;}if(Uri.TryCreate(decoded,UriKind.Absolute,out var uri)){var marker="/giftcards/claim/";var index=uri.AbsolutePath.IndexOf(marker,StringComparison.OrdinalIgnoreCase);if(index>=0){var token=Uri.UnescapeDataString(uri.AbsolutePath[(index+marker.Length)..]);var claim=await Claims.GetAsync(token);if(claim is not null){code=claim.Card.Code;await Lookup();return;}}}error="Este QR no contiene una tarjeta de regalo válida.";}
+ async Task Lookup(){try{busy=true;error=success=null;detail=await Service.GetByCodeAsync(code.Trim());if(detail is null){error="No encontramos una tarjeta de regalo con ese código.";return;}model.Amount=detail.Card.CurrentBalance;}catch(Exception){error="No fue posible consultar o procesar la tarjeta de regalo. Intenta nuevamente.";}finally{busy=false;}}
+ async Task Redeem(){if(detail is null)return;try{busy=true;error=success=null;var r=await Service.RedeemAsync(code,model.Amount,Guid.NewGuid().ToString("N"),model.Reference,null);if(!r.Success){error=r.Error??"No fue posible completar el canje.";return;}detail=r.Detail;success="Canje completado correctamente.";model.Amount=0;}catch(Exception){error="No fue posible consultar o procesar la tarjeta de regalo. Intenta nuevamente.";}finally{busy=false;}}
  sealed class RedeemModel{[Range(typeof(decimal),"0.01","999999999",ErrorMessage="Ingresa un monto mayor a cero.")]public decimal Amount{get;set;} public string? Reference{get;set;}}
 }

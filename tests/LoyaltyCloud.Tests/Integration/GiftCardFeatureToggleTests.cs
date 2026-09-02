@@ -24,8 +24,8 @@ public sealed class GiftCardFeatureToggleTests
     {
         var source = Read("src", "LoyaltyCloud.Admin", "Components", "Layout", "MainLayout.razor");
         Assert.Contains("@if (giftCardsEnabled)", source);
-        Assert.Equal(1, source.Split("<span>Gift Cards</span>", StringSplitOptions.None).Length - 1);
-        Assert.Contains("<span class=\"kb-sidebar-section\">Gift Cards</span>", source);
+        Assert.Equal(1, source.Split("<span>Tarjetas de regalo</span>", StringSplitOptions.None).Length - 1);
+        Assert.Contains("<span class=\"kb-sidebar-section\">Tarjetas de regalo</span>", source);
         Assert.Contains("<span>Resumen</span>", source);
         Assert.Contains("<span>Emitir</span>", source);
         Assert.Contains("<span>Consultar y canjear</span>", source);
@@ -41,7 +41,7 @@ public sealed class GiftCardFeatureToggleTests
         var source = Read("src", "LoyaltyCloud.Admin", "Components", "Layout", "MainLayout.razor");
         var principal = source.IndexOf(">Principal</span>", StringComparison.Ordinal);
         var programa = source.IndexOf(">Programa</span>", StringComparison.Ordinal);
-        var giftCards = source.IndexOf(">Gift Cards</span>", StringComparison.Ordinal);
+        var giftCards = source.IndexOf(">Tarjetas de regalo</span>", StringComparison.Ordinal);
         var reportes = source.IndexOf(">Reportes</span>", StringComparison.Ordinal);
         var gestion = source.IndexOf(">Gestión</span>", StringComparison.Ordinal);
         Assert.True(principal < programa && programa < giftCards && giftCards < reportes && reportes < gestion);
@@ -100,8 +100,14 @@ public sealed class GiftCardFeatureToggleTests
         var panel = Read("src", "LoyaltyCloud.Admin", "Components", "GiftCardSettingsPanel.razor");
         Assert.Contains("GiftCardSettingsPanel", source);
         Assert.Contains("section=giftcards", source);
-        Assert.Contains(">Loyalty</a>", source);
-        Assert.Contains("Gift Cards habilitadas", panel);
+        Assert.Contains(">Tarjeta digital</a>", source);
+        Assert.Contains(">Tarjetas de regalo</a>", source);
+        Assert.Contains(">Puntos y beneficios</a>", source);
+        Assert.Contains("section=giftcards", source);
+        Assert.Contains("section=points", source);
+        Assert.Contains("kb-report-nav", source);
+        Assert.DoesNotContain("kb-config-tabs", source);
+        Assert.Contains("Tarjetas de regalo habilitadas", panel);
         Assert.Contains("AllowPartialRedemption", panel);
         Assert.Contains("GiftCardVisual", panel);
     }
@@ -143,7 +149,7 @@ public sealed class GiftCardFeatureToggleTests
         Assert.DoesNotContain("Agregar a Google Wallet", detail);
         Assert.Contains("RedeemAsync", detail);
         Assert.Contains("Confirmar canje", detail);
-        Assert.Contains("Cancelar Gift Card", detail);
+        Assert.Contains("Cancelar tarjeta de regalo", detail);
         Assert.Contains("Reenviar por email", detail);
         Assert.Contains("RotateClaimTokenAsync", detail);
         Assert.Contains("Delivery.SendEmailAsync", issue);

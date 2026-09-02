@@ -50,10 +50,10 @@ internal sealed class GiftCardClaimService(
 
     private async Task<(GiftCard Card, string Slug)> RequireActiveAsync(string token, CancellationToken ct)
     {
-        var resolved = await ResolveAsync(token, ct) ?? throw new KeyNotFoundException("Esta Gift Card no está disponible.");
+        var resolved = await ResolveAsync(token, ct) ?? throw new KeyNotFoundException("Esta tarjeta de regalo no está disponible.");
         var (card, slug) = resolved;
         card.EvaluateExpiration(clock.UtcNow);
-        if (card.Status != GiftCardStatus.Active) throw new InvalidOperationException("Esta Gift Card ya no está disponible para Wallet.");
+        if (card.Status != GiftCardStatus.Active) throw new InvalidOperationException("Esta tarjeta de regalo ya no está disponible para Wallet.");
         return (card, slug);
     }
 
@@ -89,7 +89,7 @@ internal sealed class GiftCardDeliveryService(ITransactionalEmailSender sender, 
 
         var url = $"{settings.ApplicationBaseUrl.TrimEnd('/')}/giftcards/claim/{Uri.EscapeDataString(giftCard.ClaimToken)}";
         var displayName = string.IsNullOrWhiteSpace(businessName) ? "LoyaltyCloud" : businessName.Trim();
-        var subject = $"{displayName} te envió una Gift Card";
+        var subject = $"{displayName} te envió una tarjeta de regalo";
         var name = WebUtility.HtmlEncode(giftCard.Card.RecipientName);
         var code = WebUtility.HtmlEncode(giftCard.Card.Code);
         var business = WebUtility.HtmlEncode(displayName);
@@ -97,8 +97,8 @@ internal sealed class GiftCardDeliveryService(ITransactionalEmailSender sender, 
         var senderLine = string.IsNullOrWhiteSpace(giftCard.Card.SenderName) ? null : $"De: {giftCard.Card.SenderName}.";
         var messageLine = string.IsNullOrWhiteSpace(giftCard.Card.PersonalMessage) ? null : $"Mensaje: {giftCard.Card.PersonalMessage}.";
         var expiresLine = giftCard.Card.ExpiresAtUtc is null ? "Vigencia: sin expiración." : $"Vigencia: {giftCard.Card.ExpiresAtUtc.Value:dd/MM/yyyy}.";
-        var text = $"Hola {giftCard.Card.RecipientName}, {displayName} te envió una Gift Card por {amount}. {senderLine} {messageLine} Código: {giftCard.Card.Code}. {expiresLine} Ver mi Gift Card: {url}";
-        var html = $"<h1>{business} te envió una Gift Card</h1><p>Hola {name},</p><p>Recibiste una Gift Card por <strong>{amount}</strong>.</p>{HtmlParagraph("De:", giftCard.Card.SenderName)}{HtmlParagraph(null, giftCard.Card.PersonalMessage)}<p>Código: <strong>{code}</strong></p><p>{WebUtility.HtmlEncode(expiresLine)}</p><p><a href=\"{WebUtility.HtmlEncode(url)}\">Ver mi Gift Card</a></p>";
+        var text = $"Hola {giftCard.Card.RecipientName}, {displayName} te envió una tarjeta de regalo por {amount}. {senderLine} {messageLine} Código: {giftCard.Card.Code}. {expiresLine} Ver mi tarjeta de regalo: {url}";
+        var html = $"<h1>{business} te envió una tarjeta de regalo</h1><p>Hola {name},</p><p>Recibiste una tarjeta de regalo por <strong>{amount}</strong>.</p>{HtmlParagraph("De:", giftCard.Card.SenderName)}{HtmlParagraph(null, giftCard.Card.PersonalMessage)}<p>Código: <strong>{code}</strong></p><p>{WebUtility.HtmlEncode(expiresLine)}</p><p><a href=\"{WebUtility.HtmlEncode(url)}\">Ver mi tarjeta de regalo</a></p>";
 
         try
         {

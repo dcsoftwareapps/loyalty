@@ -491,7 +491,7 @@ public sealed class AdminRoutingTests : IClassFixture<AdminRoutingTests.AdminWeb
             "href=\"/dashboard\"", "href=\"/scan\"", "href=\"/redeem\"",
             "<span class=\"kb-sidebar-section\">Programa</span>",
             "href=\"/redemptions\"", "href=\"/rewards\"", "href=\"/campaigns\"", "href=\"/marketing-notifications\"",
-            "<span class=\"kb-sidebar-section\">Gift Cards</span>",
+            "<span class=\"kb-sidebar-section\">Tarjetas de regalo</span>",
             "href=\"/giftcards\"", "href=\"/giftcards/issue\"", "href=\"/giftcards/redeem\"", "href=\"/giftcards/cards\"",
             "<span class=\"kb-sidebar-section\">Reportes</span>",
             "href=\"/customers\"", "href=\"/reports/activity-trends\"", "href=\"/giftcards/reports\"",

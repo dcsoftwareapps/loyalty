@@ -7,9 +7,9 @@
 @inject IJSRuntime JS
 @inject NavigationManager Navigation
 
-<PageTitle>Mi Gift Card</PageTitle>
-@if(loading){<main class="kb-public-page"><section class="kb-gift-claim__state"><p>Cargando Gift Card…</p></section></main>}
-else if(claim is null){<main class="kb-public-page"><section class="kb-gift-claim__state"><h1>Gift Card no disponible</h1><p>El enlace no es válido o ya no está disponible.</p></section></main>}
+<PageTitle>Mi tarjeta de regalo</PageTitle>
+@if(loading){<main class="kb-public-page"><section class="kb-gift-claim__state"><p>Cargando tarjeta de regalo…</p></section></main>}
+else if(claim is null){<main class="kb-public-page"><section class="kb-gift-claim__state"><h1>Tarjeta de regalo no disponible</h1><p>El enlace no es válido o ya no está disponible.</p></section></main>}
 else{
 <main class="kb-public-page kb-gift-claim" style="@($"--gift-primary:{claim.PrimaryColor}")">
  <section class="kb-gift-claim__shell">
@@ -17,7 +17,7 @@ else{
   <div class="kb-gift-claim__content"><p class="kb-eyebrow">Un regalo para ti</p><h1>@claim.Card.RecipientName</h1>@if(!string.IsNullOrWhiteSpace(claim.Card.SenderName)){<p>De <strong>@claim.Card.SenderName</strong></p>}@if(!string.IsNullOrWhiteSpace(claim.Card.PersonalMessage)){<blockquote>“@claim.Card.PersonalMessage”</blockquote>}
    <dl><div><dt>Saldo disponible</dt><dd>@claim.Card.CurrentBalance.ToString("N2") @claim.Card.Currency</dd></div><div><dt>Estado</dt><dd>@StatusLabel</dd></div><div><dt>Vigencia</dt><dd>@Dates.DateNumeric(claim.Card.ExpiresAtUtc, "Sin expiración")</dd></div></dl>
    <div class="kb-gift-wallet-actions">@if(platform==GiftCardWalletPlatform.Unknown){<button class="kb-btn kb-btn--primary" @onclick="ShowPhoneGuidance">@WalletLabel</button>}else{<a class="kb-btn kb-btn--primary" href="@WalletUrl">@WalletLabel</a>}</div>
-   @if(platform==GiftCardWalletPlatform.Unknown){<p class="kb-muted">Abre esta página desde tu iPhone o Android para agregar la Gift Card a Wallet.</p>}
+   @if(platform==GiftCardWalletPlatform.Unknown){<p class="kb-muted">Abre esta página desde tu iPhone o Android para agregar la tarjeta de regalo a Wallet.</p>}
    @if(walletMessage is not null){<p class="kb-form-error" role="alert">@walletMessage</p>}
    @if(!string.IsNullOrWhiteSpace(claim.Terms)){<details><summary>Términos y condiciones</summary><p>@claim.Terms</p></details>}@if(!string.IsNullOrWhiteSpace(claim.FooterMessage)){<footer>@claim.FooterMessage</footer>}
   </div>
@@ -29,7 +29,7 @@ else{
  string WalletUrl=>platform==GiftCardWalletPlatform.Apple?$"/giftcards/claim/{Uri.EscapeDataString(Token)}/wallet/apple":$"/giftcards/claim/{Uri.EscapeDataString(Token)}/wallet/google";
  string WalletLabel=>platform switch{GiftCardWalletPlatform.Apple=>"Agregar a Apple Wallet",GiftCardWalletPlatform.Google=>"Agregar a Google Wallet",_=>"Agregar a Wallet"};
  string StatusLabel=>claim?.Card.Status switch{LoyaltyCloud.Domain.Enums.GiftCardStatus.Active=>"Activa",LoyaltyCloud.Domain.Enums.GiftCardStatus.FullyRedeemed=>"Canjeada",LoyaltyCloud.Domain.Enums.GiftCardStatus.Expired=>"Expirada",_=>"Cancelada"};
- void ShowPhoneGuidance()=>walletMessage="Abre esta Gift Card desde tu teléfono para agregarla a Wallet.";
+ void ShowPhoneGuidance()=>walletMessage="Abre esta tarjeta de regalo desde tu teléfono para agregarla a Wallet.";
  protected override async Task OnParametersSetAsync(){loading=true;claim=await Claims.GetAsync(Token);loading=false;}
  protected override async Task OnAfterRenderAsync(bool firstRender){if(!firstRender)return;try{platform=GiftCardWalletPlatformResolver.Resolve(await JS.InvokeAsync<string>("loyaltyGiftCardWallet.getUserAgent"));StateHasChanged();}catch{platform=GiftCardWalletPlatform.Unknown;}}
 }

@@ -2,7 +2,7 @@
 @inject IJSRuntime JS
 
 <button type="button" class="kb-btn kb-btn--primary kb-gift-scan-button" disabled="@(scanning || starting)" @onclick="StartAsync">@(starting ? "Iniciando cámara…" : scanning ? "Escaneando…" : "Escanear con cámara")</button>
-@if(scanning){<section class="kb-qr-scanner kb-gift-scanner" aria-label="Escáner de Gift Card"><div class="kb-gift-scanner-frame"><video @ref="video" class="kb-qr-video" autoplay muted playsinline></video><span aria-hidden="true"></span></div><p>Centra el QR de la Gift Card dentro del marco.</p><div class="kb-actions"><button type="button" class="kb-btn kb-btn--ghost" @onclick="SwitchAsync">Cambiar cámara</button><button type="button" class="kb-btn kb-btn--ghost" @onclick="CancelAsync">Cancelar</button></div></section>}
+@if(scanning){<section class="kb-qr-scanner kb-gift-scanner" aria-label="Escáner de tarjeta de regalo"><div class="kb-gift-scanner-frame"><video @ref="video" class="kb-qr-video" autoplay muted playsinline></video><span aria-hidden="true"></span></div><p>Centra el QR de la tarjeta de regalo dentro del marco.</p><div class="kb-actions"><button type="button" class="kb-btn kb-btn--ghost" @onclick="SwitchAsync">Cambiar cámara</button><button type="button" class="kb-btn kb-btn--ghost" @onclick="CancelAsync">Cancelar</button></div></section>}
 @if(message is not null){<p class="kb-form-error" role="alert">@message</p>}
 @code {
  [Parameter,EditorRequired]public EventCallback<string> OnDetected{get;set;}

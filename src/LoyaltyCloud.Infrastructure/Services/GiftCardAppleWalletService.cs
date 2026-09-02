@@ -18,7 +18,7 @@ internal sealed class GiftCardAppleWalletService(AppDbContext db, IMutableTenant
 
     public async Task<GiftCardApplePassResult> CreateOrUpdatePassAsync(Guid giftCardId, CancellationToken ct=default)
     {
-        var card=await db.GiftCards.SingleOrDefaultAsync(x=>x.Id==giftCardId,ct)??throw new KeyNotFoundException("Gift Card no encontrada.");
+        var card=await db.GiftCards.SingleOrDefaultAsync(x=>x.Id==giftCardId,ct)??throw new KeyNotFoundException("Tarjeta de regalo no encontrada.");
         var wallet=await db.GiftCardWallets.SingleOrDefaultAsync(x=>x.GiftCardId==giftCardId&&x.Provider==GiftCardWalletProvider.Apple,ct);
         if(wallet is null){var serial=$"GC-{card.TenantId:N}-{card.PublicCode.Replace("GC-","")}";var token=Convert.ToHexString(RandomNumberGenerator.GetBytes(32));wallet=new GiftCardWallet(Guid.NewGuid(),card.TenantId,card.Id,GiftCardWalletProvider.Apple,_options.PassTypeIdentifier,serial,clock.UtcNow,token);db.GiftCardWallets.Add(wallet);await db.SaveChangesAsync(ct);}
         return await BuildAsync(card,wallet,ct);

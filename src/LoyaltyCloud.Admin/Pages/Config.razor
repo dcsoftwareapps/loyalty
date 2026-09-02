@@ -16,7 +16,11 @@
 <PageTitle>Configuración · LoyaltyCloud</PageTitle>
 
 <header class="kb-page-header"><div><span class="kb-eyebrow">Gestión</span><h1>Diseño y configuración</h1><p>Administra la identidad visual y las reglas de tus programas.</p></div></header>
-<nav class="kb-config-tabs" aria-label="Secciones de diseño"><a class="@(!IsGiftCardsTab ? "active" : null)" href="/config">Loyalty</a><a class="@(IsGiftCardsTab ? "active" : null)" href="/config?section=giftcards">Gift Cards</a></nav>
+<nav class="kb-report-nav" aria-label="Secciones de diseño y configuración">
+    <a class="@(IsDigitalCardTab ? "active" : null)" href="/config">Tarjeta digital</a>
+    <a class="@(IsGiftCardsTab ? "active" : null)" href="/config?section=giftcards">Tarjetas de regalo</a>
+    <a class="@(IsPointsBenefitsTab ? "active" : null)" href="/config?section=points">Puntos y beneficios</a>
+</nav>
 @if (IsGiftCardsTab) { <GiftCardSettingsPanel /> } else {
 
 @if (entries is null)
@@ -28,6 +32,8 @@ else
     @if (successMsg is not null) { <div class="kb-form-success">@successMsg</div> }
     @if (errorMsg is not null) { <div class="kb-form-error">@errorMsg</div> }
 
+    @if (IsDigitalCardTab)
+    {
     <section class="kb-card kb-config-card">
         <h2>Tarjeta digital</h2>
         <p class="kb-muted">Personaliza el diseño de tu tarjeta digital.</p>
@@ -203,6 +209,9 @@ else
             </div>
         </div>
     </section>
+    }
+    else if (IsPointsBenefitsTab)
+    {
     <section class="kb-card kb-config-card kb-config-card--rules">
         <h2>Reglas de puntos y beneficios</h2>
         <p class="kb-muted">Define cómo se acumulan, vencen y bonifican los puntos de tu programa.</p>
@@ -248,6 +257,7 @@ else
             @(busy ? "Guardando…" : "Guardar")
         </button>
     </section>
+    }
 }
 
 }
@@ -255,6 +265,8 @@ else
 @code {
     [SupplyParameterFromQuery(Name = "section")] public string? Section { get; set; }
     private bool IsGiftCardsTab => string.Equals(Section, "giftcards", StringComparison.OrdinalIgnoreCase);
+    private bool IsPointsBenefitsTab => string.Equals(Section, "points", StringComparison.OrdinalIgnoreCase);
+    private bool IsDigitalCardTab => !IsGiftCardsTab && !IsPointsBenefitsTab;
     private List<ConfigDto>? entries;
     private Dictionary<string, string> edited = new();
     private string? successMsg;
