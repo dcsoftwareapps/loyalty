@@ -488,21 +488,15 @@ public sealed class AdminRoutingTests : IClassFixture<AdminRoutingTests.AdminWeb
         var orderedItems = new[]
         {
             "<span class=\"kb-sidebar-section\">Principal</span>",
-            "href=\"/dashboard\"",
-            "href=\"/scan\"",
-            "href=\"/redeem\"",
-            "<span class=\"kb-sidebar-section\">Reportes</span>",
-            "href=\"/customers\"",
-            "href=\"/reports/activity-trends\"",
+            "href=\"/dashboard\"", "href=\"/scan\"", "href=\"/redeem\"",
             "<span class=\"kb-sidebar-section\">Programa</span>",
-            "href=\"/redemptions\"",
-            "href=\"/rewards\"",
-            "href=\"/campaigns\"",
-            "href=\"/marketing-notifications\"",
+            "href=\"/redemptions\"", "href=\"/rewards\"", "href=\"/campaigns\"", "href=\"/marketing-notifications\"",
+            "<span class=\"kb-sidebar-section\">Gift Cards</span>",
+            "href=\"/giftcards\"", "href=\"/giftcards/issue\"", "href=\"/giftcards/redeem\"", "href=\"/giftcards/cards\"",
+            "<span class=\"kb-sidebar-section\">Reportes</span>",
+            "href=\"/customers\"", "href=\"/reports/activity-trends\"", "href=\"/giftcards/reports\"",
             "<span class=\"kb-sidebar-section\">Gestión</span>",
-            "href=\"/levels\"",
-            "href=\"/config\"",
-            "href=\"/quick-help\""
+            "href=\"/levels\"", "href=\"/config\"", "href=\"/quick-help\""
         };
 
         var previousIndex = -1;

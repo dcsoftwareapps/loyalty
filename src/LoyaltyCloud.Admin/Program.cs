@@ -51,6 +51,7 @@ var adminSessionHours = Math.Max(1, adminAuthOptions.SessionHours);
 
 builder.Services.Configure<AdminAuthOptions>(builder.Configuration.GetSection(AdminAuthOptions.SectionName));
 builder.Services.AddScoped<AdminAuthService>();
+builder.Services.AddScoped<LoyaltyCloud.Admin.Services.GiftCardFeatureState>();
 builder.Services.Configure<SuperAdminAuthOptions>(builder.Configuration.GetSection(SuperAdminAuthOptions.SectionName));
 builder.Services.AddScoped<SuperAdminAuthService>();
 
@@ -176,6 +177,25 @@ app.MapRazorComponents<LoyaltyCloud.Admin.App>()
 
 // Endpoint POST para sign-out — Blazor no puede invocar SignOutAsync interactivo
 // (necesita el HttpContext durante el ciclo de response), así que va por MVC mínimo.
+app.MapGet("/giftcards/claim/{token}/wallet/apple", async (string token, LoyaltyCloud.Application.GiftCards.IGiftCardClaimService claims, CancellationToken ct) =>
+{
+    try
+    {
+        var pass = await claims.GetApplePassAsync(token, ct);
+        return Results.File(pass.Bytes, "application/vnd.apple.pkpass", $"giftcard-{pass.SerialNumber}.pkpass");
+    }
+    catch (Exception) { return Results.NotFound(); }
+}).AllowAnonymous();
+
+app.MapGet("/giftcards/claim/{token}/wallet/google", async (string token, LoyaltyCloud.Application.GiftCards.IGiftCardClaimService claims, CancellationToken ct) =>
+{
+    try
+    {
+        var link = await claims.GetGoogleWalletLinkAsync(token, ct);
+        return Results.Redirect(link.Url);
+    }
+    catch (Exception) { return Results.NotFound(); }
+}).AllowAnonymous();
 app.MapPost("/logout", async (HttpContext ctx, AdminAuthService auth) =>
 {
     var loginPath = auth.GetLoginPathForCurrentPrincipal(ctx);

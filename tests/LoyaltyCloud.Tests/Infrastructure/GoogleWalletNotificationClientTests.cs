@@ -56,6 +56,43 @@ public sealed class GoogleWalletNotificationClientTests
         Assert.Equal("TEXT_AND_NOTIFY", message.GetProperty("messageType").GetString());
     }
 
+    [Fact]
+    public async Task ExistingGiftCardClass_IsPatchedWithoutCreatingDuplicate()
+    {
+        var (client, handler) = CreateClient();
+        await client.EnsureGiftCardClassAsync(new("issuer.giftcard_tenant", "Nuevo nombre"));
+        Assert.Collection(handler.ApiRequests,
+            get => Assert.Equal(HttpMethod.Get, get.Method),
+            patch => { Assert.Equal("PATCH", patch.Method.Method); Assert.Contains("Nuevo nombre", patch.Body); });
+        Assert.DoesNotContain(handler.ApiRequests, x => x.Method == HttpMethod.Post && x.Uri.EndsWith("/genericClass", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task ExistingGiftCardObject_PreservesIdsAndPatchesColorLogoAndHeroImage()
+    {
+        var (client, handler) = CreateClient();
+        await client.CreateOrUpdateGiftCardObjectAsync(new(
+            "issuer.object_stable", "issuer.class_stable", "Regalos Tamalitos", "Ana", "GC-AAAA-BBBB-CCCC",
+            250m, "MXN", "Active", "#123456", "https://assets.test/logo.png", "https://assets.test/hero.png", null));
+        var patch = Assert.Single(handler.ApiRequests, x => x.Method.Method == "PATCH");
+        using var json = JsonDocument.Parse(patch.Body);
+        Assert.Equal("issuer.object_stable", json.RootElement.GetProperty("id").GetString());
+        Assert.Equal("issuer.class_stable", json.RootElement.GetProperty("classId").GetString());
+        Assert.Equal("#123456", json.RootElement.GetProperty("hexBackgroundColor").GetString());
+        Assert.Equal("https://assets.test/logo.png", json.RootElement.GetProperty("logo").GetProperty("sourceUri").GetProperty("uri").GetString());
+        Assert.Equal("https://assets.test/hero.png", json.RootElement.GetProperty("heroImage").GetProperty("sourceUri").GetProperty("uri").GetString());
+    }
+
+    private static (GoogleWalletClient Client, CaptureHandler Handler) CreateClient()
+    {
+        using var rsa = RSA.Create(2048);
+        var credentials = new GoogleWalletCredentials("wallet@example.test", rsa.ExportPkcs8PrivateKeyPem(), "https://oauth.example.test/token");
+        var provider = new Mock<IGoogleWalletCredentialsProvider>(); provider.Setup(x => x.GetAsync(It.IsAny<CancellationToken>())).ReturnsAsync(credentials);
+        var clock = new Mock<IDateTimeProvider>(); clock.SetupGet(x => x.UtcNow).Returns(new DateTime(2026, 9, 1, 12, 0, 0, DateTimeKind.Utc));
+        var options = Options.Create(new GoogleWalletOptions { Enabled = true, IssuerId = "issuer-test", ApiBaseUrl = "https://walletobjects.example.test/walletobjects/v1" });
+        var handler = new CaptureHandler();
+        return (new GoogleWalletClient(new HttpClient(handler), provider.Object, new GoogleWalletJwtFactory(options), new GoogleWalletObjectMapper(), options, clock.Object, NullLogger<GoogleWalletClient>.Instance), handler);
+    }
     private sealed class CaptureHandler : HttpMessageHandler
     {
         public List<CapturedRequest> ApiRequests { get; } = [];

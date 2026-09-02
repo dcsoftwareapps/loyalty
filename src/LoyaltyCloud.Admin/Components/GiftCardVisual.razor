@@ -1,0 +1,20 @@
+<div class="kb-gift-card-visual" style="@Style" aria-label="Gift Card @DisplayName">
+    @if (!string.IsNullOrWhiteSpace(LogoUrl)) { <img src="@LogoUrl" alt="" /> }
+    <div class="kb-gift-card-visual__heading"><small>GIFT CARD</small><h2>@DisplayName</h2>@if(!string.IsNullOrWhiteSpace(SecondaryText)){<p>@SecondaryText</p>}</div>
+    @if(!string.IsNullOrWhiteSpace(RecipientName)){<div class="kb-gift-card-visual__recipient"><small>PARA</small><strong>@RecipientName</strong></div>}
+    <div class="kb-gift-card-visual__balance"><small>SALDO DISPONIBLE</small><strong>@Balance</strong><span>@Currency</span></div>
+    <div class="kb-gift-card-visual__footer"><span>@Code</span>@if(!string.IsNullOrWhiteSpace(Expiration)){<span>Vigencia: @Expiration</span>}</div>
+</div>
+@code {
+ [Parameter] public string DisplayName { get; set; } = "Gift Card";
+ [Parameter] public string BackgroundColor { get; set; } = "#1C1B18";
+ [Parameter] public string TextColor { get; set; } = "#FFFFFF";
+ [Parameter] public string? LogoUrl { get; set; }
+ [Parameter] public string? SecondaryText { get; set; }
+ [Parameter] public string? RecipientName { get; set; }
+ [Parameter] public string Balance { get; set; } = "1,000.00";
+ [Parameter] public string Currency { get; set; } = "MXN";
+ [Parameter] public string Code { get; set; } = "GC-••••-••••-••••";
+ [Parameter] public string? Expiration { get; set; }
+ private string Style => $"--gift-bg:{BackgroundColor};--gift-text:{TextColor}";
+}

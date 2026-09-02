@@ -8,7 +8,6 @@
 
 <PageTitle>Canjear Gift Card - LoyaltyCloud</PageTitle>
 <header class="kb-page-header"><div><span class="kb-eyebrow">Gift Cards</span><h1>Consultar y canjear</h1><p>Escanea o escribe el código y confirma el saldo antes de completar el canje.</p></div></header>
-<GiftCardNav />
 <section class="kb-panel kb-gift-flow">
  <div class="kb-gift-flow__step"><span>1</span><div><h2>Identifica la tarjeta</h2><p>Usa el lector o captura el código impreso.</p></div></div>
  <GiftCardQrScanner OnDetected="OnScanned" />
@@ -17,7 +16,7 @@
  @if(success is not null){<div class="kb-form-success" role="status">@success</div>}
  @if(detail is not null){
   <div class="kb-gift-flow__step"><span>2</span><div><h2>Verifica y confirma</h2><p>Comprueba destinatario, estado y saldo disponible.</p></div></div>
-  <div class="kb-detail-grid"><div><span>Destinatario</span><strong>@detail.Card.RecipientName</strong></div><div><span>Estado</span><strong>@detail.Card.Status</strong></div><div><span>Saldo disponible</span><strong>@detail.Card.CurrentBalance.ToString("N2") @detail.Card.Currency</strong></div><div><span>Expira</span><strong>@Dates.DateNumeric(detail.Card.ExpiresAtUtc, "Sin expiración")</strong></div></div>
+  <div class="kb-gift-summary-grid"><div><span>Destinatario</span><strong>@detail.Card.RecipientName</strong></div><div><span>Estado</span><strong>@detail.Card.Status</strong></div><div><span>Saldo disponible</span><strong>@detail.Card.CurrentBalance.ToString("N2") @detail.Card.Currency</strong></div><div><span>Expira</span><strong>@Dates.DateNumeric(detail.Card.ExpiresAtUtc, "Sin expiración")</strong></div></div>
   <EditForm Model="model" OnValidSubmit="Redeem"><DataAnnotationsValidator /><ValidationSummary class="kb-form-error" />
    <div class="kb-form-grid"><label class="kb-field"><span>Monto a canjear</span><InputNumber @bind-Value="model.Amount" min="0.01" step="0.01" /><ValidationMessage For="@(()=>model.Amount)" /></label><label class="kb-field"><span>Referencia <small>(opcional)</small></span><InputText @bind-Value="model.Reference" maxlength="150" /></label></div>
    <div class="kb-gift-balance-preview"><span>Saldo actual<strong>@detail.Card.CurrentBalance.ToString("N2")</strong></span><span>Canje<strong>@model.Amount.ToString("N2")</strong></span><span>Saldo restante<strong>@RemainingBalance.ToString("N2")</strong></span></div>

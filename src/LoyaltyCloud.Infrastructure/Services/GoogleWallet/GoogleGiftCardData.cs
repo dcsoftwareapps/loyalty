@@ -13,4 +13,5 @@ public sealed record GoogleGiftCardObjectData(
     string Status,
     string HexBackgroundColor,
     string? LogoUri,
+    string? HeroImageUri,
     DateTime? ExpiresAtUtc);
