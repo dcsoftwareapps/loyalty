@@ -829,11 +829,16 @@ public sealed class AdminRoutingTests : IClassFixture<AdminRoutingTests.AdminWeb
         Assert.True(
             source.IndexOf("id=\"schedule-delivery\"", StringComparison.Ordinal) <
             source.IndexOf("id=\"scheduled-at\"", StringComparison.Ordinal));
-        Assert.Contains("Ver audiencia", source);
+        Assert.Contains("@if (!confirmSend)", source);
+        Assert.Contains("@if (confirmSend && preview is not null)", source);
         Assert.Contains("RequestConfirmationAsync", source);
+        Assert.Contains("CancelConfirmation", source);
         Assert.Contains("¿Enviar este mensaje ahora?", source);
         Assert.Contains("¿Programar este mensaje?", source);
         Assert.Contains("Se enviará a {preview.TotalRecipients:N0} destinatarios.", source);
+        Assert.DoesNotContain("Ver audiencia", source);
+        Assert.DoesNotContain("@onclick=\"PreviewAsync\"", source);
+        Assert.DoesNotContain("private async Task PreviewAsync()", source);
         Assert.DoesNotContain("<span>Envío</span>", source);
         Assert.DoesNotContain("Mostrar hasta", source);
         Assert.DoesNotContain("id=\"send-mode\"", source);
