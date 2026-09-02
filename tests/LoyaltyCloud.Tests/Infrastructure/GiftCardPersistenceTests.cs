@@ -96,6 +96,35 @@ public sealed class GiftCardPersistenceTests
     }
 
     [Fact]
+    public async Task ResendTokenRotation_MakesNewTokenWorkAndOldTokenInvalid()
+    {
+        await using var database = await TestDatabase.CreateEmptyAsync();
+        await using var db = database.Context();
+        var service = Service(db);
+
+        var first = await service.IssueAsync(new(500m, null, "Cliente", "recipient@example.test", null, "Daniel", "Felicidades"));
+        var second = await service.RotateClaimTokenAsync(first.Card.Id);
+
+        Assert.NotEqual(first.ClaimToken, second.ClaimToken);
+
+        await using var claimDb = database.ContextWithoutTenant();
+        var tenantContext = new TestMutableTenantContext();
+        var claimService = new GiftCardClaimService(
+            claimDb,
+            Clock().Object,
+            tenantContext,
+            Branding(),
+            new Mock<IGiftCardWalletService>().Object,
+            new Mock<IGiftCardAppleWalletService>().Object);
+
+        Assert.Null(await claimService.GetAsync(first.ClaimToken));
+        var currentClaim = await claimService.GetAsync(second.ClaimToken);
+        Assert.NotNull(currentClaim);
+        Assert.Equal(first.Card.Id, currentClaim.Card.Id);
+        Assert.Equal(TenantId, tenantContext.TenantId);
+    }
+
+    [Fact]
     public async Task RotateClaimToken_RequiresRecipientEmail()
     {
         await using var database = await TestDatabase.CreateAsync(300m);
