@@ -152,9 +152,17 @@ public sealed class GiftCardFeatureToggleTests
         Assert.Contains("Cancelar tarjeta de regalo", detail);
         Assert.Contains("Reenviar por email", detail);
         Assert.Contains("RotateClaimTokenAsync", detail);
+        Assert.Contains("Reenviar por email", issue);
+        Assert.Contains("RotateClaimTokenAsync", issue);
         Assert.Contains("Delivery.SendEmailAsync", issue);
-        Assert.Contains("Agregar a Apple Wallet", claim);
-        Assert.Contains("Agregar a Google Wallet", claim);
+        Assert.Contains("IHttpContextAccessor", claim);
+        Assert.Contains("Request.Headers.UserAgent", claim);
+        Assert.Contains("Agregar a Wallet", claim);
+        Assert.Contains("/wallet/apple", claim);
+        Assert.Contains("/wallet/google", claim);
+        Assert.DoesNotContain("loyaltyGiftCardWallet.getUserAgent", claim);
+        Assert.DoesNotContain("@onclick=\"ShowPhoneGuidance\"", claim);
+        Assert.Contains("kb-gift-message-field", issue);
     }
 
     [Fact]
