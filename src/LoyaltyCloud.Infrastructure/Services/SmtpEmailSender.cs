@@ -22,7 +22,8 @@ internal sealed class SmtpEmailSender(IOptions<EmailOptions> options) : ITransac
         message.Body = new BodyBuilder { TextBody = email.TextBody, HtmlBody = email.HtmlBody }.ToMessageBody();
 
         using var client = new SmtpClient();
-        await client.ConnectAsync(settings.SmtpHost, settings.SmtpPort, SecureSocketOptions.SslOnConnect, ct);
+        await client.ConnectAsync(settings.SmtpHost, settings.SmtpPort,
+            settings.SmtpPort is 465 or 2465 ? SecureSocketOptions.SslOnConnect : SecureSocketOptions.StartTls, ct);
         await client.AuthenticateAsync(settings.Username, settings.Password!, ct);
         await client.SendAsync(message, ct);
         await client.DisconnectAsync(true, ct);

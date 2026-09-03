@@ -242,7 +242,10 @@ public sealed class BillingUxTests
         var page = Read("src", "LoyaltyCloud.Admin", "Pages", "PlatformBillingSettings.razor");
 
         Assert.Contains("Authorize(Roles = LoyaltyCloud.Admin.Auth.SuperAdminAuthDefaults.Role)", page);
-        Assert.Contains("Notificaciones por email", page);
+        Assert.Contains("Email transaccional", page);
+        Assert.Contains("Resend", page);
+        Assert.Contains("Proveedor efectivo de email", page);
+        Assert.DoesNotContain("<option value=\"Cloudflare\">", page);
         Assert.Contains("Credenciales:", page);
         Assert.DoesNotContain("Email__Password", page);
         Assert.DoesNotContain("SmtpHost", page);

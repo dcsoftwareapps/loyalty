@@ -53,7 +53,7 @@ else
     </section>
 
     <section class="kb-card" style="margin-top:20px">
-        <h2>Notificaciones por email</h2>
+        <h2>Email transaccional</h2>
         <p>Estado: <strong>@(emailEnabled ? "Habilitadas" : "Deshabilitadas")</strong></p>
         @if (!emailEnabled)
         {
@@ -62,9 +62,8 @@ else
         <div class="kb-form-row">
             <label><input type="checkbox" @bind="emailEnabled" disabled="@busy" /> Habilitar notificaciones por email</label>
             <label>Proveedor</label>
-            <select @bind="emailProvider" disabled="@busy">
-                <option value="Cloudflare">Cloudflare</option>
-            </select>
+            <input value="@emailProvider" readonly aria-label="Proveedor efectivo de email" />
+            <p class="kb-muted">Resend se integra mediante SMTP. El proveedor efectivo y sus credenciales se administran en la configuración del servidor, nunca en este formulario.</p>
             <label>Nombre del remitente</label><input @bind="emailFromName" maxlength="100" disabled="@busy" />
             <label>Correo remitente</label><input type="email" @bind="emailFromAddress" maxlength="320" disabled="@busy" />
             <label>URL pública de LoyaltyCloud</label><input type="url" @bind="emailApplicationBaseUrl" maxlength="500" disabled="@busy" />
@@ -116,7 +115,7 @@ else
     private string? bankName, beneficiary, clabe, instructions, support;
     private string? stripeP1, stripeP3, stripeP6, stripeP12;
     private bool emailEnabled, emailCredentialsConfigured, emailConfigurationComplete;
-    private string emailProvider = "Cloudflare", emailFromName = "LoyaltyCloud";
+    private string emailProvider = "SMTP", emailFromName = "LoyaltyCloud";
     private string? emailFromAddress, emailApplicationBaseUrl;
     private string? toastMessage;
     private bool toastIsError;

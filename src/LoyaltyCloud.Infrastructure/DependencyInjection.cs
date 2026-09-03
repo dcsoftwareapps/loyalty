@@ -257,6 +257,7 @@ public static class DependencyInjection
         services.AddScoped<GoogleWalletJwtFactory>();
         services.AddScoped<IGoogleWalletCredentialsProvider, GoogleWalletCredentialsProvider>();
         services.AddScoped<IGoogleWalletService, GoogleWalletService>();
+        services.AddScoped<GoogleWalletBrandingSynchronizer>();
         services.AddHttpClient<IGoogleWalletClient, GoogleWalletClient>();
     }
 

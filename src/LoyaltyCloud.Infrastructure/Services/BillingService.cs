@@ -26,9 +26,9 @@ internal sealed class BillingService : IBillingService
     public async Task SaveEmailSettingsAsync(BillingEmailSettingsDto x,CancellationToken ct=default)
     {
         var runtime=await _emailConfiguration.GetAsync(ct);
-        var provider=x.Provider?.Trim();var from=x.FromAddress?.Trim();var name=x.FromName?.Trim();var baseUrl=x.ApplicationBaseUrl?.Trim();
+        var provider=runtime.Provider;var from=x.FromAddress?.Trim();var name=x.FromName?.Trim();var baseUrl=x.ApplicationBaseUrl?.Trim();
         var emailValid=!string.IsNullOrWhiteSpace(from)&&MailAddress.TryCreate(from,out _);
-        var urlValid=Uri.TryCreate(baseUrl,UriKind.Absolute,out var uri)&&(_environment?.IsDevelopment()==true||uri.Scheme==Uri.UriSchemeHttps);
+        var urlValid=Uri.TryCreate(baseUrl,UriKind.Absolute,out var uri)&&(_environment?.IsDevelopment()==true||(uri.Scheme==Uri.UriSchemeHttps&&!uri.IsLoopback&&string.IsNullOrEmpty(uri.UserInfo)));
         if(x.Enabled&&(!runtime.CredentialsConfigured||string.IsNullOrWhiteSpace(provider)||string.IsNullOrWhiteSpace(name)||!emailValid||!urlValid))throw new InvalidOperationException("No se pueden habilitar las notificaciones hasta completar la configuración requerida.");
         if(!string.IsNullOrWhiteSpace(from)&&!emailValid)throw new InvalidOperationException("El correo remitente no tiene un formato válido.");
         if(!string.IsNullOrWhiteSpace(baseUrl)&&!Uri.TryCreate(baseUrl,UriKind.Absolute,out _))throw new InvalidOperationException("La URL pública no tiene un formato válido.");

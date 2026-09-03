@@ -55,6 +55,22 @@ public sealed class WalletAssetsController : ControllerBase
         Response.Headers.CacheControl = "no-store";
         return File(logo.Bytes, "image/png");
     }
+    [HttpGet("google/{tenantId:guid}/hero.png")]
+    [ResponseCache(NoStore = true, Location = ResponseCacheLocation.None)]
+    [Produces("image/png")]
+    public async Task<IActionResult> GetGoogleWalletHero(Guid tenantId, CancellationToken ct)
+    {
+        TenantWalletBrandingDto branding;
+        try { branding = await _branding.GetForTenantAsync(tenantId, ct); }
+        catch (InvalidOperationException) { return NotFound(); }
+        if (string.IsNullOrWhiteSpace(branding.AppleWalletStripImageBlobName)) return NotFound();
+        var assets = await _assets.LoadAssetsAsync(tenantId, branding.TenantSlug,
+            branding.WalletLogoBlobName, branding.LogoBlobName, true,
+            branding.AppleWalletStripImageBlobName, ct);
+        var hero = assets.FirstOrDefault(x => x.Name == "strip@3x.png");
+        return hero is null ? NotFound() : File(hero.Bytes, "image/png");
+    }
+
     [HttpGet("apple/{assetName}")]
     [ResponseCache(Duration = 3600, Location = ResponseCacheLocation.Any)]
     [Produces("image/png")]
