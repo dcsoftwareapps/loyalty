@@ -39,7 +39,9 @@ internal sealed class GiftCardService(AppDbContext db, IDbContextFactory<AppDbCo
         var config = await ConfigurationAsync(create: true, ct);
         config.Update(request.IsEnabled, request.AllowCustomAmount, request.AllowPartialRedemption, request.AllowPromotionalIssuance, request.ExpirationMode, request.DefaultExpirationMonths, request.Currency.Trim(), request.DisplayName.Trim(), request.PrimaryColor.Trim(), request.TextColor.Trim(), Clean(request.LogoUrl), Clean(request.SecondaryText), Clean(request.Terms), Clean(request.FooterMessage), clock.UtcNow);
         await db.SaveChangesAsync(ct);
-        return await SettingsDtoAsync(config, ct);
+        var sync = await wallets.SynchronizeBrandingAsync(ct);
+        var result = await SettingsDtoAsync(config, ct);
+        return sync.Failed > 0 ? result with { SyncWarning = "La configuración se guardó, pero algunas tarjetas de Google Wallet no pudieron actualizarse." } : result;
     }
 
     public async Task<GiftCardDenominationDto> AddDenominationAsync(decimal amount, CancellationToken ct = default)
@@ -81,7 +83,7 @@ internal sealed class GiftCardService(AppDbContext db, IDbContextFactory<AppDbCo
             throw new InvalidOperationException("La emisión promocional está deshabilitada.");
         var now = clock.UtcNow;
         var expires = ResolveExpiration(config, request.ExpiresAtUtc, now);
-        var token = Convert.ToHexString(RandomNumberGenerator.GetBytes(32));
+        var token = GenerateClaimToken();
         var card = new GiftCard(Guid.NewGuid(), TenantId(), await UniqueCodeAsync(ct), GiftCard.HashClaimToken(token), amount, config.Currency, request.RecipientMemberId, recipientName, email, phone, senderName, personalMessage, request.Source, UserId(), now, expires);
         db.GiftCards.Add(card);
         db.GiftCardTransactions.Add(new GiftCardTransaction(Guid.NewGuid(), TenantId(), card.Id, GiftCardTransactionType.Issued, amount, 0, amount, UserId(), now, notes: personalMessage));
@@ -103,6 +105,23 @@ internal sealed class GiftCardService(AppDbContext db, IDbContextFactory<AppDbCo
 
     public async Task<GiftCardDetailDto?> GetAsync(Guid id, CancellationToken ct = default) { await EnabledConfigurationAsync(ct); var card = await db.GiftCards.AsNoTracking().SingleOrDefaultAsync(x => x.Id == id, ct); return card is null ? null : await DetailAsync(card, ct); }
     public async Task<GiftCardDetailDto?> GetByCodeAsync(string code, CancellationToken ct = default) { await EnabledConfigurationAsync(ct); var normalized = code.Trim().ToUpperInvariant(); var card = await db.GiftCards.SingleOrDefaultAsync(x => x.PublicCode == normalized, ct); if (card is null) return null; await PersistExpirationAsync(card, ct); return await DetailAsync(card, ct); }
+
+    public async Task<IssuedGiftCardDto> RotateClaimTokenAsync(Guid id, CancellationToken ct = default)
+    {
+        await EnabledConfigurationAsync(ct);
+        var card = await db.GiftCards.SingleOrDefaultAsync(x => x.Id == id, ct)
+            ?? throw new KeyNotFoundException("Tarjeta de regalo no encontrada.");
+        card.EvaluateExpiration(clock.UtcNow);
+        if (card.Status != GiftCardStatus.Active)
+            throw new InvalidOperationException("Esta tarjeta de regalo ya no está disponible para entrega.");
+        if (string.IsNullOrWhiteSpace(card.RecipientEmail))
+            throw new InvalidOperationException("La tarjeta de regalo no tiene email de destinatario.");
+
+        var token = GenerateClaimToken();
+        card.ReplaceClaimTokenHash(GiftCard.HashClaimToken(token), clock.UtcNow);
+        await db.SaveChangesAsync(ct);
+        return new(ToDto(card), token);
+    }
 
     public async Task<GiftCardOperationResult> RedeemAsync(string code, decimal amount, string idempotencyKey, string? reference, string? notes, CancellationToken ct = default)
     {
@@ -157,10 +176,10 @@ internal sealed class GiftCardService(AppDbContext db, IDbContextFactory<AppDbCo
         if (string.IsNullOrWhiteSpace(key) || key.Length > 100) return new(false, "Idempotency key requerida.", null);
         var existing = await db.GiftCardTransactions.AsNoTracking().SingleOrDefaultAsync(x => x.IdempotencyKey == key, ct);
         if (existing is not null) { var existingCard = await db.GiftCards.AsNoTracking().SingleAsync(x => x.Id == existing.GiftCardId, ct); return new(true, null, await DetailAsync(existingCard, ct), true); }
-        var card = await load(); if (card is null) return new(false, "Gift Card no encontrada.", null);
+        var card = await load(); if (card is null) return new(false, "Tarjeta de regalo no encontrada.", null);
         try { var transaction = mutation(card, clock.UtcNow); db.GiftCardTransactions.Add(transaction); await db.SaveChangesAsync(ct); try { await wallets.SynchronizeAsync(card.Id, ct); } catch { /* Provider sync never rolls back value movement. */ } try { await appleWallets.SynchronizeAsync(card.Id, ct); } catch { /* Provider sync never rolls back value movement. */ } return new(true, null, await DetailAsync(card, ct)); }
         catch (InvalidOperationException ex) { return new(false, ex.Message, await DetailAsync(card, ct)); }
-        catch (DbUpdateConcurrencyException) { return new(false, "La Gift Card cambió durante el canje. Consulta el saldo e inténtalo nuevamente.", null); }
+        catch (DbUpdateConcurrencyException) { return new(false, "La tarjeta de regalo cambió durante el canje. Consulta el saldo e inténtalo nuevamente.", null); }
         catch (DbUpdateException)
         {
             db.ChangeTracker.Clear();
@@ -171,13 +190,14 @@ internal sealed class GiftCardService(AppDbContext db, IDbContextFactory<AppDbCo
         }
     }
 
-    private async Task<GiftCardConfiguration> ConfigurationAsync(bool create, CancellationToken ct) { var result = await db.GiftCardConfigurations.SingleOrDefaultAsync(ct); if (result is null && create) { result = new GiftCardConfiguration(Guid.NewGuid(), TenantId(), clock.UtcNow); db.GiftCardConfigurations.Add(result); await db.SaveChangesAsync(ct); } return result ?? throw new InvalidOperationException("Gift Cards no está configurado."); }
-    private async Task<GiftCardConfiguration> EnabledConfigurationAsync(CancellationToken ct) { var result = await ConfigurationAsync(false, ct); if (!result.IsEnabled) throw new InvalidOperationException("Gift Cards está deshabilitado para este tenant."); return result; }
+    private async Task<GiftCardConfiguration> ConfigurationAsync(bool create, CancellationToken ct) { var result = await db.GiftCardConfigurations.SingleOrDefaultAsync(ct); if (result is null && create) { result = new GiftCardConfiguration(Guid.NewGuid(), TenantId(), clock.UtcNow); db.GiftCardConfigurations.Add(result); await db.SaveChangesAsync(ct); } return result ?? throw new InvalidOperationException("El módulo de tarjetas de regalo no está configurado."); }
+    private async Task<GiftCardConfiguration> EnabledConfigurationAsync(CancellationToken ct) { var result = await ConfigurationAsync(false, ct); if (!result.IsEnabled) throw new InvalidOperationException("El módulo de tarjetas de regalo está deshabilitado para este tenant."); return result; }
     private async Task<GiftCardSettingsDto> SettingsDtoAsync(GiftCardConfiguration c, CancellationToken ct) { var d = await db.GiftCardDenominations.AsNoTracking().OrderBy(x => x.Amount).Select(x => new GiftCardDenominationDto(x.Id, x.Amount, x.Currency, x.IsActive)).ToListAsync(ct); return new(c.Id,c.IsEnabled,c.AllowCustomAmount,c.AllowPartialRedemption,c.AllowPromotionalIssuance,c.ExpirationMode,c.DefaultExpirationMonths,c.Currency,c.DisplayName,c.PrimaryColor,c.TextColor,c.LogoUrl,c.SecondaryText,c.Terms,c.FooterMessage,d); }
     private async Task<GiftCardDetailDto> DetailAsync(GiftCard card, CancellationToken ct) { var tx = await db.GiftCardTransactions.AsNoTracking().Where(x => x.GiftCardId == card.Id).OrderByDescending(x => x.CreatedAtUtc).Select(x => new GiftCardTransactionDto(x.Id,x.Type,x.Amount,x.BalanceBefore,x.BalanceAfter,x.PerformedByUserId,x.CreatedAtUtc,x.Reference,x.Notes,x.IdempotencyKey)).ToListAsync(ct); return new(ToDto(card), tx); }
     private async Task PersistExpirationAsync(GiftCard card, CancellationToken ct) { var expired = card.EvaluateExpiration(clock.UtcNow); if (expired <= 0) return; var exists = await db.GiftCardTransactions.AnyAsync(x => x.GiftCardId == card.Id && x.Type == GiftCardTransactionType.Expired, ct); if (!exists) db.GiftCardTransactions.Add(new GiftCardTransaction(Guid.NewGuid(),TenantId(),card.Id,GiftCardTransactionType.Expired,0,expired,expired,UserId(),clock.UtcNow)); await db.SaveChangesAsync(ct); }
     private static DateTime? ResolveExpiration(GiftCardConfiguration c, DateTime? selected, DateTime now) => c.ExpirationMode switch { GiftCardExpirationMode.Never => null, GiftCardExpirationMode.MonthsAfterIssue => now.AddMonths(c.DefaultExpirationMonths!.Value), GiftCardExpirationMode.SelectAtIssue when selected is not null && selected > now => selected, GiftCardExpirationMode.SelectAtIssue => throw new InvalidOperationException("Selecciona una fecha de expiración futura."), _ => null };
     private async Task<string> UniqueCodeAsync(CancellationToken ct) { for (var i=0;i<10;i++) { var raw = Convert.ToHexString(RandomNumberGenerator.GetBytes(6)); var code = $"GC-{raw[..4]}-{raw[4..8]}-{raw[8..12]}"; if (!await db.GiftCards.AnyAsync(x => x.PublicCode == code,ct)) return code; } throw new InvalidOperationException("No se pudo generar un código único."); }
+    private static string GenerateClaimToken() => Convert.ToHexString(RandomNumberGenerator.GetBytes(32));
     private static readonly Regex PhonePattern = new(@"^[0-9+().\-\s]+$", RegexOptions.Compiled | RegexOptions.CultureInvariant);
     private static readonly Regex HexColorPattern = new(@"^#[0-9A-Fa-f]{6}$", RegexOptions.Compiled | RegexOptions.CultureInvariant);
 
@@ -214,7 +234,7 @@ internal sealed class GiftCardService(AppDbContext db, IDbContextFactory<AppDbCo
 
     private static void ValidateSettings(UpdateGiftCardSettingsRequest request)
     {
-        if (string.IsNullOrWhiteSpace(request.DisplayName)) throw new ArgumentException("Ingresa el nombre de la Gift Card.");
+        if (string.IsNullOrWhiteSpace(request.DisplayName)) throw new ArgumentException("Ingresa el nombre de la tarjeta de regalo.");
         if (request.DisplayName.Trim().Length > 100) throw new ArgumentException("El nombre no puede exceder 100 caracteres.");
         if (string.IsNullOrWhiteSpace(request.Currency) || request.Currency.Trim().Length != 3) throw new ArgumentException("Ingresa una moneda válida de tres letras.");
         if (!HexColorPattern.IsMatch(request.PrimaryColor?.Trim() ?? string.Empty) || !HexColorPattern.IsMatch(request.TextColor?.Trim() ?? string.Empty)) throw new ArgumentException("Los colores deben usar formato #RRGGBB.");

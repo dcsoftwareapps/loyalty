@@ -102,6 +102,23 @@ internal sealed class TenantBrandingLogoService :
             walletSpecific: true,
             cancellationToken);
 
+    public async Task<Result<TenantBrandingLogoResult>> UploadGiftCardLogoAsync(
+        Guid tenantId,
+        string fileName,
+        string contentType,
+        Stream content,
+        long contentLength,
+        CancellationToken cancellationToken = default) =>
+        await UploadCoreAsync(
+            tenantId,
+            fileName,
+            contentType,
+            content,
+            contentLength,
+            walletSpecific: true,
+            cancellationToken,
+            giftCardSpecific: true);
+
     public async Task<Result<TenantBrandingLogoResult>> UploadAppleWalletStripImageAsync(
         Guid tenantId,
         string fileName,
@@ -174,7 +191,8 @@ internal sealed class TenantBrandingLogoService :
         Stream content,
         long contentLength,
         bool walletSpecific,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        bool giftCardSpecific = false)
     {
         if (tenantId == Guid.Empty)
             return Result.Fail<TenantBrandingLogoResult>("TenantId requerido.");
@@ -219,7 +237,7 @@ internal sealed class TenantBrandingLogoService :
         using (original)
         {
             var extension = GetSafeExtension(fileName, contentType);
-            var folder = walletSpecific ? "wallet-branding" : "wallet";
+            var folder = giftCardSpecific ? "gift-card" : walletSpecific ? "wallet-branding" : "wallet";
             var originalBlobName = walletSpecific
                 ? $"{GetTenantBrandingPrefix(tenantId)}/{folder}/{OriginalBlobName}{extension}"
                 : $"{GetTenantBrandingPrefix(tenantId)}/{OriginalBlobName}{extension}";
@@ -239,11 +257,16 @@ internal sealed class TenantBrandingLogoService :
                 NormalizeWalletLogoScale(branding.WalletLogoScalePercent),
                 cancellationToken);
 
-            if (walletSpecific)
+            if (giftCardSpecific)
+            {
+                // Gift Card settings persist this blob name on GiftCardConfiguration.
+            }
+            else if (walletSpecific)
                 branding.SetWalletLogo(originalBlobName);
             else
                 branding.SetLogo(null, originalBlobName);
-            await _db.SaveChangesAsync(cancellationToken);
+            if (!giftCardSpecific)
+                await _db.SaveChangesAsync(cancellationToken);
 
             _logger.LogInformation(
                 "Tenant logo uploaded. TenantId={TenantId}, OriginalBlob={OriginalBlob}, WalletSpecific={WalletSpecific}, WalletAssets={WalletAssetCount}.",

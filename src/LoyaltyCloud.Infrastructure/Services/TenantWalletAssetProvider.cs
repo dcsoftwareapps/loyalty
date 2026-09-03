@@ -49,7 +49,13 @@ internal sealed class TenantWalletAssetProvider : ITenantWalletAssetProvider
             ? "unknown"
             : tenantSlug.Trim().ToLowerInvariant();
 
-        var tenantAssets = !string.IsNullOrWhiteSpace(walletLogoBlobName)
+        var tenantAssets = IsGiftCardLogoBlobName(walletLogoBlobName)
+            ? await TryLoadTenantBlobAssetsAsync(tenantId, normalizedSlug, "gift-card/apple", cancellationToken)
+            : null;
+        tenantAssets ??= IsGiftCardLogoBlobName(walletLogoBlobName)
+            ? await TryLoadTenantBlobAssetsAsync(tenantId, normalizedSlug, "gift-card", cancellationToken)
+            : null;
+        tenantAssets ??= !string.IsNullOrWhiteSpace(walletLogoBlobName)
             ? await TryLoadTenantBlobAssetsAsync(tenantId, normalizedSlug, "wallet-branding/apple", cancellationToken)
             : null;
         tenantAssets ??= !string.IsNullOrWhiteSpace(walletLogoBlobName)
@@ -314,4 +320,8 @@ internal sealed class TenantWalletAssetProvider : ITenantWalletAssetProvider
         bytes[offset + 3];
 
     private sealed record WalletAssetSpec(string Name, int Width, int Height);
+
+    private static bool IsGiftCardLogoBlobName(string? value) =>
+        !string.IsNullOrWhiteSpace(value)
+        && value.Contains("/gift-card/", StringComparison.OrdinalIgnoreCase);
 }

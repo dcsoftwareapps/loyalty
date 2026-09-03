@@ -2,7 +2,7 @@ using LoyaltyCloud.Domain.Enums;
 
 namespace LoyaltyCloud.Application.GiftCards;
 
-public sealed record GiftCardSettingsDto(Guid Id, bool IsEnabled, bool AllowCustomAmount, bool AllowPartialRedemption, bool AllowPromotionalIssuance, GiftCardExpirationMode ExpirationMode, int? DefaultExpirationMonths, string Currency, string DisplayName, string PrimaryColor, string TextColor, string? LogoUrl, string? SecondaryText, string? Terms, string? FooterMessage, IReadOnlyList<GiftCardDenominationDto> Denominations);
+public sealed record GiftCardSettingsDto(Guid Id, bool IsEnabled, bool AllowCustomAmount, bool AllowPartialRedemption, bool AllowPromotionalIssuance, GiftCardExpirationMode ExpirationMode, int? DefaultExpirationMonths, string Currency, string DisplayName, string PrimaryColor, string TextColor, string? LogoUrl, string? SecondaryText, string? Terms, string? FooterMessage, IReadOnlyList<GiftCardDenominationDto> Denominations, string? SyncWarning = null);
 public sealed record GiftCardDenominationDto(Guid Id, decimal Amount, string Currency, bool IsActive);
 public sealed record UpdateGiftCardSettingsRequest(bool IsEnabled, bool AllowCustomAmount, bool AllowPartialRedemption, bool AllowPromotionalIssuance, GiftCardExpirationMode ExpirationMode, int? DefaultExpirationMonths, string Currency, string DisplayName, string PrimaryColor, string TextColor, string? LogoUrl, string? SecondaryText, string? Terms, string? FooterMessage);
 public sealed record IssueGiftCardRequest(decimal Amount, Guid? RecipientMemberId, string RecipientName, string? RecipientEmail, string? RecipientPhone, string? SenderName, string? PersonalMessage, GiftCardSource Source = GiftCardSource.Manual, DateTime? ExpiresAtUtc = null);
@@ -15,6 +15,11 @@ public sealed record GiftCardDashboardDto(int ActiveCards, decimal OutstandingBa
 public sealed record GiftCardReportPoint(DateTime DateUtc, decimal Issued, decimal Redeemed, int IssuedCount, int RedemptionCount);
 public sealed record GiftCardOperationResult(bool Success, string? Error, GiftCardDetailDto? Detail, bool WasIdempotent = false);
 public sealed record GiftCardClaimDto(GiftCardDto Card, string DisplayName, string PrimaryColor, string TextColor, string? LogoUrl, string? SecondaryText, string? Terms, string? FooterMessage);
+public enum GiftCardDeliveryStatus { Sent, NotSent, Failed }
+public sealed record GiftCardDeliveryResult(GiftCardDeliveryStatus Status, string? Message, string? ClaimUrl)
+{
+    public bool Sent => Status == GiftCardDeliveryStatus.Sent;
+}
 
 public interface IGiftCardService
 {
@@ -28,6 +33,7 @@ public interface IGiftCardService
     Task<GiftCardPage> SearchAsync(string? search, GiftCardStatus? status, DateTime? fromUtc, DateTime? toUtc, int page = 1, int pageSize = 25, CancellationToken ct = default);
     Task<GiftCardDetailDto?> GetAsync(Guid id, CancellationToken ct = default);
     Task<GiftCardDetailDto?> GetByCodeAsync(string code, CancellationToken ct = default);
+    Task<IssuedGiftCardDto> RotateClaimTokenAsync(Guid id, CancellationToken ct = default);
     Task<GiftCardOperationResult> RedeemAsync(string code, decimal amount, string idempotencyKey, string? reference, string? notes, CancellationToken ct = default);
     Task<GiftCardOperationResult> AdjustAsync(Guid id, decimal amount, string idempotencyKey, string? reference, string? notes, CancellationToken ct = default);
     Task<GiftCardOperationResult> CancelAsync(Guid id, string idempotencyKey, string? notes, CancellationToken ct = default);
@@ -46,16 +52,18 @@ public interface IGiftCardClaimService
 public interface IGiftCardDeliveryService
 {
     Task<string?> GetClaimUrlAsync(string claimToken, CancellationToken ct = default);
-Task SendEmailAsync(IssuedGiftCardDto giftCard, string recipient, CancellationToken ct = default);
+    Task<GiftCardDeliveryResult> SendEmailAsync(IssuedGiftCardDto giftCard, string recipient, string businessName, CancellationToken ct = default);
 }
 
 
 
 public sealed record GiftCardWalletLinkDto(GiftCardWalletProvider Provider, string Url, string ExternalClassId, string ExternalObjectId);
+public sealed record GiftCardWalletSyncResult(int Attempted, int Failed);
 public interface IGiftCardWalletService
 {
     Task<GiftCardWalletLinkDto> GetGoogleSaveLinkAsync(Guid giftCardId, CancellationToken ct = default);
     Task SynchronizeAsync(Guid giftCardId, CancellationToken ct = default);
+    Task<GiftCardWalletSyncResult> SynchronizeBrandingAsync(CancellationToken ct = default);
 }
 
 

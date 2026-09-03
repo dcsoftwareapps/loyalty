@@ -5,9 +5,8 @@
 @inject LoyaltyCloud.Application.GiftCards.IGiftCardService Service
 @inject AdminDateTimeFormatter Dates
 
-<PageTitle>Tarjetas Gift Card - LoyaltyCloud</PageTitle>
-<header class="kb-page-header"><div><span class="kb-eyebrow">Gift Cards</span><h1>Tarjetas</h1><p>Consulta saldos, destinatarios, vigencia e historial de cada tarjeta.</p></div><a class="kb-btn kb-btn--primary" href="/giftcards/issue">Emitir Gift Card</a></header>
-<GiftCardNav />
+<PageTitle>Tarjetas de regalo - LoyaltyCloud</PageTitle>
+<header class="kb-page-header"><div><span class="kb-eyebrow">Tarjetas de regalo</span><h1>Tarjetas</h1><p>Consulta saldos, destinatarios, vigencia e historial de cada tarjeta.</p></div><a class="kb-btn kb-btn--primary" href="/giftcards/issue">Emitir tarjeta de regalo</a></header>
 <section class="kb-panel">
  <div class="kb-toolbar kb-gift-filterbar">
   <label class="kb-field"><span>Buscar</span><input @bind="search" placeholder="Código, nombre o email" /></label>
@@ -16,7 +15,7 @@
  </div>
  @if (error is not null) { <div class="kb-form-error" role="alert">@error</div> }
  @if (loading && resultPage is null) { <div class="kb-empty-state"><p>Cargando tarjetas…</p></div> }
- else if (resultPage is not null && resultPage.Items.Count == 0) { <div class="kb-empty-state"><h2>No encontramos tarjetas</h2><p>Prueba con otros filtros o emite una nueva Gift Card.</p><a class="kb-btn kb-btn--primary" href="/giftcards/issue">Emitir Gift Card</a></div> }
+ else if (resultPage is not null && resultPage.Items.Count == 0) { <div class="kb-empty-state"><h2>No encontramos tarjetas</h2><p>Prueba con otros filtros o emite una nueva tarjeta de regalo.</p><a class="kb-btn kb-btn--primary" href="/giftcards/issue">Emitir tarjeta de regalo</a></div> }
  else if (resultPage is not null) {
   <div class="kb-table-shell kb-table-responsive"><table class="kb-table"><thead><tr><th>Código</th><th>Destinatario</th><th>Emitida</th><th>Saldo</th><th>Estado</th><th><span class="visually-hidden">Acciones</span></th></tr></thead><tbody>
   @foreach (var card in resultPage.Items) { <tr><td data-label="Código"><strong>@card.Code</strong></td><td data-label="Destinatario"><span>@card.RecipientName</span>@if(!string.IsNullOrWhiteSpace(card.RecipientEmail)){<small>@card.RecipientEmail</small>}</td><td data-label="Emitida">@Dates.DateNumeric(card.IssuedAtUtc)</td><td data-label="Saldo"><strong>@card.CurrentBalance.ToString("N2")</strong> @card.Currency</td><td data-label="Estado"><span class="kb-badge @StatusClass(card.Status)">@StatusLabel(card.Status)</span></td><td><a class="kb-btn kb-btn--ghost" href="/giftcards/cards/@card.Id">Ver detalle</a></td></tr> }

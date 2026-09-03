@@ -3,12 +3,11 @@
 @rendermode InteractiveServer
 @inject LoyaltyCloud.Application.GiftCards.IGiftCardService Service
 
-<PageTitle>Gift Cards · LoyaltyCloud</PageTitle>
+<PageTitle>Tarjetas de regalo · LoyaltyCloud</PageTitle>
 <header class="kb-page-header">
-    <div><span class="kb-eyebrow">Gift Cards</span><h1>Resumen</h1><p>Consulta el saldo emitido, disponible y utilizado por tus clientes.</p></div>
-    <a class="kb-btn kb-btn--primary" href="/giftcards/issue">Emitir Gift Card</a>
+    <div><span class="kb-eyebrow">Tarjetas de regalo</span><h1>Resumen</h1><p>Consulta el saldo emitido, disponible y utilizado por tus clientes.</p></div>
+    <a class="kb-btn kb-btn--primary" href="/giftcards/issue">Emitir tarjeta de regalo</a>
 </header>
-<GiftCardNav />
 @if (error is not null)
 {
     <div class="kb-form-error">No pudimos cargar el resumen. Inténtalo nuevamente.</div>
@@ -20,16 +19,16 @@ else if (dashboard is null)
 else
 {
     <section class="kb-metric-grid kb-gift-metrics">
-        <article class="kb-card kb-metric-card"><div class="kb-metric-topline"><span class="kb-card-label">Gift Cards activas</span><span class="kb-metric-icon"><NavIcon Name="gift" /></span></div><strong class="kb-card-value">@dashboard.ActiveCards.ToString("N0")</strong><p class="kb-card-context">Disponibles para usar</p></article>
+        <article class="kb-card kb-metric-card"><div class="kb-metric-topline"><span class="kb-card-label">Tarjetas de regalo activas</span><span class="kb-metric-icon"><NavIcon Name="gift" /></span></div><strong class="kb-card-value">@dashboard.ActiveCards.ToString("N0")</strong><p class="kb-card-context">Disponibles para usar</p></article>
         <article class="kb-card kb-metric-card"><div class="kb-metric-topline"><span class="kb-card-label">Saldo en circulación</span><span class="kb-metric-icon"><NavIcon Name="card" /></span></div><strong class="kb-card-value">@Money(dashboard.OutstandingBalance)</strong><p class="kb-card-context">Saldo pendiente de canjear</p></article>
-        <article class="kb-card kb-metric-card"><div class="kb-metric-topline"><span class="kb-card-label">Saldo emitido</span><span class="kb-metric-icon"><NavIcon Name="plus" /></span></div><strong class="kb-card-value">@Money(dashboard.IssuedValue)</strong><p class="kb-card-context">Valor cargado en Gift Cards</p></article>
+        <article class="kb-card kb-metric-card"><div class="kb-metric-topline"><span class="kb-card-label">Saldo emitido</span><span class="kb-metric-icon"><NavIcon Name="plus" /></span></div><strong class="kb-card-value">@Money(dashboard.IssuedValue)</strong><p class="kb-card-context">Valor cargado en tarjetas de regalo</p></article>
         <article class="kb-card kb-metric-card"><div class="kb-metric-topline"><span class="kb-card-label">Saldo canjeado</span><span class="kb-metric-icon"><NavIcon Name="scan" /></span></div><strong class="kb-card-value">@Money(dashboard.RedeemedValue)</strong><p class="kb-card-context">Usado por clientes</p></article>
     </section>
     <section class="kb-dashboard-layout">
         <article class="kb-panel">
             <div class="kb-panel-heading"><div><h2>Acciones frecuentes</h2><p>Continúa con las tareas principales del módulo.</p></div></div>
             <div class="kb-action-list">
-                <a href="/giftcards/issue"><span class="kb-action-icon"><NavIcon Name="plus" /></span><span><strong>Emitir</strong><small>Crea una nueva Gift Card</small></span><span class="kb-action-arrow">→</span></a>
+                <a href="/giftcards/issue"><span class="kb-action-icon"><NavIcon Name="plus" /></span><span><strong>Emitir</strong><small>Crea una nueva tarjeta de regalo</small></span><span class="kb-action-arrow">→</span></a>
                 <a href="/giftcards/redeem"><span class="kb-action-icon"><NavIcon Name="scan" /></span><span><strong>Consultar y canjear</strong><small>Busca por código o escanea</small></span><span class="kb-action-arrow">→</span></a>
                 <a href="/giftcards/cards"><span class="kb-action-icon"><NavIcon Name="card" /></span><span><strong>Ver tarjetas</strong><small>Consulta saldos e historial</small></span><span class="kb-action-arrow">→</span></a>
             </div>

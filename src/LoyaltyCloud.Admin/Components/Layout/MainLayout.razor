@@ -5,6 +5,8 @@
 @inject AuthenticationStateProvider AuthenticationStateProvider
 @inject NavigationManager Navigation
 @inject LoyaltyCloud.Application.GiftCards.IGiftCardService GiftCards
+@inject LoyaltyCloud.Admin.Services.GiftCardFeatureState GiftCardFeatureState
+@implements IDisposable
 
 @if (canRender)
 {
@@ -40,10 +42,6 @@
                 <NavLink href="/scan"><NavIcon Name="plus" /><span>Escanear QR</span></NavLink>
                 <NavLink href="/redeem"><NavIcon Name="scan" /><span>Canjear puntos</span></NavLink>
 
-                <span class="kb-sidebar-section">Reportes</span>
-                <NavLink href="/customers"><NavIcon Name="users" /><span>Clientes</span></NavLink>
-                <NavLink href="/reports/activity-trends"><NavIcon Name="history" /><span>Actividad y tendencias</span></NavLink>
-
                 <span class="kb-sidebar-section">Programa</span>
                 <NavLink href="/redemptions"><NavIcon Name="history" /><span>Canjes</span></NavLink>
                 <NavLink href="/rewards"><NavIcon Name="gift" /><span>Recompensas</span></NavLink>
@@ -52,7 +50,19 @@
 
                 @if (giftCardsEnabled)
                 {
-                    <NavLink href="/giftcards" Match="NavLinkMatch.Prefix"><NavIcon Name="gift" /><span>Gift Cards</span></NavLink>
+                    <span class="kb-sidebar-section">Tarjetas de regalo</span>
+                    <NavLink href="/giftcards" Match="NavLinkMatch.All"><NavIcon Name="dashboard" /><span>Resumen</span></NavLink>
+                    <NavLink href="/giftcards/issue"><NavIcon Name="plus" /><span>Emitir</span></NavLink>
+                    <NavLink href="/giftcards/redeem"><NavIcon Name="scan" /><span>Consultar y canjear</span></NavLink>
+                    <NavLink href="/giftcards/cards" Match="NavLinkMatch.Prefix"><NavIcon Name="card" /><span>Tarjetas</span></NavLink>
+                }
+
+                <span class="kb-sidebar-section">Reportes</span>
+                <NavLink href="/customers"><NavIcon Name="users" /><span>Clientes</span></NavLink>
+                <NavLink href="/reports/activity-trends"><NavIcon Name="history" /><span>Actividad y tendencias</span></NavLink>
+                @if (giftCardsEnabled)
+                {
+                    <NavLink href="/giftcards/reports"><NavIcon Name="gift" /><span>Tarjetas de regalo</span></NavLink>
                 }
 
                 <span class="kb-sidebar-section">Gestión</span>
@@ -61,7 +71,6 @@
                 <NavLink href="@($"/{TenantContext.TenantSlug}/billing")"><NavIcon Name="card" /><span>Suscripción y pagos</span></NavLink>
                 <NavLink href="/quick-help"><NavIcon Name="help" /><span>Ayuda</span></NavLink>
             </nav>
-
             <div class="kb-sidebar-footer">
                 <div class="kb-tenant-summary">
                     <span class="kb-tenant-avatar" aria-hidden="true">@TenantInitial</span>
@@ -90,6 +99,10 @@
 
     private void ToggleMenu() => menuOpen = !menuOpen;
     private void CloseMenu() => menuOpen = false;
+
+    protected override void OnInitialized() => GiftCardFeatureState.Changed += OnGiftCardsChangedAsync;
+    private Task OnGiftCardsChangedAsync(bool enabled) { giftCardsEnabled = enabled; return InvokeAsync(StateHasChanged); }
+    public void Dispose() => GiftCardFeatureState.Changed -= OnGiftCardsChangedAsync;
 
     protected override async Task OnParametersSetAsync()
     {

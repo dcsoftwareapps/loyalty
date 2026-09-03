@@ -488,21 +488,15 @@ public sealed class AdminRoutingTests : IClassFixture<AdminRoutingTests.AdminWeb
         var orderedItems = new[]
         {
             "<span class=\"kb-sidebar-section\">Principal</span>",
-            "href=\"/dashboard\"",
-            "href=\"/scan\"",
-            "href=\"/redeem\"",
-            "<span class=\"kb-sidebar-section\">Reportes</span>",
-            "href=\"/customers\"",
-            "href=\"/reports/activity-trends\"",
+            "href=\"/dashboard\"", "href=\"/scan\"", "href=\"/redeem\"",
             "<span class=\"kb-sidebar-section\">Programa</span>",
-            "href=\"/redemptions\"",
-            "href=\"/rewards\"",
-            "href=\"/campaigns\"",
-            "href=\"/marketing-notifications\"",
+            "href=\"/redemptions\"", "href=\"/rewards\"", "href=\"/campaigns\"", "href=\"/marketing-notifications\"",
+            "<span class=\"kb-sidebar-section\">Tarjetas de regalo</span>",
+            "href=\"/giftcards\"", "href=\"/giftcards/issue\"", "href=\"/giftcards/redeem\"", "href=\"/giftcards/cards\"",
+            "<span class=\"kb-sidebar-section\">Reportes</span>",
+            "href=\"/customers\"", "href=\"/reports/activity-trends\"", "href=\"/giftcards/reports\"",
             "<span class=\"kb-sidebar-section\">Gestión</span>",
-            "href=\"/levels\"",
-            "href=\"/config\"",
-            "href=\"/quick-help\""
+            "href=\"/levels\"", "href=\"/config\"", "href=\"/quick-help\""
         };
 
         var previousIndex = -1;
@@ -822,16 +816,41 @@ public sealed class AdminRoutingTests : IClassFixture<AdminRoutingTests.AdminWeb
 
     [Fact]
     [Trait("Category", "AdminMarketingNotifications")]
-    public void Marketing_notifications_preview_separates_notification_and_detail_without_unavailable_filler()
+    public void Marketing_notifications_creation_flow_is_simplified_without_wallet_preview()
     {
         var source = File.ReadAllText(Path.Combine(GetRepositoryRoot(), "src", "LoyaltyCloud.Admin", "Pages", "MarketingNotifications.razor"));
 
-        Assert.Contains("<h3 style=\"margin-top:8px;\">@GeneratedTitle</h3>", source);
-        Assert.Contains("Notificación", source);
-        Assert.Contains("Detalle", source);
-        Assert.Contains("@DisplayText(form.ShortMessage?.Trim())", source);
-        Assert.Contains("@DisplayText(form.LongMessage?.Trim())", source);
+        Assert.Contains("<label for=\"display-until\">Fecha de expiración</label>", source);
+        Assert.Contains("Después de esta fecha, el mensaje dejará de mostrarse en las siguientes actualizaciones de Wallet.", source);
+        Assert.Contains("class=\"kb-checkbox-row\" for=\"schedule-delivery\"", source);
+        Assert.Contains("id=\"schedule-delivery\" class=\"kb-checkbox\" type=\"checkbox\"", source);
+        Assert.Contains("Programar envío", source);
+        Assert.Contains("<label for=\"scheduled-at\">Fecha y hora de envío</label>", source);
+        Assert.True(
+            source.IndexOf("id=\"schedule-delivery\"", StringComparison.Ordinal) <
+            source.IndexOf("id=\"scheduled-at\"", StringComparison.Ordinal));
+        Assert.Contains("@if (!confirmSend)", source);
+        Assert.Contains("@if (confirmSend && preview is not null)", source);
+        Assert.Contains("RequestConfirmationAsync", source);
+        Assert.Contains("CancelConfirmation", source);
+        Assert.Contains("¿Enviar este mensaje ahora?", source);
+        Assert.Contains("¿Programar este mensaje?", source);
+        Assert.Contains("Se enviará a {preview.TotalRecipients:N0} destinatarios.", source);
+        Assert.DoesNotContain("Ver audiencia", source);
+        Assert.DoesNotContain("@onclick=\"PreviewAsync\"", source);
+        Assert.DoesNotContain("private async Task PreviewAsync()", source);
+        Assert.DoesNotContain("<span>Envío</span>", source);
+        Assert.DoesNotContain("Mostrar hasta", source);
+        Assert.DoesNotContain("id=\"send-mode\"", source);
+        Assert.DoesNotContain("Preview audiencia", source);
+        Assert.DoesNotContain("Vista previa Wallet", source);
+        Assert.DoesNotContain("@DisplayText(form.ShortMessage?.Trim())", source);
+        Assert.DoesNotContain("@DisplayText(form.LongMessage?.Trim())", source);
         Assert.DoesNotContain("@BuildShortMessage(form.Message)", source);
+
+        var css = File.ReadAllText(Path.Combine(GetRepositoryRoot(), "src", "LoyaltyCloud.Admin", "wwwroot", "css", "site.css"));
+        Assert.Contains(".kb-checkbox-row", css);
+        Assert.Contains("input.kb-checkbox", css);
     }
 
     [Fact]
