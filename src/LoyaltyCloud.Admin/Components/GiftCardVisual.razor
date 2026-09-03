@@ -14,14 +14,6 @@
             <p>@SecondaryText</p>
         }
     </div>
-    @if (!string.IsNullOrWhiteSpace(SenderName))
-    {
-        <div class="kb-gift-card-visual__sender"><small>DE</small><strong>@SenderName</strong></div>
-    }
-    @if (ShowRecipient && !string.IsNullOrWhiteSpace(RecipientName))
-    {
-        <div class="kb-gift-card-visual__recipient"><small>PARA</small><strong>@RecipientName</strong></div>
-    }
     <div class="kb-gift-card-visual__balance @BalanceClass">
         @if (ShowBalanceLabel)
         {
@@ -33,12 +25,22 @@
             <span>@Currency</span>
         }
     </div>
-    <div class="kb-gift-card-visual__footer">
-        <span>@Code</span>
+    <div class="kb-gift-card-visual__meta">
+        @if (!string.IsNullOrWhiteSpace(SenderName))
+        {
+            <div class="kb-gift-card-visual__sender"><small>DE</small><strong>@SenderName</strong></div>
+        }
+        @if (ShowRecipient && !string.IsNullOrWhiteSpace(RecipientName))
+        {
+            <div class="kb-gift-card-visual__recipient"><small>PARA</small><strong>@RecipientName</strong></div>
+        }
         @if (ShowExpiration && !string.IsNullOrWhiteSpace(Expiration))
         {
-            <span>Vigencia: @Expiration</span>
+            <div class="kb-gift-card-visual__expiration"><small>VÁLIDA HASTA</small><strong>@Expiration</strong></div>
         }
+    </div>
+    <div class="kb-gift-card-visual__footer">
+        <span>@Code</span>
     </div>
 </div>
 @code {

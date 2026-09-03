@@ -110,6 +110,7 @@ public sealed class GiftCardFeatureToggleTests
         Assert.Contains("Tarjetas de regalo habilitadas", panel);
         Assert.Contains("AllowPartialRedemption", panel);
         Assert.Contains("GiftCardVisual", panel);
+        Assert.DoesNotContain("<span>Moneda</span>", panel);
     }
 
     [Fact]
@@ -117,6 +118,7 @@ public sealed class GiftCardFeatureToggleTests
     {
         var panel = Read("src", "LoyaltyCloud.Admin", "Components", "GiftCardSettingsPanel.razor");
         var visual = Read("src", "LoyaltyCloud.Admin", "Components", "GiftCardVisual.razor");
+        var css = Read("src", "LoyaltyCloud.Admin", "wwwroot", "css", "site.css");
 
         Assert.Contains("DisplayName=\"@PreviewBranding.DisplayName\"", panel);
         Assert.Contains("BackgroundColor=\"@PreviewBranding.BackgroundColor\"", panel);
@@ -139,6 +141,34 @@ public sealed class GiftCardFeatureToggleTests
         Assert.Contains("kb-gift-card-visual__sender", visual);
         Assert.Contains("@if (ShowRecipient", visual);
         Assert.Contains("@if (ShowBalanceLabel)", visual);
+        Assert.True(visual.IndexOf("kb-gift-card-visual__balance", StringComparison.Ordinal) < visual.IndexOf("kb-gift-card-visual__sender", StringComparison.Ordinal));
+        Assert.Contains("kb-gift-card-visual__meta", visual);
+        Assert.Contains("VÁLIDA HASTA", visual);
+        Assert.Contains("aspect-ratio:.72/1", css);
+        Assert.Contains("min-height:420px", css);
+    }
+
+    [Fact]
+    public void GiftCardPublicClaimPreview_UsesActualCardDataWithCleanWalletFront()
+    {
+        var claim = Read("src", "LoyaltyCloud.Admin", "Pages", "GiftCardClaim.razor");
+
+        Assert.Contains("DisplayName=\"@claim.DisplayName\"", claim);
+        Assert.Contains("BackgroundColor=\"@claim.PrimaryColor\"", claim);
+        Assert.Contains("TextColor=\"@claim.TextColor\"", claim);
+        Assert.Contains("LogoUrl=\"@claim.LogoUrl\"", claim);
+        Assert.Contains("SenderName=\"@claim.Card.SenderName\"", claim);
+        Assert.Contains("Balance=\"@Money(claim.Card.CurrentBalance, claim.Card.Currency)\"", claim);
+        Assert.Contains("Expiration=\"@ExpirationText\"", claim);
+        Assert.Contains("ShowCategoryLabel=\"false\"", claim);
+        Assert.Contains("ShowSecondaryText=\"false\"", claim);
+        Assert.Contains("ShowRecipient=\"false\"", claim);
+        Assert.Contains("ShowBalanceLabel=\"false\"", claim);
+        Assert.Contains("ShowCurrency=\"false\"", claim);
+        Assert.DoesNotContain("SecondaryText=\"@claim.SecondaryText\"", claim);
+        Assert.DoesNotContain("RecipientName=\"@claim.Card.RecipientName\"", claim);
+        Assert.DoesNotContain("Balance=\"@claim.Card.CurrentBalance.ToString(\"N2\")\"", claim);
+        Assert.Contains("decimal.Truncate(value)==value", claim);
     }
 
     [Fact]

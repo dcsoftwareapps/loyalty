@@ -87,7 +87,10 @@ internal sealed class GiftCardDeliveryService(ITransactionalEmailSender sender, 
         if (string.IsNullOrWhiteSpace(recipient))
             return new(GiftCardDeliveryStatus.NotSent, "Email no enviado: falta el email del destinatario.", null);
 
-        var url = $"{settings.ApplicationBaseUrl.TrimEnd('/')}/giftcards/claim/{Uri.EscapeDataString(giftCard.ClaimToken)}";
+        var url = await GetClaimUrlAsync(giftCard.ClaimToken, ct);
+        if (string.IsNullOrWhiteSpace(url))
+            return new(GiftCardDeliveryStatus.NotSent, "Email no enviado: falta el enlace público de entrega.", null);
+
         var displayName = string.IsNullOrWhiteSpace(businessName) ? "LoyaltyCloud" : businessName.Trim();
         var subject = $"{displayName} te envió una tarjeta de regalo";
         var name = WebUtility.HtmlEncode(giftCard.Card.RecipientName);

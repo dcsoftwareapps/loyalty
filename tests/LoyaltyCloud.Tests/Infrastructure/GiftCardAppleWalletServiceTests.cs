@@ -26,7 +26,7 @@ public sealed class GiftCardAppleWalletServiceTests
     [Trait("Category", "GiftCards")]
     [Trait("Category", "TenantBranding")]
     [Trait("Category", "WalletProductionUpdate")]
-    public async Task Apple_gift_card_pass_uses_dark_tenant_wallet_branding_colors_and_assets()
+    public async Task Apple_gift_card_pass_uses_gift_card_branding_before_tenant_wallet_colors_and_assets()
     {
         await using var db = CreateContext();
         var card = await SeedAsync(db, expiresAtUtc: null, senderName: null);
@@ -45,10 +45,10 @@ public sealed class GiftCardAppleWalletServiceTests
         await Service(db, package, assets.Object, Branding()).CreateOrUpdatePassAsync(card.Id);
 
         var pass = package.PassJson!;
-        Assert.Equal("rgb(12,34,56)", pass["backgroundColor"]!.GetValue<string>());
-        Assert.Equal("rgb(250,250,250)", pass["foregroundColor"]!.GetValue<string>());
-        Assert.Equal("rgb(230,230,230)", pass["labelColor"]!.GetValue<string>());
-        Assert.NotEqual("#1C1B18", pass["backgroundColor"]!.GetValue<string>());
+        Assert.Equal("rgb(28,27,24)", pass["backgroundColor"]!.GetValue<string>());
+        Assert.Equal("rgb(255,255,255)", pass["foregroundColor"]!.GetValue<string>());
+        Assert.Equal("rgb(255,255,255)", pass["labelColor"]!.GetValue<string>());
+        Assert.NotEqual("rgb(12,34,56)", pass["backgroundColor"]!.GetValue<string>());
         assets.VerifyAll();
     }
 
@@ -56,25 +56,26 @@ public sealed class GiftCardAppleWalletServiceTests
     [Trait("Category", "GiftCards")]
     [Trait("Category", "TenantBranding")]
     [Trait("Category", "WalletProductionUpdate")]
-    public async Task Apple_gift_card_pass_uses_light_tenant_wallet_branding_contrast_result()
+    public async Task Apple_gift_card_pass_uses_gift_card_text_color_before_tenant_wallet_text_color()
     {
         await using var db = CreateContext();
-        var card = await SeedAsync(db, expiresAtUtc: null, senderName: null);
+        var card = await SeedAsync(db, expiresAtUtc: null, senderName: null, primaryColor: "#FFFFFF", textColor: "#101820");
         var package = new CapturingPassPackageBuilder();
         var branding = Branding() with
         {
-            BackgroundColor = "rgb(255,255,255)",
-            ForegroundColor = "rgb(17,24,39)",
-            LabelColor = "rgb(17,24,39)",
-            BackgroundHex = "#FFFFFF"
+            BackgroundColor = "rgb(12,34,56)",
+            ForegroundColor = "rgb(250,250,250)",
+            LabelColor = "rgb(230,230,230)",
+            BackgroundHex = "#0C2238"
         };
 
         await Service(db, package, branding: branding).CreateOrUpdatePassAsync(card.Id);
 
         var pass = package.PassJson!;
-        Assert.Equal(branding.BackgroundColor, pass["backgroundColor"]!.GetValue<string>());
-        Assert.Equal(branding.ForegroundColor, pass["foregroundColor"]!.GetValue<string>());
-        Assert.Equal(branding.LabelColor, pass["labelColor"]!.GetValue<string>());
+        Assert.Equal("rgb(255,255,255)", pass["backgroundColor"]!.GetValue<string>());
+        Assert.Equal("rgb(16,24,32)", pass["foregroundColor"]!.GetValue<string>());
+        Assert.Equal("rgb(16,24,32)", pass["labelColor"]!.GetValue<string>());
+        Assert.NotEqual(branding.ForegroundColor, pass["foregroundColor"]!.GetValue<string>());
     }
 
     [Fact]
@@ -245,7 +246,11 @@ public sealed class GiftCardAppleWalletServiceTests
         DateTime? expiresAtUtc,
         string? senderName,
         decimal amount = 500m,
-        string currency = "MXN")
+        string currency = "MXN",
+        string displayName = "Tarjeta de regalo",
+        string primaryColor = "#1C1B18",
+        string textColor = "#FFFFFF",
+        string? logoUrl = null)
     {
         db.Tenants.Add(new Tenant(TenantId, "kbeauty", "KBeauty", "America/Tijuana", Now));
         var config = new GiftCardConfiguration(Guid.NewGuid(), TenantId, Now);
@@ -257,10 +262,10 @@ public sealed class GiftCardAppleWalletServiceTests
             expirationMode: GiftCardExpirationMode.Never,
             months: null,
             currency: currency,
-            displayName: "Gift Card",
-            primaryColor: "#1C1B18",
-            textColor: "#FFFFFF",
-            logoUrl: null,
+            displayName: displayName,
+            primaryColor: primaryColor,
+            textColor: textColor,
+            logoUrl: logoUrl,
             secondaryText: null,
             terms: null,
             footer: null,
