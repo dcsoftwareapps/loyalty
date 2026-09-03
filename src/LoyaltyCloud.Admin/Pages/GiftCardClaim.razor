@@ -1,6 +1,7 @@
 @page "/giftcards/claim/{Token}"
 @attribute [AllowAnonymous]
 @layout EmptyLayout
+@using System.Globalization
 @using LoyaltyCloud.Admin.Services
 @using Microsoft.AspNetCore.Http
 @inject LoyaltyCloud.Application.GiftCards.IGiftCardClaimService Claims
@@ -13,7 +14,7 @@ else if(claim is null){<main class="kb-public-page"><section class="kb-gift-clai
 else{
 <main class="kb-public-page kb-gift-claim" style="@($"--gift-primary:{claim.PrimaryColor}")">
  <section class="kb-gift-claim__shell">
-  <GiftCardVisual DisplayName="@claim.DisplayName" BackgroundColor="@claim.PrimaryColor" TextColor="@claim.TextColor" LogoUrl="@claim.LogoUrl" SecondaryText="@claim.SecondaryText" RecipientName="@claim.Card.RecipientName" Balance="@claim.Card.CurrentBalance.ToString("N2")" Currency="@claim.Card.Currency" Code="@claim.Card.Code" Expiration="@Dates.DateNumeric(claim.Card.ExpiresAtUtc, "Sin expiración")" />
+  <GiftCardVisual DisplayName="@claim.DisplayName" BackgroundColor="@claim.PrimaryColor" TextColor="@claim.TextColor" LogoUrl="@claim.LogoUrl" SenderName="@claim.Card.SenderName" Balance="@Money(claim.Card.CurrentBalance, claim.Card.Currency)" Currency="" Code="@claim.Card.Code" Expiration="@ExpirationText" ShowCategoryLabel="false" ShowSecondaryText="false" ShowRecipient="false" ShowBalanceLabel="false" ShowCurrency="false" />
   <div class="kb-gift-claim__content"><p class="kb-eyebrow">Un regalo para ti</p><h1>@claim.Card.RecipientName</h1>@if(!string.IsNullOrWhiteSpace(claim.Card.SenderName)){<p>De <strong>@claim.Card.SenderName</strong></p>}@if(!string.IsNullOrWhiteSpace(claim.Card.PersonalMessage)){<blockquote>“@claim.Card.PersonalMessage”</blockquote>}
    <dl><div><dt>Saldo disponible</dt><dd>@claim.Card.CurrentBalance.ToString("N2") @claim.Card.Currency</dd></div><div><dt>Estado</dt><dd>@StatusLabel</dd></div><div><dt>Vigencia</dt><dd>@Dates.DateNumeric(claim.Card.ExpiresAtUtc, "Sin expiración")</dd></div></dl>
    <div class="kb-gift-wallet-actions">@if(platform==GiftCardWalletPlatform.Unknown){<p class="kb-muted">Abre esta página desde tu iPhone o Android para agregar la tarjeta de regalo a Wallet.</p>}else{<a class="kb-btn kb-btn--primary" href="@WalletUrl">@WalletLabel</a>}</div>
@@ -27,5 +28,7 @@ else{
  string WalletUrl=>platform==GiftCardWalletPlatform.Apple?$"/giftcards/claim/{Uri.EscapeDataString(Token)}/wallet/apple":$"/giftcards/claim/{Uri.EscapeDataString(Token)}/wallet/google";
  string WalletLabel=>"Agregar a Wallet";
  string StatusLabel=>claim?.Card.Status switch{LoyaltyCloud.Domain.Enums.GiftCardStatus.Active=>"Activa",LoyaltyCloud.Domain.Enums.GiftCardStatus.FullyRedeemed=>"Canjeada",LoyaltyCloud.Domain.Enums.GiftCardStatus.Expired=>"Expirada",_=>"Cancelada"};
+ string? ExpirationText=>claim?.Card.ExpiresAtUtc is null?null:Dates.DateNumeric(claim.Card.ExpiresAtUtc);
  protected override async Task OnParametersSetAsync(){loading=true;var userAgent=HttpContextAccessor.HttpContext?.Request.Headers.UserAgent.ToString();platform=GiftCardWalletPlatformResolver.Resolve(userAgent);claim=await Claims.GetAsync(Token);loading=false;}
+ static string Money(decimal value,string currency){var normalized=string.IsNullOrWhiteSpace(currency)?"":currency.Trim().ToUpperInvariant();if(normalized!="MXN")return $"{value:N2} {normalized}".Trim();var format=decimal.Truncate(value)==value?"#,0":"#,0.00";return "$"+value.ToString(format,CultureInfo.InvariantCulture);}
 }

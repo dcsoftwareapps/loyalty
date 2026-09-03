@@ -103,10 +103,6 @@ public sealed class GiftCardPersistenceTests
         var service = Service(db);
 
         var first = await service.IssueAsync(new(500m, null, "Cliente", "recipient@example.test", null, "Daniel", "Felicidades"));
-        var second = await service.RotateClaimTokenAsync(first.Card.Id);
-
-        Assert.NotEqual(first.ClaimToken, second.ClaimToken);
-
         await using var claimDb = database.ContextWithoutTenant();
         var tenantContext = new TestMutableTenantContext();
         var claimService = new GiftCardClaimService(
@@ -117,11 +113,31 @@ public sealed class GiftCardPersistenceTests
             new Mock<IGiftCardWalletService>().Object,
             new Mock<IGiftCardAppleWalletService>().Object);
 
+        var initialClaim = await claimService.GetAsync(first.ClaimToken);
+        Assert.NotNull(initialClaim);
+        Assert.Equal(first.Card.Id, initialClaim.Card.Id);
+
+        var sender = new RecordingSender();
+        var delivery = new GiftCardDeliveryService(sender, new EmailConfiguration(), NullLogger<GiftCardDeliveryService>.Instance);
+        var initialDelivery = await delivery.SendEmailAsync(first, first.Card.RecipientEmail!, "Gift Card Test");
+        var initialEmail = Assert.Single(sender.Messages);
+        Assert.Equal(GiftCardDeliveryStatus.Sent, initialDelivery.Status);
+        Assert.Equal($"https://admin.example.test/giftcards/claim/{first.ClaimToken}", initialDelivery.ClaimUrl);
+        Assert.Contains($"/giftcards/claim/{first.ClaimToken}", initialEmail.TextBody);
+
+        var second = await service.RotateClaimTokenAsync(first.Card.Id);
+
+        Assert.NotEqual(first.ClaimToken, second.ClaimToken);
         Assert.Null(await claimService.GetAsync(first.ClaimToken));
         var currentClaim = await claimService.GetAsync(second.ClaimToken);
         Assert.NotNull(currentClaim);
         Assert.Equal(first.Card.Id, currentClaim.Card.Id);
         Assert.Equal(TenantId, tenantContext.TenantId);
+
+        var resendDelivery = await delivery.SendEmailAsync(second, second.Card.RecipientEmail!, "Gift Card Test");
+        Assert.Equal(GiftCardDeliveryStatus.Sent, resendDelivery.Status);
+        Assert.Equal($"https://admin.example.test/giftcards/claim/{second.ClaimToken}", resendDelivery.ClaimUrl);
+        Assert.DoesNotContain($"/giftcards/claim/{first.ClaimToken}", sender.Messages.Last().TextBody);
     }
 
     [Fact]

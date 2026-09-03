@@ -1,6 +1,7 @@
 using System.Security.Cryptography;
 using System.Globalization;
 using System.Text.Json;
+using LoyaltyCloud.Application.Common.Branding;
 using LoyaltyCloud.Application.Common.Interfaces;
 using LoyaltyCloud.Application.GiftCards;
 using LoyaltyCloud.Common.Services;
@@ -64,9 +65,12 @@ internal sealed class GiftCardAppleWalletService(
 
     private async Task<GiftCardApplePassResult> BuildAsync(GiftCard card,GiftCardWallet wallet,CancellationToken ct)
     {
-        var config=await db.GiftCardConfigurations.SingleAsync(ct);var tenant=await db.Tenants.AsNoTracking().SingleAsync(x=>x.Id==card.TenantId,ct);var branding=await tenantWalletBranding.GetForTenantAsync(card.TenantId,ct);
-        var pass=new{formatVersion=1,passTypeIdentifier=_options.PassTypeIdentifier,serialNumber=wallet.ExternalObjectId,teamIdentifier=_options.TeamIdentifier,webServiceURL=_options.WebServiceURL,authenticationToken=wallet.AuthenticationToken,organizationName=tenant.DisplayName,description=$"{config.DisplayName} - {tenant.DisplayName}",backgroundColor=branding.BackgroundColor,foregroundColor=branding.ForegroundColor,labelColor=branding.LabelColor,storeCard=new{headerFields=new[]{new{key="gift_card_title",label=string.Empty,value="Tarjeta de regalo"}},primaryFields=new[]{new{key="balance",label=string.Empty,value=FormatBalance(card.CurrentBalance,card.Currency),changeMessage="Tu nuevo saldo es %@",textAlignment="PKTextAlignmentCenter"}},secondaryFields=BuildSecondaryFields(card),auxiliaryFields=Array.Empty<object>(),backFields=new[]{new{key="code",label="Código",value=card.PublicCode},new{key="terms",label="Términos",value=config.Terms??"Presenta este código al pagar"}}},barcodes=new[]{new{format="PKBarcodeFormatQR",message=card.PublicCode,messageEncoding="iso-8859-1",altText="Presenta este código al pagar"}}};
-        var assetBytes=await assets.LoadAssetsAsync(branding.TenantId,branding.TenantSlug,branding.WalletLogoBlobName,branding.LogoBlobName,includeStripImage:false,stripImageBlobName:null,ct);var bytes=await package.BuildAsync(JsonSerializer.SerializeToUtf8Bytes(pass),assetBytes,ct);return new(bytes,wallet.ExternalObjectId,card.UpdatedAtUtc);
+        var config=await db.GiftCardConfigurations.SingleAsync(ct);var tenant=await db.Tenants.AsNoTracking().SingleAsync(x=>x.Id==card.TenantId,ct);var tenantBranding=await tenantWalletBranding.GetForTenantAsync(card.TenantId,ct);
+        var giftBranding=GiftCardBrandingResolver.Resolve(config.PrimaryColor,config.TextColor,config.DisplayName,config.LogoUrl,tenantBranding.BackgroundHex,tenantBranding.DisplayName,null);
+        var backgroundColor=WalletColorContrast.ToAppleRgb(giftBranding.BackgroundColor);
+        var textColor=WalletColorContrast.ToAppleRgb(giftBranding.TextColor);
+        var pass=new{formatVersion=1,passTypeIdentifier=_options.PassTypeIdentifier,serialNumber=wallet.ExternalObjectId,teamIdentifier=_options.TeamIdentifier,webServiceURL=_options.WebServiceURL,authenticationToken=wallet.AuthenticationToken,organizationName=tenant.DisplayName,description=$"{giftBranding.DisplayName} - {tenant.DisplayName}",backgroundColor,foregroundColor=textColor,labelColor=textColor,storeCard=new{headerFields=new[]{new{key="gift_card_title",label=string.Empty,value=giftBranding.DisplayName}},primaryFields=new[]{new{key="balance",label=string.Empty,value=FormatBalance(card.CurrentBalance,card.Currency),changeMessage="Tu nuevo saldo es %@",textAlignment="PKTextAlignmentCenter"}},secondaryFields=BuildSecondaryFields(card),auxiliaryFields=Array.Empty<object>(),backFields=new[]{new{key="code",label="Código",value=card.PublicCode},new{key="terms",label="Términos",value=config.Terms??"Presenta este código al pagar"}}},barcodes=new[]{new{format="PKBarcodeFormatQR",message=card.PublicCode,messageEncoding="iso-8859-1",altText="Presenta este código al pagar"}}};
+        var assetBytes=await assets.LoadAssetsAsync(tenantBranding.TenantId,tenantBranding.TenantSlug,tenantBranding.WalletLogoBlobName,tenantBranding.LogoBlobName,includeStripImage:false,stripImageBlobName:null,ct);var bytes=await package.BuildAsync(JsonSerializer.SerializeToUtf8Bytes(pass),assetBytes,ct);return new(bytes,wallet.ExternalObjectId,card.UpdatedAtUtc);
     }
 
     private static object[] BuildSecondaryFields(GiftCard card)
