@@ -113,6 +113,35 @@ public sealed class GiftCardFeatureToggleTests
     }
 
     [Fact]
+    public void GiftCardConfigurationPreview_MatchesAppleGiftCardFrontPresentation()
+    {
+        var panel = Read("src", "LoyaltyCloud.Admin", "Components", "GiftCardSettingsPanel.razor");
+        var visual = Read("src", "LoyaltyCloud.Admin", "Components", "GiftCardVisual.razor");
+
+        Assert.Contains("DisplayName=\"@PreviewBranding.DisplayName\"", panel);
+        Assert.Contains("BackgroundColor=\"@PreviewBranding.BackgroundColor\"", panel);
+        Assert.Contains("TextColor=\"@PreviewBranding.TextColor\"", panel);
+        Assert.Contains("LogoUrl=\"@PreviewBranding.LogoUrl\"", panel);
+        Assert.Contains("SenderName=\"Loyalty\"", panel);
+        Assert.Contains("Balance=\"$200\"", panel);
+        Assert.Contains("ShowCategoryLabel=\"false\"", panel);
+        Assert.Contains("ShowSecondaryText=\"false\"", panel);
+        Assert.Contains("ShowRecipient=\"false\"", panel);
+        Assert.Contains("ShowBalanceLabel=\"false\"", panel);
+        Assert.Contains("ShowCurrency=\"false\"", panel);
+        Assert.Contains("ShowExpiration=\"false\"", panel);
+        Assert.DoesNotContain("SecondaryText=\"@", panel);
+        Assert.DoesNotContain("Balance=\"1,000.00\"", panel);
+        Assert.DoesNotContain("Expiration=\"Sin expiración\"", panel);
+
+        Assert.Contains("@if (ShowCategoryLabel)", visual);
+        Assert.Contains("@if (ShowSecondaryText", visual);
+        Assert.Contains("kb-gift-card-visual__sender", visual);
+        Assert.Contains("@if (ShowRecipient", visual);
+        Assert.Contains("@if (ShowBalanceLabel)", visual);
+    }
+
+    [Fact]
     public async Task AuthorizationPolicy_DeniesOffAndAllowsOn()
     {
         var service = new Mock<IGiftCardService>();

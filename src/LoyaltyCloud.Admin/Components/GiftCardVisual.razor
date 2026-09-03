@@ -1,20 +1,64 @@
 <div class="kb-gift-card-visual" style="@Style" aria-label="Tarjeta de regalo @DisplayName">
-    @if (!string.IsNullOrWhiteSpace(LogoUrl)) { <img src="@LogoUrl" alt="" /> }
-    <div class="kb-gift-card-visual__heading"><small>TARJETA DE REGALO</small><h2>@DisplayName</h2>@if(!string.IsNullOrWhiteSpace(SecondaryText)){<p>@SecondaryText</p>}</div>
-    @if(!string.IsNullOrWhiteSpace(RecipientName)){<div class="kb-gift-card-visual__recipient"><small>PARA</small><strong>@RecipientName</strong></div>}
-    <div class="kb-gift-card-visual__balance"><small>SALDO DISPONIBLE</small><strong>@Balance</strong><span>@Currency</span></div>
-    <div class="kb-gift-card-visual__footer"><span>@Code</span>@if(!string.IsNullOrWhiteSpace(Expiration)){<span>Vigencia: @Expiration</span>}</div>
+    @if (!string.IsNullOrWhiteSpace(LogoUrl))
+    {
+        <img src="@LogoUrl" alt="" />
+    }
+    <div class="kb-gift-card-visual__heading">
+        @if (ShowCategoryLabel)
+        {
+            <small>TARJETA DE REGALO</small>
+        }
+        <h2>@DisplayName</h2>
+        @if (ShowSecondaryText && !string.IsNullOrWhiteSpace(SecondaryText))
+        {
+            <p>@SecondaryText</p>
+        }
+    </div>
+    @if (!string.IsNullOrWhiteSpace(SenderName))
+    {
+        <div class="kb-gift-card-visual__sender"><small>DE</small><strong>@SenderName</strong></div>
+    }
+    @if (ShowRecipient && !string.IsNullOrWhiteSpace(RecipientName))
+    {
+        <div class="kb-gift-card-visual__recipient"><small>PARA</small><strong>@RecipientName</strong></div>
+    }
+    <div class="kb-gift-card-visual__balance @BalanceClass">
+        @if (ShowBalanceLabel)
+        {
+            <small>SALDO DISPONIBLE</small>
+        }
+        <strong>@Balance</strong>
+        @if (ShowCurrency && !string.IsNullOrWhiteSpace(Currency))
+        {
+            <span>@Currency</span>
+        }
+    </div>
+    <div class="kb-gift-card-visual__footer">
+        <span>@Code</span>
+        @if (ShowExpiration && !string.IsNullOrWhiteSpace(Expiration))
+        {
+            <span>Vigencia: @Expiration</span>
+        }
+    </div>
 </div>
 @code {
- [Parameter] public string DisplayName { get; set; } = "Tarjeta de regalo";
- [Parameter] public string BackgroundColor { get; set; } = "#1C1B18";
- [Parameter] public string TextColor { get; set; } = "#FFFFFF";
- [Parameter] public string? LogoUrl { get; set; }
- [Parameter] public string? SecondaryText { get; set; }
- [Parameter] public string? RecipientName { get; set; }
- [Parameter] public string Balance { get; set; } = "1,000.00";
- [Parameter] public string Currency { get; set; } = "MXN";
- [Parameter] public string Code { get; set; } = "GC-••••-••••-••••";
- [Parameter] public string? Expiration { get; set; }
- private string Style => $"--gift-bg:{BackgroundColor};--gift-text:{TextColor}";
+    [Parameter] public string DisplayName { get; set; } = "Tarjeta de regalo";
+    [Parameter] public string BackgroundColor { get; set; } = "#1C1B18";
+    [Parameter] public string TextColor { get; set; } = "#FFFFFF";
+    [Parameter] public string? LogoUrl { get; set; }
+    [Parameter] public string? SecondaryText { get; set; }
+    [Parameter] public string? SenderName { get; set; }
+    [Parameter] public string? RecipientName { get; set; }
+    [Parameter] public string Balance { get; set; } = "1,000.00";
+    [Parameter] public string Currency { get; set; } = "MXN";
+    [Parameter] public string Code { get; set; } = "GC-••••-••••-••••";
+    [Parameter] public string? Expiration { get; set; }
+    [Parameter] public bool ShowCategoryLabel { get; set; } = true;
+    [Parameter] public bool ShowSecondaryText { get; set; } = true;
+    [Parameter] public bool ShowRecipient { get; set; } = true;
+    [Parameter] public bool ShowBalanceLabel { get; set; } = true;
+    [Parameter] public bool ShowCurrency { get; set; } = true;
+    [Parameter] public bool ShowExpiration { get; set; } = true;
+    private string BalanceClass => ShowBalanceLabel ? string.Empty : "kb-gift-card-visual__balance--clean";
+    private string Style => $"--gift-bg:{BackgroundColor};--gift-text:{TextColor}";
 }

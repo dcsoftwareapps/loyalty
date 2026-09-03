@@ -1,5 +1,6 @@
 using System.Text.Json;
 using System.Text.Json.Nodes;
+using System.Globalization;
 using LoyaltyCloud.Application.Common.Interfaces;
 using LoyaltyCloud.Common.Services;
 using LoyaltyCloud.Domain.Entities;
@@ -25,7 +26,7 @@ public sealed class GiftCardAppleWalletServiceTests
     [Trait("Category", "GiftCards")]
     [Trait("Category", "TenantBranding")]
     [Trait("Category", "WalletProductionUpdate")]
-    public async Task Apple_gift_card_pass_uses_tenant_wallet_branding_colors_and_assets()
+    public async Task Apple_gift_card_pass_uses_dark_tenant_wallet_branding_colors_and_assets()
     {
         await using var db = CreateContext();
         var card = await SeedAsync(db, expiresAtUtc: null, senderName: null);
@@ -53,6 +54,31 @@ public sealed class GiftCardAppleWalletServiceTests
 
     [Fact]
     [Trait("Category", "GiftCards")]
+    [Trait("Category", "TenantBranding")]
+    [Trait("Category", "WalletProductionUpdate")]
+    public async Task Apple_gift_card_pass_uses_light_tenant_wallet_branding_contrast_result()
+    {
+        await using var db = CreateContext();
+        var card = await SeedAsync(db, expiresAtUtc: null, senderName: null);
+        var package = new CapturingPassPackageBuilder();
+        var branding = Branding() with
+        {
+            BackgroundColor = "rgb(255,255,255)",
+            ForegroundColor = "rgb(17,24,39)",
+            LabelColor = "rgb(17,24,39)",
+            BackgroundHex = "#FFFFFF"
+        };
+
+        await Service(db, package, branding: branding).CreateOrUpdatePassAsync(card.Id);
+
+        var pass = package.PassJson!;
+        Assert.Equal(branding.BackgroundColor, pass["backgroundColor"]!.GetValue<string>());
+        Assert.Equal(branding.ForegroundColor, pass["foregroundColor"]!.GetValue<string>());
+        Assert.Equal(branding.LabelColor, pass["labelColor"]!.GetValue<string>());
+    }
+
+    [Fact]
+    [Trait("Category", "GiftCards")]
     [Trait("Category", "WalletProductionUpdate")]
     public async Task Apple_gift_card_pass_with_expiration_shows_valid_until_and_recipient()
     {
@@ -63,12 +89,12 @@ public sealed class GiftCardAppleWalletServiceTests
         await Service(db, package).CreateOrUpdatePassAsync(card.Id);
 
         var validUntil = SingleField(package.PassJson!, "valid_until");
-        var recipient = SingleField(package.PassJson!, "recipient");
+        var sender = SingleField(package.PassJson!, "sender");
         Assert.Equal("VÁLIDA HASTA", validUntil["label"]!.GetValue<string>());
         Assert.Equal("25/12/2026", validUntil["value"]!.GetValue<string>());
-        Assert.Equal("PARA", recipient["label"]!.GetValue<string>());
-        Assert.Equal("Ana", recipient["value"]!.GetValue<string>());
-        Assert.Equal(0, CountFields(package.PassJson!, "sender"));
+        Assert.Equal("DE", sender["label"]!.GetValue<string>());
+        Assert.Equal("Daniel", sender["value"]!.GetValue<string>());
+        Assert.Equal(0, CountFrontFields(package.PassJson!, "recipient"));
         Assert.DoesNotContain("Sin expiración", package.PassJson!.ToJsonString(), StringComparison.Ordinal);
     }
 
@@ -84,11 +110,9 @@ public sealed class GiftCardAppleWalletServiceTests
         await Service(db, package).CreateOrUpdatePassAsync(card.Id);
 
         var sender = SingleField(package.PassJson!, "sender");
-        var recipient = SingleField(package.PassJson!, "recipient");
         Assert.Equal("DE", sender["label"]!.GetValue<string>());
         Assert.Equal("Daniel", sender["value"]!.GetValue<string>());
-        Assert.Equal("PARA", recipient["label"]!.GetValue<string>());
-        Assert.Equal("Ana", recipient["value"]!.GetValue<string>());
+        Assert.Equal(0, CountFrontFields(package.PassJson!, "recipient"));
         Assert.DoesNotContain("Sin expiración", package.PassJson!.ToJsonString(), StringComparison.Ordinal);
     }
 
@@ -105,8 +129,49 @@ public sealed class GiftCardAppleWalletServiceTests
 
         Assert.Equal(0, CountFields(package.PassJson!, "valid_until"));
         Assert.Equal(0, CountFields(package.PassJson!, "sender"));
-        Assert.Equal("Ana", SingleField(package.PassJson!, "recipient")["value"]!.GetValue<string>());
+        Assert.Equal(0, CountFrontFields(package.PassJson!, "recipient"));
         Assert.DoesNotContain("Sin expiración", package.PassJson!.ToJsonString(), StringComparison.Ordinal);
+    }
+
+    [Theory]
+    [Trait("Category", "GiftCards")]
+    [Trait("Category", "WalletProductionUpdate")]
+    [InlineData("MXN", "200", "$200")]
+    [InlineData("MXN", "1500", "$1,500")]
+    [InlineData("MXN", "199.50", "$199.50")]
+    [InlineData("USD", "199.50", "199.50 USD")]
+    public async Task Apple_gift_card_pass_formats_balance_for_front_presentation(string currency, string amountText, string expected)
+    {
+        await using var db = CreateContext();
+        var amount = decimal.Parse(amountText, CultureInfo.InvariantCulture);
+        var card = await SeedAsync(db, expiresAtUtc: null, senderName: null, amount: amount, currency: currency);
+        var package = new CapturingPassPackageBuilder();
+
+        await Service(db, package).CreateOrUpdatePassAsync(card.Id);
+
+        var balance = SingleField(package.PassJson!, "balance");
+        Assert.Equal(string.Empty, balance["label"]!.GetValue<string>());
+        Assert.Equal(expected, balance["value"]!.GetValue<string>());
+        Assert.Equal("PKTextAlignmentCenter", balance["textAlignment"]!.GetValue<string>());
+        Assert.DoesNotContain("SALDO DISPONIBLE", FrontFieldsText(package.PassJson!), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    [Trait("Category", "GiftCards")]
+    [Trait("Category", "WalletProductionUpdate")]
+    public async Task Apple_gift_card_pass_uses_single_visible_gift_card_title()
+    {
+        await using var db = CreateContext();
+        var card = await SeedAsync(db, expiresAtUtc: null, senderName: null);
+        var package = new CapturingPassPackageBuilder();
+
+        await Service(db, package).CreateOrUpdatePassAsync(card.Id);
+
+        var title = SingleField(package.PassJson!, "gift_card_title");
+        Assert.Equal(string.Empty, title["label"]!.GetValue<string>());
+        Assert.Equal("Tarjeta de regalo", title["value"]!.GetValue<string>());
+        Assert.DoesNotContain("GIFT CARD", FrontFieldsText(package.PassJson!), StringComparison.Ordinal);
+        Assert.DoesNotContain("Gift Card", FrontFieldsText(package.PassJson!), StringComparison.Ordinal);
     }
 
     private static GiftCardAppleWalletService Service(
@@ -175,7 +240,12 @@ public sealed class GiftCardAppleWalletServiceTests
         return assets.Object;
     }
 
-    private static async Task<GiftCard> SeedAsync(AppDbContext db, DateTime? expiresAtUtc, string? senderName)
+    private static async Task<GiftCard> SeedAsync(
+        AppDbContext db,
+        DateTime? expiresAtUtc,
+        string? senderName,
+        decimal amount = 500m,
+        string currency = "MXN")
     {
         db.Tenants.Add(new Tenant(TenantId, "kbeauty", "KBeauty", "America/Tijuana", Now));
         var config = new GiftCardConfiguration(Guid.NewGuid(), TenantId, Now);
@@ -186,7 +256,7 @@ public sealed class GiftCardAppleWalletServiceTests
             promotional: false,
             expirationMode: GiftCardExpirationMode.Never,
             months: null,
-            currency: "MXN",
+            currency: currency,
             displayName: "Gift Card",
             primaryColor: "#1C1B18",
             textColor: "#FFFFFF",
@@ -200,8 +270,8 @@ public sealed class GiftCardAppleWalletServiceTests
             TenantId,
             "GC-AAAA-BBBB-CCCC",
             GiftCard.HashClaimToken("claim-token"),
-            500m,
-            "MXN",
+            amount,
+            currency,
             null,
             "Ana",
             null,
@@ -236,10 +306,28 @@ public sealed class GiftCardAppleWalletServiceTests
     private static int CountFields(JsonObject passJson, string key) =>
         AllFields(passJson).Count(field => string.Equals(field["key"]?.GetValue<string>(), key, StringComparison.Ordinal));
 
+    private static int CountFrontFields(JsonObject passJson, string key) =>
+        FrontFields(passJson).Count(field => string.Equals(field["key"]?.GetValue<string>(), key, StringComparison.Ordinal));
+
+    private static string FrontFieldsText(JsonObject passJson) =>
+        string.Join(
+            "\n",
+            FrontFields(passJson).SelectMany(field => new[] { field["label"]?.GetValue<string>(), field["value"]?.GetValue<string>() }));
+
+    private static IEnumerable<JsonObject> FrontFields(JsonObject passJson)
+    {
+        var storeCard = passJson["storeCard"]!.AsObject();
+        foreach (var fieldGroup in new[] { "headerFields", "primaryFields", "secondaryFields", "auxiliaryFields" })
+        {
+            foreach (var field in storeCard[fieldGroup]!.AsArray())
+                yield return field!.AsObject();
+        }
+    }
+
     private static IEnumerable<JsonObject> AllFields(JsonObject passJson)
     {
         var storeCard = passJson["storeCard"]!.AsObject();
-        foreach (var fieldGroup in new[] { "primaryFields", "secondaryFields", "auxiliaryFields", "backFields" })
+        foreach (var fieldGroup in new[] { "headerFields", "primaryFields", "secondaryFields", "auxiliaryFields", "backFields" })
         {
             foreach (var field in storeCard[fieldGroup]!.AsArray())
                 yield return field!.AsObject();
