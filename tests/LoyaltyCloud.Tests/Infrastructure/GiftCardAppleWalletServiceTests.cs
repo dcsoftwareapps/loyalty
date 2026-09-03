@@ -80,6 +80,34 @@ public sealed class GiftCardAppleWalletServiceTests
 
     [Fact]
     [Trait("Category", "GiftCards")]
+    [Trait("Category", "TenantBranding")]
+    [Trait("Category", "WalletProductionUpdate")]
+    public async Task Apple_gift_card_pass_uses_gift_card_logo_assets_before_tenant_wallet_logo()
+    {
+        await using var db = CreateContext();
+        var giftCardLogo = $"tenant-branding/{TenantId:D}/gift-card/logo-original.png";
+        var card = await SeedAsync(db, expiresAtUtc: null, senderName: null, logoUrl: giftCardLogo);
+        var package = new CapturingPassPackageBuilder();
+        var assets = new Mock<ITenantWalletAssetProvider>();
+        assets.Setup(x => x.LoadAssetsAsync(
+                TenantId,
+                "kbeauty",
+                giftCardLogo,
+                "tenant-branding/kbeauty/logo-original.png",
+                false,
+                null,
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync([new WalletPassAsset("logo.png", [9, 8, 7])])
+            .Verifiable();
+
+        await Service(db, package, assets.Object, Branding()).CreateOrUpdatePassAsync(card.Id);
+
+        assets.Verify();
+        Assert.NotNull(package.PassJson);
+    }
+
+    [Fact]
+    [Trait("Category", "GiftCards")]
     [Trait("Category", "WalletProductionUpdate")]
     public async Task Apple_gift_card_pass_with_expiration_shows_valid_until_and_recipient()
     {
