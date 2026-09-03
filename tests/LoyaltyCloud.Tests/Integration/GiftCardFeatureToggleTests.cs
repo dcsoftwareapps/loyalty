@@ -180,6 +180,45 @@ public sealed class GiftCardFeatureToggleTests
     }
 
     [Fact]
+    public void GiftCardSettingsPanel_RendersSaveFeedbackBelowBottomSaveButton()
+    {
+        var panel = Read("src", "LoyaltyCloud.Admin", "Components", "GiftCardSettingsPanel.razor");
+
+        var save = panel.IndexOf("@onclick=\"Save\"", StringComparison.Ordinal);
+        var error = panel.IndexOf("@if(error is not null)", StringComparison.Ordinal);
+        var success = panel.IndexOf("@if(success is not null)", StringComparison.Ordinal);
+
+        Assert.True(save > 0);
+        Assert.True(save < error);
+        Assert.True(save < success);
+        Assert.Equal(1, panel.Split("@if(error is not null)", StringSplitOptions.None).Length - 1);
+        Assert.Equal(1, panel.Split("@if(success is not null)", StringSplitOptions.None).Length - 1);
+    }
+
+    [Fact]
+    public void ConfigurationTabs_RenderSaveFeedbackBelowTheirSaveActions()
+    {
+        var source = Read("src", "LoyaltyCloud.Admin", "Pages", "Config.razor");
+
+        var digitalSave = source.IndexOf("SaveWalletBrandingAsync", StringComparison.Ordinal);
+        var pointsSection = source.IndexOf("Reglas de puntos y beneficios", StringComparison.Ordinal);
+        var pointsSave = source.IndexOf("SaveAsync", pointsSection, StringComparison.Ordinal);
+        var firstSuccess = source.IndexOf("@if (successMsg is not null)", StringComparison.Ordinal);
+        var firstError = source.IndexOf("@if (errorMsg is not null)", StringComparison.Ordinal);
+        var secondSuccess = source.IndexOf("@if (successMsg is not null)", firstSuccess + 1, StringComparison.Ordinal);
+        var secondError = source.IndexOf("@if (errorMsg is not null)", firstError + 1, StringComparison.Ordinal);
+
+        Assert.True(digitalSave > 0);
+        Assert.True(pointsSave > pointsSection);
+        Assert.True(digitalSave < firstSuccess);
+        Assert.True(digitalSave < firstError);
+        Assert.True(pointsSave < secondSuccess);
+        Assert.True(pointsSave < secondError);
+        Assert.Equal(2, source.Split("@if (successMsg is not null)", StringSplitOptions.None).Length - 1);
+        Assert.Equal(2, source.Split("@if (errorMsg is not null)", StringSplitOptions.None).Length - 1);
+    }
+
+    [Fact]
     public void GiftCardPublicClaimPreview_UsesActualCardDataWithCleanWalletFront()
     {
         var claim = Read("src", "LoyaltyCloud.Admin", "Pages", "GiftCardClaim.razor");
