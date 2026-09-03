@@ -123,7 +123,7 @@ public sealed class GiftCardFeatureToggleTests
         Assert.Contains("DisplayName=\"@PreviewBranding.DisplayName\"", panel);
         Assert.Contains("BackgroundColor=\"@PreviewBranding.BackgroundColor\"", panel);
         Assert.Contains("TextColor=\"@PreviewBranding.TextColor\"", panel);
-        Assert.Contains("LogoUrl=\"@PreviewBranding.LogoUrl\"", panel);
+        Assert.Contains("LogoUrl=\"@PreviewLogoUrl\"", panel);
         Assert.Contains("SenderName=\"Loyalty\"", panel);
         Assert.Contains("Balance=\"$200\"", panel);
         Assert.Contains("ShowCategoryLabel=\"false\"", panel);
@@ -146,6 +146,37 @@ public sealed class GiftCardFeatureToggleTests
         Assert.Contains("VÁLIDA HASTA", visual);
         Assert.Contains("aspect-ratio:.72/1", css);
         Assert.Contains("min-height:420px", css);
+    }
+
+    [Fact]
+    public void GiftCardSettingsPanel_UsesSimplifiedBrandingFormAndPreservesHiddenValues()
+    {
+        var panel = Read("src", "LoyaltyCloud.Admin", "Components", "GiftCardSettingsPanel.razor");
+
+        Assert.Contains("<span>Título de la tarjeta</span>", panel);
+        Assert.Contains("<span>Color de la tarjeta</span>", panel);
+        Assert.Contains("<span>Color de texto</span>", panel);
+        Assert.Contains("<span>Logo de la tarjeta</span>", panel);
+        Assert.Contains("UploadGiftCardLogoAsync", panel);
+        Assert.Contains("class=\"kb-file-upload\"", panel);
+        Assert.Contains("class=\"kb-file-input-hidden\"", panel);
+        Assert.Contains("Cambiar logo", panel);
+        Assert.Contains("Guardar\")", panel);
+        Assert.DoesNotContain("Guardar cambios", panel);
+        Assert.DoesNotContain("Logo (URL)", panel);
+        Assert.DoesNotContain("Texto secundario</span>", panel);
+        Assert.DoesNotContain("Términos y condiciones</span>", panel);
+        Assert.DoesNotContain("Mensaje al pie</span>", panel);
+        Assert.DoesNotContain("<span>Moneda</span>", panel);
+        Assert.Contains("secondaryText=settings.SecondaryText", panel);
+        Assert.Contains("terms=settings.Terms", panel);
+        Assert.Contains("footerMessage=settings.FooterMessage", panel);
+        Assert.Contains("currency,displayName,primaryColor,textColor,logoUrl,secondaryText,terms,footerMessage", panel);
+        Assert.Contains("PreviewLogoUrl=>ResolveLogoDisplayUrl(logoUrl)", panel);
+
+        var logoUpload = panel.IndexOf("Logo de la tarjeta", StringComparison.Ordinal);
+        var save = panel.IndexOf("@onclick=\"Save\"", StringComparison.Ordinal);
+        Assert.True(logoUpload < save);
     }
 
     [Fact]

@@ -16,6 +16,7 @@ internal sealed class GiftCardClaimService(
     IDateTimeProvider clock,
     IMutableTenantContext tenantContext,
     ITenantBrandingReadService tenantBranding,
+    ITenantBrandingLogoUrlProvider logoUrls,
     IGiftCardWalletService googleWallet,
     IGiftCardAppleWalletService appleWallet) : IGiftCardClaimService
 {
@@ -30,7 +31,8 @@ internal sealed class GiftCardClaimService(
         if (config is null) return null;
         var status = card.Status == GiftCardStatus.Active && card.ExpiresAtUtc <= clock.UtcNow ? GiftCardStatus.Expired : card.Status;
         var dto = new GiftCardDto(card.Id, card.PublicCode, card.InitialValue, card.CurrentBalance, card.Currency, status, card.RecipientMemberId, card.RecipientName, card.RecipientEmail, card.RecipientPhone, card.SenderName, card.PersonalMessage, card.Source, card.IssuedAtUtc, card.ExpiresAtUtc, card.UpdatedAtUtc);
-        var effective = GiftCardBrandingResolver.Resolve(config.PrimaryColor, config.TextColor, config.DisplayName, config.LogoUrl, tenantPresentation.ResolvedWalletBackgroundColor, tenantPresentation.DisplayName, tenantPresentation.WalletLogoUrl ?? tenantPresentation.LogoUrl);
+        var logoUrl = ResolveLogoDisplayUrl(config.LogoUrl);
+        var effective = GiftCardBrandingResolver.Resolve(config.PrimaryColor, config.TextColor, config.DisplayName, logoUrl, tenantPresentation.ResolvedWalletBackgroundColor, tenantPresentation.DisplayName, tenantPresentation.WalletLogoUrl ?? tenantPresentation.LogoUrl);
         return new(dto, effective.DisplayName, effective.BackgroundColor, effective.TextColor, effective.LogoUrl, config.SecondaryText, config.Terms, config.FooterMessage);
     }
 
@@ -65,6 +67,15 @@ internal sealed class GiftCardClaimService(
         if (card is null) return null;
         var tenant = await db.Tenants.IgnoreQueryFilters().AsNoTracking().SingleOrDefaultAsync(x => x.Id == card.TenantId && x.IsActive, ct);
         return tenant is null ? null : (card, tenant.Slug);
+    }
+
+    private string? ResolveLogoDisplayUrl(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value)) return null;
+        var trimmed = value.Trim();
+        return trimmed.StartsWith("http://", StringComparison.OrdinalIgnoreCase) || trimmed.StartsWith("https://", StringComparison.OrdinalIgnoreCase)
+            ? trimmed
+            : logoUrls.GetDisplayUrl(trimmed);
     }
 }
 

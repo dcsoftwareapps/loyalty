@@ -70,7 +70,8 @@ internal sealed class GiftCardAppleWalletService(
         var backgroundColor=WalletColorContrast.ToAppleRgb(giftBranding.BackgroundColor);
         var textColor=WalletColorContrast.ToAppleRgb(giftBranding.TextColor);
         var pass=new{formatVersion=1,passTypeIdentifier=_options.PassTypeIdentifier,serialNumber=wallet.ExternalObjectId,teamIdentifier=_options.TeamIdentifier,webServiceURL=_options.WebServiceURL,authenticationToken=wallet.AuthenticationToken,organizationName=tenant.DisplayName,description=$"{giftBranding.DisplayName} - {tenant.DisplayName}",backgroundColor,foregroundColor=textColor,labelColor=textColor,storeCard=new{headerFields=new[]{new{key="gift_card_title",label=string.Empty,value=giftBranding.DisplayName}},primaryFields=new[]{new{key="balance",label=string.Empty,value=FormatBalance(card.CurrentBalance,card.Currency),changeMessage="Tu nuevo saldo es %@",textAlignment="PKTextAlignmentCenter"}},secondaryFields=BuildSecondaryFields(card),auxiliaryFields=Array.Empty<object>(),backFields=new[]{new{key="code",label="Código",value=card.PublicCode},new{key="terms",label="Términos",value=config.Terms??"Presenta este código al pagar"}}},barcodes=new[]{new{format="PKBarcodeFormatQR",message=card.PublicCode,messageEncoding="iso-8859-1",altText="Presenta este código al pagar"}}};
-        var assetBytes=await assets.LoadAssetsAsync(tenantBranding.TenantId,tenantBranding.TenantSlug,tenantBranding.WalletLogoBlobName,tenantBranding.LogoBlobName,includeStripImage:false,stripImageBlobName:null,ct);var bytes=await package.BuildAsync(JsonSerializer.SerializeToUtf8Bytes(pass),assetBytes,ct);return new(bytes,wallet.ExternalObjectId,card.UpdatedAtUtc);
+        var walletLogoBlobName=IsGiftCardLogoBlobName(config.LogoUrl)?config.LogoUrl:tenantBranding.WalletLogoBlobName;
+        var assetBytes=await assets.LoadAssetsAsync(tenantBranding.TenantId,tenantBranding.TenantSlug,walletLogoBlobName,tenantBranding.LogoBlobName,includeStripImage:false,stripImageBlobName:null,ct);var bytes=await package.BuildAsync(JsonSerializer.SerializeToUtf8Bytes(pass),assetBytes,ct);return new(bytes,wallet.ExternalObjectId,card.UpdatedAtUtc);
     }
 
     private static object[] BuildSecondaryFields(GiftCard card)
@@ -97,4 +98,5 @@ internal sealed class GiftCardAppleWalletService(
 
     private Task<GiftCardWallet?> FindWalletAsync(string serial,CancellationToken ct)=>db.GiftCardWallets.IgnoreQueryFilters().SingleOrDefaultAsync(x=>x.Provider==GiftCardWalletProvider.Apple&&x.ExternalObjectId==serial,ct);
     private async Task<bool> SetTenantAsync(Guid tenantId,CancellationToken ct){var tenant=await db.Tenants.AsNoTracking().SingleOrDefaultAsync(x=>x.Id==tenantId&&x.IsActive,ct);var subscription=await db.TenantSubscriptions.AsNoTracking().SingleOrDefaultAsync(x=>x.TenantId==tenantId,ct);if(tenant is null||subscription is null||!subscription.IsOperational(clock.UtcNow))return false;tenantContext.SetTenant(tenant.Id,tenant.Slug);return true;}
+    private static bool IsGiftCardLogoBlobName(string? value)=>!string.IsNullOrWhiteSpace(value)&&value.Contains("/gift-card/",StringComparison.OrdinalIgnoreCase);
 }

@@ -77,6 +77,7 @@ public sealed class GiftCardPersistenceTests
             Clock().Object,
             tenantContext,
             Branding(),
+            LogoUrls(),
             new Mock<IGiftCardWalletService>().Object,
             new Mock<IGiftCardAppleWalletService>().Object);
 
@@ -110,6 +111,7 @@ public sealed class GiftCardPersistenceTests
             Clock().Object,
             tenantContext,
             Branding(),
+            LogoUrls(),
             new Mock<IGiftCardWalletService>().Object,
             new Mock<IGiftCardAppleWalletService>().Object);
 
@@ -200,6 +202,14 @@ public sealed class GiftCardPersistenceTests
         branding.Setup(x => x.GetCurrentAsync(It.IsAny<CancellationToken>()))
             .ReturnsAsync(new TenantBrandingInfo(TenantId, "giftcard-test", "Gift Card Test", "#111111", "#FFFFFF", null, null, "#111111", null, false, 100, "CustomerName", null, false, null, null, null, null));
         return branding.Object;
+    }
+
+    private static ITenantBrandingLogoUrlProvider LogoUrls()
+    {
+        var urls = new Mock<ITenantBrandingLogoUrlProvider>();
+        urls.Setup(x => x.GetDisplayUrl(It.IsAny<string?>()))
+            .Returns((string? value) => string.IsNullOrWhiteSpace(value) ? null : $"https://assets.example.test/{value}");
+        return urls.Object;
     }
 
     private sealed class TestMutableTenantContext : IMutableTenantContext
