@@ -29,9 +29,6 @@
 }
 else
 {
-    @if (successMsg is not null) { <div class="kb-form-success">@successMsg</div> }
-    @if (errorMsg is not null) { <div class="kb-form-error">@errorMsg</div> }
-
     @if (IsDigitalCardTab)
     {
     <section class="kb-card kb-config-card">
@@ -151,6 +148,8 @@ else
                         @(brandingBusy ? "Guardando…" : "Guardar")
                     </button>
                 </div>
+                @if (successMsg is not null) { <div class="kb-form-success" role="status">@successMsg</div> }
+                @if (errorMsg is not null) { <div class="kb-form-error" role="alert">@errorMsg</div> }
             </div>
 
             <div class="kb-wallet-preview-shell">
@@ -256,6 +255,8 @@ else
                 @onclick="SaveAsync" disabled="@busy">
             @(busy ? "Guardando…" : "Guardar")
         </button>
+        @if (successMsg is not null) { <div class="kb-form-success" role="status">@successMsg</div> }
+        @if (errorMsg is not null) { <div class="kb-form-error" role="alert">@errorMsg</div> }
     </section>
     }
 }
