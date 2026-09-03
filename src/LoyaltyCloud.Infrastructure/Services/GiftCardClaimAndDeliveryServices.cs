@@ -1,4 +1,5 @@
 using System.Net;
+using System.Globalization;
 using LoyaltyCloud.Application.Billing;
 using LoyaltyCloud.Application.Common.Interfaces;
 using LoyaltyCloud.Application.GiftCards;
@@ -107,12 +108,12 @@ internal sealed class GiftCardDeliveryService(ITransactionalEmailSender sender, 
         var name = WebUtility.HtmlEncode(giftCard.Card.RecipientName);
         var code = WebUtility.HtmlEncode(giftCard.Card.Code);
         var business = WebUtility.HtmlEncode(displayName);
-        var amount = $"{giftCard.Card.CurrentBalance:N2} {giftCard.Card.Currency}";
+        var amount = FormatMoney(giftCard.Card.CurrentBalance, giftCard.Card.Currency);
         var senderLine = string.IsNullOrWhiteSpace(giftCard.Card.SenderName) ? null : $"De: {giftCard.Card.SenderName}.";
         var messageLine = string.IsNullOrWhiteSpace(giftCard.Card.PersonalMessage) ? null : $"Mensaje: {giftCard.Card.PersonalMessage}.";
-        var expiresLine = giftCard.Card.ExpiresAtUtc is null ? "Vigencia: sin expiración." : $"Vigencia: {giftCard.Card.ExpiresAtUtc.Value:dd/MM/yyyy}.";
-        var text = $"Hola {giftCard.Card.RecipientName}, {displayName} te envió una tarjeta de regalo por {amount}. {senderLine} {messageLine} Código: {giftCard.Card.Code}. {expiresLine} Ver mi tarjeta de regalo: {url}";
-        var html = $"<h1>{business} te envió una tarjeta de regalo</h1><p>Hola {name},</p><p>Recibiste una tarjeta de regalo por <strong>{amount}</strong>.</p>{HtmlParagraph("De:", giftCard.Card.SenderName)}{HtmlParagraph(null, giftCard.Card.PersonalMessage)}<p>Código: <strong>{code}</strong></p><p>{WebUtility.HtmlEncode(expiresLine)}</p><p><a href=\"{WebUtility.HtmlEncode(url)}\">Ver mi tarjeta de regalo</a></p>";
+        var expiresLine = giftCard.Card.ExpiresAtUtc is null ? null : $"Válida hasta: {giftCard.Card.ExpiresAtUtc.Value:dd/MM/yyyy}.";
+        var text = $"Hola {giftCard.Card.RecipientName}, {displayName} te envió una tarjeta de regalo por {amount}. {senderLine} Ver mi tarjeta de regalo: {url}. Código: {giftCard.Card.Code}. {messageLine} {expiresLine}".Trim();
+        var html = $"<h1>{business} te envió una tarjeta de regalo</h1><p>Hola {name},</p><p>Recibiste una tarjeta de regalo por <strong>{WebUtility.HtmlEncode(amount)}</strong>.</p>{HtmlParagraph("De:", giftCard.Card.SenderName)}<p><a href=\"{WebUtility.HtmlEncode(url)}\">Ver mi tarjeta de regalo</a></p><p>Código: <strong>{code}</strong></p>{HtmlParagraph(null, giftCard.Card.PersonalMessage)}{HtmlParagraph(null, expiresLine)}";
 
         try
         {
@@ -135,5 +136,17 @@ internal sealed class GiftCardDeliveryService(ITransactionalEmailSender sender, 
         if (string.IsNullOrWhiteSpace(value)) return string.Empty;
         var label = string.IsNullOrWhiteSpace(prefix) ? string.Empty : $"<strong>{WebUtility.HtmlEncode(prefix.Trim())}</strong> ";
         return $"<p>{label}{WebUtility.HtmlEncode(value.Trim())}</p>";
+    }
+
+    private static string FormatMoney(decimal amount, string currency)
+    {
+        var normalizedCurrency = string.IsNullOrWhiteSpace(currency)
+            ? "MXN"
+            : currency.Trim().ToUpperInvariant();
+        var normalizedAmount = decimal.Round(amount, 2);
+        var format = decimal.Truncate(normalizedAmount) == normalizedAmount ? "N0" : "N2";
+        return normalizedCurrency == "MXN"
+            ? $"${normalizedAmount.ToString(format, CultureInfo.InvariantCulture)}"
+            : $"{normalizedAmount.ToString(format, CultureInfo.InvariantCulture)} {normalizedCurrency}";
     }
 }
