@@ -168,9 +168,6 @@ app.UseAuthorization();
 
 app.UseAntiforgery();
 
-app.MapGet("/", () => Results.Redirect("/platform/login"))
-    .AllowAnonymous();
-
 app.MapRazorComponents<LoyaltyCloud.Admin.App>()
     .AddInteractiveServerRenderMode()
     .AllowAnonymous();

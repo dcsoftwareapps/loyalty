@@ -64,7 +64,7 @@ public sealed class AdminRoutingTests : IClassFixture<AdminRoutingTests.AdminWeb
     }
     [Fact]
     [Trait("Category", "AdminRouting")]
-    public async Task Root_redirects_to_platform_login_without_loop()
+    public async Task Root_serves_public_landing_without_admin_layout_or_redirect()
     {
         using var client = _factory.CreateClient(new WebApplicationFactoryClientOptions
         {
@@ -73,8 +73,18 @@ public sealed class AdminRoutingTests : IClassFixture<AdminRoutingTests.AdminWeb
 
         using var response = await client.GetAsync("/");
 
-        Assert.Equal(HttpStatusCode.Redirect, response.StatusCode);
-        Assert.Equal("/platform/login", response.Headers.Location?.OriginalString);
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.Null(response.Headers.Location);
+        var html = WebUtility.HtmlDecode(await response.Content.ReadAsStringAsync());
+        Assert.Contains("Convierte clientes ocasionales en clientes", html);
+        Assert.Contains("css/landing.css", html);
+        Assert.Contains("href=\"/platform/login\"", html);
+        foreach (var section in new[] { "producto", "como-funciona", "para-quien", "nosotros", "comenzar" })
+            Assert.Contains($"id=\"{section}\"", html);
+        Assert.DoesNotContain("class=\"kb-sidebar", html);
+        Assert.Contains("<details class=\"lp-mobile-nav\"", html);
+        foreach (Match link in Regex.Matches(html, "href=\"#([^\"]+)\""))
+            Assert.Contains($"id=\"{link.Groups[1].Value}\"", html);
     }
 
     [Fact]

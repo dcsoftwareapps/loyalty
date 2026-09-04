@@ -15,6 +15,25 @@ namespace LoyaltyCloud.Tests.Infrastructure;
 public sealed class GoogleWalletNotificationClientTests
 {
     [Fact]
+    public async Task ExistingLoyaltyClass_PatchesNativeBrandingTwiceWithoutCreatingResources()
+    {
+        var (client, handler) = CreateClient();
+        var data = new GoogleWalletClassData("issuer.stable", "Program", "Tenant", null, null,
+            "https://assets.test/hero.png", "#123456");
+        await client.EnsureLoyaltyClassAsync(data);
+        await client.EnsureLoyaltyClassAsync(data);
+        Assert.Equal(2, handler.ApiRequests.Count(x => x.Method.Method == "PATCH"));
+        Assert.DoesNotContain(handler.ApiRequests, x => x.Method == HttpMethod.Post);
+        foreach (var request in handler.ApiRequests.Where(x => x.Method.Method == "PATCH"))
+        {
+            Assert.EndsWith("/loyaltyClass/issuer.stable", request.Uri, StringComparison.Ordinal);
+            using var json = JsonDocument.Parse(request.Body);
+            Assert.Equal("#123456", json.RootElement.GetProperty("hexBackgroundColor").GetString());
+            Assert.Equal("https://assets.test/hero.png", json.RootElement.GetProperty("heroImage").GetProperty("sourceUri").GetProperty("uri").GetString());
+        }
+    }
+
+    [Fact]
     [Trait("Category", "GoogleWalletNotifications")]
     public async Task AddMessage_uses_object_endpoint_and_TEXT_AND_NOTIFY()
     {

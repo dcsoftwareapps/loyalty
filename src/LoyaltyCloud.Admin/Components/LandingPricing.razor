@@ -1,0 +1,29 @@
+@using LoyaltyCloud.Admin.Services
+@using System.Globalization
+
+<section id="precios" class="lp-section lp-pricing">
+    <div class="lp-container">
+        <div class="lp-section-heading"><p class="lp-eyebrow">Plan @PublicCommercialCatalog.PlanName</p><h2>Todo LoyaltyCloud.<br />Un solo plan.</h2><p>Elige cuánto tiempo quieres empezar.</p></div>
+        <div class="lp-plan-includes"><span>Puntos y recompensas</span><span>Tarjetas digitales</span><span>Campañas</span><span>Reportes</span><span>Gift Cards</span></div>
+        <div class="lp-price-options">
+            @foreach (var period in PublicCommercialCatalog.Periods)
+            {
+                <article class="lp-price-option @(period.Months == 12 ? "lp-price-featured" : "")">
+                    <div class="lp-price-top"><h3>@period.Months @(period.Months == 1 ? "mes" : "meses")</h3>@if(period.Months == 12) { <span>MEJOR VALOR</span> }</div>
+                    <p class="lp-price-amount">@Money(period.Price) <small>@PublicCommercialCatalog.Currency</small></p>
+                    <p class="lp-price-term">por el periodo completo</p>
+                    <p class="lp-price-benefit">
+                        @if(period.TwoMonthsFree) { <strong>2 meses GRATIS</strong> }
+                        @if(period.Savings > 0) { <span>Ahorras @Money(period.Savings)</span> }
+                        else { <span>Empieza mes a mes</span> }
+                    </p>
+                    <a class="lp-button @(period.Months == 12 ? "lp-button-dark" : "lp-button-outline")" href="#comenzar" aria-label="Comenzar con @period.Months meses">Comenzar <span aria-hidden="true">↗</span></a>
+                </article>
+            }
+        </div>
+        <p class="lp-small">Oferta comercial en MXN. La contratación en línea aún no está habilitada. Ningún botón de esta página inicia un cobro.</p>
+    </div>
+</section>
+@code {
+    private static string Money(decimal value) => "$" + value.ToString("N0", CultureInfo.GetCultureInfo("es-MX"));
+}

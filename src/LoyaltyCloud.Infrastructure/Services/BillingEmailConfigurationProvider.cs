@@ -18,16 +18,17 @@ internal sealed class BillingEmailConfigurationProvider(
             .SingleOrDefaultAsync(x => x.Code == Domain.Entities.BillingSettings.SingletonCode, ct);
         var credentials = options.Value.CredentialsConfigured;
         if (settings is null)
-            return new(false, "Cloudflare", null, "LoyaltyCloud", null, credentials, false);
+            return new(false, options.Value.EffectiveProvider, null, "LoyaltyCloud", null, credentials, false);
 
         var complete = credentials
             && !string.IsNullOrWhiteSpace(settings.EmailProvider)
             && !string.IsNullOrWhiteSpace(settings.EmailFromAddress)
             && !string.IsNullOrWhiteSpace(settings.EmailFromName)
             && Uri.TryCreate(settings.EmailApplicationBaseUrl, UriKind.Absolute, out var uri)
-            && (environment?.IsDevelopment() == true || uri.Scheme == Uri.UriSchemeHttps);
+            && (environment?.IsDevelopment() == true || (uri.Scheme == Uri.UriSchemeHttps && !uri.IsLoopback
+                && string.IsNullOrEmpty(uri.UserInfo)));
 
-        return new(settings.EmailNotificationsEnabled, settings.EmailProvider,
+        return new(settings.EmailNotificationsEnabled, options.Value.EffectiveProvider,
             settings.EmailFromAddress, settings.EmailFromName,
             settings.EmailApplicationBaseUrl, credentials, complete);
     }

@@ -21,7 +21,9 @@ public sealed class GoogleWalletObjectMapper
             IssuerName: branding.OrganizationName,
             LogoUri: logoUri,
             WideLogoUri: logoUri,
-            HeroImageUri: null,
+            HeroImageUri: string.IsNullOrWhiteSpace(branding.AppleWalletStripImageBlobName) || logoUri is null
+                ? null
+                : new Uri(new Uri(logoUri), $"/api/wallet-assets/google/{branding.TenantId:D}/hero.png").ToString(),
             HexBackgroundColor: branding.BackgroundHex);
     }
 
@@ -182,7 +184,8 @@ public sealed class GoogleWalletObjectMapper
         var configuredUri = string.IsNullOrWhiteSpace(options.LogoUri)
             ? options.WideLogoUri
             : options.LogoUri;
-        if (!Uri.TryCreate(configuredUri, UriKind.Absolute, out var publicUri))
+        if (!Uri.TryCreate(configuredUri, UriKind.Absolute, out var publicUri)
+            || publicUri.Scheme != Uri.UriSchemeHttps || publicUri.IsLoopback)
             return null;
 
         return new Uri(publicUri, $"/api/wallet-assets/google/{tenantId:D}/logo.png").ToString();

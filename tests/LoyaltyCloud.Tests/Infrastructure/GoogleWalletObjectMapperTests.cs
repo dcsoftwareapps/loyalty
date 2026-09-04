@@ -10,6 +10,48 @@ namespace LoyaltyCloud.Tests.Infrastructure;
 public sealed class GoogleWalletObjectMapperTests
 {
     [Fact]
+    public void LoyaltyCover_UsesNativeTenantHero_AndKeepsClassId()
+    {
+        var mapper = new GoogleWalletObjectMapper();
+        var branding = Branding() with { AppleWalletStripImageBlobName = "tenant/cover.png" };
+        var options = new GoogleWalletOptions { LogoUri = "https://assets.example/logo.png" };
+        var data = mapper.ToClassData("issuer.stable", options, branding);
+        Assert.Equal($"https://assets.example/api/wallet-assets/google/{branding.TenantId:D}/hero.png", data.HeroImageUri);
+        Assert.True(mapper.ToClassPayload(data).ContainsKey("heroImage"));
+        var changed = mapper.ToClassData("issuer.stable", options, branding with { BackgroundHex = "#123456" });
+        Assert.Equal(data.Id, changed.Id);
+        Assert.Equal("#123456", changed.HexBackgroundColor);
+        var other = mapper.ToClassData("issuer.other", options, branding with { TenantId = Guid.NewGuid() });
+        Assert.NotEqual(data.HeroImageUri, other.HeroImageUri);
+    }
+
+    [Theory]
+    [InlineData("http://assets.example/logo.png")]
+    [InlineData("https://localhost/logo.png")]
+    [InlineData("https://127.0.0.1/logo.png")]
+    public void LoyaltyCover_RejectsNonPublicOrigins(string origin)
+    {
+        var data = new GoogleWalletObjectMapper().ToClassData("issuer.stable",
+            new GoogleWalletOptions { LogoUri = origin },
+            Branding() with { AppleWalletStripImageBlobName = "tenant/cover.png" });
+        Assert.Null(data.HeroImageUri);
+        Assert.Null(data.LogoUri);
+    }
+
+    [Theory]
+    [InlineData("smtp.resend.com", "Resend")]
+    [InlineData("SMTP.RESEND.COM", "Resend")]
+    [InlineData("smtp.mx.cloudflare.net", "Cloudflare (legacy SMTP)")]
+    [InlineData("mail.example.test", "SMTP")]
+    public void EmailProvider_ReflectsActualTransport_WithoutExposingCredentials(string host, string provider)
+    {
+        var options = new EmailOptions { SmtpHost = host, Username = "resend", Password = "test-only-value" };
+        Assert.Equal(provider, options.EffectiveProvider);
+        Assert.True(options.CredentialsConfigured);
+        Assert.DoesNotContain(options.Password!, options.EffectiveProvider);
+    }
+
+    [Fact]
     public void ToObjectPayload_ShouldMapPointsTierAndBarcode()
     {
         var mapper = new GoogleWalletObjectMapper();
@@ -168,7 +210,8 @@ public sealed class GoogleWalletObjectMapperTests
             HexBackgroundColor = "#FFFFFF"
         };
 
-        var full = mapper.ToClassPayload(mapper.ToClassData("issuer.loyalty", options, Branding(100)));
+        var full = mapper.ToClassPayload(mapper.ToClassData("issuer.loyalty", options,
+            Branding(100, "CustomerName", "tenant-branding/test/wallet-strip/strip-original.png")));
         var smaller = mapper.ToClassPayload(mapper.ToClassData(
             "issuer.loyalty",
             options,

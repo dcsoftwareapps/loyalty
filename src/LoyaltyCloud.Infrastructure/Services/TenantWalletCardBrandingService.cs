@@ -18,6 +18,7 @@ internal sealed class TenantWalletCardBrandingService : ITenantWalletCardBrandin
     private readonly ITenantBrandingLogoService _logos;
     private readonly IAppleWalletPassRefreshService _passRefresh;
     private readonly ILogger<TenantWalletCardBrandingService> _logger;
+    private readonly GoogleWallet.GoogleWalletBrandingSynchronizer? _googleBranding;
 
     public TenantWalletCardBrandingService(
         AppDbContext db,
@@ -25,7 +26,8 @@ internal sealed class TenantWalletCardBrandingService : ITenantWalletCardBrandin
         ITenantBrandingReadService brandingRead,
         ITenantBrandingLogoService logos,
         IAppleWalletPassRefreshService passRefresh,
-        ILogger<TenantWalletCardBrandingService> logger)
+        ILogger<TenantWalletCardBrandingService> logger,
+        GoogleWallet.GoogleWalletBrandingSynchronizer? googleBranding = null)
     {
         _db = db;
         _tenantContext = tenantContext;
@@ -33,6 +35,7 @@ internal sealed class TenantWalletCardBrandingService : ITenantWalletCardBrandin
         _logos = logos;
         _passRefresh = passRefresh;
         _logger = logger;
+        _googleBranding = googleBranding;
     }
 
     public async Task<Result<TenantBrandingInfo>> UpdateAsync(
@@ -99,6 +102,8 @@ internal sealed class TenantWalletCardBrandingService : ITenantWalletCardBrandin
 
     public async Task RefreshInstalledApplePassesBestEffortAsync(Guid tenantId, CancellationToken ct)
     {
+        if (_googleBranding is not null)
+            await _googleBranding.RefreshAsync(tenantId, ct);
         _logger.LogInformation(
             "Tenant wallet branding refresh requested. TenantId={TenantId}.",
             tenantId);
