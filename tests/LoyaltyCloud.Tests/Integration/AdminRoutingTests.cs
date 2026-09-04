@@ -79,8 +79,13 @@ public sealed class AdminRoutingTests : IClassFixture<AdminRoutingTests.AdminWeb
         Assert.Contains("Convierte clientes ocasionales en clientes", html);
         Assert.Contains("css/landing.css", html);
         Assert.Contains("href=\"/platform/login\"", html);
-        foreach (var section in new[] { "producto", "como-funciona", "para-quien", "nosotros", "comenzar" })
+        foreach (var section in new[] { "producto", "como-funciona", "wallet", "precios", "preguntas", "comenzar" })
             Assert.Contains($"id=\"{section}\"", html);
+        foreach (var removedSection in new[] { "demo", "para-quien", "nosotros", "seguridad" })
+        {
+            Assert.DoesNotContain($"id=\"{removedSection}\"", html);
+            Assert.DoesNotContain($"href=\"#{removedSection}\"", html);
+        }
         Assert.DoesNotContain("class=\"kb-sidebar", html);
         Assert.Contains("<details class=\"lp-mobile-nav\"", html);
         foreach (Match link in Regex.Matches(html, "href=\"#([^\"]+)\""))
