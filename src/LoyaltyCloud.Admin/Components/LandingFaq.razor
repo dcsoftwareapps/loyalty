@@ -1,0 +1,27 @@
+<section id="preguntas" class="lp-section lp-container lp-faq">
+    <div><p class="lp-eyebrow">Antes de comenzar</p><h2>Preguntas claras.<br /><em>Respuestas útiles.</em></h2><p>Lo esencial para imaginar tu programa en marcha.</p></div>
+    <div>
+        @for (var i = 0; i < Questions.Length; i++)
+        {
+            <div class="lp-faq-item">
+                <h3><button type="button" aria-expanded="false" aria-controls="faq-answer-@i" data-faq-toggle>@Questions[i].Question <span aria-hidden="true">+</span></button></h3>
+                <div id="faq-answer-@i" hidden><p>@Questions[i].Answer</p></div>
+            </div>
+        }
+        <noscript><p>Activa JavaScript para abrir las respuestas.</p></noscript>
+    </div>
+</section>
+@code {
+    private static readonly (string Question, string Answer)[] Questions = [
+        ("¿Mis clientes necesitan descargar una aplicación?", "No necesitan una app dedicada de LoyaltyCloud. Pueden guardar su tarjeta en Apple Wallet o Google Wallet, según su dispositivo y la disponibilidad del servicio."),
+        ("¿Funciona con iPhone y Android?", "La tarjeta es compatible con Apple Wallet en iPhone y Google Wallet en dispositivos Android compatibles. La presentación y las actualizaciones varían según cada plataforma."),
+        ("¿Puedo usar mi logo y los colores de mi negocio?", "Sí. El panel permite configurar la identidad visual de tu tarjeta de lealtad, incluyendo logo y colores."),
+        ("¿Cómo se registran mis clientes?", "Comparten sus datos a través del enlace de registro de tu negocio. Puedes facilitarles ese enlace mediante el código QR de registro."),
+        ("¿Cómo se agregan y canjean puntos?", "Tu equipo identifica al cliente desde el panel o el escáner y registra puntos. Los canjes se realizan contra las recompensas y el saldo disponible del programa."),
+        ("¿Puedo crear mis propias recompensas?", "Sí. Puedes gestionar el catálogo de recompensas y los puntos necesarios para canjearlas desde el panel."),
+        ("¿Puedo comunicarme con mis clientes?", "Puedes crear campañas y mensajes para audiencias de tu programa. La aceptación de un mensaje por Wallet no garantiza una notificación visible ni que el cliente lo lea."),
+        ("¿Puedo ofrecer Gift Cards?", "Cuando el módulo está habilitado, puedes emitir tarjetas de regalo, compartirlas por email o enlace seguro y gestionar su saldo y canjes. Esto no implica procesar el cobro externo de la tarjeta."),
+        ("¿Necesito equipo especial?", "Para administrar tu programa necesitas un navegador compatible y conexión a internet. El escáner usa una cámara con permisos; también puedes buscar clientes desde el panel."),
+        ("¿Qué pasa si necesito ayuda?", "Dentro del panel encontrarás la sección Ayuda rápida. Consulta allí las indicaciones para las operaciones habituales de tu negocio.")
+    ];
+}
