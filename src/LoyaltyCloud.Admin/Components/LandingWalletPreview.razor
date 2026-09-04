@@ -1,13 +1,30 @@
 <div class="lp-phone" aria-label="Ejemplo ilustrativo de tarjeta de lealtad en @Platform">
     <div class="lp-phone-top" aria-hidden="true"><span>9:41</span><span>● ▰</span></div>
     <div class="lp-phone-label">@Platform</div>
-    <div class="lp-wallet @(Platform == "Google Wallet" ? "lp-wallet-google" : "")">
-        <div class="lp-wallet-brand"><span class="lp-demo-mark" aria-hidden="true">c.</span><span>CAFÉ CENTRAL<br /><small>CLUB DE LEALTAD · DEMO</small></span></div>
-        <div class="lp-wallet-cover" aria-hidden="true"><span>Un gusto<br /><em>verte de nuevo.</em></span><span class="lp-cover-line"></span></div>
-        <div class="lp-wallet-member">Alex · Cliente de ejemplo</div>
-        <div class="lp-wallet-values"><div><small>PUNTOS</small><strong>250</strong></div><div><small>NIVEL</small><strong>Frecuente</strong></div></div>
-        <div class="lp-demo-code" aria-hidden="true"><svg viewBox="0 0 100 44"><path fill="currentColor" d="M0 0h3v44H0zm6 0h1v44H6zm4 0h5v44h-5zm8 0h2v44h-2zm5 0h1v44h-1zm4 0h4v44h-4zm7 0h2v44h-2zm5 0h5v44h-5zm8 0h1v44h-1zm4 0h3v44h-3zm6 0h2v44h-2zm5 0h5v44h-5zm8 0h1v44h-1zm4 0h3v44h-3zm6 0h1v44h-1zm4 0h5v44h-5zm8 0h2v44h-2zm5 0h3v44h-3z" /></svg><span>CÓDIGO ILUSTRATIVO</span></div>
-    </div>
+    @if (!string.IsNullOrWhiteSpace(ScreenshotSrc))
+    {
+        <div class="lp-wallet-shot @ScreenshotClass">
+            <img src="@ScreenshotSrc" alt="@ScreenshotAlt" />
+        </div>
+    }
+    else
+    {
+        <div class="lp-wallet @(Platform == "Google Wallet" ? "lp-wallet-google" : "")">
+            <div class="lp-wallet-brand"><span class="lp-demo-mark" aria-hidden="true">c.</span><span>CAFÉ CENTRAL<br /><small>CLUB DE LEALTAD · DEMO</small></span></div>
+            <div class="lp-wallet-cover" aria-hidden="true"><span>Un gusto<br /><em>verte de nuevo.</em></span><span class="lp-cover-line"></span></div>
+            <div class="lp-wallet-member">Alex · Cliente de ejemplo</div>
+            <div class="lp-wallet-values"><div><small>PUNTOS</small><strong>250</strong></div><div><small>NIVEL</small><strong>Frecuente</strong></div></div>
+            <div class="lp-demo-code" aria-hidden="true"><svg viewBox="0 0 100 44"><path fill="currentColor" d="M0 0h3v44H0zm6 0h1v44H6zm4 0h5v44h-5zm8 0h2v44h-2zm5 0h1v44h-1zm4 0h4v44h-4zm7 0h2v44h-2zm5 0h5v44h-5zm8 0h1v44h-1zm4 0h3v44h-3zm6 0h2v44h-2zm5 0h5v44h-5zm8 0h1v44h-1zm4 0h3v44h-3zm6 0h1v44h-1zm4 0h5v44h-5zm8 0h2v44h-2zm5 0h3v44h-3z" /></svg><span>CÓDIGO ILUSTRATIVO</span></div>
+        </div>
+    }
     <p class="lp-phone-note">Tu tarjeta, siempre a la mano.</p>
 </div>
-@code { [Parameter] public string Platform { get; set; } = "Apple Wallet"; }
+@code {
+    [Parameter] public string Platform { get; set; } = "Apple Wallet";
+    [Parameter] public string? ScreenshotSrc { get; set; }
+    [Parameter] public string? ScreenshotAlt { get; set; }
+
+    private string ScreenshotClass => Platform == "Google Wallet"
+        ? "lp-wallet-shot--google"
+        : "lp-wallet-shot--apple";
+}
