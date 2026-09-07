@@ -43,6 +43,16 @@ public sealed class TenantAdminUser : Entity, ITenantOwned
         Role = role;
     }
 
+    public void Activate()
+    {
+        IsActive = true;
+    }
+
+    public void Deactivate()
+    {
+        IsActive = false;
+    }
+
     public void RecordLogin(DateTime loggedInAtUtc)
     {
         LastLoginAt = loggedInAtUtc;

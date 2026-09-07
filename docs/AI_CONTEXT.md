@@ -112,6 +112,8 @@ Current architecture:
 - Most business entities are tenant-owned and filtered/guarded by EF tenant context.
 - Admin-to-API calls send a tenant slug in signed HMAC headers; they do not send a free-form TenantId.
 - Tenant user roles currently support `Admin` and `Cashier`. Existing Admin portal pages remain Admin-only.
+- Staff Management exists at `/staff` for tenant `Admin` users to create Admin/Cashier users, reset passwords and activate/deactivate staff without accepting TenantId from the UI.
+- Staff Management reuses `TenantAdminUser.Role`, `TenantAdminUser.IsActive`, `TenantAdminUser.NormalizeUsername(...)` and `IPasswordHashingService`; it blocks deactivating the last active tenant Admin.
 - Cashier API Phase 1 exists for future mobile/PWA cashier clients: `POST /api/auth/cashier/login` issues a short-lived bearer token signed by `CashierAuth:SigningKey`.
 - Cashier bearer tokens derive tenant/user/role from authenticated token claims and DB revalidation, not from browser-supplied TenantId or operator headers.
 - Cashier bearer tokens are limited to existing operational endpoints for customer lookup, transactions, points and redemptions. Configuration, billing, reports, campaigns, rewards, levels, Wallet branding, staff and platform APIs remain blocked.
@@ -861,6 +863,7 @@ Done:
 - Google Wallet first vertical slice.
 - Gift Card email delivery through provider-neutral SMTP, including safe Admin feedback and claim-token rotation on resend.
 - Cashier API authentication Phase 1: server-issued short-lived bearer tokens for existing operational endpoints.
+- Staff Management for tenant Admin users: `/staff`, create Admin/Cashier, reset password, activate/deactivate and last-active-Admin protection.
 - STG infrastructure scripts and STG setup documentation.
 
 Active/UAT focus:

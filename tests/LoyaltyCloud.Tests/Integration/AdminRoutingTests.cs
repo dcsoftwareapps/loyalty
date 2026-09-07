@@ -445,6 +445,7 @@ public sealed class AdminRoutingTests : IClassFixture<AdminRoutingTests.AdminWeb
     [InlineData("/levels")]
     [InlineData("/marketing-notifications")]
     [InlineData("/giftcards/redeem")]
+    [InlineData("/staff")]
     public async Task Cashier_authenticated_user_cannot_access_current_admin_portal(string path)
     {
         using var client = _factory.CreateClient(new WebApplicationFactoryClientOptions
@@ -537,7 +538,7 @@ public sealed class AdminRoutingTests : IClassFixture<AdminRoutingTests.AdminWeb
             "<span class=\"kb-sidebar-section\">Reportes</span>",
             "href=\"/customers\"", "href=\"/reports/activity-trends\"", "href=\"/giftcards/reports\"",
             "<span class=\"kb-sidebar-section\">Gestión</span>",
-            "href=\"/levels\"", "href=\"/config\"", "href=\"/quick-help\""
+            "href=\"/levels\"", "href=\"/config\"", "href=\"/staff\"", "href=\"/quick-help\""
         };
 
         var previousIndex = -1;
@@ -551,6 +552,46 @@ public sealed class AdminRoutingTests : IClassFixture<AdminRoutingTests.AdminWeb
         Assert.DoesNotContain("href=\"/operacion\"", source, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("href=\"/puntos\"", source, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("href=\"/clientes\"", source, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    [Trait("Category", "AdminRouting")]
+    [Trait("Category", "StaffManagement")]
+    public async Task Staff_management_route_is_available_for_authenticated_tenant_admin()
+    {
+        using var client = _factory.CreateClient(new WebApplicationFactoryClientOptions
+        {
+            AllowAutoRedirect = false
+        });
+        client.DefaultRequestHeaders.Add("Cookie", await _factory.CreateTenantAdminCookieAsync());
+
+        using var response = await client.GetAsync("/staff");
+        var html = await response.Content.ReadAsStringAsync();
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.Contains("Personal", html);
+        Assert.Contains("Usuarios del tenant", html);
+        Assert.Contains("Crear usuario", html);
+    }
+
+    [Fact]
+    [Trait("Category", "AdminRouting")]
+    [Trait("Category", "StaffManagement")]
+    public void Staff_management_navigation_is_under_management_group()
+    {
+        var source = File.ReadAllText(Path.Combine(GetRepositoryRoot(), "src", "LoyaltyCloud.Admin", "Components", "Layout", "MainLayout.razor"));
+
+        var managementIndex = source.IndexOf("<span class=\"kb-sidebar-section\">Gestión</span>", StringComparison.Ordinal);
+        var configIndex = source.IndexOf("href=\"/config\"", managementIndex, StringComparison.Ordinal);
+        var billingIndex = source.IndexOf("href=\"@($\"/{TenantContext.TenantSlug}/billing\")", managementIndex, StringComparison.Ordinal);
+        var staffIndex = source.IndexOf("href=\"/staff\"", managementIndex, StringComparison.Ordinal);
+        var helpIndex = source.IndexOf("href=\"/quick-help\"", managementIndex, StringComparison.Ordinal);
+
+        Assert.True(managementIndex >= 0);
+        Assert.True(configIndex > managementIndex);
+        Assert.True(billingIndex > configIndex);
+        Assert.True(staffIndex > billingIndex);
+        Assert.True(helpIndex > staffIndex);
     }
 
     [Fact]

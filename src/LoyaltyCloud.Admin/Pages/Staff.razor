@@ -1,0 +1,256 @@
+@page "/staff"
+@attribute [Authorize(Policy = LoyaltyCloud.Admin.Auth.TenantAuthorizationPolicies.TenantAdmin)]
+@rendermode InteractiveServer
+
+@using LoyaltyCloud.Domain.Enums
+@inject TenantStaffService StaffService
+
+<PageTitle>Personal - LoyaltyCloud</PageTitle>
+
+<header class="kb-page-header">
+    <div>
+        <span class="kb-eyebrow">Administracion</span>
+        <h1>Personal</h1>
+        <p>Administra los usuarios que pueden operar el Admin y caja.</p>
+    </div>
+</header>
+
+@if (success is not null)
+{
+    <div class="kb-form-success" role="status">@success</div>
+}
+@if (error is not null)
+{
+    <div class="kb-form-error" role="alert">@error</div>
+}
+
+<section class="kb-card" style="margin-bottom:24px;max-width:900px;">
+    <h2>Nuevo usuario</h2>
+    <p class="kb-muted">Crea un Admin o Cashier para este tenant.</p>
+
+    <div class="kb-form-row kb-form-row--horizontal">
+        <label>
+            <span>Usuario</span>
+            <input type="text" @bind="createForm.Username" autocomplete="off" maxlength="150" disabled="@busy" />
+        </label>
+        <label>
+            <span>Password inicial</span>
+            <input type="password" @bind="createForm.Password" autocomplete="new-password" minlength="@TenantStaffService.MinimumPasswordLength" disabled="@busy" />
+        </label>
+        <label>
+            <span>Rol</span>
+            <select @bind="createForm.Role" disabled="@busy">
+                <option value="@TenantUserRole.Admin">Admin</option>
+                <option value="@TenantUserRole.Cashier">Cashier</option>
+            </select>
+        </label>
+        <button type="button" class="kb-btn kb-btn--primary" @onclick="CreateAsync" disabled="@busy">
+            @(busy ? "Guardando..." : "Crear usuario")
+        </button>
+    </div>
+    <small class="kb-muted">El password no se muestra ni se guarda en texto plano.</small>
+</section>
+
+<section class="kb-card kb-table-shell">
+    <div style="padding:20px 24px 8px;">
+        <h2>Usuarios del tenant</h2>
+        <p class="kb-muted">Solo se muestran usuarios del tenant actual.</p>
+    </div>
+
+    @if (users is null)
+    {
+        <p style="padding:0 24px 24px;">Cargando...</p>
+    }
+    else if (users.Count == 0)
+    {
+        <div class="kb-empty-state">
+            <h3>No hay usuarios registrados</h3>
+            <p>Crea el primer usuario para este tenant.</p>
+        </div>
+    }
+    else
+    {
+        <div class="kb-table-responsive">
+            <table class="kb-table kb-table--compact">
+                <thead>
+                    <tr>
+                        <th>Usuario</th>
+                        <th>Rol</th>
+                        <th>Estado</th>
+                        <th>Ultimo acceso</th>
+                        <th>Acciones</th>
+                    </tr>
+                </thead>
+                <tbody>
+                @foreach (var user in users)
+                {
+                    <tr>
+                        <td><strong>@user.Username</strong></td>
+                        <td>@RoleLabel(user.Role)</td>
+                        <td><span class="@StatusClass(user.IsActive)">@(user.IsActive ? "Activo" : "Inactivo")</span></td>
+                        <td>@FormatLastLogin(user.LastLoginAtUtc)</td>
+                        <td>
+                            <div class="kb-actions-inline">
+                                <button type="button" class="kb-btn kb-btn--ghost kb-btn--small" @onclick="() => StartPasswordReset(user)" disabled="@busy">Cambiar password</button>
+                                @if (user.IsActive)
+                                {
+                                    <button type="button" class="kb-btn kb-btn--ghost kb-btn--small" @onclick="() => SetActiveAsync(user.Id, false)" disabled="@busy">Desactivar</button>
+                                }
+                                else
+                                {
+                                    <button type="button" class="kb-btn kb-btn--primary kb-btn--small" @onclick="() => SetActiveAsync(user.Id, true)" disabled="@busy">Activar</button>
+                                }
+                            </div>
+                        </td>
+                    </tr>
+                    @if (resetForm.UserId == user.Id)
+                    {
+                        <tr>
+                            <td colspan="5">
+                                <div class="kb-form-row kb-form-row--horizontal" style="margin:0;">
+                                    <label>
+                                        <span>Nuevo password para @user.Username</span>
+                                        <input type="password" @bind="resetForm.Password" autocomplete="new-password" minlength="@TenantStaffService.MinimumPasswordLength" disabled="@busy" />
+                                    </label>
+                                    <button type="button" class="kb-btn kb-btn--primary" @onclick="ResetPasswordAsync" disabled="@busy">
+                                        @(busy ? "Guardando..." : "Guardar password")
+                                    </button>
+                                    <button type="button" class="kb-btn kb-btn--ghost" @onclick="CancelPasswordReset" disabled="@busy">Cancelar</button>
+                                </div>
+                            </td>
+                        </tr>
+                    }
+                }
+                </tbody>
+            </table>
+        </div>
+    }
+</section>
+
+@code {
+    private IReadOnlyList<TenantStaffUserDto>? users;
+    private bool busy;
+    private string? success;
+    private string? error;
+    private CreateUserForm createForm = new();
+    private ResetPasswordForm resetForm = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        users = await StaffService.ListAsync();
+    }
+
+    private async Task CreateAsync()
+    {
+        await RunAsync(async () =>
+        {
+            var result = await StaffService.CreateAsync(createForm.Username, createForm.Password, createForm.Role);
+            if (result.IsFailure)
+            {
+                error = result.Error;
+                return;
+            }
+
+            createForm = new();
+            success = "Usuario creado correctamente.";
+            await LoadAsync();
+        });
+    }
+
+    private void StartPasswordReset(TenantStaffUserDto user)
+    {
+        success = null;
+        error = null;
+        resetForm = new ResetPasswordForm { UserId = user.Id };
+    }
+
+    private void CancelPasswordReset()
+    {
+        resetForm = new();
+    }
+
+    private async Task ResetPasswordAsync()
+    {
+        if (resetForm.UserId is null)
+            return;
+
+        await RunAsync(async () =>
+        {
+            var result = await StaffService.ResetPasswordAsync(resetForm.UserId.Value, resetForm.Password);
+            if (result.IsFailure)
+            {
+                error = result.Error;
+                return;
+            }
+
+            resetForm = new();
+            success = "Password actualizado correctamente.";
+            await LoadAsync();
+        });
+    }
+
+    private async Task SetActiveAsync(Guid userId, bool isActive)
+    {
+        await RunAsync(async () =>
+        {
+            var result = await StaffService.SetActiveAsync(userId, isActive);
+            if (result.IsFailure)
+            {
+                error = result.Error;
+                return;
+            }
+
+            success = isActive ? "Usuario activado correctamente." : "Usuario desactivado correctamente.";
+            await LoadAsync();
+        });
+    }
+
+    private async Task RunAsync(Func<Task> action)
+    {
+        if (busy)
+            return;
+
+        busy = true;
+        success = null;
+        error = null;
+        try
+        {
+            await action();
+        }
+        catch (Exception)
+        {
+            error = "No fue posible completar la operacion. Intenta nuevamente.";
+        }
+        finally
+        {
+            busy = false;
+        }
+    }
+
+    private static string RoleLabel(TenantUserRole role) =>
+        role == TenantUserRole.Admin ? "Admin" : "Cashier";
+
+    private static string StatusClass(bool isActive) =>
+        isActive ? "kb-badge kb-badge--success" : "kb-badge kb-badge--muted";
+
+    private static string FormatLastLogin(DateTime? lastLoginAtUtc) =>
+        lastLoginAtUtc.HasValue ? lastLoginAtUtc.Value.ToString("dd/MM/yyyy HH:mm") : "Sin acceso";
+
+    private sealed class CreateUserForm
+    {
+        public string? Username { get; set; }
+        public string? Password { get; set; }
+        public TenantUserRole Role { get; set; } = TenantUserRole.Cashier;
+    }
+
+    private sealed class ResetPasswordForm
+    {
+        public Guid? UserId { get; set; }
+        public string? Password { get; set; }
+    }
+}
