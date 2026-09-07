@@ -1,4 +1,5 @@
 using LoyaltyCloud.Domain.Entities;
+using LoyaltyCloud.Domain.Enums;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 
@@ -21,6 +22,12 @@ internal sealed class TenantAdminUserConfiguration : IEntityTypeConfiguration<Te
 
         builder.Property(u => u.PasswordHash)
             .HasMaxLength(1000)
+            .IsRequired();
+
+        builder.Property(u => u.Role)
+            .HasConversion<string>()
+            .HasMaxLength(30)
+            .HasDefaultValue(TenantUserRole.Admin)
             .IsRequired();
 
         builder.Property(u => u.CreatedAt).HasColumnType("datetime2(3)");

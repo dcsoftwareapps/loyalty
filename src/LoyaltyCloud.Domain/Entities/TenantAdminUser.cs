@@ -1,4 +1,5 @@
 using LoyaltyCloud.Domain.Common;
+using LoyaltyCloud.Domain.Enums;
 
 namespace LoyaltyCloud.Domain.Entities;
 
@@ -8,6 +9,7 @@ public sealed class TenantAdminUser : Entity, ITenantOwned
     public string Username { get; private set; } = string.Empty;
     public string NormalizedUsername { get; private set; } = string.Empty;
     public string PasswordHash { get; private set; } = string.Empty;
+    public TenantUserRole Role { get; private set; } = TenantUserRole.Admin;
     public bool IsActive { get; private set; }
     public DateTime CreatedAt { get; private set; }
     public DateTime? LastLoginAt { get; private set; }
@@ -22,7 +24,8 @@ public sealed class TenantAdminUser : Entity, ITenantOwned
         string username,
         string passwordHash,
         DateTime createdAtUtc,
-        bool isActive = true) : base(id)
+        bool isActive = true,
+        TenantUserRole role = TenantUserRole.Admin) : base(id)
     {
         TenantId = tenantId == Guid.Empty
             ? throw new ArgumentException("TenantId requerido.", nameof(tenantId))
@@ -30,8 +33,14 @@ public sealed class TenantAdminUser : Entity, ITenantOwned
         Username = Tenant.Require(username, nameof(username), 150);
         NormalizedUsername = NormalizeUsername(username);
         PasswordHash = Tenant.Require(passwordHash, nameof(passwordHash), 1000);
+        Role = role;
         CreatedAt = createdAtUtc;
         IsActive = isActive;
+    }
+
+    public void ChangeRole(TenantUserRole role)
+    {
+        Role = role;
     }
 
     public void RecordLogin(DateTime loggedInAtUtc)

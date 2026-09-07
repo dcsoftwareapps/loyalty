@@ -434,6 +434,32 @@ public sealed class AdminRoutingTests : IClassFixture<AdminRoutingTests.AdminWeb
         Assert.DoesNotContain("/platform/platform/login", location.OriginalString, StringComparison.OrdinalIgnoreCase);
     }
 
+    [Theory]
+    [Trait("Category", "AdminRouting")]
+    [Trait("Category", "CashierAuth")]
+    [InlineData("/dashboard")]
+    [InlineData("/reports")]
+    [InlineData("/config")]
+    [InlineData("/campaigns")]
+    [InlineData("/rewards")]
+    [InlineData("/levels")]
+    [InlineData("/marketing-notifications")]
+    [InlineData("/giftcards/redeem")]
+    public async Task Cashier_authenticated_user_cannot_access_current_admin_portal(string path)
+    {
+        using var client = _factory.CreateClient(new WebApplicationFactoryClientOptions
+        {
+            AllowAutoRedirect = false
+        });
+        client.DefaultRequestHeaders.Add("Cookie", await _factory.CreateTenantCashierCookieAsync());
+
+        using var response = await client.GetAsync(path);
+
+        Assert.NotEqual(HttpStatusCode.OK, response.StatusCode);
+        Assert.Equal(HttpStatusCode.Redirect, response.StatusCode);
+        Assert.DoesNotContain("/login?ReturnUrl=", response.Headers.Location?.OriginalString ?? string.Empty, StringComparison.Ordinal);
+    }
+
     [Fact]
     [Trait("Category", "AdminRouting")]
     public void Tenant_cookie_redirect_without_slug_uses_platform_login_not_legacy_login()
@@ -1417,6 +1443,39 @@ public sealed class AdminRoutingTests : IClassFixture<AdminRoutingTests.AdminWeb
             var context = CreateHttpContext(scope.ServiceProvider);
             var result = await scope.ServiceProvider.GetRequiredService<AdminAuthService>()
                 .TrySignInAsync(context, TenantSeed.KBeautySlug, TenantAdminUsername, TenantAdminPassword);
+
+            Assert.Equal(AdminLoginResult.Success, result);
+            return ExtractCookie(context, "loyaltycloud.admin.auth");
+        }
+
+        public async Task<string> CreateTenantCashierCookieAsync()
+        {
+            using var scope = Services.CreateScope();
+            var context = CreateHttpContext(scope.ServiceProvider);
+            var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+            scope.ServiceProvider.GetRequiredService<IMutableTenantContext>().SetTenant(TenantSeed.KBeautyTenantId, TenantSeed.KBeautySlug);
+            var passwords = scope.ServiceProvider.GetRequiredService<IPasswordHashingService>();
+            const string username = "cashier";
+            const string password = "Cashier123!";
+            var normalizedUsername = TenantAdminUser.NormalizeUsername(username);
+            var cashier = await db.TenantAdminUsers.SingleOrDefaultAsync(user =>
+                user.TenantId == TenantSeed.KBeautyTenantId
+                && user.NormalizedUsername == normalizedUsername);
+            if (cashier is null)
+            {
+                cashier = new TenantAdminUser(
+                    Guid.Parse("b4000000-0000-0000-0000-000000009002"),
+                    TenantSeed.KBeautyTenantId,
+                    username,
+                    passwords.HashPassword(password),
+                    DateTime.UtcNow,
+                    role: TenantUserRole.Cashier);
+                db.TenantAdminUsers.Add(cashier);
+                await db.SaveChangesAsync();
+            }
+
+            var result = await scope.ServiceProvider.GetRequiredService<AdminAuthService>()
+                .TrySignInAsync(context, TenantSeed.KBeautySlug, username, password);
 
             Assert.Equal(AdminLoginResult.Success, result);
             return ExtractCookie(context, "loyaltycloud.admin.auth");
