@@ -2,9 +2,40 @@
 
 Last updated: 2026-09-07
 
-Branch: `feature/cashier-api-auth`
+Branch: `feature/staff-management`
 
-Last task worked: Cashier API authentication Phase 1.
+Last task worked: Staff Management for tenant Admin users.
+
+## 2026-09-07 - Staff Management
+
+Current branch for this work: `feature/staff-management`.
+
+Scope:
+
+- Adds tenant Admin page `/staff` under Admin navigation section `Gestión` as `Personal`.
+- Only tenant users with role `Admin` can open the page. `Cashier` users remain blocked from the Admin portal.
+- Staff management lists only `TenantAdminUser` rows for the current tenant.
+- Tenant Admin can create `Admin` or `Cashier` users, reset passwords, and activate/deactivate users.
+- Passwords are never displayed, returned by DTOs or stored in plaintext. All password writes use `IPasswordHashingService`.
+- Usernames use `TenantAdminUser.NormalizeUsername(...)`; duplicate usernames are rejected inside the same tenant while the same username can exist in another tenant.
+- Deactivating the last active `Admin` in a tenant is blocked.
+- Role editing after creation was intentionally not included in this first Staff Management slice.
+
+No schema change is expected. This reuses existing `TenantAdminUser.Role` and `TenantAdminUser.IsActive`.
+
+Remaining future work:
+
+- Dedicated cashier UI/PWA/mobile surface.
+- Refresh-token/revocation/trusted-device strategy.
+- Cashier Gift Card operational endpoints.
+
+Validation expected:
+
+- `Category=StaffManagement`.
+- Related tenant/admin auth, cashier auth, admin routing and super admin regressions.
+- `dotnet ef migrations has-pending-model-changes`.
+- `dotnet build .\LoyaltyCloud.sln -c Release`.
+- No deploy, database update, commit or push.
 
 ## 2026-09-07 - Cashier API authentication Phase 1
 
@@ -34,7 +65,6 @@ Remaining future work:
 
 - Dedicated cashier UI/PWA/mobile surface.
 - Refresh-token/revocation/trusted-device strategy.
-- Cashier/staff management UX.
 - Cashier Gift Card operational endpoints.
 
 Validation expected:
@@ -71,7 +101,6 @@ Remaining future work:
 - Dedicated `/cashier` UI or PWA/mobile surface.
 - Mobile-safe server-issued sessions/tokens.
 - Cashier API authentication/authorization.
-- Cashier user/staff management UI.
 - Gift Card cashier API endpoints.
 
 Validation expected:

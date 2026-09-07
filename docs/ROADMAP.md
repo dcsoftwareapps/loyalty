@@ -70,6 +70,7 @@ La base activa de produccion/UAT es `LoyaltyCloudFree`.
 - Gift Cards con entrega por email mediante SMTP provider-neutral, enlace publico seguro y rotacion de token al reenviar.
 - Phase 0 de autenticacion Cashier: roles tenant `Admin`/`Cashier`, policies base y Admin portal actual restringido a `Admin`.
 - Phase 1 de autenticacion Cashier: login API movil seguro, bearer token de corta vida y autorizacion para operaciones de caja existentes.
+- Administracion de Personal para crear Admin/Cashier, resetear password, activar/desactivar usuarios y proteger el ultimo Admin activo.
 
 ### Estado de Reportes
 
