@@ -7,4 +7,5 @@ public static class AdminClaimTypes
     public const string TenantSlug = "tenant_slug";
     public const string Name = "name";
     public const string AuthTime = "auth_time";
+    public const string Role = System.Security.Claims.ClaimTypes.Role;
 }

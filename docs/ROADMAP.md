@@ -68,6 +68,7 @@ La base activa de produccion/UAT es `LoyaltyCloudFree`.
 - Google Wallet Save Link validado en STG.
 - Prevencion de clientes duplicados por telefono y recuperacion segura de tarjeta existente cuando nombre/apellido coinciden.
 - Gift Cards con entrega por email mediante SMTP provider-neutral, enlace publico seguro y rotacion de token al reenviar.
+- Phase 0 de autenticacion Cashier: roles tenant `Admin`/`Cashier`, policies base y Admin portal actual restringido a `Admin`.
 
 ### Estado de Reportes
 
@@ -98,6 +99,9 @@ La base activa de produccion/UAT es `LoyaltyCloudFree`.
 - Vista de clientes eliminados
 - Restaurar cliente
 - Hard delete permanente de cliente
+- App/PWA de caja dedicada
+- Autenticacion movil segura para caja
+- Endpoints Cashier para Gift Cards
 
 ## DEFERRED
 

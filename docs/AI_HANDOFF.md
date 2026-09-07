@@ -1,10 +1,47 @@
 # LoyaltyCloud - AI Handoff
 
-Last updated: 2026-09-01
+Last updated: 2026-09-07
 
-Branch: `feature/gift-card-email-delivery`
+Branch: `feature/cashier-auth-roles`
 
-Last task worked: Gift Card email delivery.
+Last task worked: Cashier authentication roles Phase 0.
+
+## 2026-09-07 - Cashier authentication roles Phase 0
+
+Current branch for this work: `feature/cashier-auth-roles`.
+
+Scope:
+
+- Introduces a persisted `TenantAdminUser.Role` with supported values `Admin` and `Cashier`.
+- Existing and newly provisioned tenant admin users default to `Admin`.
+- Tenant login emits a standard role claim from the persisted user role.
+- Cookie validation rehydrates the role claim from the database so historical cookies without the claim and changed roles are reconciled from the server-side source of truth.
+- Tenant authorization policies are centralized: `TenantUser`, `TenantAdmin` and `CashierOperations`.
+- The current Admin portal remains Admin-only. Phase 0 intentionally does not add `/cashier`, mobile JWT/auth tokens or cashier API endpoints.
+- Super Admin/platform auth remains separate through `loyaltycloud.platform.auth` and the `SuperAdmin` role.
+- Existing Admin-to-API HMAC remains unchanged and remains server-to-server only. Do not embed `AdminApi:SharedSecret` in any future mobile/PWA/native client.
+
+Migration:
+
+- `20260907162223_AddTenantAdminUserRole`.
+- Adds required `TenantAdminUsers.Role` as `nvarchar(30)` with default `Admin`.
+- Existing rows are backfilled by the SQL default when the migration is applied.
+
+Remaining future work:
+
+- Dedicated `/cashier` UI or PWA/mobile surface.
+- Mobile-safe server-issued sessions/tokens.
+- Cashier API authentication/authorization.
+- Cashier user/staff management UI.
+- Gift Card cashier API endpoints.
+
+Validation expected:
+
+- Tenant admin auth and cashier auth focused tests.
+- Admin routing tests for Cashier denial on current Admin pages.
+- `dotnet ef migrations has-pending-model-changes`.
+- `dotnet build .\LoyaltyCloud.sln -c Release`.
+- No deploy, database update, commit or push.
 
 ## 2026-09-01 - Gift Card email delivery
 

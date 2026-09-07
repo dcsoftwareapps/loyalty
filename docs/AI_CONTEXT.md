@@ -73,7 +73,7 @@ Main entities:
 | `Tenant` | Platform tenant/business. Slug identifies tenant routes. |
 | `TenantBranding` | Branding, colors, support links and logo blob reference. |
 | `TenantSubscription` | Trial/active/past-due/suspended/cancelled subscription state and billing dates. |
-| `TenantAdminUser` | Tenant admin/cashier login user. Passwords use `IPasswordHashingService`. |
+| `TenantAdminUser` | Tenant admin/cashier login user. Passwords use `IPasswordHashingService`; role is persisted as `Admin` or `Cashier`. |
 | `TenantLoyaltyLevel` | Dynamic loyalty level per tenant: name, normalized name, threshold, sort order, active flag. |
 | `Customer` | Tenant customer/member. Phone is normalized for lookup/deduplication and same-tenant card recovery. `IsActive` is reused for customer soft delete. |
 | `LoyaltyCard` | Central loyalty card aggregate: serial, current balance, lifetime points, level, auth token, last activity. `IsActive` is reused with `Customer.IsActive` for soft-deleted members. |
@@ -111,6 +111,8 @@ Current architecture:
 - TenantContext is scoped and stored in `TenantContext` implementing `ITenantContext` and `IMutableTenantContext`.
 - Most business entities are tenant-owned and filtered/guarded by EF tenant context.
 - Admin-to-API calls send a tenant slug in signed HMAC headers; they do not send a free-form TenantId.
+- Tenant user roles currently support `Admin` and `Cashier`. Existing Admin portal pages remain Admin-only; `CashierOperations` is available as a future policy for dedicated cashier surfaces.
+- `AdminApi:SharedSecret` is server-to-server only and must never be embedded in browser JavaScript, PWA, MAUI, iOS or Android clients.
 
 Guardrails:
 
@@ -120,6 +122,7 @@ Guardrails:
 - Do not let `/platform/*` resolve a business tenant.
 - Do not weaken AppDbContext tenant guards.
 - Do not introduce cross-tenant joins without explicit review.
+- Do not give `Cashier` access to tenant configuration, billing, reports, campaigns, rewards, levels, Wallet branding or platform administration.
 
 Known corrected issue: Blazor Interactive Server has a different DI scope than SSR/request middleware. Tenant context for interactive circuits is restored from authenticated tenant claims through Admin-specific circuit/context services. Do not revert that pattern.
 

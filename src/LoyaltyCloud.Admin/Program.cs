@@ -119,14 +119,7 @@ builder.Services
 
 // Política por defecto: todo requiere autenticación; las páginas que no la
 // requieran usan [AllowAnonymous] (Login).
-builder.Services.AddAuthorization(options =>
-{
-    options.AddPolicy(GiftCardsAuthorization.Policy, policy =>
-        policy.RequireAuthenticatedUser().AddRequirements(new GiftCardsEnabledRequirement()));
-    options.FallbackPolicy = new AuthorizationPolicyBuilder()
-        .RequireAuthenticatedUser()
-        .Build();
-});
+builder.Services.AddAuthorization(TenantAuthorization.Configure);
 
 builder.Services.AddScoped<IAuthorizationHandler, GiftCardsEnabledHandler>();
 builder.Services.AddCascadingAuthenticationState();
