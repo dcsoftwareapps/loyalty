@@ -94,7 +94,7 @@ Main entities:
 | `GiftCardTransaction` | Gift Card ledger for issue, redemption, cancellation, expiration and adjustments. |
 | `GiftCardWallet` | Gift Card wallet synchronization state for Apple and Google Wallet providers. |
 
-Important enums include `TransactionType`, `RedemptionType`, `RedemptionStatus`, `NotificationType`, `NotificationChannel`, `NotificationStatus`, `NotificationDeliveryStatus`, `DigitalWalletProvider`, `DigitalWalletStatus`, `CustomNotificationCampaignStatus`, `CampaignLevelEligibility`, `TenantSubscriptionStatus`, `TenantSuspensionReason` and `PassUpdateReason`.
+Important enums include `TransactionType`, `RedemptionType`, `RedemptionStatus`, `NotificationType`, `NotificationChannel`, `NotificationStatus`, `NotificationDeliveryStatus`, `DigitalWalletProvider`, `DigitalWalletStatus`, `CustomNotificationCampaignStatus`, `CampaignLevelEligibility`, `TenantUserRole`, `TenantSubscriptionStatus`, `TenantSuspensionReason` and `PassUpdateReason`.
 
 ## Multi-Tenancy Rules
 
@@ -111,7 +111,10 @@ Current architecture:
 - TenantContext is scoped and stored in `TenantContext` implementing `ITenantContext` and `IMutableTenantContext`.
 - Most business entities are tenant-owned and filtered/guarded by EF tenant context.
 - Admin-to-API calls send a tenant slug in signed HMAC headers; they do not send a free-form TenantId.
-- Tenant user roles currently support `Admin` and `Cashier`. Existing Admin portal pages remain Admin-only; `CashierOperations` is available as a future policy for dedicated cashier surfaces.
+- Tenant user roles currently support `Admin` and `Cashier`. Existing Admin portal pages remain Admin-only.
+- Cashier API Phase 1 exists for future mobile/PWA cashier clients: `POST /api/auth/cashier/login` issues a short-lived bearer token signed by `CashierAuth:SigningKey`.
+- Cashier bearer tokens derive tenant/user/role from authenticated token claims and DB revalidation, not from browser-supplied TenantId or operator headers.
+- Cashier bearer tokens are limited to existing operational endpoints for customer lookup, transactions, points and redemptions. Configuration, billing, reports, campaigns, rewards, levels, Wallet branding, staff and platform APIs remain blocked.
 - `AdminApi:SharedSecret` is server-to-server only and must never be embedded in browser JavaScript, PWA, MAUI, iOS or Android clients.
 
 Guardrails:
@@ -288,6 +291,12 @@ Custom campaigns store a short notification text and a longer message detail. Te
 
 `/api/passes/{serialNumber}` returns `application/vnd.apple.pkpass` and can be opened directly in Safari on iPhone. Tenant is resolved from `LoyaltyCard.SerialNumber`.
 
+### Cashier Authentication
+
+| Method | Route | Purpose |
+| --- | --- | --- |
+| POST | `/api/auth/cashier/login` | Authenticate a tenant `Admin` or `Cashier` user for future cashier/mobile clients and return a short-lived bearer token. |
+
 ### Google Wallet
 
 | Method | Route | Purpose |
@@ -308,7 +317,18 @@ Tenant Admin API calls use:
 
 The API validates HMAC, resolves tenant by slug, verifies operational subscription state, sets `TenantContext`, then runs the controller/handler.
 
-Do not pass TenantId from browser/UI. Do not replace this with plain relative requests against Admin.
+Cashier/mobile API Phase 1 adds a separate bearer-token path for future cashier clients:
+
+- Login endpoint: `POST /api/auth/cashier/login`.
+- Request: tenant slug, username and password only.
+- Password verification uses the existing `IPasswordHashingService`.
+- Token configuration comes from `CashierAuth:Issuer`, `CashierAuth:Audience`, `CashierAuth:AccessTokenMinutes` and secret `CashierAuth:SigningKey`.
+- Tokens are server-issued, HMAC-signed and short-lived. They include user/operator id, tenant id, tenant slug, username and role claims.
+- Each bearer request revalidates the tenant and tenant admin user against SQL before setting `TenantContext`.
+- Operational endpoints accept either existing Admin HMAC or cashier bearer auth: `GET /api/customers/{serialNumber}`, `GET /api/customers/{serialNumber}/transactions`, `POST /api/points`, `GET /api/redemptions/catalog/{serialNumber}`, `POST /api/redemptions`, `PUT /api/redemptions/{id}/confirm` and `PUT /api/redemptions/{id}/cancel`.
+- API overwrites `X-Operator-Id` from the authenticated bearer user, so browser-supplied operator ids are not authoritative.
+
+Do not pass TenantId from browser/UI. Do not replace this with plain relative requests against Admin. Do not reuse `AdminApi:SharedSecret` for mobile/PWA/native clients.
 
 ## Apple Wallet Flow
 
@@ -529,6 +549,10 @@ Important App Settings:
 | `Admin:PublicBaseUrl` | Admin | Public Admin base URL used by Quick Help registration links, QR and printable poster. Environment-specific; empty falls back to current Admin request/base URI. |
 | `Admin:Auth:SessionHours` | Admin | Tenant Admin cookie duration. RC1 target 168. |
 | `AdminApi:SharedSecret` | API/Admin | HMAC secret for Admin to API calls. Must match on both. |
+| `CashierAuth:Issuer` | API | Cashier bearer token issuer. Non-secret. |
+| `CashierAuth:Audience` | API | Cashier bearer token audience. Non-secret. |
+| `CashierAuth:AccessTokenMinutes` | API | Cashier bearer token lifetime in minutes. Default is 60. Non-secret. |
+| `CashierAuth:SigningKey` | API | Cashier bearer token HMAC signing key. Secret; use Key Vault/App Setting, never source. |
 | `SuperAdmin:Username` | Admin | Platform Admin username. |
 | `SuperAdmin:PasswordHash` | Admin | Platform Admin password hash. |
 | `SuperAdmin:SessionHours` | Admin | Platform Admin cookie duration, default 8. |
@@ -569,6 +593,7 @@ Key Vault secret names in current implementation/scripts:
 | `kbeauty-apn-key-id` | APNs key ID. |
 | `kbeauty-apn-team-id` | APNs team ID. |
 | `loyaltycloud-google-wallet-service-account-json` | Google Wallet service account JSON. |
+| `loyaltycloud-cashier-auth-signing-key` | Recommended Key Vault secret for `CashierAuth__SigningKey`. |
 
 No permanent Key Vault secret name has been standardized yet for SMTP provider API keys. If Resend SMTP is enabled, store the Resend API key in Key Vault and reference it from `Email__Password`; keep `Email__SmtpHost`, `Email__SmtpPort` and `Email__Username` as non-secret App Settings when possible.
 
@@ -835,6 +860,7 @@ Done:
 - Quick Help registration QR/poster.
 - Google Wallet first vertical slice.
 - Gift Card email delivery through provider-neutral SMTP, including safe Admin feedback and claim-token rotation on resend.
+- Cashier API authentication Phase 1: server-issued short-lived bearer tokens for existing operational endpoints.
 - STG infrastructure scripts and STG setup documentation.
 
 Active/UAT focus:
@@ -852,6 +878,7 @@ Known current/pending:
 - Google Wallet does not yet have a robust outbox/retry model.
 - Google Wallet sync is currently limited mainly to add-points sync once a member is linked.
 - Gift Card email delivery does not yet have persistent delivery history, background retry or provider webhooks.
+- Cashier API auth does not yet include refresh tokens, token revocation, trusted-device management, a dedicated `/cashier` UI/PWA or Cashier endpoints for Gift Cards.
 - Review whether Google Wallet has URLs/base URLs that should move to the new custom domains.
 - Analyze safe migration strategy before changing `Apple__WebServiceURL` to `https://api.loyaltycloud.net`.
 - Determine impact of changing `Apple__WebServiceURL` on already installed Apple Wallet passes, device registrations and `/v1/*` update flow.
