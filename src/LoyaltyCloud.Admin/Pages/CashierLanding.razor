@@ -1,0 +1,22 @@
+@page "/cashier"
+@layout EmptyLayout
+@attribute [Authorize(Policy = LoyaltyCloud.Admin.Auth.TenantAuthorizationPolicies.TenantUser)]
+@rendermode InteractiveServer
+
+<PageTitle>Acceso de caja - LoyaltyCloud</PageTitle>
+
+<main class="kb-login">
+    <section class="kb-login-card">
+        <div class="kb-login-brand">
+            <h1>Acceso de caja</h1>
+            <p class="kb-muted">Tu usuario está listo. La interfaz de caja estará disponible próximamente.</p>
+        </div>
+
+        <form method="post" action="/logout" class="kb-form-row">
+            <AntiforgeryToken />
+            <button type="submit" class="kb-btn kb-btn--ghost kb-btn--block">
+                Cerrar sesión
+            </button>
+        </form>
+    </section>
+</main>
