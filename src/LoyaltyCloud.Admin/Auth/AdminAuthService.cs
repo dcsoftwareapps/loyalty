@@ -247,7 +247,32 @@ public sealed class AdminAuthService
                 IsPersistent = true,
                 ExpiresUtc = DateTimeOffset.UtcNow.AddHours(Math.Max(1, _options.SessionHours))
             });
+        context.User = principal;
     }
+
+    public string GetAuthenticatedLandingPath(ClaimsPrincipal principal)
+    {
+        var role = principal.FindFirstValue(ClaimTypes.Role);
+        return string.Equals(role, TenantUserRoles.Cashier, StringComparison.Ordinal)
+            ? "/cashier"
+            : "/dashboard";
+    }
+
+    public string GetPostLoginDestination(HttpContext context, string tenantSlug, bool billingOnly, string? returnUrl)
+    {
+        if (string.Equals(context.User.FindFirstValue(ClaimTypes.Role), TenantUserRoles.Cashier, StringComparison.Ordinal))
+            return "/cashier";
+
+        if (billingOnly)
+            return $"/{tenantSlug}/billing";
+
+        return IsLocalReturnUrl(returnUrl) ? returnUrl! : "/dashboard";
+    }
+
+    public static bool IsLocalReturnUrl(string? value) =>
+        !string.IsNullOrWhiteSpace(value)
+        && value.StartsWith('/')
+        && !value.StartsWith("//");
 
     private static ClaimsPrincipal BuildPrincipal(Tenant tenant, TenantAdminUser adminUser, string authTime)
     {

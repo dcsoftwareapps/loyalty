@@ -1,10 +1,17 @@
 @inject NavigationManager Nav
 @inject AuthenticationStateProvider AuthenticationStateProvider
+@using LoyaltyCloud.Admin.Auth
 @code {
     protected override async Task OnInitializedAsync()
     {
-        var authenticated = (await AuthenticationStateProvider.GetAuthenticationStateAsync()).User.Identity?.IsAuthenticated == true;
-        if (authenticated) { Nav.NavigateTo("/dashboard"); return; }
+        var principal = (await AuthenticationStateProvider.GetAuthenticationStateAsync()).User;
+        var authenticated = principal.Identity?.IsAuthenticated == true;
+        if (authenticated)
+        {
+            var destination = principal.IsInRole(TenantUserRoles.Cashier) ? "/cashier" : "/dashboard";
+            Nav.NavigateTo(destination);
+            return;
+        }
         var returnUrl = Uri.EscapeDataString(new Uri(Nav.Uri).PathAndQuery);
         var path = new Uri(Nav.Uri).AbsolutePath;
         var loginPath = LoyaltyCloud.Admin.Auth.AdminLoginRedirects.ResolveLoginPath(path);

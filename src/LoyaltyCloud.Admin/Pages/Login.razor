@@ -90,7 +90,7 @@
         {
             var destination = await Auth.IsBillingOnlyAsync(HttpContext)
                 ? $"/{tenant.Slug}/billing"
-                : "/dashboard";
+                : Auth.GetAuthenticatedLandingPath(HttpContext.User);
             HttpContext.Response.Redirect(destination);
             return;
         }
@@ -101,9 +101,7 @@
             if (result == AdminLoginResult.Success)
             {
                 var billingOnly = await Auth.IsBillingOnlyTenantAsync(TenantSlug);
-                var destination = billingOnly
-                    ? $"/{tenant.Slug}/billing"
-                    : IsLocalReturnUrl(ReturnUrl) ? ReturnUrl! : "/dashboard";
+                var destination = Auth.GetPostLoginDestination(HttpContext, tenant.Slug, billingOnly, ReturnUrl);
                 HttpContext.Response.Redirect(destination);
             }
             else
@@ -119,11 +117,6 @@
     }
 
     private void HandleSubmit() { /* el procesamiento ocurre en OnInitializedAsync tras el postback */ }
-
-    private static bool IsLocalReturnUrl(string? value) =>
-        !string.IsNullOrWhiteSpace(value)
-        && value.StartsWith('/')
-        && !value.StartsWith("//");
 
     public sealed class LoginInput
     {

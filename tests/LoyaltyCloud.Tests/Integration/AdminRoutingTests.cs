@@ -30,6 +30,8 @@ public sealed class AdminRoutingTests : IClassFixture<AdminRoutingTests.AdminWeb
     private const string SuperAdminPassword = "Platform123!";
     private const string TenantAdminUsername = "owner";
     private const string TenantAdminPassword = "Tenant123!";
+    private const string TenantCashierUsername = "cashier";
+    private const string TenantCashierPassword = "Cashier123!";
 
     private readonly AdminWebApplicationFactory _factory;
 
@@ -290,6 +292,106 @@ public sealed class AdminRoutingTests : IClassFixture<AdminRoutingTests.AdminWeb
         Assert.Null(protectedResponse.Headers.Location);
     }
 
+    [Fact]
+    [Trait("Category", "AdminRouting")]
+    [Trait("Category", "TenantAdminAuth")]
+    public async Task Tenant_admin_login_rejects_external_return_url_and_uses_dashboard()
+    {
+        using var client = _factory.CreateClient(new WebApplicationFactoryClientOptions
+        {
+            AllowAutoRedirect = false
+        });
+
+        using var getLogin = await client.GetAsync("/kbeauty/login?returnUrl=https%3A%2F%2Fevil.test%2Fdashboard");
+        var loginHtml = await getLogin.Content.ReadAsStringAsync();
+
+        using var post = new HttpRequestMessage(HttpMethod.Post, "/kbeauty/login?returnUrl=https%3A%2F%2Fevil.test%2Fdashboard")
+        {
+            Content = new FormUrlEncodedContent(BuildLoginForm(loginHtml, TenantAdminUsername, TenantAdminPassword))
+        };
+        post.Headers.Add("Cookie", ExtractCookies(getLogin));
+
+        using var loginResponse = await client.SendAsync(post);
+
+        Assert.Equal(HttpStatusCode.Redirect, loginResponse.StatusCode);
+        Assert.Equal("/dashboard", loginResponse.Headers.Location?.OriginalString);
+    }
+
+    [Fact]
+    [Trait("Category", "AdminRouting")]
+    [Trait("Category", "TenantAdminAuth")]
+    [Trait("Category", "CashierAuth")]
+    public async Task Cashier_login_redirects_to_cashier_landing_instead_of_dashboard()
+    {
+        using var client = _factory.CreateClient(new WebApplicationFactoryClientOptions
+        {
+            AllowAutoRedirect = false
+        });
+        await _factory.EnsureTenantCashierExistsAsync();
+
+        using var getLogin = await client.GetAsync("/kbeauty/login");
+        var loginHtml = await getLogin.Content.ReadAsStringAsync();
+
+        using var post = new HttpRequestMessage(HttpMethod.Post, "/kbeauty/login")
+        {
+            Content = new FormUrlEncodedContent(BuildLoginForm(loginHtml, TenantCashierUsername, TenantCashierPassword))
+        };
+        post.Headers.Add("Cookie", ExtractCookies(getLogin));
+
+        using var loginResponse = await client.SendAsync(post);
+
+        Assert.Equal(HttpStatusCode.Redirect, loginResponse.StatusCode);
+        Assert.Equal("/cashier", loginResponse.Headers.Location?.OriginalString);
+        Assert.DoesNotContain("/dashboard", loginResponse.Headers.Location?.OriginalString ?? string.Empty, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    [Trait("Category", "AdminRouting")]
+    [Trait("Category", "TenantAdminAuth")]
+    [Trait("Category", "CashierAuth")]
+    public async Task Cashier_login_ignores_admin_return_url()
+    {
+        using var client = _factory.CreateClient(new WebApplicationFactoryClientOptions
+        {
+            AllowAutoRedirect = false
+        });
+        await _factory.EnsureTenantCashierExistsAsync();
+
+        using var getLogin = await client.GetAsync("/kbeauty/login?returnUrl=%2Fstaff");
+        var loginHtml = await getLogin.Content.ReadAsStringAsync();
+
+        using var post = new HttpRequestMessage(HttpMethod.Post, "/kbeauty/login?returnUrl=%2Fstaff")
+        {
+            Content = new FormUrlEncodedContent(BuildLoginForm(loginHtml, TenantCashierUsername, TenantCashierPassword))
+        };
+        post.Headers.Add("Cookie", ExtractCookies(getLogin));
+
+        using var loginResponse = await client.SendAsync(post);
+
+        Assert.Equal(HttpStatusCode.Redirect, loginResponse.StatusCode);
+        Assert.Equal("/cashier", loginResponse.Headers.Location?.OriginalString);
+    }
+
+    [Fact]
+    [Trait("Category", "AdminRouting")]
+    [Trait("Category", "CashierAuth")]
+    public async Task Cashier_can_open_cashier_landing()
+    {
+        using var client = _factory.CreateClient(new WebApplicationFactoryClientOptions
+        {
+            AllowAutoRedirect = false
+        });
+        client.DefaultRequestHeaders.Add("Cookie", await _factory.CreateTenantCashierCookieAsync());
+
+        using var response = await client.GetAsync("/cashier");
+        var html = await response.Content.ReadAsStringAsync();
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.Null(response.Headers.Location);
+        Assert.Contains("Acceso de caja", html);
+        Assert.Contains("La interfaz de caja estará disponible próximamente.", html);
+    }
+
     [Theory]
     [InlineData(TenantSuspensionReason.PaymentPastDue)]
     [InlineData(TenantSuspensionReason.TrialExpired)]
@@ -458,7 +560,12 @@ public sealed class AdminRoutingTests : IClassFixture<AdminRoutingTests.AdminWeb
 
         Assert.NotEqual(HttpStatusCode.OK, response.StatusCode);
         Assert.Equal(HttpStatusCode.Redirect, response.StatusCode);
+        var redirectPath = response.Headers.Location?.IsAbsoluteUri == true
+            ? response.Headers.Location.PathAndQuery
+            : response.Headers.Location?.OriginalString;
+        Assert.Equal("/cashier", redirectPath);
         Assert.DoesNotContain("/login?ReturnUrl=", response.Headers.Location?.OriginalString ?? string.Empty, StringComparison.Ordinal);
+        Assert.DoesNotContain("/dashboard", response.Headers.Location?.OriginalString ?? string.Empty, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]
@@ -1493,33 +1600,37 @@ public sealed class AdminRoutingTests : IClassFixture<AdminRoutingTests.AdminWeb
         {
             using var scope = Services.CreateScope();
             var context = CreateHttpContext(scope.ServiceProvider);
-            var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
-            scope.ServiceProvider.GetRequiredService<IMutableTenantContext>().SetTenant(TenantSeed.KBeautyTenantId, TenantSeed.KBeautySlug);
-            var passwords = scope.ServiceProvider.GetRequiredService<IPasswordHashingService>();
-            const string username = "cashier";
-            const string password = "Cashier123!";
-            var normalizedUsername = TenantAdminUser.NormalizeUsername(username);
-            var cashier = await db.TenantAdminUsers.SingleOrDefaultAsync(user =>
-                user.TenantId == TenantSeed.KBeautyTenantId
-                && user.NormalizedUsername == normalizedUsername);
-            if (cashier is null)
-            {
-                cashier = new TenantAdminUser(
-                    Guid.Parse("b4000000-0000-0000-0000-000000009002"),
-                    TenantSeed.KBeautyTenantId,
-                    username,
-                    passwords.HashPassword(password),
-                    DateTime.UtcNow,
-                    role: TenantUserRole.Cashier);
-                db.TenantAdminUsers.Add(cashier);
-                await db.SaveChangesAsync();
-            }
+            await EnsureTenantCashierExistsAsync();
 
             var result = await scope.ServiceProvider.GetRequiredService<AdminAuthService>()
-                .TrySignInAsync(context, TenantSeed.KBeautySlug, username, password);
+                .TrySignInAsync(context, TenantSeed.KBeautySlug, TenantCashierUsername, TenantCashierPassword);
 
             Assert.Equal(AdminLoginResult.Success, result);
             return ExtractCookie(context, "loyaltycloud.admin.auth");
+        }
+
+        public async Task EnsureTenantCashierExistsAsync()
+        {
+            using var scope = Services.CreateScope();
+            var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+            scope.ServiceProvider.GetRequiredService<IMutableTenantContext>().SetTenant(TenantSeed.KBeautyTenantId, TenantSeed.KBeautySlug);
+            var passwords = scope.ServiceProvider.GetRequiredService<IPasswordHashingService>();
+            var normalizedUsername = TenantAdminUser.NormalizeUsername(TenantCashierUsername);
+            var cashier = await db.TenantAdminUsers.SingleOrDefaultAsync(user =>
+                user.TenantId == TenantSeed.KBeautyTenantId
+                && user.NormalizedUsername == normalizedUsername);
+            if (cashier is not null)
+                return;
+
+            cashier = new TenantAdminUser(
+                Guid.Parse("b4000000-0000-0000-0000-000000009002"),
+                TenantSeed.KBeautyTenantId,
+                TenantCashierUsername,
+                passwords.HashPassword(TenantCashierPassword),
+                DateTime.UtcNow,
+                role: TenantUserRole.Cashier);
+            db.TenantAdminUsers.Add(cashier);
+            await db.SaveChangesAsync();
         }
 
         private static DefaultHttpContext CreateHttpContext(IServiceProvider services)
