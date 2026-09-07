@@ -2,9 +2,48 @@
 
 Last updated: 2026-09-07
 
-Branch: `feature/cashier-auth-roles`
+Branch: `feature/cashier-api-auth`
 
-Last task worked: Cashier authentication roles Phase 0.
+Last task worked: Cashier API authentication Phase 1.
+
+## 2026-09-07 - Cashier API authentication Phase 1
+
+Current branch for this work: `feature/cashier-api-auth`.
+
+Scope:
+
+- Adds `POST /api/auth/cashier/login` in `LoyaltyCloud.API` for future mobile/PWA cashier clients.
+- Login accepts only tenant slug, username and password. It resolves tenant by slug, verifies operational tenant/subscription state, sets `TenantContext`, looks up `TenantAdminUser` by normalized username and verifies the password through `IPasswordHashingService`.
+- Issues short-lived bearer tokens signed with `CashierAuth:SigningKey`. Tokens include tenant id, tenant slug, user/operator id, username and role claims.
+- Adds bearer authentication and request middleware that revalidates tenant and tenant user against SQL before setting `TenantContext`.
+- Cashier bearer auth is allowed only on existing operational endpoints for customers, points and redemptions. Admin-only API areas such as config, billing, reports, campaigns, rewards, levels, Wallet branding, staff and platform remain blocked.
+- Existing Admin -> API HMAC using `AdminApi:SharedSecret` is preserved. Do not embed that secret in browser/PWA/mobile clients.
+- API overwrites `X-Operator-Id` from the authenticated bearer user so client-provided operator ids are not trusted.
+- Adds a small fixed-window rate limit to cashier login: 10 attempts per 5 minutes per remote IP.
+
+Configuration:
+
+- `CashierAuth:Issuer`.
+- `CashierAuth:Audience`.
+- `CashierAuth:AccessTokenMinutes` default: 60.
+- `CashierAuth:SigningKey` required secret, at least 32 UTF-8 bytes; recommended Key Vault secret name: `loyaltycloud-cashier-auth-signing-key`.
+
+No schema change is expected for Phase 1. It reuses `TenantAdminUser.Role` from Phase 0 and existing tenant/user tables.
+
+Remaining future work:
+
+- Dedicated cashier UI/PWA/mobile surface.
+- Refresh-token/revocation/trusted-device strategy.
+- Cashier/staff management UX.
+- Cashier Gift Card operational endpoints.
+
+Validation expected:
+
+- `Category=CashierAuth` tests.
+- Related tenant/admin auth, redemption and points regressions where practical.
+- `dotnet ef migrations has-pending-model-changes`.
+- `dotnet build .\LoyaltyCloud.sln -c Release`.
+- No deploy, database update, commit or push.
 
 ## 2026-09-07 - Cashier authentication roles Phase 0
 

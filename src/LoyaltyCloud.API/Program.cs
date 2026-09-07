@@ -1,10 +1,13 @@
 using LoyaltyCloud.API.Middleware;
+using LoyaltyCloud.API.Auth;
 using LoyaltyCloud.API.Configuration;
 using LoyaltyCloud.API.Services;
 using LoyaltyCloud.Application;
 using LoyaltyCloud.Application.Common.Interfaces;
 using LoyaltyCloud.Infrastructure;
 using LoyaltyCloud.Infrastructure.KeyVault;
+using Microsoft.AspNetCore.Authentication;
+using System.Threading.RateLimiting;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -27,6 +30,31 @@ builder.Services.Configure<LoyaltyNotificationOptions>(
 builder.Services.Configure<CustomNotificationCampaignOptions>(
     builder.Configuration.GetSection(CustomNotificationCampaignOptions.SectionName));
 builder.Services.AddHostedService<LoyaltyNotificationBackgroundService>();
+builder.Services.Configure<CashierAuthOptions>(
+    builder.Configuration.GetSection(CashierAuthOptions.SectionName));
+builder.Services.AddScoped<CashierAccessTokenService>();
+builder.Services
+    .AddAuthentication(CashierAuthDefaults.AuthenticationScheme)
+    .AddScheme<AuthenticationSchemeOptions, CashierBearerAuthenticationHandler>(
+        CashierAuthDefaults.AuthenticationScheme,
+        _ => { });
+builder.Services.AddAuthorization(CashierAuthorizationPolicies.Configure);
+builder.Services.AddRateLimiter(options =>
+{
+    options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
+    options.AddPolicy(CashierAuthDefaults.LoginRateLimitPolicy, context =>
+    {
+        var remoteIp = context.Connection.RemoteIpAddress?.ToString() ?? "unknown";
+        return RateLimitPartition.GetFixedWindowLimiter(
+            remoteIp,
+            _ => new FixedWindowRateLimiterOptions
+            {
+                PermitLimit = 10,
+                Window = TimeSpan.FromMinutes(5),
+                QueueLimit = 0
+            });
+    });
+});
 
 // Controllers + OpenAPI/Swagger
 builder.Services.AddControllers();
@@ -80,7 +108,11 @@ else
 
 app.UseCors();
 
+app.UseRateLimiter();
+app.UseAuthentication();
+app.UseMiddleware<CashierTenantContextMiddleware>();
 app.UseMiddleware<AdminApiAuthenticationMiddleware>();
+app.UseAuthorization();
 
 // Middleware Apple Pass — corre ANTES que MapControllers para bloquear /v1/*
 // con auth inválida sin llegar al controller.

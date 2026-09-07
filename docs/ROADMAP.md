@@ -69,6 +69,7 @@ La base activa de produccion/UAT es `LoyaltyCloudFree`.
 - Prevencion de clientes duplicados por telefono y recuperacion segura de tarjeta existente cuando nombre/apellido coinciden.
 - Gift Cards con entrega por email mediante SMTP provider-neutral, enlace publico seguro y rotacion de token al reenviar.
 - Phase 0 de autenticacion Cashier: roles tenant `Admin`/`Cashier`, policies base y Admin portal actual restringido a `Admin`.
+- Phase 1 de autenticacion Cashier: login API movil seguro, bearer token de corta vida y autorizacion para operaciones de caja existentes.
 
 ### Estado de Reportes
 
@@ -100,7 +101,7 @@ La base activa de produccion/UAT es `LoyaltyCloudFree`.
 - Restaurar cliente
 - Hard delete permanente de cliente
 - App/PWA de caja dedicada
-- Autenticacion movil segura para caja
+- Refresh/revocacion/dispositivos confiables para sesiones de caja
 - Endpoints Cashier para Gift Cards
 
 ## DEFERRED
