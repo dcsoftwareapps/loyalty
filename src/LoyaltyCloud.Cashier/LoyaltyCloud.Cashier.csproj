@@ -13,6 +13,7 @@
         <ImplicitUsings>enable</ImplicitUsings>
         <EnableDefaultCssItems>false</EnableDefaultCssItems>
         <Nullable>enable</Nullable>
+        <RestoreSources>https://api.nuget.org/v3/index.json</RestoreSources>
 
         <!-- Display name -->
         <ApplicationTitle>LoyaltyCloud Caja</ApplicationTitle>
@@ -59,6 +60,7 @@
         <PackageReference Include="Microsoft.AspNetCore.Components.WebView.Maui" Version="$(MauiVersion)" />
         <PackageReference Include="Microsoft.Extensions.Http" Version="9.0.8" />
         <PackageReference Include="Microsoft.Extensions.Logging.Debug" Version="9.0.8" />
+        <PackageReference Include="ZXing.Net.Maui.Controls" Version="0.5.2" />
     </ItemGroup>
 
 </Project>

@@ -46,6 +46,17 @@ input {
     text-align: center;
 }
 
+.cashier-header {
+    display: flex;
+    align-items: start;
+    justify-content: space-between;
+    gap: 12px;
+}
+
+.cashier-header h1 {
+    margin-top: 4px;
+}
+
 .eyebrow {
     margin: 0;
     color: var(--cashier-accent);
@@ -88,6 +99,11 @@ h1 {
     color: var(--cashier-ink);
 }
 
+.input--mono {
+    font-family: ui-monospace, "Cascadia Mono", "SFMono-Regular", Consolas, monospace;
+    text-transform: uppercase;
+}
+
 .input:focus {
     border-color: var(--cashier-accent);
     outline: 3px solid rgba(216, 63, 135, 0.18);
@@ -118,6 +134,15 @@ h1 {
     border: 1px solid var(--cashier-border);
 }
 
+.link-button {
+    min-height: 36px;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    color: var(--cashier-accent-dark);
+    font-weight: 800;
+}
+
 .segmented {
     display: grid;
     grid-template-columns: 1fr 1fr;
@@ -136,6 +161,20 @@ h1 {
 .segment.active {
     background: var(--cashier-accent);
     color: white;
+}
+
+.segment:disabled {
+    opacity: 0.55;
+}
+
+.operation-section {
+    display: grid;
+    gap: 12px;
+}
+
+.operation-section h2 {
+    margin: 0;
+    font-size: 1rem;
 }
 
 .session-panel {
@@ -158,6 +197,52 @@ h1 {
     overflow-wrap: anywhere;
 }
 
+.customer-panel {
+    display: grid;
+    gap: 12px;
+    padding: 16px;
+    border: 1px solid var(--cashier-border);
+    border-radius: 10px;
+    background: var(--cashier-card);
+}
+
+.customer-panel > div {
+    display: grid;
+    gap: 2px;
+}
+
+.customer-panel span,
+.customer-panel small {
+    color: var(--cashier-muted);
+    font-size: 0.82rem;
+}
+
+.customer-panel strong {
+    overflow-wrap: anywhere;
+}
+
+.points-balance strong {
+    font-size: 2.4rem;
+    line-height: 1;
+}
+
+.customer-meta {
+    padding-top: 8px;
+    border-top: 1px solid var(--cashier-border);
+}
+
+.money-input {
+    display: grid;
+    grid-template-columns: auto 1fr;
+    align-items: center;
+    gap: 8px;
+}
+
+.money-input span {
+    color: var(--cashier-muted);
+    font-weight: 800;
+}
+
 .environment {
     margin: 0;
     text-align: center;
@@ -173,6 +258,12 @@ h1 {
     background: #fff1f0;
     color: var(--cashier-error);
     border: 1px solid #ffd4cf;
+}
+
+.alert-success {
+    background: #edfdf5;
+    color: #067647;
+    border: 1px solid #abefc6;
 }
 
 .validation-message,

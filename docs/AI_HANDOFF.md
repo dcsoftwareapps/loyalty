@@ -2,9 +2,44 @@
 
 Last updated: 2026-09-08
 
-Branch: `feature/cashier-mobile-app`
+Branch: `feature/cashier-mobile-points`
 
-Last task worked: Cashier mobile app foundation Phase 4A.
+Last task worked: Cashier mobile app Phase 4B customer lookup and points.
+
+## 2026-09-08 - Cashier mobile app Phase 4B customer + points
+
+Current branch for this work: `feature/cashier-mobile-points`.
+
+Scope:
+
+- Continues `LoyaltyCloud.Cashier`, the .NET MAUI Blazor Hybrid native cashier app.
+- Adds native QR scanning with `ZXing.Net.Maui.Controls` version `0.5.2`, chosen because it supports .NET 9 mobile targets. Newer 0.10.x packages target .NET 10 and are not compatible with this RC1 app.
+- Registers ZXing through `.UseBarcodeReader()` in `MauiProgram`.
+- Adds Android `CAMERA` permission and iOS `NSCameraUsageDescription`.
+- Keeps Windows scanner behavior as a friendly unsupported path; manual customer lookup remains available.
+- Uses raw Apple Wallet customer QR payloads as serial numbers. The parser trims payload text only; it does not parse tenant IDs, accept browser-supplied TenantId or infer tenant context from URLs.
+- Adds manual `ID del cliente` lookup using existing `GET /api/customers/{serialNumber}`.
+- Displays customer name, serial/ID, current points and level.
+- Adds points from purchase amount using existing `POST /api/points` with `serialNumber` and `purchaseAmount`.
+- Refreshes customer detail after successful add-points so the displayed balance/level is current.
+- Handles 401 by clearing the local MAUI SecureStorage-backed session through the existing auth handler/session flow.
+- Keeps `Tarjeta de regalo` visible but disabled in the native app; redemptions and Gift Cards are future phases.
+
+Security:
+
+- The native app consumes `LoyaltyCloud.API` directly with the cashier bearer token.
+- It does not embed `AdminApi:SharedSecret`, SQL connection strings, Key Vault credentials, `CashierAuth:SigningKey` or server-only signing material.
+- API continues to derive tenant/user/operator from the authenticated bearer token and server-side revalidation. The app never submits TenantId.
+
+Validation:
+
+- `dotnet workload list` confirmed installed workloads: `android`, `ios`, `maccatalyst`, `maui-windows`.
+- `dotnet build .\src\LoyaltyCloud.Cashier\LoyaltyCloud.Cashier.csproj -c Release -f net9.0-android` passed with 0 warnings and 0 errors.
+- Focused regression target: `Category=CashierMobile|Category=CashierAuth|Category=TenantAdminAuth|Category=AdminRouting|Category=StaffManagement|Category=AdminCustomerPoints|Category=SuperAdmin`.
+
+Out of scope:
+
+- Rewards/catalog redemption, monetary redemption, Gift Cards, offline mode, push, biometrics, refresh tokens, token revocation, trusted devices, store packaging and real-device iOS/Android validation.
 
 ## 2026-09-08 - Cashier mobile app foundation Phase 4A
 
