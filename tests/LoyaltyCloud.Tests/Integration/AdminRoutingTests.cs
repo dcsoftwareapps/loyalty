@@ -389,7 +389,88 @@ public sealed class AdminRoutingTests : IClassFixture<AdminRoutingTests.AdminWeb
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         Assert.Null(response.Headers.Location);
         Assert.Contains("Acceso de caja", html);
-        Assert.Contains("La interfaz de caja estará disponible próximamente.", html);
+        Assert.Contains("Escanear cliente", html);
+        Assert.Contains("Escribir código", html);
+        Assert.Contains("ID del cliente", html);
+    }
+
+    [Fact]
+    [Trait("Category", "AdminRouting")]
+    [Trait("Category", "CashierAuth")]
+    public void Cashier_page_uses_mobile_operational_flow_without_frontend_secrets()
+    {
+        var source = File.ReadAllText(Path.Combine(GetRepositoryRoot(), "src", "LoyaltyCloud.Admin", "Pages", "CashierLanding.razor"));
+
+        Assert.Contains("@page \"/cashier\"", source);
+        Assert.Contains("TenantAuthorizationPolicies.TenantUser", source);
+        Assert.Contains("@layout EmptyLayout", source);
+        Assert.Contains("Escanear cliente", source);
+        Assert.Contains("Escribir código", source);
+        Assert.Contains("Buscar cliente", source);
+        Assert.Contains("+ Sumar puntos", source);
+        Assert.Contains("Canjear recompensa", source);
+        Assert.Contains("Escanear otro cliente", source);
+        Assert.Contains("form method=\"post\" action=\"/logout\"", source);
+        Assert.DoesNotContain("AdminApi:SharedSecret", source, StringComparison.Ordinal);
+        Assert.DoesNotContain("localStorage", source, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("sessionStorage", source, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("CashierAuth:SigningKey", source, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    [Trait("Category", "AdminRouting")]
+    [Trait("Category", "CashierAuth")]
+    public void Cashier_page_reuses_existing_customer_points_and_redemption_contracts()
+    {
+        var source = File.ReadAllText(Path.Combine(GetRepositoryRoot(), "src", "LoyaltyCloud.Admin", "Pages", "CashierLanding.razor"));
+
+        Assert.Contains("Api.GetAsync<CustomerDetailDto>", source);
+        Assert.Contains("api/customers/{Uri.EscapeDataString(serial)}", source);
+        Assert.Contains("PointsApi.AddPointsAsync(serial, PurchaseAmount)", source);
+        Assert.Contains("Api.GetAsync<IReadOnlyList<RewardCatalogItemDto>>", source);
+        Assert.Contains("api/redemptions/catalog/{Uri.EscapeDataString(customer.SerialNumber)}", source);
+        Assert.Contains("Api.PostAsJsonAsync<RedeemRedemptionRequest, RedemptionResponse>", source);
+        Assert.Contains("\"api/redemptions\"", source);
+        Assert.Contains("new RedeemRedemptionRequest(serial, selectedReward.Id)", source);
+        Assert.DoesNotContain("new AddPointsCommand", source, StringComparison.Ordinal);
+        Assert.DoesNotContain("new RedeemRewardCommand", source, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    [Trait("Category", "AdminRouting")]
+    [Trait("Category", "CashierAuth")]
+    public void Cashier_page_handles_qr_once_and_disposes_scanner_safely()
+    {
+        var source = File.ReadAllText(Path.Combine(GetRepositoryRoot(), "src", "LoyaltyCloud.Admin", "Pages", "CashierLanding.razor"));
+
+        Assert.Contains("kbeautyQrScanner.start", source);
+        Assert.Contains("kbeautyQrScanner.stop", source);
+        Assert.Contains("private bool scannerStarted;", source);
+        Assert.Contains("private bool qrHandled;", source);
+        Assert.Contains("if (qrHandled)", source);
+        Assert.Contains("qrHandled = true;", source);
+        Assert.Contains("if (!scannerStarted)", source);
+        Assert.Contains("catch (JSDisconnectedException)", source);
+        Assert.Contains("public async ValueTask DisposeAsync()", source);
+        Assert.Contains("await StopScannerAsync();", source);
+        Assert.Contains("[JSInvokable]", source);
+        Assert.Contains("public async Task OnQrDetected(string rawValue)", source);
+    }
+
+    [Fact]
+    [Trait("Category", "AdminRouting")]
+    [Trait("Category", "CashierAuth")]
+    public void Cashier_page_surfaces_safe_errors_for_expired_session_and_api_failures()
+    {
+        var source = File.ReadAllText(Path.Combine(GetRepositoryRoot(), "src", "LoyaltyCloud.Admin", "Pages", "CashierLanding.razor"));
+
+        Assert.Contains("NormalizeApiError", source);
+        Assert.Contains("Tu sesión expiró. Vuelve a iniciar sesión.", source);
+        Assert.Contains("Ocurrió un error inesperado.", source);
+        Assert.Contains("Logger.LogError", source);
+        Assert.Contains("Cashier customer lookup failed.", source);
+        Assert.Contains("Cashier add points failed.", source);
+        Assert.Contains("Cashier reward redemption failed.", source);
     }
 
     [Theory]

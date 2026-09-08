@@ -1,10 +1,42 @@
 # LoyaltyCloud - AI Handoff
 
-Last updated: 2026-09-07
+Last updated: 2026-09-08
 
-Branch: `feature/staff-management`
+Branch: `feature/cashier-pwa`
 
-Last task worked: Staff Management for tenant Admin users.
+Last task worked: Cashier mobile-first UI / PWA Phase 2.
+
+## 2026-09-08 - Cashier mobile-first UI Phase 2
+
+Current branch for this work: `feature/cashier-pwa`.
+
+Scope:
+
+- Converts `/cashier` from a temporary landing into a mobile-first Blazor Server cashier surface.
+- Cashier users continue to log in through the existing tenant login and land on `/cashier`; tenant Admin users still land on `/dashboard`.
+- `/cashier` uses `TenantAuthorizationPolicies.TenantUser`, so `Admin` and `Cashier` tenant users can open it, while Admin portal pages remain Admin-only.
+- The page supports QR scanner and manual customer ID entry.
+- QR scanning reuses `wwwroot/js/qr-scanner.js` / `window.kbeautyQrScanner` and includes a `scannerStarted` guard so disposal does not call JS before the component is interactive.
+- The customer lookup path reuses `GET /api/customers/{serialNumber}`.
+- Add-points reuses `POST /api/points` through the existing purchase-amount contract; the UI labels the input as purchase amount, not raw points.
+- Reward redemption reuses `GET /api/redemptions/catalog/{serialNumber}` and `POST /api/redemptions`, matching the existing Admin redemption flow.
+- Gift Cards, refresh tokens, trusted-device management, offline transactions, MAUI/native shell and new API endpoints are intentionally out of scope.
+
+Auth/security:
+
+- The `/cashier` web UI is server-side Blazor and uses the tenant auth cookie.
+- It does not store a bearer token in `localStorage` or `sessionStorage`.
+- It does not expose `AdminApi:SharedSecret`, `CashierAuth:SigningKey` or any signing material to browser JavaScript.
+- Existing Cashier bearer auth remains available for future standalone/mobile clients through `POST /api/auth/cashier/login`; Phase 2 does not redesign that API.
+
+Validation expected:
+
+- `Category=TenantAdminAuth|Category=CashierAuth|Category=StaffManagement|Category=AdminRouting|Category=SuperAdmin`.
+- Add relevant Admin customer points/redemption/cashier source guardrails if touched.
+- `dotnet ef migrations has-pending-model-changes`.
+- `dotnet build .\LoyaltyCloud.sln -c Release`.
+- `git diff --check`.
+- No deploy, database update, commit or push.
 
 ## 2026-09-07 - Staff Management
 
