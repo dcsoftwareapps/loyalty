@@ -2,9 +2,51 @@
 
 Last updated: 2026-09-08
 
-Branch: `fix/cashier-giftcard-actions-ux`
+Branch: `feature/cashier-mobile-app`
 
-Last task worked: Cashier Gift Card actions and scan UX cleanup.
+Last task worked: Cashier mobile app foundation Phase 4A.
+
+## 2026-09-08 - Cashier mobile app foundation Phase 4A
+
+Current branch for this work: `feature/cashier-mobile-app`.
+
+Scope:
+
+- Adds `LoyaltyCloud.Cashier`, a .NET MAUI Blazor Hybrid mobile app foundation separate from `LoyaltyCloud.Admin`.
+- This is not a PWA and does not wrap or navigate to Admin `/cashier`.
+- The app consumes `LoyaltyCloud.API` over HTTPS through the existing `POST /api/auth/cashier/login` endpoint.
+- Login uses the real cashier auth contract: `tenantSlug`, `username`, `password` and response fields `accessToken`, `tokenType`, `expiresAtUtc`, `expiresInSeconds`, `tenantSlug`, `userId`, `username`, `role`.
+- Access token/session data are stored with MAUI `SecureStorage`; no token is stored in `localStorage`, `Preferences` or plaintext files.
+- Session restore checks local expiration and clears expired/corrupt sessions.
+- Authenticated HTTP calls are centralized through `AuthenticatedCashierApiClient` and `CashierAuthorizationHandler`, which adds `Authorization: Bearer ...` only for the configured LoyaltyCloud API host and clears local session on 401.
+- The first home screen after login shows `LoyaltyCloud Caja`, a placeholder `Puntos` / `Tarjeta de regalo` segmented control, current username, tenant slug and logout.
+- Logout removes SecureStorage session data and returns to login.
+
+Configuration:
+
+- Default API target is STG: `https://loyaltycloud-api-stg-01.azurewebsites.net`.
+- Build with `-p:CashierEnvironment=Production` to target PROD: `https://api.loyaltycloud.net`.
+- Provisional app id is `com.loyaltycloud.cashier`; confirm final Bundle Identifier / Android Application ID before store submission.
+- Never add `AdminApi:SharedSecret`, SQL connection strings, Key Vault credentials or `CashierAuth:SigningKey` to this app.
+
+Out of scope for Phase 4A:
+
+- QR scanner, customer lookup, points, redemptions, Gift Cards, offline mode, push notifications, biometrics, refresh tokens, trusted devices and store packaging.
+
+Environment:
+
+- `dotnet workload list` showed installed workloads: `android`, `ios`, `maccatalyst`, `maui-windows`.
+- Windows can validate Android/Windows builds. Full iOS signing/device validation still requires the normal Apple/Mac toolchain.
+
+Validation expected:
+
+- `Category=CashierMobile`.
+- Existing cashier/auth regressions if touched.
+- `dotnet ef migrations has-pending-model-changes`.
+- MAUI project build for a locally supported target.
+- `dotnet build .\LoyaltyCloud.sln -c Release` if practical in the installed environment.
+- `git diff --check`.
+- No deploy, database update, migration, commit or push unless explicitly requested.
 
 ## 2026-09-08 - Cashier Gift Card actions UX cleanup
 

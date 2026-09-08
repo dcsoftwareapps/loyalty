@@ -43,6 +43,7 @@ Projects:
 | `LoyaltyCloud.Infrastructure` | EF Core, repositories, read services, tenant services, Blob Storage, Key Vault, Apple Wallet, APNs, Google Wallet and cross-cutting adapters. |
 | `LoyaltyCloud.API` | REST API, Admin API HMAC middleware, public join API, Apple PassKit web service, Wallet endpoints and hosted workers. |
 | `LoyaltyCloud.Admin` | Blazor Server / Interactive Server tenant admin and platform admin. |
+| `LoyaltyCloud.Cashier` | .NET MAUI Blazor Hybrid mobile app foundation for iOS/Android cashier users. Consumes `LoyaltyCloud.API` directly with cashier bearer auth. |
 | `LoyaltyCloud.Tools` | Internal operational CLI commands and wallet diagnostics. |
 | `LoyaltyCloud.Tests` | xUnit integration, application, infrastructure and guardrail tests. |
 
@@ -52,6 +53,7 @@ Main technologies:
 - C#.
 - ASP.NET Core.
 - Blazor Server / Interactive Server.
+- .NET MAUI Blazor Hybrid for the native Cashier app foundation.
 - MediatR.
 - EF Core 9 with SQL Server provider and retrying execution strategy.
 - Azure SQL.
@@ -120,6 +122,7 @@ Current architecture:
 - Cashier bearer tokens derive tenant/user/role from authenticated token claims and DB revalidation, not from browser-supplied TenantId or operator headers.
 - Cashier bearer tokens are limited to existing operational endpoints for customer lookup, transactions, points and redemptions. Configuration, billing, reports, campaigns, rewards, levels, Wallet branding, staff and platform APIs remain blocked.
 - `AdminApi:SharedSecret` is server-to-server only and must never be embedded in browser JavaScript, PWA, MAUI, iOS or Android clients.
+- Native mobile Cashier foundation exists in `LoyaltyCloud.Cashier` as Phase 4A. It is a .NET MAUI Blazor Hybrid app, not a PWA and not a wrapper around Admin `/cashier`. It uses `POST /api/auth/cashier/login`, stores the access token through MAUI `SecureStorage`, restores non-expired sessions locally, clears session on logout/401, and centralizes authenticated API calls without embedding server-side secrets.
 
 Guardrails:
 
@@ -331,6 +334,17 @@ Cashier/mobile API Phase 1 adds a separate bearer-token path for future cashier 
 - Tokens are server-issued, HMAC-signed and short-lived. They include user/operator id, tenant id, tenant slug, username and role claims.
 - Each bearer request revalidates the tenant and tenant admin user against SQL before setting `TenantContext`.
 - Operational endpoints accept either existing Admin HMAC or cashier bearer auth: `GET /api/customers/{serialNumber}`, `GET /api/customers/{serialNumber}/transactions`, `POST /api/points`, `GET /api/redemptions/catalog/{serialNumber}`, `POST /api/redemptions`, `PUT /api/redemptions/{id}/confirm` and `PUT /api/redemptions/{id}/cancel`.
+
+Native Cashier app Phase 4A:
+
+- Project: `src/LoyaltyCloud.Cashier`.
+- UI technology: .NET MAUI Blazor Hybrid.
+- Visible app name: `LoyaltyCloud Caja`.
+- Current provisional application id: `com.loyaltycloud.cashier`; confirm before App Store / Play Store submission.
+- Default API environment is STG: `https://loyaltycloud-api-stg-01.azurewebsites.net`.
+- Build with `-p:CashierEnvironment=Production` to use PROD API: `https://api.loyaltycloud.net`.
+- No server-side secrets belong in the app. Do not add `AdminApi:SharedSecret`, SQL connection strings, Key Vault credentials or `CashierAuth:SigningKey`.
+- Phase 4A includes only app shell, login, SecureStorage-backed session restore, authenticated HTTP foundation, logout and a simple post-login home. Scanner, customer lookup, points, redemptions, Gift Cards, offline, push, biometrics, refresh tokens and trusted devices are Phase 4B+.
 - API overwrites `X-Operator-Id` from the authenticated bearer user, so browser-supplied operator ids are not authoritative.
 
 Do not pass TenantId from browser/UI. Do not replace this with plain relative requests against Admin. Do not reuse `AdminApi:SharedSecret` for mobile/PWA/native clients.
@@ -879,6 +893,7 @@ Done:
 - Cashier API authentication Phase 1: server-issued short-lived bearer tokens for existing operational endpoints.
 - Staff Management for tenant Admin users: `/staff`, create Admin/Cashier, reset password, activate/deactivate and last-active-Admin protection.
 - Cashier UI Phase 2/3: `/cashier` mobile-first web surface with `Puntos` as the default segmented mode and `Tarjeta de regalo` as a secondary mode. It supports QR/manual customer lookup, add points, monetary discount redemption, catalog reward redemption, Gift Card redemption and logout. It is not an offline PWA and does not include refresh tokens.
+- Cashier mobile app Phase 4A: `LoyaltyCloud.Cashier` .NET MAUI Blazor Hybrid foundation with login, SecureStorage session restore, logout and STG/PROD API base URL selection.
 - STG infrastructure scripts and STG setup documentation.
 
 Active/UAT focus:
@@ -896,7 +911,7 @@ Known current/pending:
 - Google Wallet does not yet have a robust outbox/retry model.
 - Google Wallet sync is currently limited mainly to add-points sync once a member is linked.
 - Gift Card email delivery does not yet have persistent delivery history, background retry or provider webhooks.
-- Cashier auth/UI does not yet include refresh tokens, token revocation, trusted-device management, offline/PWA caching or native shell/MAUI.
+- Cashier mobile app does not yet include scanner, customer lookup, add-points, redemptions, Gift Cards, offline mode, refresh tokens, token revocation, trusted-device management, biometrics, push notifications or store packaging.
 - Review whether Google Wallet has URLs/base URLs that should move to the new custom domains.
 - Analyze safe migration strategy before changing `Apple__WebServiceURL` to `https://api.loyaltycloud.net`.
 - Determine impact of changing `Apple__WebServiceURL` on already installed Apple Wallet passes, device registrations and `/v1/*` update flow.
