@@ -4,7 +4,7 @@ Last updated: 2026-09-08
 
 Branch: `fix/cashier-giftcard-actions-ux`
 
-Last task worked: Cashier Gift Card actions UX cleanup.
+Last task worked: Cashier Gift Card actions and scan UX cleanup.
 
 ## 2026-09-08 - Cashier Gift Card actions UX cleanup
 
@@ -16,6 +16,9 @@ What changed:
 - Removed the redundant `Volver a caja` button from the Gift Card UI. Cashiers return to Puntos only through the segmented control.
 - `Otra Gift Card` is shown only after a Gift Card has been resolved or after a Gift Card redemption result exists. It is not shown in the initial Gift Card lookup state.
 - `Otra Gift Card` continues to reset the Gift Card code, detail, amount, success/error messages and QR handling while leaving the current mode as `Tarjeta de regalo`.
+- Initial Puntos copy is now compact: `Cliente`, `Escanear`, `ID del cliente`, `Buscar`.
+- Initial Gift Card copy is now compact: `Tarjeta de regalo`, `Escanear`, `Código`, `Buscar`.
+- QR detection already stops the scanner, writes the scanned value into the active input and invokes the same manual lookup method once: `LoadCustomerAsync` for Puntos and `LookupGiftCardAsync` for Gift Cards.
 - No business rules, endpoints, Gift Card services, scanner JavaScript, bearer auth, schema or migrations changed.
 
 Validation:
