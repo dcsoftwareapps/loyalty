@@ -24,7 +24,7 @@
 @inject IJSRuntime JS
 @inject ILogger<CashierLanding> Logger
 
-<PageTitle>Acceso de caja - LoyaltyCloud</PageTitle>
+<PageTitle>Caja - LoyaltyCloud</PageTitle>
 
 <main class="kb-cashier-shell">
     <header class="kb-cashier-header">
@@ -63,7 +63,7 @@
                     class="kb-btn kb-btn--primary kb-btn--large kb-btn--block"
                     @onclick="@(() => StartScannerAsync(ScannerPurpose.GiftCard))"
                     disabled="@(busy || scanning)">
-                @(scanning ? "Escaneando..." : "Escanear Gift Card")
+                @(scanning ? "Escaneando..." : "Escanear")
             </button>
         </section>
 
@@ -92,7 +92,7 @@
                     class="kb-btn kb-btn--primary kb-btn--large kb-btn--block"
                     @onclick="LookupGiftCardAsync"
                     disabled="@(busy || string.IsNullOrWhiteSpace(giftCardCodeInput))">
-                @(busy ? "Buscando..." : "Buscar Gift Card")
+                @(busy ? "Buscando..." : "Buscar")
             </button>
         </section>
 
@@ -164,13 +164,12 @@
     else if (customer is null)
     {
         <section class="kb-cashier-hero">
-            <p class="kb-muted">Acceso de caja</p>
-            <h1>Escanea o escribe el ID del cliente</h1>
+            <h1>Cliente</h1>
             <button type="button"
                     class="kb-btn kb-btn--primary kb-btn--large kb-btn--block"
                     @onclick="@(() => StartScannerAsync(ScannerPurpose.Customer))"
                     disabled="@(busy || scanning)">
-                @(scanning ? "Escaneando..." : "Escanear cliente")
+                @(scanning ? "Escaneando..." : "Escanear")
             </button>
         </section>
 
@@ -199,7 +198,7 @@
                     class="kb-btn kb-btn--primary kb-btn--large kb-btn--block"
                     @onclick="LoadCustomerAsync"
                     disabled="@(busy || string.IsNullOrWhiteSpace(serialInput))">
-                @(busy ? "Buscando..." : "Buscar cliente")
+                @(busy ? "Buscando..." : "Buscar")
             </button>
         </section>
     }

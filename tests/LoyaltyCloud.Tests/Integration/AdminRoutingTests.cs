@@ -388,12 +388,16 @@ public sealed class AdminRoutingTests : IClassFixture<AdminRoutingTests.AdminWeb
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         Assert.Null(response.Headers.Location);
-        Assert.Contains("Acceso de caja", html);
-        Assert.Contains("Escanear cliente", html);
+        Assert.Contains("Cliente", html);
+        Assert.Contains("Escanear", html);
         Assert.DoesNotContain("Escribir código", html);
         Assert.Contains("ID del cliente", html);
+        Assert.Contains("Buscar", html);
         Assert.Contains("Puntos", html);
         Assert.Contains("Tarjeta de regalo", html);
+        Assert.DoesNotContain("Acceso de caja", html);
+        Assert.DoesNotContain("Escanear cliente", html);
+        Assert.DoesNotContain("Buscar cliente", html);
         Assert.DoesNotContain("Escanear Gift Card", html);
         Assert.DoesNotContain("Buscar Gift Card", html);
     }
@@ -414,12 +418,16 @@ public sealed class AdminRoutingTests : IClassFixture<AdminRoutingTests.AdminWeb
         Assert.Contains("SwitchSurfaceAsync(CashierSurface.Points)", source);
         Assert.Contains("SwitchSurfaceAsync(CashierSurface.GiftCard)", source);
         Assert.Contains("Tarjeta de regalo", source);
-        Assert.Contains("Escanear cliente", source);
+        Assert.Contains("<h1>Cliente</h1>", source);
+        Assert.Contains("Escanear", source);
         Assert.DoesNotContain("Escribir código", source);
-        Assert.Contains("Buscar cliente", source);
-        Assert.Contains("Escanear Gift Card", source);
+        Assert.Contains("Buscar", source);
+        Assert.DoesNotContain("Acceso de caja", source);
+        Assert.DoesNotContain("Escanear cliente", source);
+        Assert.DoesNotContain("Buscar cliente", source);
+        Assert.DoesNotContain("Escanear Gift Card", source);
         Assert.Contains("Código", source);
-        Assert.Contains("Buscar Gift Card", source);
+        Assert.DoesNotContain("Buscar Gift Card", source);
         Assert.Contains("Otra Gift Card", source);
         Assert.Contains("@if (giftCardDetail is not null || giftCardSuccessMessage is not null)", source);
         Assert.DoesNotContain("Volver a caja", source);
@@ -536,6 +544,12 @@ public sealed class AdminRoutingTests : IClassFixture<AdminRoutingTests.AdminWeb
         Assert.Contains("public async Task OnQrDetected(string rawValue)", source);
         Assert.Contains("StartScannerAsync(ScannerPurpose.Customer)", source);
         Assert.Contains("StartScannerAsync(ScannerPurpose.GiftCard)", source);
+        Assert.Contains("await StopScannerAsync();", source);
+        Assert.Contains("serialInput = serial;", source);
+        Assert.Contains("await LoadCustomerAsync();", source);
+        Assert.Contains("giftCardCodeInput = code;", source);
+        Assert.Contains("await LookupGiftCardAsync();", source);
+        Assert.Contains("qrHandled = false;", source);
     }
 
     [Fact]
