@@ -114,7 +114,7 @@ Current architecture:
 - Tenant user roles currently support `Admin` and `Cashier`. Existing Admin portal pages remain Admin-only.
 - Staff Management exists at `/staff` for tenant `Admin` users to create Admin/Cashier users, reset passwords and activate/deactivate staff without accepting TenantId from the UI.
 - Staff Management reuses `TenantAdminUser.Role`, `TenantAdminUser.IsActive`, `TenantAdminUser.NormalizeUsername(...)` and `IPasswordHashingService`; it blocks deactivating the last active tenant Admin.
-- Cashier web UI exists at `/cashier` as a mobile-first Blazor Server surface for tenant `Admin`/`Cashier` users. It supports QR/manual customer lookup, add-points from purchase amount, monetary discount redemption, catalog reward redemption and logout.
+- Cashier web UI exists at `/cashier` as a mobile-first Blazor Server surface for tenant `Admin`/`Cashier` users. It supports QR/manual customer lookup, add-points from purchase amount, monetary discount redemption, catalog reward redemption, tenant-scoped Gift Card lookup/redemption and logout.
 - `/cashier` uses the tenant auth cookie and server-side API clients. It does not store a bearer token in browser storage and does not expose `AdminApi:SharedSecret`, `CashierAuth:SigningKey` or API signing material to browser JavaScript.
 - Cashier API Phase 1 exists for future mobile/PWA cashier clients: `POST /api/auth/cashier/login` issues a short-lived bearer token signed by `CashierAuth:SigningKey`.
 - Cashier bearer tokens derive tenant/user/role from authenticated token claims and DB revalidation, not from browser-supplied TenantId or operator headers.
@@ -163,7 +163,7 @@ Blazor Admin pages:
 | `/notifications` | `Notifications.razor` | Historical/admin notification page. Exists but is hidden from main menu. |
 | `/config` | `Config.razor` | Program configuration. Some legacy settings are visually hidden. |
 | `/quick-help` | `QuickHelp.razor` | Quick cashier/admin help, registration QR and printable poster. |
-| `/cashier` | `CashierLanding.razor` | Mobile-first cashier surface for customer lookup, add points, monetary discount redemption and catalog reward redemption. |
+| `/cashier` | `CashierLanding.razor` | Mobile-first cashier surface for customer lookup, add points, monetary discount redemption, catalog reward redemption and Gift Card redemption. |
 | `/giftcards` | `GiftCards.razor` | Tenant Gift Card dashboard/landing. Requires Gift Cards feature authorization. |
 | `/giftcards/issue` | `GiftCardIssue.razor` | Issue a Gift Card. Optional recipient email triggers SMTP delivery after successful issuance. |
 | `/giftcards/cards` | `GiftCardList.razor` | Gift Card list/search by tenant. |
@@ -460,6 +460,15 @@ Admin flow:
 4. Admin builds the public claim URL `/giftcards/claim/{token}` through `IGiftCardDeliveryService.GetClaimUrlAsync`.
 5. If `RecipientEmail` exists, Admin attempts email delivery after issuance. Email failure must not roll back issuance.
 6. The public claim page resolves the hashed token, sets tenant context from the owning active tenant and lets the recipient add the Gift Card to Apple Wallet or Google Wallet.
+
+Cashier flow:
+
+1. Tenant Admin or Cashier opens `/cashier`.
+2. Customer lookup and Gift Card redemption are separate flows on the initial cashier screen.
+3. `Canjear Gift Card` accepts a direct Gift Card code or QR/public claim URL.
+4. Direct codes use `IGiftCardService.GetByCodeAsync(...)`.
+5. Claim URLs use `IGiftCardService.GetByClaimTokenAsync(...)`, which stays inside the currently authenticated tenant. Do not use the public `IGiftCardClaimService` from `/cashier` because it is designed for public claim pages and can resolve tenant from token.
+6. Redemption uses `IGiftCardService.RedeemAsync(...)`, preserving existing balance, status, partial-redemption, idempotency, tenant filters, operator audit and Wallet sync behavior.
 
 Email delivery:
 
@@ -867,7 +876,7 @@ Done:
 - Gift Card email delivery through provider-neutral SMTP, including safe Admin feedback and claim-token rotation on resend.
 - Cashier API authentication Phase 1: server-issued short-lived bearer tokens for existing operational endpoints.
 - Staff Management for tenant Admin users: `/staff`, create Admin/Cashier, reset password, activate/deactivate and last-active-Admin protection.
-- Cashier UI Phase 2: `/cashier` mobile-first web surface for QR/manual customer lookup, add points, monetary discount redemption, catalog reward redemption and logout. It is not an offline PWA and does not include Gift Cards or refresh tokens.
+- Cashier UI Phase 2/3: `/cashier` mobile-first web surface for QR/manual customer lookup, add points, monetary discount redemption, catalog reward redemption, Gift Card redemption and logout. It is not an offline PWA and does not include refresh tokens.
 - STG infrastructure scripts and STG setup documentation.
 
 Active/UAT focus:
@@ -885,7 +894,7 @@ Known current/pending:
 - Google Wallet does not yet have a robust outbox/retry model.
 - Google Wallet sync is currently limited mainly to add-points sync once a member is linked.
 - Gift Card email delivery does not yet have persistent delivery history, background retry or provider webhooks.
-- Cashier auth/UI does not yet include refresh tokens, token revocation, trusted-device management, offline/PWA caching, native shell/MAUI or Cashier endpoints for Gift Cards.
+- Cashier auth/UI does not yet include refresh tokens, token revocation, trusted-device management, offline/PWA caching or native shell/MAUI.
 - Review whether Google Wallet has URLs/base URLs that should move to the new custom domains.
 - Analyze safe migration strategy before changing `Apple__WebServiceURL` to `https://api.loyaltycloud.net`.
 - Determine impact of changing `Apple__WebServiceURL` on already installed Apple Wallet passes, device registrations and `/v1/*` update flow.
