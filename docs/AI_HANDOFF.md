@@ -2,9 +2,25 @@
 
 Last updated: 2026-09-08
 
-Branch: `feature/cashier-ux-cleanup`
+Branch: `fix/cashier-giftcard-actions-ux`
 
-Last task worked: Cashier UX cleanup after Gift Cards.
+Last task worked: Cashier Gift Card actions UX cleanup.
+
+## 2026-09-08 - Cashier Gift Card actions UX cleanup
+
+Current branch for this work: `fix/cashier-giftcard-actions-ux`.
+
+What changed:
+
+- Keeps `/cashier` on the segmented `Puntos` / `Tarjeta de regalo` surface.
+- Removed the redundant `Volver a caja` button from the Gift Card UI. Cashiers return to Puntos only through the segmented control.
+- `Otra Gift Card` is shown only after a Gift Card has been resolved or after a Gift Card redemption result exists. It is not shown in the initial Gift Card lookup state.
+- `Otra Gift Card` continues to reset the Gift Card code, detail, amount, success/error messages and QR handling while leaving the current mode as `Tarjeta de regalo`.
+- No business rules, endpoints, Gift Card services, scanner JavaScript, bearer auth, schema or migrations changed.
+
+Validation:
+
+- Pending at handoff: focused cashier/admin tests, EF pending-model check, Release build and `git diff --check`.
 
 ## 2026-09-08 - Cashier UX cleanup after Gift Cards
 
@@ -14,7 +30,7 @@ Scope:
 
 - Keeps `/cashier` on the same mobile-first Blazor Server surface.
 - Adds a full-width segmented control with `Puntos` and `Tarjeta de regalo`.
-- `Puntos` is the default mode on every page load and is the destination for `Volver a caja`.
+- `Puntos` is the default mode on every page load. Later cleanup removed the redundant `Volver a caja` button from Gift Card mode; cashiers switch back to Puntos through the segmented control.
 - `Tarjeta de regalo` is secondary and no longer appears as a stacked operation below customer lookup.
 - Switching modes stops the active scanner and clears mode-specific state/messages so customer and Gift Card flows do not leak into each other.
 - The Gift Card detail shown in Cashier is operational only: status, available balance and expiration. It does not show the technical `GC-...` reference.
