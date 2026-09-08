@@ -73,6 +73,7 @@ La base activa de produccion/UAT es `LoyaltyCloudFree`.
 - Administracion de Personal para crear Admin/Cashier, resetear password, activar/desactivar usuarios y proteger el ultimo Admin activo.
 - Phase 2 de Cashier: UI mobile-first en `/cashier` para buscar cliente por QR/manual, sumar puntos por monto de compra, canjear descuento en dinero/recompensas de catalogo y cerrar sesion.
 - Phase 3 de Cashier: canje de Gift Cards desde `/cashier` reutilizando reglas/servicios existentes y aislamiento tenant-aware.
+- Cleanup UX de Cashier: selector segmentado con `Puntos` como modo default y `Tarjeta de regalo` como modo secundario.
 
 ### Estado de Reportes
 

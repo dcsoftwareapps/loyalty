@@ -38,11 +38,27 @@
         </form>
     </header>
 
-    @if (showGiftCardFlow)
+    <section class="kb-cashier-segmented" role="group" aria-label="Modo de caja">
+        <button type="button"
+                class="@SurfaceButtonClass(CashierSurface.Points)"
+                aria-pressed="@(surface == CashierSurface.Points)"
+                @onclick="@(() => SwitchSurfaceAsync(CashierSurface.Points))"
+                disabled="@busy">
+            Puntos
+        </button>
+        <button type="button"
+                class="@SurfaceButtonClass(CashierSurface.GiftCard)"
+                aria-pressed="@(surface == CashierSurface.GiftCard)"
+                @onclick="@(() => SwitchSurfaceAsync(CashierSurface.GiftCard))"
+                disabled="@busy">
+            Tarjeta de regalo
+        </button>
+    </section>
+
+    @if (surface == CashierSurface.GiftCard)
     {
         <section class="kb-cashier-hero">
-            <p class="kb-muted">Gift Cards</p>
-            <h1>Canjear Gift Card</h1>
+            <h1>Tarjeta de regalo</h1>
             <button type="button"
                     class="kb-btn kb-btn--primary kb-btn--large kb-btn--block"
                     @onclick="@(() => StartScannerAsync(ScannerPurpose.GiftCard))"
@@ -63,7 +79,7 @@
         }
 
         <section class="kb-cashier-panel">
-            <label for="cashier-gift-card-code">Código / QR</label>
+            <label for="cashier-gift-card-code">Código</label>
             <input id="cashier-gift-card-code"
                    type="text"
                    inputmode="text"
@@ -88,22 +104,17 @@
         @if (giftCardDetail is not null)
         {
             <section class="kb-cashier-panel">
-                <h2>Saldo disponible</h2>
-                <div class="kb-gift-summary-grid">
-                    <div>
-                        <span>Referencia</span>
-                        <strong>@giftCardDetail.Card.Code</strong>
-                    </div>
+                <div class="kb-cashier-gift-stats">
                     <div>
                         <span>Estado</span>
                         <strong>@GiftCardStatusLabel(giftCardDetail.Card.Status)</strong>
                     </div>
                     <div>
-                        <span>Saldo</span>
+                        <span>Saldo disponible</span>
                         <strong>@FormatGiftCardMoney(giftCardDetail.Card.CurrentBalance, giftCardDetail.Card.Currency)</strong>
                     </div>
                     <div>
-                        <span>Expira</span>
+                        <span>Expiración</span>
                         <strong>@Dates.DateNumeric(giftCardDetail.Card.ExpiresAtUtc, "Sin expiración")</strong>
                     </div>
                 </div>
@@ -117,13 +128,6 @@
                        value="@giftCardAmountInput"
                        @oninput="HandleGiftCardAmountInput"
                        placeholder="0.00" />
-                <label for="cashier-gift-card-reference">Referencia <small>(opcional)</small></label>
-                <input id="cashier-gift-card-reference"
-                       type="text"
-                       maxlength="150"
-                       @bind="giftCardReference"
-                       @bind:event="oninput"
-                       autocomplete="off" />
 
                 @if (IsGiftCardAmountPreviewValid)
                 {
@@ -196,16 +200,6 @@
                     @onclick="LoadCustomerAsync"
                     disabled="@(busy || string.IsNullOrWhiteSpace(serialInput))">
                 @(busy ? "Buscando..." : "Buscar cliente")
-            </button>
-        </section>
-
-        <section class="kb-cashier-panel">
-            <p class="kb-muted">Gift Cards</p>
-            <button type="button"
-                    class="kb-btn kb-btn--secondary kb-btn--large kb-btn--block"
-                    @onclick="ShowGiftCardFlow"
-                    disabled="@busy">
-                Canjear Gift Card
             </button>
         </section>
     }
@@ -399,7 +393,6 @@
     private string amountInput = string.Empty;
     private string giftCardCodeInput = string.Empty;
     private string giftCardAmountInput = string.Empty;
-    private string? giftCardReference;
     private string currentUsername = "Caja";
     private CustomerDetailDto? customer;
     private IReadOnlyList<RewardCatalogItemDto>? catalog;
@@ -411,13 +404,13 @@
     private string? successMessage;
     private string? giftCardSuccessMessage;
     private bool showMonetaryDiscount;
-    private bool showGiftCardFlow;
     private bool busy;
     private bool scanning;
     private bool scannerStarted;
     private bool qrHandled;
     private bool catalogLoading;
     private ScannerPurpose scannerPurpose = ScannerPurpose.Customer;
+    private CashierSurface surface = CashierSurface.Points;
     private CashierMode mode = CashierMode.None;
     private ElementReference qrVideo;
     private DotNetObjectReference<CashierLanding>? dotNetRef;
@@ -502,6 +495,41 @@
             ?? "Caja";
     }
 
+    private async Task SwitchSurfaceAsync(CashierSurface nextSurface)
+    {
+        if (busy || surface == nextSurface)
+            return;
+
+        await StopScannerAsync();
+        qrHandled = false;
+        errorMessage = null;
+        successMessage = null;
+        giftCardSuccessMessage = null;
+
+        if (nextSurface == CashierSurface.Points)
+        {
+            ResetGiftCardFlow();
+            ResetPointsFlow();
+        }
+        else
+        {
+            ResetPointsFlow();
+            ResetGiftCardFlow();
+        }
+
+        surface = nextSurface;
+        scannerPurpose = nextSurface == CashierSurface.GiftCard
+            ? ScannerPurpose.GiftCard
+            : ScannerPurpose.Customer;
+    }
+
+    private string SurfaceButtonClass(CashierSurface target) =>
+        surface == target
+            ? "kb-cashier-segmented__option active"
+            : "kb-cashier-segmented__option";
+
+    private string ManualEntryName => scannerPurpose == ScannerPurpose.GiftCard ? "código" : "ID";
+
     private async Task StartScannerAsync(ScannerPurpose purpose)
     {
         errorMessage = null;
@@ -520,7 +548,7 @@
             scannerStarted = result.Ok;
             scanning = result.Ok;
             if (!result.Ok)
-                errorMessage = result.Message ?? "No se pudo acceder a la cámara. Puedes escribir el ID manualmente.";
+                errorMessage = result.Message ?? $"No se pudo acceder a la cámara. Puedes escribir el {ManualEntryName} manualmente.";
         }
         catch (InvalidOperationException)
         {
@@ -532,7 +560,7 @@
         {
             scanning = false;
             scannerStarted = false;
-            errorMessage = "No fue posible iniciar la cámara. Puedes escribir el ID manualmente.";
+            errorMessage = $"No fue posible iniciar la cámara. Puedes escribir el {ManualEntryName} manualmente.";
         }
     }
 
@@ -638,15 +666,6 @@
         showMonetaryDiscount = false;
         errorMessage = null;
         successMessage = null;
-    }
-
-    private void ShowGiftCardFlow()
-    {
-        showGiftCardFlow = true;
-        errorMessage = null;
-        successMessage = null;
-        giftCardSuccessMessage = null;
-        mode = CashierMode.None;
     }
 
     private async Task ShowRedeemAsync()
@@ -865,7 +884,6 @@
             giftCardAmountInput = giftCardDetail.Card.Status == GiftCardStatus.Active
                 ? giftCardDetail.Card.CurrentBalance.ToString("0.##", CultureInfo.InvariantCulture)
                 : string.Empty;
-            giftCardReference = null;
         }
         catch (Exception ex)
         {
@@ -894,7 +912,7 @@
                 giftCardDetail.Card.Code,
                 GiftCardAmount,
                 Guid.NewGuid().ToString("N"),
-                giftCardReference,
+                null,
                 null);
 
             if (!result.Success)
@@ -906,9 +924,10 @@
             }
 
             giftCardDetail = result.Detail;
-            giftCardSuccessMessage = "Canje realizado.";
+            giftCardSuccessMessage = result.Detail is null
+                ? "Canje realizado."
+                : $"Canje realizado. Saldo restante: {FormatGiftCardMoney(result.Detail.Card.CurrentBalance, result.Detail.Card.Currency)}.";
             giftCardAmountInput = string.Empty;
-            giftCardReference = null;
         }
         catch (Exception ex)
         {
@@ -964,7 +983,7 @@
         errorMessage = null;
     }
 
-    private void Reset()
+    private void ResetPointsFlow()
     {
         customer = null;
         catalog = null;
@@ -980,12 +999,13 @@
         qrHandled = false;
     }
 
+    private void Reset() => ResetPointsFlow();
+
     private void ResetGiftCardFlow()
     {
         giftCardDetail = null;
         giftCardCodeInput = string.Empty;
         giftCardAmountInput = string.Empty;
-        giftCardReference = null;
         giftCardSuccessMessage = null;
         errorMessage = null;
         qrHandled = false;
@@ -994,7 +1014,9 @@
     private void ReturnToCashierHome()
     {
         ResetGiftCardFlow();
-        showGiftCardFlow = false;
+        ResetPointsFlow();
+        surface = CashierSurface.Points;
+        scannerPurpose = ScannerPurpose.Customer;
     }
 
     private async Task StopScannerAsync()
@@ -1101,6 +1123,12 @@
         None,
         AddPoints,
         Redeem
+    }
+
+    private enum CashierSurface
+    {
+        Points,
+        GiftCard
     }
 
     private enum ScannerPurpose

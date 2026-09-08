@@ -304,6 +304,34 @@ input[type=color].kb-color-picker {
     color: var(--kb-ink-muted);
     font-size: 0.84rem;
 }
+.kb-cashier-segmented {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 4px;
+    padding: 4px;
+    border: 1px solid var(--kb-sand-100);
+    border-radius: var(--kb-radius);
+    background: var(--kb-sand-50);
+}
+.kb-cashier-segmented__option {
+    min-height: 48px;
+    padding: 10px 12px;
+    border: 0;
+    border-radius: calc(var(--kb-radius) - 4px);
+    background: transparent;
+    color: var(--kb-ink-muted);
+    font: 800 0.98rem var(--font-body);
+    cursor: pointer;
+}
+.kb-cashier-segmented__option.active {
+    background: var(--kb-bg-card);
+    color: var(--kb-ink);
+    box-shadow: 0 2px 10px rgba(45, 36, 30, 0.08);
+}
+.kb-cashier-segmented__option:disabled {
+    cursor: not-allowed;
+    opacity: 0.7;
+}
 .kb-cashier-hero,
 .kb-cashier-panel,
 .kb-cashier-customer {
@@ -409,6 +437,34 @@ input[type=color].kb-color-picker {
     color: var(--kb-ink-muted);
     font-size: 0.9rem;
 }
+.kb-cashier-gift-stats {
+    display: grid;
+    gap: 10px;
+}
+.kb-cashier-gift-stats > div {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 14px;
+    min-height: 58px;
+    padding: 12px 14px;
+    border: 1px solid var(--kb-sand-100);
+    border-radius: var(--kb-radius-sm);
+    background: var(--kb-sand-50);
+}
+.kb-cashier-gift-stats span {
+    color: var(--kb-ink-muted);
+    font-size: 0.78rem;
+    font-weight: 800;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+}
+.kb-cashier-gift-stats strong {
+    color: var(--kb-ink);
+    font-size: 1.05rem;
+    text-align: right;
+    white-space: nowrap;
+}
 .kb-cashier-confirm p {
     margin: 0;
 }
@@ -431,6 +487,19 @@ input[type=color].kb-color-picker {
     .kb-cashier-confirm .kb-actions-inline {
         display: grid;
         width: 100%;
+    }
+}
+@media (min-width: 520px) {
+    .kb-cashier-gift-stats {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
+    .kb-cashier-gift-stats > div {
+        display: grid;
+        align-content: space-between;
+        min-height: 98px;
+    }
+    .kb-cashier-gift-stats strong {
+        text-align: left;
     }
 }
 
