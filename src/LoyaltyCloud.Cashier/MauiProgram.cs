@@ -1,5 +1,6 @@
 using LoyaltyCloud.Cashier.Services;
 using Microsoft.Extensions.Logging;
+using ZXing.Net.Maui.Controls;
 
 namespace LoyaltyCloud.Cashier;
 
@@ -10,6 +11,7 @@ public static class MauiProgram
         var builder = MauiApp.CreateBuilder();
         builder
             .UseMauiApp<App>()
+            .UseBarcodeReader()
             .ConfigureFonts(fonts =>
             {
                 fonts.AddFont("OpenSans-Regular.ttf", "OpenSansRegular");
@@ -20,6 +22,8 @@ public static class MauiProgram
         builder.Services.AddSingleton<ISecureTokenStore, MauiSecureTokenStore>();
         builder.Services.AddSingleton<CashierSessionService>();
         builder.Services.AddSingleton<CashierAuthorizationHandler>();
+        builder.Services.AddSingleton<IQrScannerService, MauiQrScannerService>();
+        builder.Services.AddSingleton<CashierCustomerService>();
         builder.Services.AddHttpClient<CashierApiClient>((services, client) =>
         {
             var options = services.GetRequiredService<CashierApiOptions>();

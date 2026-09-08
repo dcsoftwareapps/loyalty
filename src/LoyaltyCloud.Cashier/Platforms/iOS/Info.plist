@@ -28,5 +28,7 @@
     </array>
     <key>XSAppIconAssets</key>
     <string>Assets.xcassets/appicon.appiconset</string>
+    <key>NSCameraUsageDescription</key>
+    <string>LoyaltyCloud usa la cámara para escanear códigos QR de clientes.</string>
 </dict>
 </plist>

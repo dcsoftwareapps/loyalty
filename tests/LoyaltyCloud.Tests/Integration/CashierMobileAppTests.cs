@@ -101,7 +101,7 @@ public sealed class CashierMobileAppTests
 
     [Fact]
     [Trait("Category", "CashierMobile")]
-    public void Cashier_mobile_phase_4a_does_not_implement_operational_flows_yet()
+    public void Cashier_mobile_phase_4b_uses_native_scanner_and_real_customer_points_endpoints()
     {
         var source = string.Join(
             "\n",
@@ -110,15 +110,58 @@ public sealed class CashierMobileAppTests
                     || path.EndsWith(".razor", StringComparison.OrdinalIgnoreCase)
                     || path.EndsWith(".xaml", StringComparison.OrdinalIgnoreCase))
                 .Select(File.ReadAllText));
+        var project = Read("src", "LoyaltyCloud.Cashier", "LoyaltyCloud.Cashier.csproj");
+        var program = Read("src", "LoyaltyCloud.Cashier", "MauiProgram.cs");
+        var androidManifest = Read("src", "LoyaltyCloud.Cashier", "Platforms", "Android", "AndroidManifest.xml");
+        var iosInfo = Read("src", "LoyaltyCloud.Cashier", "Platforms", "iOS", "Info.plist");
 
-        Assert.DoesNotContain("api/points", source, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("ZXing.Net.Maui.Controls", project);
+        Assert.Contains(".UseBarcodeReader()", program);
+        Assert.Contains("android.permission.CAMERA", androidManifest);
+        Assert.Contains("NSCameraUsageDescription", iosInfo);
+        Assert.Contains("api/customers/{Uri.EscapeDataString(serial)}", source);
+        Assert.Contains("\"api/points\"", source);
+        Assert.Contains("CashierAddPointsRequest", source);
+        Assert.Contains("Scanner.ScanAsync()", source);
+        Assert.Contains("await LoadCustomerAsync(serial)", source);
+        Assert.Contains("Multiple = false", source);
+        Assert.Contains("if (_completed)", source);
+        Assert.DoesNotContain("window.kbeautyQrScanner", source, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("api/redemptions", source, StringComparison.OrdinalIgnoreCase);
-        Assert.DoesNotContain("api/customers", source, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("giftcards", source, StringComparison.OrdinalIgnoreCase);
-        Assert.DoesNotContain("Barcode", source, StringComparison.OrdinalIgnoreCase);
-        Assert.DoesNotContain("Camera", source, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("AdminApi:SharedSecret", source, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("CashierAuth:SigningKey", source, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    [Trait("Category", "CashierMobile")]
+    public void Cashier_mobile_phase_4b_preserves_manual_lookup_and_add_points_state_rules()
+    {
+        var page = Read("src", "LoyaltyCloud.Cashier", "Components", "Pages", "Home.razor");
+        var service = Read("src", "LoyaltyCloud.Cashier", "Services", "CashierCustomerService.cs");
+        var contracts = Read("src", "LoyaltyCloud.Cashier", "Services", "CashierContracts.cs");
+        var parser = Read("src", "LoyaltyCloud.Cashier", "Services", "CashierQrPayloadParser.cs");
+
+        Assert.Contains("ID del cliente", page);
+        Assert.Contains("SearchCustomerAsync() => LoadCustomerAsync(lookup.SerialNumber)", page);
+        Assert.Contains("CashierQrPayloadParser.ExtractCustomerSerial(result.Value)", page);
+        Assert.Contains("lookup.SerialNumber = serial", page);
+        Assert.Contains("if (busy)", page);
+        Assert.Contains("customer = result.Value", page);
+        Assert.Contains("Monto de compra", page);
+        Assert.Contains("points.PurchaseAmount <= 0m", page);
+        Assert.Contains("points.PurchaseAmount = null", page);
+        Assert.Contains("var refresh = await Customers.GetCustomerAsync(serial)", page);
+        Assert.Contains("Otro cliente", page);
+        Assert.Contains("customer = null", page);
+        Assert.Contains("Tarjeta de regalo", page);
+        Assert.Contains("disabled>Tarjeta de regalo", page);
+
+        Assert.Contains("PostAsJsonAsync", service);
+        Assert.Contains("new CashierAddPointsRequest(serial, purchaseAmount)", service);
+        Assert.Contains("HttpStatusCode.Unauthorized", service);
+        Assert.Contains("SessionExpired", contracts);
+        Assert.Contains("payload?.Trim()", parser);
     }
 
     private static string Read(params string[] parts) =>

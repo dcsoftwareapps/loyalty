@@ -1,6 +1,9 @@
 @page "/"
+@implements IDisposable
 @inject CashierApiClient Api
 @inject CashierApiOptions ApiOptions
+@inject CashierCustomerService Customers
+@inject IQrScannerService Scanner
 @inject CashierSessionService Sessions
 
 <PageTitle>LoyaltyCloud Caja</PageTitle>
@@ -64,41 +67,115 @@
     else
     {
         <section class="cashier-card">
-            <p class="eyebrow">LoyaltyCloud Caja</p>
-            <h1>Lista para operar</h1>
+            <div class="cashier-header">
+                <div>
+                    <p class="eyebrow">LoyaltyCloud Caja</p>
+                    <h1>Puntos</h1>
+                </div>
+                <button type="button" class="link-button" @onclick="LogoutAsync" disabled="@busy">
+                    Salir
+                </button>
+            </div>
 
             <div class="segmented" role="group" aria-label="Modo de caja">
                 <button type="button" class="segment active">Puntos</button>
-                <button type="button" class="segment">Tarjeta de regalo</button>
+                <button type="button" class="segment" disabled>Tarjeta de regalo</button>
             </div>
 
-            <div class="session-panel">
-                <span>Sesión</span>
-                <strong>@session.Username</strong>
-                <small>@session.Role</small>
-            </div>
+            @if (!string.IsNullOrWhiteSpace(errorMessage))
+            {
+                <div class="alert alert-error">@errorMessage</div>
+            }
+            @if (!string.IsNullOrWhiteSpace(successMessage))
+            {
+                <div class="alert alert-success">@successMessage</div>
+            }
 
-            <div class="session-panel">
-                <span>Negocio</span>
-                <strong>@session.TenantSlug</strong>
-                <small>Expira @session.ExpiresAtUtc.ToLocalTime().ToString("dd/MM/yyyy HH:mm")</small>
-            </div>
+            @if (customer is null)
+            {
+                <section class="operation-section">
+                    <h2>Cliente</h2>
+                    <button type="button" class="secondary-button" @onclick="ScanCustomerAsync" disabled="@busy">
+                        @(busy ? "Procesando..." : "Escanear")
+                    </button>
 
-            <p class="muted">Las operaciones de caja se agregarán en la siguiente fase.</p>
+                    <EditForm Model="lookup" OnValidSubmit="SearchCustomerAsync" FormName="cashier-customer-lookup" class="login-form">
+                        <DataAnnotationsValidator />
 
-            <button type="button" class="secondary-button" @onclick="LogoutAsync">
-                Cerrar sesión
-            </button>
+                        <label for="customerSerial">ID del cliente</label>
+                        <InputText id="customerSerial"
+                                   class="input input--mono"
+                                   autocomplete="off"
+                                   autocapitalize="characters"
+                                   disabled="@busy"
+                                   @bind-Value="lookup.SerialNumber" />
+                        <ValidationSummary />
+
+                        <button type="submit" class="primary-button" disabled="@IsLookupDisabled">
+                            @(busy ? "Buscando..." : "Buscar")
+                        </button>
+                    </EditForm>
+                </section>
+            }
+            else
+            {
+                <section class="customer-panel">
+                    <div>
+                        <span>Cliente</span>
+                        <strong>@customer.FullName</strong>
+                        <small>@customer.SerialNumber</small>
+                    </div>
+                    <div class="points-balance">
+                        <span>Puntos</span>
+                        <strong>@customer.CurrentPoints.ToString("N0")</strong>
+                    </div>
+                    <div class="customer-meta">
+                        <span>Nivel</span>
+                        <strong>@customer.Level</strong>
+                    </div>
+                </section>
+
+                <section class="operation-section">
+                    <h2>Sumar puntos</h2>
+                    <EditForm Model="points" OnValidSubmit="AddPointsAsync" FormName="cashier-add-points" class="login-form">
+                        <DataAnnotationsValidator />
+
+                        <label for="purchaseAmount">Monto de compra</label>
+                        <div class="money-input">
+                            <span>$</span>
+                            <InputNumber id="purchaseAmount"
+                                         class="input"
+                                         min="0"
+                                         step="0.01"
+                                         disabled="@busy"
+                                         @bind-Value="points.PurchaseAmount" />
+                        </div>
+                        <ValidationSummary />
+
+                        <button type="submit" class="primary-button" disabled="@IsAddPointsDisabled">
+                            @(busy ? "Agregando..." : "Agregar puntos")
+                        </button>
+                    </EditForm>
+                </section>
+
+                <button type="button" class="secondary-button" @onclick="ClearCustomer" disabled="@busy">
+                    Otro cliente
+                </button>
+            }
         </section>
     }
 </main>
 
 @code {
     private readonly LoginModel login = new();
+    private readonly CustomerLookupModel lookup = new();
+    private readonly AddPointsModel points = new();
     private CashierSession? session;
+    private CashierCustomerDetail? customer;
     private bool restoring = true;
     private bool busy;
     private string? errorMessage;
+    private string? successMessage;
 
     private bool IsLoginDisabled =>
         busy
@@ -106,10 +183,22 @@
         || string.IsNullOrWhiteSpace(login.Username)
         || string.IsNullOrWhiteSpace(login.Password);
 
+    private bool IsLookupDisabled =>
+        busy || string.IsNullOrWhiteSpace(lookup.SerialNumber);
+
+    private bool IsAddPointsDisabled =>
+        busy || customer is null || points.PurchaseAmount is null || points.PurchaseAmount <= 0m;
+
     protected override async Task OnInitializedAsync()
     {
+        Sessions.SessionChanged += OnSessionChanged;
         session = await Sessions.RestoreAsync();
         restoring = false;
+    }
+
+    public void Dispose()
+    {
+        Sessions.SessionChanged -= OnSessionChanged;
     }
 
     private async Task SignInAsync()
@@ -119,6 +208,7 @@
 
         busy = true;
         errorMessage = null;
+        successMessage = null;
         try
         {
             var result = await Api.LoginAsync(login.TenantSlug, login.Username, login.Password);
@@ -142,8 +232,126 @@
     {
         await Sessions.LogoutAsync();
         session = null;
+        ClearCustomer();
         errorMessage = null;
         login.Password = string.Empty;
+    }
+
+    private async Task ScanCustomerAsync()
+    {
+        if (busy)
+            return;
+
+        errorMessage = null;
+        successMessage = null;
+        var result = await Scanner.ScanAsync();
+        if (!result.Succeeded)
+        {
+            if (!string.IsNullOrWhiteSpace(result.ErrorMessage))
+                errorMessage = result.ErrorMessage;
+            return;
+        }
+
+        var serial = CashierQrPayloadParser.ExtractCustomerSerial(result.Value);
+        if (string.IsNullOrWhiteSpace(serial))
+        {
+            errorMessage = "El QR no contiene un ID de cliente válido.";
+            return;
+        }
+
+        lookup.SerialNumber = serial;
+        await LoadCustomerAsync(serial);
+    }
+
+    private Task SearchCustomerAsync() => LoadCustomerAsync(lookup.SerialNumber);
+
+    private async Task LoadCustomerAsync(string serialNumber)
+    {
+        if (busy)
+            return;
+
+        var serial = CashierQrPayloadParser.ExtractCustomerSerial(serialNumber);
+        if (string.IsNullOrWhiteSpace(serial))
+        {
+            errorMessage = "Ingresa el ID del cliente.";
+            return;
+        }
+
+        busy = true;
+        errorMessage = null;
+        successMessage = null;
+        try
+        {
+            var result = await Customers.GetCustomerAsync(serial);
+            if (!result.Succeeded || result.Value is null)
+            {
+                errorMessage = result.ErrorMessage ?? "No fue posible buscar el cliente.";
+                if (result.Unauthorized)
+                    session = null;
+                return;
+            }
+
+            customer = result.Value;
+            lookup.SerialNumber = result.Value.SerialNumber;
+        }
+        finally
+        {
+            busy = false;
+        }
+    }
+
+    private async Task AddPointsAsync()
+    {
+        if (IsAddPointsDisabled || customer is null)
+            return;
+
+        var serial = customer.SerialNumber;
+        busy = true;
+        errorMessage = null;
+        successMessage = null;
+        try
+        {
+            var addResult = await Customers.AddPointsAsync(serial, points.PurchaseAmount.GetValueOrDefault());
+            if (!addResult.Succeeded || addResult.Value is null)
+            {
+                errorMessage = addResult.ErrorMessage ?? "No fue posible agregar puntos.";
+                if (addResult.Unauthorized)
+                    session = null;
+                return;
+            }
+
+            points.PurchaseAmount = null;
+            var refresh = await Customers.GetCustomerAsync(serial);
+            if (!refresh.Succeeded || refresh.Value is null)
+            {
+                errorMessage = refresh.ErrorMessage ?? "Los puntos se agregaron, pero no fue posible refrescar el cliente.";
+                if (refresh.Unauthorized)
+                    session = null;
+                return;
+            }
+
+            customer = refresh.Value;
+            successMessage = $"Se agregaron {addResult.Value.PointsAdded:N0} puntos.";
+        }
+        finally
+        {
+            busy = false;
+        }
+    }
+
+    private void ClearCustomer()
+    {
+        customer = null;
+        lookup.SerialNumber = string.Empty;
+        points.PurchaseAmount = null;
+        errorMessage = null;
+        successMessage = null;
+    }
+
+    private void OnSessionChanged()
+    {
+        session = Sessions.Current;
+        _ = InvokeAsync(StateHasChanged);
     }
 
     private sealed class LoginModel
@@ -156,5 +364,17 @@
 
         [Required(ErrorMessage = "Ingresa la contraseña.")]
         public string Password { get; set; } = string.Empty;
+    }
+
+    private sealed class CustomerLookupModel
+    {
+        [Required(ErrorMessage = "Ingresa el ID del cliente.")]
+        public string SerialNumber { get; set; } = string.Empty;
+    }
+
+    private sealed class AddPointsModel
+    {
+        [Range(typeof(decimal), "0.01", "999999999", ErrorMessage = "Ingresa un monto mayor a cero.")]
+        public decimal? PurchaseAmount { get; set; }
     }
 }
