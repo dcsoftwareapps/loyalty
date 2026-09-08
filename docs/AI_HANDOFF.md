@@ -19,7 +19,7 @@ Scope:
 - QR scanning reuses `wwwroot/js/qr-scanner.js` / `window.kbeautyQrScanner` and includes a `scannerStarted` guard so disposal does not call JS before the component is interactive.
 - The customer lookup path reuses `GET /api/customers/{serialNumber}`.
 - Add-points reuses `POST /api/points` through the existing purchase-amount contract; the UI labels the input as purchase amount, not raw points.
-- Reward redemption reuses `GET /api/redemptions/catalog/{serialNumber}` and `POST /api/redemptions`, matching the existing Admin redemption flow.
+- Redemption reuses the existing Admin flow: catalog rewards come from `GET /api/redemptions/catalog/{serialNumber}`, monetary discount availability comes from `GET /api/config` / `points_per_peso_unit`, and both redemption types use `POST /api/redemptions`.
 - Gift Cards, refresh tokens, trusted-device management, offline transactions, MAUI/native shell and new API endpoints are intentionally out of scope.
 
 Auth/security:

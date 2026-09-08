@@ -8,10 +8,12 @@
 @using System.Security.Claims
 @using System.Text.RegularExpressions
 @using LoyaltyCloud.Admin.Auth
+@using LoyaltyCloud.Application.Config.Queries.GetProgramConfig
 @using LoyaltyCloud.Application.Customers.Queries.GetCustomerBySerial
 @using LoyaltyCloud.Application.Points.Commands.AddPoints
 @using LoyaltyCloud.Application.Redemptions.Commands.RedeemReward
 @using LoyaltyCloud.Application.Redemptions.Queries.GetRedemptionCatalog
+@using LoyaltyCloud.Common.Constants
 @inject AdminApiClient Api
 @inject AdminApiPointsClient PointsApi
 @inject AuthenticationStateProvider AuthenticationStateProvider
@@ -144,30 +146,93 @@
                 {
                     <p class="kb-muted">Cargando recompensas...</p>
                 }
-                else if (availableRewards.Count == 0)
-                {
-                    <p class="kb-muted">No hay recompensas disponibles para este cliente.</p>
-                }
                 else
                 {
-                    <div class="kb-cashier-rewards">
-                        @foreach (var reward in availableRewards)
-                        {
-                            <article class="kb-cashier-reward">
-                                <div>
-                                    <strong>@reward.Name</strong>
-                                    <span>@reward.PointsCost.ToString("N0") pts</span>
-                                </div>
-                                <button type="button"
-                                        class="kb-btn kb-btn--primary kb-btn--small"
-                                        @onclick="@(() => SelectReward(reward))"
-                                        disabled="@busy">
-                                    Elegir
-                                </button>
-                            </article>
-                        }
-                    </div>
+                    @if (CanRedeemMoney)
+                    {
+                        <article class="kb-cashier-reward kb-cashier-reward--money">
+                            <div>
+                                <strong>Descuento en dinero</strong>
+                                <span>Disponible aprox. @FormatMoney(AvailableMonetaryAmount)</span>
+                                <small>@RateLabel</small>
+                            </div>
+                            <button type="button"
+                                    class="kb-btn kb-btn--primary kb-btn--small"
+                                    @onclick="SelectMonetaryDiscount"
+                                    disabled="@busy">
+                                Elegir
+                            </button>
+                        </article>
+                    }
+                    else if (MonetaryUnavailableReason is not null)
+                    {
+                        <p class="kb-muted">@MonetaryUnavailableReason</p>
+                    }
+
+                    @if (availableRewards.Count > 0)
+                    {
+                        <div class="kb-cashier-rewards">
+                            @foreach (var reward in availableRewards)
+                            {
+                                <article class="kb-cashier-reward">
+                                    <div>
+                                        <strong>@reward.Name</strong>
+                                        <span>@reward.PointsCost.ToString("N0") pts</span>
+                                    </div>
+                                    <button type="button"
+                                            class="kb-btn kb-btn--primary kb-btn--small"
+                                            @onclick="@(() => SelectReward(reward))"
+                                            disabled="@busy">
+                                        Elegir
+                                    </button>
+                                </article>
+                            }
+                        </div>
+                    }
+
+                    @if (!CanRedeemMoney && availableRewards.Count == 0)
+                    {
+                        <p class="kb-muted">No hay recompensas disponibles para este cliente.</p>
+                    }
                 }
+            </section>
+        }
+
+        @if (showMonetaryDiscount)
+        {
+            <section class="kb-cashier-panel kb-cashier-confirm">
+                <h2>Descuento en dinero</h2>
+                <p>Saldo disponible: <strong>@customer.CurrentPoints.ToString("N0") pts</strong></p>
+                <p>Valor disponible aproximado: <strong>@FormatMoney(AvailableMonetaryAmount)</strong></p>
+                <label for="cashier-monetary-points">Puntos a canjear</label>
+                <input id="cashier-monetary-points"
+                       type="number"
+                       min="0"
+                       step="@PointUnit"
+                       @bind="monetaryPoints"
+                       @bind:event="oninput" />
+                <button type="button"
+                        class="kb-btn kb-btn--ghost kb-btn--block"
+                        @onclick="UseAllPoints"
+                        disabled="@(busy || UsablePoints <= 0)">
+                    Usar todos
+                </button>
+                <p>Descuento: <strong>@FormatMoney(MonetaryDiscountAmount)</strong></p>
+                @if (MonetaryValidationError is not null)
+                {
+                    <div class="kb-form-error">@MonetaryValidationError</div>
+                }
+                <div class="kb-actions-inline">
+                    <button type="button" class="kb-btn kb-btn--ghost kb-btn--large" @onclick="CancelMonetaryDiscount" disabled="@busy">
+                        Cancelar
+                    </button>
+                    <button type="button"
+                            class="kb-btn kb-btn--primary kb-btn--large"
+                            @onclick="RedeemMonetaryDiscountAsync"
+                            disabled="@(busy || MonetaryValidationError is not null)">
+                        @(busy ? "Procesando..." : $"Confirmar {FormatMoney(MonetaryDiscountAmount)}")
+                    </button>
+                </div>
             </section>
         }
 
@@ -207,8 +272,11 @@
     private CustomerDetailDto? customer;
     private IReadOnlyList<RewardCatalogItemDto>? catalog;
     private RewardCatalogItemDto? selectedReward;
+    private decimal? pointsPerPesoUnit;
+    private int monetaryPoints;
     private string? errorMessage;
     private string? successMessage;
+    private bool showMonetaryDiscount;
     private bool busy;
     private bool scanning;
     private bool scannerStarted;
@@ -222,6 +290,49 @@
     private decimal PurchaseAmount => TryParseAmount(amountInput, out var parsed) ? parsed : 0m;
     private bool IsPurchaseAmountValid => PurchaseAmount > 0m;
     private IReadOnlyList<RewardCatalogItemDto> availableRewards => catalog?.Where(reward => reward.CanAfford).ToList() ?? [];
+    private int PointUnit => pointsPerPesoUnit.HasValue && pointsPerPesoUnit.Value > 0
+        && decimal.Truncate(pointsPerPesoUnit.Value) == pointsPerPesoUnit.Value
+        && pointsPerPesoUnit.Value <= int.MaxValue
+            ? (int)pointsPerPesoUnit.Value
+            : 0;
+    private int UsablePoints => customer is null || PointUnit <= 0
+        ? 0
+        : customer.CurrentPoints - (customer.CurrentPoints % PointUnit);
+    private bool CanRedeemMoney => UsablePoints > 0;
+    private decimal AvailableMonetaryAmount => pointsPerPesoUnit.GetValueOrDefault() > 0
+        ? decimal.Round(UsablePoints / pointsPerPesoUnit.GetValueOrDefault(), 2, MidpointRounding.AwayFromZero)
+        : 0;
+    private decimal MonetaryDiscountAmount => pointsPerPesoUnit.GetValueOrDefault() > 0
+        ? decimal.Round(monetaryPoints / pointsPerPesoUnit.GetValueOrDefault(), 2, MidpointRounding.AwayFromZero)
+        : 0;
+    private string RateLabel => PointUnit > 0
+        ? $"{PointUnit:N0} puntos = $1.00 MXN"
+        : "Configuración no disponible";
+    private string? MonetaryUnavailableReason => customer is null || PointUnit <= 0
+        ? "La configuración de canje en dinero no está disponible."
+        : customer.CurrentPoints > 0
+            ? $"El cliente necesita al menos {PointUnit:N0} puntos disponibles para canjear dinero."
+            : null;
+    private string? MonetaryValidationError
+    {
+        get
+        {
+            if (customer is null)
+                return "Busca un cliente antes de canjear.";
+            if (PointUnit <= 0 || pointsPerPesoUnit is null)
+                return "La configuración de canje no es válida.";
+            if (monetaryPoints <= 0)
+                return "Los puntos a canjear deben ser mayores a 0.";
+            if (monetaryPoints > customer.CurrentPoints)
+                return $"Saldo insuficiente: el cliente tiene {customer.CurrentPoints:N0} puntos.";
+            if (monetaryPoints % PointUnit != 0)
+                return $"Los puntos deben canjearse en múltiplos de {PointUnit:N0}.";
+            if (MonetaryDiscountAmount <= 0)
+                return "El descuento calculado debe ser mayor a $0.00 MXN.";
+
+            return null;
+        }
+    }
 
     protected override async Task OnInitializedAsync()
     {
@@ -333,6 +444,9 @@
             customer = result.Value;
             catalog = null;
             selectedReward = null;
+            pointsPerPesoUnit = null;
+            monetaryPoints = 0;
+            showMonetaryDiscount = false;
             amountInput = string.Empty;
             mode = CashierMode.None;
         }
@@ -352,6 +466,7 @@
     {
         mode = nextMode;
         selectedReward = null;
+        showMonetaryDiscount = false;
         errorMessage = null;
         successMessage = null;
     }
@@ -374,6 +489,7 @@
             }
 
             catalog = result.Value;
+            await LoadMonetaryConfigAsync();
         }
         catch (Exception ex)
         {
@@ -389,8 +505,31 @@
     private void SelectReward(RewardCatalogItemDto reward)
     {
         selectedReward = reward;
+        showMonetaryDiscount = false;
         errorMessage = null;
         successMessage = null;
+    }
+
+    private void SelectMonetaryDiscount()
+    {
+        selectedReward = null;
+        showMonetaryDiscount = true;
+        monetaryPoints = UsablePoints;
+        errorMessage = null;
+        successMessage = null;
+    }
+
+    private void CancelMonetaryDiscount()
+    {
+        showMonetaryDiscount = false;
+        monetaryPoints = 0;
+        errorMessage = null;
+    }
+
+    private void UseAllPoints()
+    {
+        monetaryPoints = UsablePoints;
+        errorMessage = null;
     }
 
     private async Task AddPointsAsync()
@@ -466,6 +605,45 @@
         }
     }
 
+    private async Task RedeemMonetaryDiscountAsync()
+    {
+        if (customer is null || busy || MonetaryValidationError is not null)
+            return;
+
+        errorMessage = null;
+        successMessage = null;
+        busy = true;
+        var serial = customer.SerialNumber;
+
+        try
+        {
+            var result = await Api.PostAsJsonAsync<RedeemRedemptionRequest, RedemptionResponse>(
+                "api/redemptions",
+                new RedeemRedemptionRequest(serial, null, "MonetaryDiscount", monetaryPoints));
+
+            if (result.IsFailure)
+            {
+                errorMessage = NormalizeApiError(result.Error);
+                return;
+            }
+
+            successMessage = $"Descuento aplicado: {FormatMoney(result.Value.MonetaryAmount.GetValueOrDefault())}. Nuevo saldo: {result.Value.RemainingPoints:N0} pts.";
+            showMonetaryDiscount = false;
+            monetaryPoints = 0;
+            await RefreshCustomerAsync(serial);
+            await LoadCatalogAsync(serial);
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Cashier monetary redemption failed. Serial={Serial}", serial);
+            errorMessage = "Ocurrió un error inesperado.";
+        }
+        finally
+        {
+            busy = false;
+        }
+    }
+
     private async Task RefreshCustomerAsync(string serial)
     {
         var result = await Api.GetAsync<CustomerDetailDto>($"api/customers/{Uri.EscapeDataString(serial)}");
@@ -484,6 +662,19 @@
             errorMessage ??= NormalizeApiError(result.Error);
     }
 
+    private async Task LoadMonetaryConfigAsync()
+    {
+        var result = await Api.GetAsync<IReadOnlyList<ConfigDto>>("api/config");
+        if (result.IsFailure)
+        {
+            errorMessage = NormalizeApiError(result.Error);
+            pointsPerPesoUnit = null;
+            return;
+        }
+
+        pointsPerPesoUnit = ReadPointsPerPesoUnit(result.Value);
+    }
+
     private void HandleAmountInput(ChangeEventArgs e)
     {
         amountInput = e.Value?.ToString() ?? string.Empty;
@@ -495,6 +686,9 @@
         customer = null;
         catalog = null;
         selectedReward = null;
+        pointsPerPesoUnit = null;
+        monetaryPoints = 0;
+        showMonetaryDiscount = false;
         serialInput = string.Empty;
         amountInput = string.Empty;
         errorMessage = null;
@@ -545,6 +739,18 @@
         return decimal.TryParse(normalized, NumberStyles.Number, CultureInfo.InvariantCulture, out amount);
     }
 
+    private static decimal? ReadPointsPerPesoUnit(IReadOnlyList<ConfigDto> entries)
+    {
+        var raw = entries.FirstOrDefault(entry =>
+            string.Equals(entry.Key, LoyaltyConstants.ConfigKeys.PointsPerPesoUnit, StringComparison.OrdinalIgnoreCase))?.Value;
+
+        return decimal.TryParse(raw, NumberStyles.Number, CultureInfo.InvariantCulture, out var value)
+            ? value
+            : null;
+    }
+
+    private static string FormatMoney(decimal value) => $"${value:N2} MXN";
+
     public async ValueTask DisposeAsync()
     {
         await StopScannerAsync();
@@ -558,6 +764,10 @@
         Redeem
     }
 
-    private sealed record RedeemRedemptionRequest(string SerialNumber, Guid? RewardCatalogItemId);
+    private sealed record RedeemRedemptionRequest(
+        string SerialNumber,
+        Guid? RewardCatalogItemId,
+        string? Type = null,
+        int? PointsToRedeem = null);
     private sealed record QrScannerStartResult(bool Ok, string? Message);
 }

@@ -114,7 +114,7 @@ Current architecture:
 - Tenant user roles currently support `Admin` and `Cashier`. Existing Admin portal pages remain Admin-only.
 - Staff Management exists at `/staff` for tenant `Admin` users to create Admin/Cashier users, reset passwords and activate/deactivate staff without accepting TenantId from the UI.
 - Staff Management reuses `TenantAdminUser.Role`, `TenantAdminUser.IsActive`, `TenantAdminUser.NormalizeUsername(...)` and `IPasswordHashingService`; it blocks deactivating the last active tenant Admin.
-- Cashier web UI exists at `/cashier` as a mobile-first Blazor Server surface for tenant `Admin`/`Cashier` users. It supports QR/manual customer lookup, add-points from purchase amount, catalog reward redemption and logout.
+- Cashier web UI exists at `/cashier` as a mobile-first Blazor Server surface for tenant `Admin`/`Cashier` users. It supports QR/manual customer lookup, add-points from purchase amount, monetary discount redemption, catalog reward redemption and logout.
 - `/cashier` uses the tenant auth cookie and server-side API clients. It does not store a bearer token in browser storage and does not expose `AdminApi:SharedSecret`, `CashierAuth:SigningKey` or API signing material to browser JavaScript.
 - Cashier API Phase 1 exists for future mobile/PWA cashier clients: `POST /api/auth/cashier/login` issues a short-lived bearer token signed by `CashierAuth:SigningKey`.
 - Cashier bearer tokens derive tenant/user/role from authenticated token claims and DB revalidation, not from browser-supplied TenantId or operator headers.
@@ -163,7 +163,7 @@ Blazor Admin pages:
 | `/notifications` | `Notifications.razor` | Historical/admin notification page. Exists but is hidden from main menu. |
 | `/config` | `Config.razor` | Program configuration. Some legacy settings are visually hidden. |
 | `/quick-help` | `QuickHelp.razor` | Quick cashier/admin help, registration QR and printable poster. |
-| `/cashier` | `CashierLanding.razor` | Mobile-first cashier surface for customer lookup, add points and catalog reward redemption. |
+| `/cashier` | `CashierLanding.razor` | Mobile-first cashier surface for customer lookup, add points, monetary discount redemption and catalog reward redemption. |
 | `/giftcards` | `GiftCards.razor` | Tenant Gift Card dashboard/landing. Requires Gift Cards feature authorization. |
 | `/giftcards/issue` | `GiftCardIssue.razor` | Issue a Gift Card. Optional recipient email triggers SMTP delivery after successful issuance. |
 | `/giftcards/cards` | `GiftCardList.razor` | Gift Card list/search by tenant. |
@@ -867,7 +867,7 @@ Done:
 - Gift Card email delivery through provider-neutral SMTP, including safe Admin feedback and claim-token rotation on resend.
 - Cashier API authentication Phase 1: server-issued short-lived bearer tokens for existing operational endpoints.
 - Staff Management for tenant Admin users: `/staff`, create Admin/Cashier, reset password, activate/deactivate and last-active-Admin protection.
-- Cashier UI Phase 2: `/cashier` mobile-first web surface for QR/manual customer lookup, add points, catalog reward redemption and logout. It is not an offline PWA and does not include Gift Cards or refresh tokens.
+- Cashier UI Phase 2: `/cashier` mobile-first web surface for QR/manual customer lookup, add points, monetary discount redemption, catalog reward redemption and logout. It is not an offline PWA and does not include Gift Cards or refresh tokens.
 - STG infrastructure scripts and STG setup documentation.
 
 Active/UAT focus:
