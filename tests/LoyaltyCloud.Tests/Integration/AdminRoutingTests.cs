@@ -429,11 +429,40 @@ public sealed class AdminRoutingTests : IClassFixture<AdminRoutingTests.AdminWeb
         Assert.Contains("PointsApi.AddPointsAsync(serial, PurchaseAmount)", source);
         Assert.Contains("Api.GetAsync<IReadOnlyList<RewardCatalogItemDto>>", source);
         Assert.Contains("api/redemptions/catalog/{Uri.EscapeDataString(customer.SerialNumber)}", source);
+        Assert.Contains("Api.GetAsync<IReadOnlyList<ConfigDto>>(\"api/config\")", source);
+        Assert.Contains("LoyaltyConstants.ConfigKeys.PointsPerPesoUnit", source);
         Assert.Contains("Api.PostAsJsonAsync<RedeemRedemptionRequest, RedemptionResponse>", source);
         Assert.Contains("\"api/redemptions\"", source);
         Assert.Contains("new RedeemRedemptionRequest(serial, selectedReward.Id)", source);
+        Assert.Contains("new RedeemRedemptionRequest(serial, null, \"MonetaryDiscount\", monetaryPoints)", source);
         Assert.DoesNotContain("new AddPointsCommand", source, StringComparison.Ordinal);
         Assert.DoesNotContain("new RedeemRewardCommand", source, StringComparison.Ordinal);
+        Assert.DoesNotContain("new RedeemMonetaryDiscountCommand", source, StringComparison.Ordinal);
+        Assert.DoesNotContain("api/redemptions/monetary", source, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    [Trait("Category", "AdminRouting")]
+    [Trait("Category", "CashierAuth")]
+    public void Cashier_redemption_includes_existing_monetary_discount_option()
+    {
+        var source = File.ReadAllText(Path.Combine(GetRepositoryRoot(), "src", "LoyaltyCloud.Admin", "Pages", "CashierLanding.razor"));
+
+        Assert.Contains("Descuento en dinero", source);
+        Assert.Contains("CanRedeemMoney", source);
+        Assert.Contains("UsablePoints", source);
+        Assert.Contains("PointUnit", source);
+        Assert.Contains("pointsPerPesoUnit", source);
+        Assert.Contains("Disponible aprox. @FormatMoney(AvailableMonetaryAmount)", source);
+        Assert.Contains("Puntos a canjear", source);
+        Assert.Contains("Usar todos", source);
+        Assert.Contains("Confirmar {FormatMoney(MonetaryDiscountAmount)}", source);
+        Assert.Contains("MonetaryValidationError", source);
+        Assert.Contains("Los puntos deben canjearse en múltiplos de {PointUnit:N0}.", source);
+        Assert.Contains("Cashier monetary redemption failed.", source);
+        Assert.Contains("api/config", source);
+        Assert.Contains("api/redemptions/catalog/{Uri.EscapeDataString(customer.SerialNumber)}", source);
+        Assert.Contains("\"MonetaryDiscount\"", source);
     }
 
     [Fact]
@@ -471,6 +500,7 @@ public sealed class AdminRoutingTests : IClassFixture<AdminRoutingTests.AdminWeb
         Assert.Contains("Cashier customer lookup failed.", source);
         Assert.Contains("Cashier add points failed.", source);
         Assert.Contains("Cashier reward redemption failed.", source);
+        Assert.Contains("Cashier monetary redemption failed.", source);
     }
 
     [Theory]
