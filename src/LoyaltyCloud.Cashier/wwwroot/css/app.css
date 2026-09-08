@@ -1,0 +1,186 @@
+:root {
+    color-scheme: light;
+    --cashier-bg: #f7f3ef;
+    --cashier-card: #fffaf6;
+    --cashier-ink: #251f1a;
+    --cashier-muted: #7a6d63;
+    --cashier-border: #e5d9cf;
+    --cashier-accent: #d83f87;
+    --cashier-accent-dark: #a92865;
+    --cashier-error: #b42318;
+}
+
+* {
+    box-sizing: border-box;
+}
+
+html,
+body {
+    min-height: 100%;
+    margin: 0;
+    font-family: "OpenSansRegular", "Segoe UI", system-ui, sans-serif;
+    background: var(--cashier-bg);
+    color: var(--cashier-ink);
+}
+
+button,
+input {
+    font: inherit;
+}
+
+.cashier-shell {
+    min-height: 100vh;
+    min-height: 100dvh;
+    display: grid;
+    place-items: center;
+    padding: max(20px, env(safe-area-inset-top)) 18px max(24px, env(safe-area-inset-bottom));
+}
+
+.cashier-card {
+    width: min(100%, 430px);
+    display: grid;
+    gap: 18px;
+}
+
+.cashier-card--center {
+    text-align: center;
+}
+
+.eyebrow {
+    margin: 0;
+    color: var(--cashier-accent);
+    font-size: 0.78rem;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+}
+
+h1 {
+    margin: 0;
+    font-size: 2rem;
+    line-height: 1.08;
+}
+
+.muted {
+    margin: 0;
+    color: var(--cashier-muted);
+    line-height: 1.5;
+}
+
+.login-form {
+    display: grid;
+    gap: 10px;
+}
+
+.login-form label {
+    color: var(--cashier-muted);
+    font-size: 0.88rem;
+    font-weight: 700;
+}
+
+.input {
+    width: 100%;
+    min-height: 48px;
+    padding: 12px 14px;
+    border: 1px solid var(--cashier-border);
+    border-radius: 8px;
+    background: white;
+    color: var(--cashier-ink);
+}
+
+.input:focus {
+    border-color: var(--cashier-accent);
+    outline: 3px solid rgba(216, 63, 135, 0.18);
+}
+
+.primary-button,
+.secondary-button,
+.segment {
+    min-height: 48px;
+    border: 0;
+    border-radius: 8px;
+    font-weight: 800;
+}
+
+.primary-button {
+    margin-top: 6px;
+    background: var(--cashier-accent);
+    color: white;
+}
+
+.primary-button:disabled {
+    opacity: 0.55;
+}
+
+.secondary-button {
+    background: white;
+    color: var(--cashier-ink);
+    border: 1px solid var(--cashier-border);
+}
+
+.segmented {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 4px;
+    padding: 4px;
+    border: 1px solid var(--cashier-border);
+    border-radius: 10px;
+    background: white;
+}
+
+.segment {
+    background: transparent;
+    color: var(--cashier-muted);
+}
+
+.segment.active {
+    background: var(--cashier-accent);
+    color: white;
+}
+
+.session-panel {
+    display: grid;
+    gap: 2px;
+    padding: 14px;
+    border: 1px solid var(--cashier-border);
+    border-radius: 8px;
+    background: var(--cashier-card);
+}
+
+.session-panel span,
+.session-panel small,
+.environment {
+    color: var(--cashier-muted);
+    font-size: 0.82rem;
+}
+
+.session-panel strong {
+    overflow-wrap: anywhere;
+}
+
+.environment {
+    margin: 0;
+    text-align: center;
+}
+
+.alert {
+    padding: 12px 14px;
+    border-radius: 8px;
+    line-height: 1.4;
+}
+
+.alert-error {
+    background: #fff1f0;
+    color: var(--cashier-error);
+    border: 1px solid #ffd4cf;
+}
+
+.validation-message,
+.validation-errors {
+    color: var(--cashier-error);
+    font-size: 0.86rem;
+}
+
+#blazor-error-ui {
+    display: none;
+}

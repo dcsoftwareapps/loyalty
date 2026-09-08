@@ -1,0 +1,160 @@
+@page "/"
+@inject CashierApiClient Api
+@inject CashierApiOptions ApiOptions
+@inject CashierSessionService Sessions
+
+<PageTitle>LoyaltyCloud Caja</PageTitle>
+
+<main class="cashier-shell">
+    @if (restoring)
+    {
+        <section class="cashier-card cashier-card--center">
+            <p class="eyebrow">LoyaltyCloud</p>
+            <h1>Preparando caja</h1>
+            <p class="muted">Revisando tu sesión...</p>
+        </section>
+    }
+    else if (session is null)
+    {
+        <section class="cashier-card">
+            <p class="eyebrow">LoyaltyCloud</p>
+            <h1>Iniciar sesión</h1>
+            <p class="muted">Usa el usuario creado en Admin &gt; Personal.</p>
+
+            @if (!string.IsNullOrWhiteSpace(errorMessage))
+            {
+                <div class="alert alert-error">@errorMessage</div>
+            }
+
+            <EditForm Model="login" OnValidSubmit="SignInAsync" FormName="cashier-login" class="login-form">
+                <DataAnnotationsValidator />
+
+                <label for="tenantSlug">Negocio</label>
+                <InputText id="tenantSlug"
+                           class="input"
+                           autocomplete="organization"
+                           disabled="@busy"
+                           @bind-Value="login.TenantSlug" />
+
+                <label for="username">Usuario</label>
+                <InputText id="username"
+                           class="input"
+                           autocomplete="username"
+                           disabled="@busy"
+                           @bind-Value="login.Username" />
+
+                <label for="password">Contraseña</label>
+                <InputText id="password"
+                           type="password"
+                           class="input"
+                           autocomplete="current-password"
+                           disabled="@busy"
+                           @bind-Value="login.Password" />
+
+                <ValidationSummary />
+
+                <button type="submit" class="primary-button" disabled="@IsLoginDisabled">
+                    @(busy ? "Iniciando..." : "Iniciar sesión")
+                </button>
+            </EditForm>
+
+            <p class="environment">API @ApiOptions.EnvironmentName</p>
+        </section>
+    }
+    else
+    {
+        <section class="cashier-card">
+            <p class="eyebrow">LoyaltyCloud Caja</p>
+            <h1>Lista para operar</h1>
+
+            <div class="segmented" role="group" aria-label="Modo de caja">
+                <button type="button" class="segment active">Puntos</button>
+                <button type="button" class="segment">Tarjeta de regalo</button>
+            </div>
+
+            <div class="session-panel">
+                <span>Sesión</span>
+                <strong>@session.Username</strong>
+                <small>@session.Role</small>
+            </div>
+
+            <div class="session-panel">
+                <span>Negocio</span>
+                <strong>@session.TenantSlug</strong>
+                <small>Expira @session.ExpiresAtUtc.ToLocalTime().ToString("dd/MM/yyyy HH:mm")</small>
+            </div>
+
+            <p class="muted">Las operaciones de caja se agregarán en la siguiente fase.</p>
+
+            <button type="button" class="secondary-button" @onclick="LogoutAsync">
+                Cerrar sesión
+            </button>
+        </section>
+    }
+</main>
+
+@code {
+    private readonly LoginModel login = new();
+    private CashierSession? session;
+    private bool restoring = true;
+    private bool busy;
+    private string? errorMessage;
+
+    private bool IsLoginDisabled =>
+        busy
+        || string.IsNullOrWhiteSpace(login.TenantSlug)
+        || string.IsNullOrWhiteSpace(login.Username)
+        || string.IsNullOrWhiteSpace(login.Password);
+
+    protected override async Task OnInitializedAsync()
+    {
+        session = await Sessions.RestoreAsync();
+        restoring = false;
+    }
+
+    private async Task SignInAsync()
+    {
+        if (IsLoginDisabled)
+            return;
+
+        busy = true;
+        errorMessage = null;
+        try
+        {
+            var result = await Api.LoginAsync(login.TenantSlug, login.Username, login.Password);
+            if (!result.Succeeded || result.Session is null)
+            {
+                errorMessage = result.ErrorMessage ?? "No fue posible iniciar sesión.";
+                return;
+            }
+
+            await Sessions.SignInAsync(result.Session);
+            session = result.Session;
+            login.Password = string.Empty;
+        }
+        finally
+        {
+            busy = false;
+        }
+    }
+
+    private async Task LogoutAsync()
+    {
+        await Sessions.LogoutAsync();
+        session = null;
+        errorMessage = null;
+        login.Password = string.Empty;
+    }
+
+    private sealed class LoginModel
+    {
+        [Required(ErrorMessage = "Ingresa el negocio.")]
+        public string TenantSlug { get; set; } = string.Empty;
+
+        [Required(ErrorMessage = "Ingresa el usuario.")]
+        public string Username { get; set; } = string.Empty;
+
+        [Required(ErrorMessage = "Ingresa la contraseña.")]
+        public string Password { get; set; } = string.Empty;
+    }
+}

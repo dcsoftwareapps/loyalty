@@ -75,6 +75,7 @@ La base activa de produccion/UAT es `LoyaltyCloudFree`.
 - Phase 3 de Cashier: canje de Gift Cards desde `/cashier` reutilizando reglas/servicios existentes y aislamiento tenant-aware.
 - Cleanup UX de Cashier: selector segmentado con `Puntos` como modo default y `Tarjeta de regalo` como modo secundario.
 - Cleanup UX de Gift Cards en Cashier: se elimino `Volver a caja` y `Otra Gift Card` aparece solo despues de resolver o canjear una tarjeta.
+- Phase 4A de Cashier Mobile: fundacion .NET MAUI Blazor Hybrid con login real, token en SecureStorage, restauracion de sesion, logout y BaseUrl STG/PROD.
 
 ### Estado de Reportes
 
@@ -106,6 +107,7 @@ La base activa de produccion/UAT es `LoyaltyCloudFree`.
 - Restaurar cliente
 - Hard delete permanente de cliente
 - PWA/offline formal para caja
+- Cashier Mobile Phase 4B: scanner, busqueda de cliente, puntos, canjes, Gift Cards y validacion iOS/Android en dispositivo real
 - Refresh/revocacion/dispositivos confiables para sesiones de caja
 
 ## DEFERRED
