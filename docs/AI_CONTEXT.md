@@ -114,7 +114,7 @@ Current architecture:
 - Tenant user roles currently support `Admin` and `Cashier`. Existing Admin portal pages remain Admin-only.
 - Staff Management exists at `/staff` for tenant `Admin` users to create Admin/Cashier users, reset passwords and activate/deactivate staff without accepting TenantId from the UI.
 - Staff Management reuses `TenantAdminUser.Role`, `TenantAdminUser.IsActive`, `TenantAdminUser.NormalizeUsername(...)` and `IPasswordHashingService`; it blocks deactivating the last active tenant Admin.
-- Cashier web UI exists at `/cashier` as a mobile-first Blazor Server surface for tenant `Admin`/`Cashier` users. It opens in the `Puntos` mode by default through a two-option segmented control: `Puntos` and `Tarjeta de regalo`. It supports QR/manual customer lookup, add-points from purchase amount, monetary discount redemption, catalog reward redemption, tenant-scoped Gift Card lookup/redemption and logout.
+- Cashier web UI exists at `/cashier` as a mobile-first Blazor Server surface for tenant `Admin`/`Cashier` users. It opens in the `Puntos` mode by default through a two-option segmented control: `Puntos` and `Tarjeta de regalo`. It supports QR/manual customer lookup, add-points from purchase amount, monetary discount redemption, catalog reward redemption, tenant-scoped Gift Card lookup/redemption and logout. Gift Card mode uses the segmented control to return to Puntos; `Otra Gift Card` appears only after a Gift Card is resolved or redeemed.
 - `/cashier` uses the tenant auth cookie and server-side API clients. It does not store a bearer token in browser storage and does not expose `AdminApi:SharedSecret`, `CashierAuth:SigningKey` or API signing material to browser JavaScript.
 - Cashier API Phase 1 exists for future mobile/PWA cashier clients: `POST /api/auth/cashier/login` issues a short-lived bearer token signed by `CashierAuth:SigningKey`.
 - Cashier bearer tokens derive tenant/user/role from authenticated token claims and DB revalidation, not from browser-supplied TenantId or operator headers.
@@ -470,6 +470,7 @@ Cashier flow:
 5. Direct codes use `IGiftCardService.GetByCodeAsync(...)`.
 6. Claim URLs use `IGiftCardService.GetByClaimTokenAsync(...)`, which stays inside the currently authenticated tenant. Do not use the public `IGiftCardClaimService` from `/cashier` because it is designed for public claim pages and can resolve tenant from token.
 7. Redemption uses `IGiftCardService.RedeemAsync(...)`, preserving existing balance, status, partial-redemption, idempotency, tenant filters, operator audit and Wallet sync behavior. The Cashier UI does not ask for optional Gift Card transaction reference; Admin Gift Card screens still can.
+8. `Otra Gift Card` resets only the Gift Card workflow and remains in `Tarjeta de regalo`; returning to Puntos is done through the segmented control.
 
 Email delivery:
 

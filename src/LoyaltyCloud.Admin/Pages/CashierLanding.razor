@@ -152,14 +152,14 @@
             </section>
         }
 
-        <div class="kb-actions-inline">
-            <button type="button" class="kb-btn kb-btn--ghost kb-btn--large" @onclick="ResetGiftCardFlow" disabled="@busy">
-                Otra Gift Card
-            </button>
-            <button type="button" class="kb-btn kb-btn--ghost kb-btn--large" @onclick="ReturnToCashierHome" disabled="@busy">
-                Volver a caja
-            </button>
-        </div>
+        @if (giftCardDetail is not null || giftCardSuccessMessage is not null)
+        {
+            <div class="kb-actions-inline">
+                <button type="button" class="kb-btn kb-btn--ghost kb-btn--large" @onclick="ResetGiftCardFlow" disabled="@busy">
+                    Otra Gift Card
+                </button>
+            </div>
+        }
     }
     else if (customer is null)
     {
@@ -1009,14 +1009,6 @@
         giftCardSuccessMessage = null;
         errorMessage = null;
         qrHandled = false;
-    }
-
-    private void ReturnToCashierHome()
-    {
-        ResetGiftCardFlow();
-        ResetPointsFlow();
-        surface = CashierSurface.Points;
-        scannerPurpose = ScannerPurpose.Customer;
     }
 
     private async Task StopScannerAsync()

@@ -421,7 +421,8 @@ public sealed class AdminRoutingTests : IClassFixture<AdminRoutingTests.AdminWeb
         Assert.Contains("Código", source);
         Assert.Contains("Buscar Gift Card", source);
         Assert.Contains("Otra Gift Card", source);
-        Assert.Contains("Volver a caja", source);
+        Assert.Contains("@if (giftCardDetail is not null || giftCardSuccessMessage is not null)", source);
+        Assert.DoesNotContain("Volver a caja", source);
         Assert.Contains("+ Sumar puntos", source);
         Assert.Contains("Canjear recompensa", source);
         Assert.Contains("Escanear otro cliente", source);
@@ -478,8 +479,8 @@ public sealed class AdminRoutingTests : IClassFixture<AdminRoutingTests.AdminWeb
         Assert.Contains("GiftCardCodeRegex", source);
         Assert.Contains("ResetGiftCardFlow()", source);
         Assert.Contains("ResetPointsFlow()", source);
-        Assert.Contains("surface = CashierSurface.Points", source);
         Assert.Contains("giftCardSuccessMessage = result.Detail is null", source);
+        Assert.Contains("surface = CashierSurface.Points", source);
         Assert.DoesNotContain("IGiftCardClaimService GiftCardClaims", source);
         Assert.DoesNotContain("GiftCardClaims.GetAsync", source);
         Assert.DoesNotContain("giftCardReference", source);
