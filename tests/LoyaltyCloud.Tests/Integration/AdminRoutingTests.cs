@@ -392,8 +392,10 @@ public sealed class AdminRoutingTests : IClassFixture<AdminRoutingTests.AdminWeb
         Assert.Contains("Escanear cliente", html);
         Assert.DoesNotContain("Escribir código", html);
         Assert.Contains("ID del cliente", html);
-        Assert.Contains("Gift Cards", html);
-        Assert.Contains("Canjear Gift Card", html);
+        Assert.Contains("Puntos", html);
+        Assert.Contains("Tarjeta de regalo", html);
+        Assert.DoesNotContain("Escanear Gift Card", html);
+        Assert.DoesNotContain("Buscar Gift Card", html);
     }
 
     [Fact]
@@ -406,13 +408,17 @@ public sealed class AdminRoutingTests : IClassFixture<AdminRoutingTests.AdminWeb
         Assert.Contains("@page \"/cashier\"", source);
         Assert.Contains("TenantAuthorizationPolicies.TenantUser", source);
         Assert.Contains("@layout EmptyLayout", source);
+        Assert.Contains("CashierSurface.Points", source);
+        Assert.Contains("private CashierSurface surface = CashierSurface.Points", source);
+        Assert.Contains("class=\"kb-cashier-segmented\"", source);
+        Assert.Contains("SwitchSurfaceAsync(CashierSurface.Points)", source);
+        Assert.Contains("SwitchSurfaceAsync(CashierSurface.GiftCard)", source);
+        Assert.Contains("Tarjeta de regalo", source);
         Assert.Contains("Escanear cliente", source);
         Assert.DoesNotContain("Escribir código", source);
         Assert.Contains("Buscar cliente", source);
-        Assert.Contains("Gift Cards", source);
-        Assert.Contains("Canjear Gift Card", source);
         Assert.Contains("Escanear Gift Card", source);
-        Assert.Contains("Código / QR", source);
+        Assert.Contains("Código", source);
         Assert.Contains("Buscar Gift Card", source);
         Assert.Contains("Otra Gift Card", source);
         Assert.Contains("Volver a caja", source);
@@ -470,8 +476,15 @@ public sealed class AdminRoutingTests : IClassFixture<AdminRoutingTests.AdminWeb
         Assert.Contains("giftCardDetail.Card.CurrentBalance", source);
         Assert.Contains("ScannerPurpose.GiftCard", source);
         Assert.Contains("GiftCardCodeRegex", source);
+        Assert.Contains("ResetGiftCardFlow()", source);
+        Assert.Contains("ResetPointsFlow()", source);
+        Assert.Contains("surface = CashierSurface.Points", source);
+        Assert.Contains("giftCardSuccessMessage = result.Detail is null", source);
         Assert.DoesNotContain("IGiftCardClaimService GiftCardClaims", source);
         Assert.DoesNotContain("GiftCardClaims.GetAsync", source);
+        Assert.DoesNotContain("giftCardReference", source);
+        Assert.DoesNotContain("cashier-gift-card-reference", source);
+        Assert.DoesNotContain("Referencia", source);
         Assert.DoesNotContain("api/giftcards", source, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("KB-", scanner, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("GC-", scanner, StringComparison.OrdinalIgnoreCase);

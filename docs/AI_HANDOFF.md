@@ -2,9 +2,32 @@
 
 Last updated: 2026-09-08
 
-Branch: `feature/cashier-giftcards`
+Branch: `feature/cashier-ux-cleanup`
 
-Last task worked: Cashier Gift Cards Phase 3.
+Last task worked: Cashier UX cleanup after Gift Cards.
+
+## 2026-09-08 - Cashier UX cleanup after Gift Cards
+
+Current branch for this work: `feature/cashier-ux-cleanup`.
+
+Scope:
+
+- Keeps `/cashier` on the same mobile-first Blazor Server surface.
+- Adds a full-width segmented control with `Puntos` and `Tarjeta de regalo`.
+- `Puntos` is the default mode on every page load and is the destination for `Volver a caja`.
+- `Tarjeta de regalo` is secondary and no longer appears as a stacked operation below customer lookup.
+- Switching modes stops the active scanner and clears mode-specific state/messages so customer and Gift Card flows do not leak into each other.
+- The Gift Card detail shown in Cashier is operational only: status, available balance and expiration. It does not show the technical `GC-...` reference.
+- Cashier no longer asks for optional Gift Card transaction reference. `Reference` remains available in Admin Gift Card screens and in the domain/contract; Cashier sends `null` because reference is optional metadata and is not used for security, idempotency or business rules.
+- Scanner remains shared through `wwwroot/js/qr-scanner.js`; the component decides whether the scan is for customer points or Gift Cards.
+
+Validation expected:
+
+- `Category=TenantAdminAuth|Category=CashierAuth|Category=StaffManagement|Category=AdminRouting|Category=SuperAdmin|Category=AdminCustomerPoints|Category=AdminRedemptionFlow|Category=MonetaryRedemption|Category=GiftCards`.
+- `dotnet ef migrations has-pending-model-changes`.
+- `dotnet build .\LoyaltyCloud.sln -c Release`.
+- `git diff --check`.
+- No deploy, database update, commit or push unless explicitly requested.
 
 ## 2026-09-08 - Cashier Gift Cards Phase 3
 
@@ -13,7 +36,7 @@ Current branch for this work: `feature/cashier-giftcards`.
 Scope:
 
 - Extends `/cashier` with a dedicated Gift Card flow separate from loyalty reward/monetary redemption.
-- The initial cashier screen now shows customer scan/manual lookup plus a separate `Gift Cards` section with `Canjear Gift Card`.
+- The initial cashier screen showed customer scan/manual lookup plus a separate `Gift Cards` section with `Canjear Gift Card`; this was later cleaned up into a segmented `Puntos` / `Tarjeta de regalo` control.
 - Removed the redundant `Escribir código` button because the manual customer ID field is already visible.
 - Gift Card lookup accepts direct `GC-....` codes and public claim URLs/QRs.
 - Direct code lookup uses `IGiftCardService.GetByCodeAsync(...)`.
