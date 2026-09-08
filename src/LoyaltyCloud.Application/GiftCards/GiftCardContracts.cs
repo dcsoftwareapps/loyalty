@@ -33,6 +33,7 @@ public interface IGiftCardService
     Task<GiftCardPage> SearchAsync(string? search, GiftCardStatus? status, DateTime? fromUtc, DateTime? toUtc, int page = 1, int pageSize = 25, CancellationToken ct = default);
     Task<GiftCardDetailDto?> GetAsync(Guid id, CancellationToken ct = default);
     Task<GiftCardDetailDto?> GetByCodeAsync(string code, CancellationToken ct = default);
+    Task<GiftCardDetailDto?> GetByClaimTokenAsync(string claimToken, CancellationToken ct = default);
     Task<IssuedGiftCardDto> RotateClaimTokenAsync(Guid id, CancellationToken ct = default);
     Task<GiftCardOperationResult> RedeemAsync(string code, decimal amount, string idempotencyKey, string? reference, string? notes, CancellationToken ct = default);
     Task<GiftCardOperationResult> AdjustAsync(Guid id, decimal amount, string idempotencyKey, string? reference, string? notes, CancellationToken ct = default);

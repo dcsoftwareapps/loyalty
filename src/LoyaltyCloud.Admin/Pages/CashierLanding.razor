@@ -10,13 +10,17 @@
 @using LoyaltyCloud.Admin.Auth
 @using LoyaltyCloud.Application.Config.Queries.GetProgramConfig
 @using LoyaltyCloud.Application.Customers.Queries.GetCustomerBySerial
+@using LoyaltyCloud.Application.GiftCards
 @using LoyaltyCloud.Application.Points.Commands.AddPoints
 @using LoyaltyCloud.Application.Redemptions.Commands.RedeemReward
 @using LoyaltyCloud.Application.Redemptions.Queries.GetRedemptionCatalog
 @using LoyaltyCloud.Common.Constants
+@using LoyaltyCloud.Domain.Enums
 @inject AdminApiClient Api
 @inject AdminApiPointsClient PointsApi
+@inject IGiftCardService GiftCards
 @inject AuthenticationStateProvider AuthenticationStateProvider
+@inject AdminDateTimeFormatter Dates
 @inject IJSRuntime JS
 @inject ILogger<CashierLanding> Logger
 
@@ -34,21 +38,135 @@
         </form>
     </header>
 
-    @if (customer is null)
+    @if (showGiftCardFlow)
+    {
+        <section class="kb-cashier-hero">
+            <p class="kb-muted">Gift Cards</p>
+            <h1>Canjear Gift Card</h1>
+            <button type="button"
+                    class="kb-btn kb-btn--primary kb-btn--large kb-btn--block"
+                    @onclick="@(() => StartScannerAsync(ScannerPurpose.GiftCard))"
+                    disabled="@(busy || scanning)">
+                @(scanning ? "Escaneando..." : "Escanear Gift Card")
+            </button>
+        </section>
+
+        @if (scanning)
+        {
+            <section class="kb-qr-scanner kb-cashier-scanner" aria-label="Escáner de Gift Card">
+                <video @ref="qrVideo" class="kb-qr-video" autoplay muted playsinline></video>
+                <p>Apunta al QR de la Gift Card.</p>
+                <button type="button" class="kb-btn kb-btn--ghost kb-btn--block" @onclick="CancelScannerAsync">
+                    Cancelar
+                </button>
+            </section>
+        }
+
+        <section class="kb-cashier-panel">
+            <label for="cashier-gift-card-code">Código / QR</label>
+            <input id="cashier-gift-card-code"
+                   type="text"
+                   inputmode="text"
+                   @bind="giftCardCodeInput"
+                   @bind:event="oninput"
+                   @onkeydown="HandleGiftCardCodeKeyDownAsync"
+                   placeholder="GC-0000-0000-0000"
+                   autocomplete="off" />
+            <button type="button"
+                    class="kb-btn kb-btn--primary kb-btn--large kb-btn--block"
+                    @onclick="LookupGiftCardAsync"
+                    disabled="@(busy || string.IsNullOrWhiteSpace(giftCardCodeInput))">
+                @(busy ? "Buscando..." : "Buscar Gift Card")
+            </button>
+        </section>
+
+        @if (giftCardSuccessMessage is not null)
+        {
+            <div class="kb-form-success kb-cashier-alert">@giftCardSuccessMessage</div>
+        }
+
+        @if (giftCardDetail is not null)
+        {
+            <section class="kb-cashier-panel">
+                <h2>Saldo disponible</h2>
+                <div class="kb-gift-summary-grid">
+                    <div>
+                        <span>Referencia</span>
+                        <strong>@giftCardDetail.Card.Code</strong>
+                    </div>
+                    <div>
+                        <span>Estado</span>
+                        <strong>@GiftCardStatusLabel(giftCardDetail.Card.Status)</strong>
+                    </div>
+                    <div>
+                        <span>Saldo</span>
+                        <strong>@FormatGiftCardMoney(giftCardDetail.Card.CurrentBalance, giftCardDetail.Card.Currency)</strong>
+                    </div>
+                    <div>
+                        <span>Expira</span>
+                        <strong>@Dates.DateNumeric(giftCardDetail.Card.ExpiresAtUtc, "Sin expiración")</strong>
+                    </div>
+                </div>
+
+                <label for="cashier-gift-card-amount">Monto a canjear</label>
+                <input id="cashier-gift-card-amount"
+                       type="number"
+                       inputmode="decimal"
+                       min="0.01"
+                       step="0.01"
+                       value="@giftCardAmountInput"
+                       @oninput="HandleGiftCardAmountInput"
+                       placeholder="0.00" />
+                <label for="cashier-gift-card-reference">Referencia <small>(opcional)</small></label>
+                <input id="cashier-gift-card-reference"
+                       type="text"
+                       maxlength="150"
+                       @bind="giftCardReference"
+                       @bind:event="oninput"
+                       autocomplete="off" />
+
+                @if (IsGiftCardAmountPreviewValid)
+                {
+                    <div class="kb-gift-balance-preview">
+                        <span>Saldo actual<strong>@FormatGiftCardMoney(giftCardDetail.Card.CurrentBalance, giftCardDetail.Card.Currency)</strong></span>
+                        <span>Canje<strong>-@FormatGiftCardMoney(GiftCardAmount, giftCardDetail.Card.Currency)</strong></span>
+                        <span>Saldo restante<strong>@FormatGiftCardMoney(giftCardDetail.Card.CurrentBalance - GiftCardAmount, giftCardDetail.Card.Currency)</strong></span>
+                    </div>
+                }
+
+                @if (GiftCardValidationError is not null)
+                {
+                    <div class="kb-form-error">@GiftCardValidationError</div>
+                }
+
+                <button type="button"
+                        class="kb-btn kb-btn--primary kb-btn--large kb-btn--block"
+                        @onclick="RedeemGiftCardAsync"
+                        disabled="@(busy || GiftCardValidationError is not null)">
+                    @(busy ? "Procesando..." : "Confirmar canje")
+                </button>
+            </section>
+        }
+
+        <div class="kb-actions-inline">
+            <button type="button" class="kb-btn kb-btn--ghost kb-btn--large" @onclick="ResetGiftCardFlow" disabled="@busy">
+                Otra Gift Card
+            </button>
+            <button type="button" class="kb-btn kb-btn--ghost kb-btn--large" @onclick="ReturnToCashierHome" disabled="@busy">
+                Volver a caja
+            </button>
+        </div>
+    }
+    else if (customer is null)
     {
         <section class="kb-cashier-hero">
             <p class="kb-muted">Acceso de caja</p>
             <h1>Escanea o escribe el ID del cliente</h1>
             <button type="button"
                     class="kb-btn kb-btn--primary kb-btn--large kb-btn--block"
-                    @onclick="StartScannerAsync"
+                    @onclick="@(() => StartScannerAsync(ScannerPurpose.Customer))"
                     disabled="@(busy || scanning)">
                 @(scanning ? "Escaneando..." : "Escanear cliente")
-            </button>
-            <button type="button"
-                    class="kb-btn kb-btn--ghost kb-btn--large kb-btn--block"
-                    @onclick="FocusManualEntry">
-                Escribir código
             </button>
         </section>
 
@@ -78,6 +196,16 @@
                     @onclick="LoadCustomerAsync"
                     disabled="@(busy || string.IsNullOrWhiteSpace(serialInput))">
                 @(busy ? "Buscando..." : "Buscar cliente")
+            </button>
+        </section>
+
+        <section class="kb-cashier-panel">
+            <p class="kb-muted">Gift Cards</p>
+            <button type="button"
+                    class="kb-btn kb-btn--secondary kb-btn--large kb-btn--block"
+                    @onclick="ShowGiftCardFlow"
+                    disabled="@busy">
+                Canjear Gift Card
             </button>
         </section>
     }
@@ -265,23 +393,31 @@
 
 @code {
     private static readonly Regex SerialRegex = new(@"KB-[A-Z0-9]{7}", RegexOptions.IgnoreCase | RegexOptions.Compiled);
+    private static readonly Regex GiftCardCodeRegex = new(@"GC-[A-Z0-9]{4}-[A-Z0-9]{4}-[A-Z0-9]{4}", RegexOptions.IgnoreCase | RegexOptions.Compiled);
 
     private string serialInput = string.Empty;
     private string amountInput = string.Empty;
+    private string giftCardCodeInput = string.Empty;
+    private string giftCardAmountInput = string.Empty;
+    private string? giftCardReference;
     private string currentUsername = "Caja";
     private CustomerDetailDto? customer;
     private IReadOnlyList<RewardCatalogItemDto>? catalog;
     private RewardCatalogItemDto? selectedReward;
+    private GiftCardDetailDto? giftCardDetail;
     private decimal? pointsPerPesoUnit;
     private int monetaryPoints;
     private string? errorMessage;
     private string? successMessage;
+    private string? giftCardSuccessMessage;
     private bool showMonetaryDiscount;
+    private bool showGiftCardFlow;
     private bool busy;
     private bool scanning;
     private bool scannerStarted;
     private bool qrHandled;
     private bool catalogLoading;
+    private ScannerPurpose scannerPurpose = ScannerPurpose.Customer;
     private CashierMode mode = CashierMode.None;
     private ElementReference qrVideo;
     private DotNetObjectReference<CashierLanding>? dotNetRef;
@@ -289,6 +425,11 @@
     private string CurrentUsername => currentUsername;
     private decimal PurchaseAmount => TryParseAmount(amountInput, out var parsed) ? parsed : 0m;
     private bool IsPurchaseAmountValid => PurchaseAmount > 0m;
+    private decimal GiftCardAmount => TryParseAmount(giftCardAmountInput, out var parsed) ? parsed : 0m;
+    private bool IsGiftCardAmountPreviewValid => giftCardDetail is not null
+        && GiftCardAmount > 0
+        && GiftCardAmount <= giftCardDetail.Card.CurrentBalance
+        && DecimalScale(GiftCardAmount) <= 2;
     private IReadOnlyList<RewardCatalogItemDto> availableRewards => catalog?.Where(reward => reward.CanAfford).ToList() ?? [];
     private int PointUnit => pointsPerPesoUnit.HasValue && pointsPerPesoUnit.Value > 0
         && decimal.Truncate(pointsPerPesoUnit.Value) == pointsPerPesoUnit.Value
@@ -334,6 +475,25 @@
         }
     }
 
+    private string? GiftCardValidationError
+    {
+        get
+        {
+            if (giftCardDetail is null)
+                return null;
+            if (giftCardDetail.Card.Status != GiftCardStatus.Active)
+                return "Esta Gift Card no está activa.";
+            if (GiftCardAmount <= 0)
+                return "Ingresa un monto mayor a $0.";
+            if (DecimalScale(GiftCardAmount) > 2)
+                return "Usa máximo dos decimales.";
+            if (GiftCardAmount > giftCardDetail.Card.CurrentBalance)
+                return "El monto no puede ser mayor al saldo disponible.";
+
+            return null;
+        }
+    }
+
     protected override async Task OnInitializedAsync()
     {
         var principal = (await AuthenticationStateProvider.GetAuthenticationStateAsync()).User;
@@ -342,16 +502,12 @@
             ?? "Caja";
     }
 
-    private void FocusManualEntry()
+    private async Task StartScannerAsync(ScannerPurpose purpose)
     {
         errorMessage = null;
         successMessage = null;
-    }
-
-    private async Task StartScannerAsync()
-    {
-        errorMessage = null;
-        successMessage = null;
+        giftCardSuccessMessage = null;
+        scannerPurpose = purpose;
         scanning = true;
         qrHandled = false;
         await InvokeAsync(StateHasChanged);
@@ -397,6 +553,13 @@
             qrHandled = true;
             await StopScannerAsync();
 
+            if (scannerPurpose == ScannerPurpose.GiftCard)
+            {
+                await HandleGiftCardQrAsync(rawValue);
+                StateHasChanged();
+                return;
+            }
+
             var serial = ExtractSerial(rawValue);
             if (serial is null)
             {
@@ -416,6 +579,12 @@
     {
         if (e.Key == "Enter")
             await LoadCustomerAsync();
+    }
+
+    private async Task HandleGiftCardCodeKeyDownAsync(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter")
+            await LookupGiftCardAsync();
     }
 
     private async Task LoadCustomerAsync()
@@ -469,6 +638,15 @@
         showMonetaryDiscount = false;
         errorMessage = null;
         successMessage = null;
+    }
+
+    private void ShowGiftCardFlow()
+    {
+        showGiftCardFlow = true;
+        errorMessage = null;
+        successMessage = null;
+        giftCardSuccessMessage = null;
+        mode = CashierMode.None;
     }
 
     private async Task ShowRedeemAsync()
@@ -644,6 +822,105 @@
         }
     }
 
+    private async Task HandleGiftCardQrAsync(string rawValue)
+    {
+        var code = await ResolveGiftCardCodeAsync(rawValue);
+        if (code is null)
+        {
+            errorMessage = "Este QR no contiene una Gift Card válida.";
+            qrHandled = false;
+            return;
+        }
+
+        giftCardCodeInput = code;
+        await LookupGiftCardAsync();
+    }
+
+    private async Task LookupGiftCardAsync()
+    {
+        if (busy)
+            return;
+
+        var code = await ResolveGiftCardCodeAsync(giftCardCodeInput);
+        if (code is null)
+        {
+            errorMessage = "Ingresa un código de Gift Card válido.";
+            return;
+        }
+
+        giftCardCodeInput = code;
+        errorMessage = null;
+        giftCardSuccessMessage = null;
+        busy = true;
+
+        try
+        {
+            giftCardDetail = await GiftCards.GetByCodeAsync(code);
+            if (giftCardDetail is null)
+            {
+                errorMessage = "No encontramos una Gift Card con ese código.";
+                return;
+            }
+
+            giftCardAmountInput = giftCardDetail.Card.Status == GiftCardStatus.Active
+                ? giftCardDetail.Card.CurrentBalance.ToString("0.##", CultureInfo.InvariantCulture)
+                : string.Empty;
+            giftCardReference = null;
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Cashier Gift Card lookup failed.");
+            errorMessage = "No fue posible consultar la Gift Card. Intenta nuevamente.";
+        }
+        finally
+        {
+            busy = false;
+            qrHandled = false;
+        }
+    }
+
+    private async Task RedeemGiftCardAsync()
+    {
+        if (giftCardDetail is null || busy || GiftCardValidationError is not null)
+            return;
+
+        errorMessage = null;
+        giftCardSuccessMessage = null;
+        busy = true;
+
+        try
+        {
+            var result = await GiftCards.RedeemAsync(
+                giftCardDetail.Card.Code,
+                GiftCardAmount,
+                Guid.NewGuid().ToString("N"),
+                giftCardReference,
+                null);
+
+            if (!result.Success)
+            {
+                errorMessage = result.Error ?? "No fue posible completar el canje.";
+                if (result.Detail is not null)
+                    giftCardDetail = result.Detail;
+                return;
+            }
+
+            giftCardDetail = result.Detail;
+            giftCardSuccessMessage = "Canje realizado.";
+            giftCardAmountInput = string.Empty;
+            giftCardReference = null;
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Cashier Gift Card redemption failed.");
+            errorMessage = "No fue posible completar el canje. Intenta nuevamente.";
+        }
+        finally
+        {
+            busy = false;
+        }
+    }
+
     private async Task RefreshCustomerAsync(string serial)
     {
         var result = await Api.GetAsync<CustomerDetailDto>($"api/customers/{Uri.EscapeDataString(serial)}");
@@ -681,6 +958,12 @@
         errorMessage = null;
     }
 
+    private void HandleGiftCardAmountInput(ChangeEventArgs e)
+    {
+        giftCardAmountInput = e.Value?.ToString() ?? string.Empty;
+        errorMessage = null;
+    }
+
     private void Reset()
     {
         customer = null;
@@ -695,6 +978,23 @@
         successMessage = null;
         mode = CashierMode.None;
         qrHandled = false;
+    }
+
+    private void ResetGiftCardFlow()
+    {
+        giftCardDetail = null;
+        giftCardCodeInput = string.Empty;
+        giftCardAmountInput = string.Empty;
+        giftCardReference = null;
+        giftCardSuccessMessage = null;
+        errorMessage = null;
+        qrHandled = false;
+    }
+
+    private void ReturnToCashierHome()
+    {
+        ResetGiftCardFlow();
+        showGiftCardFlow = false;
     }
 
     private async Task StopScannerAsync()
@@ -729,6 +1029,32 @@
         return match.Success ? match.Value.ToUpperInvariant() : null;
     }
 
+    private async Task<string?> ResolveGiftCardCodeAsync(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+            return null;
+
+        var decoded = Uri.UnescapeDataString(value.Trim());
+        var match = GiftCardCodeRegex.Match(decoded);
+        if (match.Success)
+            return match.Value.ToUpperInvariant();
+
+        if (!Uri.TryCreate(decoded, UriKind.Absolute, out var uri))
+            return null;
+
+        const string marker = "/giftcards/claim/";
+        var index = uri.AbsolutePath.IndexOf(marker, StringComparison.OrdinalIgnoreCase);
+        if (index < 0)
+            return null;
+
+        var token = Uri.UnescapeDataString(uri.AbsolutePath[(index + marker.Length)..]);
+        if (string.IsNullOrWhiteSpace(token))
+            return null;
+
+        var card = await GiftCards.GetByClaimTokenAsync(token);
+        return card?.Card.Code;
+    }
+
     private static bool TryParseAmount(string? value, out decimal amount)
     {
         amount = 0m;
@@ -738,6 +1064,8 @@
         var normalized = value.Trim().Replace(',', '.');
         return decimal.TryParse(normalized, NumberStyles.Number, CultureInfo.InvariantCulture, out amount);
     }
+
+    private static int DecimalScale(decimal value) => (decimal.GetBits(value)[3] >> 16) & 0x7F;
 
     private static decimal? ReadPointsPerPesoUnit(IReadOnlyList<ConfigDto> entries)
     {
@@ -751,6 +1079,17 @@
 
     private static string FormatMoney(decimal value) => $"${value:N2} MXN";
 
+    private static string FormatGiftCardMoney(decimal value, string currency) => $"${value:N2} {currency}";
+
+    private static string GiftCardStatusLabel(GiftCardStatus status) => status switch
+    {
+        GiftCardStatus.Active => "Activa",
+        GiftCardStatus.FullyRedeemed => "Canjeada",
+        GiftCardStatus.Expired => "Expirada",
+        GiftCardStatus.Cancelled => "Cancelada",
+        _ => status.ToString()
+    };
+
     public async ValueTask DisposeAsync()
     {
         await StopScannerAsync();
@@ -762,6 +1101,12 @@
         None,
         AddPoints,
         Redeem
+    }
+
+    private enum ScannerPurpose
+    {
+        Customer,
+        GiftCard
     }
 
     private sealed record RedeemRedemptionRequest(

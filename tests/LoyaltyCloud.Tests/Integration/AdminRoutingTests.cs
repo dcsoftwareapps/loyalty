@@ -390,8 +390,10 @@ public sealed class AdminRoutingTests : IClassFixture<AdminRoutingTests.AdminWeb
         Assert.Null(response.Headers.Location);
         Assert.Contains("Acceso de caja", html);
         Assert.Contains("Escanear cliente", html);
-        Assert.Contains("Escribir código", html);
+        Assert.DoesNotContain("Escribir código", html);
         Assert.Contains("ID del cliente", html);
+        Assert.Contains("Gift Cards", html);
+        Assert.Contains("Canjear Gift Card", html);
     }
 
     [Fact]
@@ -405,8 +407,15 @@ public sealed class AdminRoutingTests : IClassFixture<AdminRoutingTests.AdminWeb
         Assert.Contains("TenantAuthorizationPolicies.TenantUser", source);
         Assert.Contains("@layout EmptyLayout", source);
         Assert.Contains("Escanear cliente", source);
-        Assert.Contains("Escribir código", source);
+        Assert.DoesNotContain("Escribir código", source);
         Assert.Contains("Buscar cliente", source);
+        Assert.Contains("Gift Cards", source);
+        Assert.Contains("Canjear Gift Card", source);
+        Assert.Contains("Escanear Gift Card", source);
+        Assert.Contains("Código / QR", source);
+        Assert.Contains("Buscar Gift Card", source);
+        Assert.Contains("Otra Gift Card", source);
+        Assert.Contains("Volver a caja", source);
         Assert.Contains("+ Sumar puntos", source);
         Assert.Contains("Canjear recompensa", source);
         Assert.Contains("Escanear otro cliente", source);
@@ -439,6 +448,33 @@ public sealed class AdminRoutingTests : IClassFixture<AdminRoutingTests.AdminWeb
         Assert.DoesNotContain("new RedeemRewardCommand", source, StringComparison.Ordinal);
         Assert.DoesNotContain("new RedeemMonetaryDiscountCommand", source, StringComparison.Ordinal);
         Assert.DoesNotContain("api/redemptions/monetary", source, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    [Trait("Category", "AdminRouting")]
+    [Trait("Category", "CashierAuth")]
+    [Trait("Category", "GiftCards")]
+    public void Cashier_page_reuses_existing_gift_card_service_without_new_endpoints_or_public_claim_context()
+    {
+        var source = File.ReadAllText(Path.Combine(GetRepositoryRoot(), "src", "LoyaltyCloud.Admin", "Pages", "CashierLanding.razor"));
+        var scanner = File.ReadAllText(Path.Combine(GetRepositoryRoot(), "src", "LoyaltyCloud.Admin", "wwwroot", "js", "qr-scanner.js"));
+
+        Assert.Contains("@inject IGiftCardService GiftCards", source);
+        Assert.Contains("GiftCards.GetByCodeAsync(code)", source);
+        Assert.Contains("GiftCards.GetByClaimTokenAsync(token)", source);
+        Assert.Contains("GiftCards.RedeemAsync(", source);
+        Assert.Contains("Guid.NewGuid().ToString(\"N\")", source);
+        Assert.Contains("GiftCardValidationError", source);
+        Assert.Contains("GiftCardStatus.Active", source);
+        Assert.Contains("DecimalScale(GiftCardAmount)", source);
+        Assert.Contains("giftCardDetail.Card.CurrentBalance", source);
+        Assert.Contains("ScannerPurpose.GiftCard", source);
+        Assert.Contains("GiftCardCodeRegex", source);
+        Assert.DoesNotContain("IGiftCardClaimService GiftCardClaims", source);
+        Assert.DoesNotContain("GiftCardClaims.GetAsync", source);
+        Assert.DoesNotContain("api/giftcards", source, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("KB-", scanner, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("GC-", scanner, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]
@@ -484,6 +520,8 @@ public sealed class AdminRoutingTests : IClassFixture<AdminRoutingTests.AdminWeb
         Assert.Contains("await StopScannerAsync();", source);
         Assert.Contains("[JSInvokable]", source);
         Assert.Contains("public async Task OnQrDetected(string rawValue)", source);
+        Assert.Contains("StartScannerAsync(ScannerPurpose.Customer)", source);
+        Assert.Contains("StartScannerAsync(ScannerPurpose.GiftCard)", source);
     }
 
     [Fact]
@@ -501,6 +539,8 @@ public sealed class AdminRoutingTests : IClassFixture<AdminRoutingTests.AdminWeb
         Assert.Contains("Cashier add points failed.", source);
         Assert.Contains("Cashier reward redemption failed.", source);
         Assert.Contains("Cashier monetary redemption failed.", source);
+        Assert.Contains("Cashier Gift Card lookup failed.", source);
+        Assert.Contains("Cashier Gift Card redemption failed.", source);
     }
 
     [Theory]
@@ -658,6 +698,7 @@ public sealed class AdminRoutingTests : IClassFixture<AdminRoutingTests.AdminWeb
     [InlineData("/levels")]
     [InlineData("/marketing-notifications")]
     [InlineData("/giftcards/redeem")]
+    [InlineData("/giftcards/settings")]
     [InlineData("/staff")]
     public async Task Cashier_authenticated_user_cannot_access_current_admin_portal(string path)
     {

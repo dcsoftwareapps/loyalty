@@ -105,6 +105,20 @@ internal sealed class GiftCardService(AppDbContext db, IDbContextFactory<AppDbCo
 
     public async Task<GiftCardDetailDto?> GetAsync(Guid id, CancellationToken ct = default) { await EnabledConfigurationAsync(ct); var card = await db.GiftCards.AsNoTracking().SingleOrDefaultAsync(x => x.Id == id, ct); return card is null ? null : await DetailAsync(card, ct); }
     public async Task<GiftCardDetailDto?> GetByCodeAsync(string code, CancellationToken ct = default) { await EnabledConfigurationAsync(ct); var normalized = code.Trim().ToUpperInvariant(); var card = await db.GiftCards.SingleOrDefaultAsync(x => x.PublicCode == normalized, ct); if (card is null) return null; await PersistExpirationAsync(card, ct); return await DetailAsync(card, ct); }
+    public async Task<GiftCardDetailDto?> GetByClaimTokenAsync(string claimToken, CancellationToken ct = default)
+    {
+        await EnabledConfigurationAsync(ct);
+        if (string.IsNullOrWhiteSpace(claimToken) || claimToken.Length > 256)
+            return null;
+
+        var hash = GiftCard.HashClaimToken(claimToken.Trim());
+        var card = await db.GiftCards.SingleOrDefaultAsync(x => x.ClaimTokenHash == hash && !x.ClaimRevoked, ct);
+        if (card is null)
+            return null;
+
+        await PersistExpirationAsync(card, ct);
+        return await DetailAsync(card, ct);
+    }
 
     public async Task<IssuedGiftCardDto> RotateClaimTokenAsync(Guid id, CancellationToken ct = default)
     {

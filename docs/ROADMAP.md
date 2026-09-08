@@ -72,6 +72,7 @@ La base activa de produccion/UAT es `LoyaltyCloudFree`.
 - Phase 1 de autenticacion Cashier: login API movil seguro, bearer token de corta vida y autorizacion para operaciones de caja existentes.
 - Administracion de Personal para crear Admin/Cashier, resetear password, activar/desactivar usuarios y proteger el ultimo Admin activo.
 - Phase 2 de Cashier: UI mobile-first en `/cashier` para buscar cliente por QR/manual, sumar puntos por monto de compra, canjear descuento en dinero/recompensas de catalogo y cerrar sesion.
+- Phase 3 de Cashier: canje de Gift Cards desde `/cashier` reutilizando reglas/servicios existentes y aislamiento tenant-aware.
 
 ### Estado de Reportes
 
@@ -104,7 +105,6 @@ La base activa de produccion/UAT es `LoyaltyCloudFree`.
 - Hard delete permanente de cliente
 - PWA/offline formal para caja
 - Refresh/revocacion/dispositivos confiables para sesiones de caja
-- Endpoints Cashier para Gift Cards
 
 ## DEFERRED
 

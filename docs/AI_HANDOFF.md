@@ -2,9 +2,33 @@
 
 Last updated: 2026-09-08
 
-Branch: `feature/cashier-pwa`
+Branch: `feature/cashier-giftcards`
 
-Last task worked: Cashier mobile-first UI / PWA Phase 2.
+Last task worked: Cashier Gift Cards Phase 3.
+
+## 2026-09-08 - Cashier Gift Cards Phase 3
+
+Current branch for this work: `feature/cashier-giftcards`.
+
+Scope:
+
+- Extends `/cashier` with a dedicated Gift Card flow separate from loyalty reward/monetary redemption.
+- The initial cashier screen now shows customer scan/manual lookup plus a separate `Gift Cards` section with `Canjear Gift Card`.
+- Removed the redundant `Escribir código` button because the manual customer ID field is already visible.
+- Gift Card lookup accepts direct `GC-....` codes and public claim URLs/QRs.
+- Direct code lookup uses `IGiftCardService.GetByCodeAsync(...)`.
+- Claim URL lookup uses `IGiftCardService.GetByClaimTokenAsync(...)`, a tenant-scoped service method that preserves the authenticated cashier tenant. Do not use the public `IGiftCardClaimService` from `/cashier` because it is designed for public claim pages and can resolve tenant from token.
+- Gift Card redemption uses `IGiftCardService.RedeemAsync(...)`, preserving existing balance, status, partial-redemption, idempotency, operator audit, tenant isolation and Wallet sync behavior.
+- No new Cashier API endpoints, schema changes or migrations are expected for this slice.
+
+Validation expected:
+
+- `Category=TenantAdminAuth|Category=CashierAuth|Category=StaffManagement|Category=AdminRouting|Category=SuperAdmin|Category=AdminCustomerPoints|Category=AdminRedemptionFlow|Category=GiftCards`.
+- Existing Gift Card domain/persistence/isolation regressions where practical.
+- `dotnet ef migrations has-pending-model-changes`.
+- `dotnet build .\LoyaltyCloud.sln -c Release`.
+- `git diff --check`.
+- No deploy, database update, commit or push unless explicitly requested.
 
 ## 2026-09-08 - Cashier mobile-first UI Phase 2
 
