@@ -1,10 +1,147 @@
 # LoyaltyCloud - AI Handoff
 
-Last updated: 2026-09-01
+Last updated: 2026-09-08
 
-Branch: `feature/gift-card-email-delivery`
+Branch: `feature/cashier-pwa`
 
-Last task worked: Gift Card email delivery.
+Last task worked: Cashier mobile-first UI / PWA Phase 2.
+
+## 2026-09-08 - Cashier mobile-first UI Phase 2
+
+Current branch for this work: `feature/cashier-pwa`.
+
+Scope:
+
+- Converts `/cashier` from a temporary landing into a mobile-first Blazor Server cashier surface.
+- Cashier users continue to log in through the existing tenant login and land on `/cashier`; tenant Admin users still land on `/dashboard`.
+- `/cashier` uses `TenantAuthorizationPolicies.TenantUser`, so `Admin` and `Cashier` tenant users can open it, while Admin portal pages remain Admin-only.
+- The page supports QR scanner and manual customer ID entry.
+- QR scanning reuses `wwwroot/js/qr-scanner.js` / `window.kbeautyQrScanner` and includes a `scannerStarted` guard so disposal does not call JS before the component is interactive.
+- The customer lookup path reuses `GET /api/customers/{serialNumber}`.
+- Add-points reuses `POST /api/points` through the existing purchase-amount contract; the UI labels the input as purchase amount, not raw points.
+- Reward redemption reuses `GET /api/redemptions/catalog/{serialNumber}` and `POST /api/redemptions`, matching the existing Admin redemption flow.
+- Gift Cards, refresh tokens, trusted-device management, offline transactions, MAUI/native shell and new API endpoints are intentionally out of scope.
+
+Auth/security:
+
+- The `/cashier` web UI is server-side Blazor and uses the tenant auth cookie.
+- It does not store a bearer token in `localStorage` or `sessionStorage`.
+- It does not expose `AdminApi:SharedSecret`, `CashierAuth:SigningKey` or any signing material to browser JavaScript.
+- Existing Cashier bearer auth remains available for future standalone/mobile clients through `POST /api/auth/cashier/login`; Phase 2 does not redesign that API.
+
+Validation expected:
+
+- `Category=TenantAdminAuth|Category=CashierAuth|Category=StaffManagement|Category=AdminRouting|Category=SuperAdmin`.
+- Add relevant Admin customer points/redemption/cashier source guardrails if touched.
+- `dotnet ef migrations has-pending-model-changes`.
+- `dotnet build .\LoyaltyCloud.sln -c Release`.
+- `git diff --check`.
+- No deploy, database update, commit or push.
+
+## 2026-09-07 - Staff Management
+
+Current branch for this work: `feature/staff-management`.
+
+Scope:
+
+- Adds tenant Admin page `/staff` under Admin navigation section `Gestión` as `Personal`.
+- Only tenant users with role `Admin` can open the page. `Cashier` users remain blocked from the Admin portal.
+- Staff management lists only `TenantAdminUser` rows for the current tenant.
+- Tenant Admin can create `Admin` or `Cashier` users, reset passwords, and activate/deactivate users.
+- Passwords are never displayed, returned by DTOs or stored in plaintext. All password writes use `IPasswordHashingService`.
+- Usernames use `TenantAdminUser.NormalizeUsername(...)`; duplicate usernames are rejected inside the same tenant while the same username can exist in another tenant.
+- Deactivating the last active `Admin` in a tenant is blocked.
+- Role editing after creation was intentionally not included in this first Staff Management slice.
+
+No schema change is expected. This reuses existing `TenantAdminUser.Role` and `TenantAdminUser.IsActive`.
+
+Remaining future work:
+
+- Dedicated cashier UI/PWA/mobile surface.
+- Refresh-token/revocation/trusted-device strategy.
+- Cashier Gift Card operational endpoints.
+
+Validation expected:
+
+- `Category=StaffManagement`.
+- Related tenant/admin auth, cashier auth, admin routing and super admin regressions.
+- `dotnet ef migrations has-pending-model-changes`.
+- `dotnet build .\LoyaltyCloud.sln -c Release`.
+- No deploy, database update, commit or push.
+
+## 2026-09-07 - Cashier API authentication Phase 1
+
+Current branch for this work: `feature/cashier-api-auth`.
+
+Scope:
+
+- Adds `POST /api/auth/cashier/login` in `LoyaltyCloud.API` for future mobile/PWA cashier clients.
+- Login accepts only tenant slug, username and password. It resolves tenant by slug, verifies operational tenant/subscription state, sets `TenantContext`, looks up `TenantAdminUser` by normalized username and verifies the password through `IPasswordHashingService`.
+- Issues short-lived bearer tokens signed with `CashierAuth:SigningKey`. Tokens include tenant id, tenant slug, user/operator id, username and role claims.
+- Adds bearer authentication and request middleware that revalidates tenant and tenant user against SQL before setting `TenantContext`.
+- Cashier bearer auth is allowed only on existing operational endpoints for customers, points and redemptions. Admin-only API areas such as config, billing, reports, campaigns, rewards, levels, Wallet branding, staff and platform remain blocked.
+- Existing Admin -> API HMAC using `AdminApi:SharedSecret` is preserved. Do not embed that secret in browser/PWA/mobile clients.
+- API overwrites `X-Operator-Id` from the authenticated bearer user so client-provided operator ids are not trusted.
+- Adds a small fixed-window rate limit to cashier login: 10 attempts per 5 minutes per remote IP.
+
+Configuration:
+
+- `CashierAuth:Issuer`.
+- `CashierAuth:Audience`.
+- `CashierAuth:AccessTokenMinutes` default: 60.
+- `CashierAuth:SigningKey` required secret, at least 32 UTF-8 bytes; recommended Key Vault secret name: `loyaltycloud-cashier-auth-signing-key`.
+
+No schema change is expected for Phase 1. It reuses `TenantAdminUser.Role` from Phase 0 and existing tenant/user tables.
+
+Remaining future work:
+
+- Dedicated cashier UI/PWA/mobile surface.
+- Refresh-token/revocation/trusted-device strategy.
+- Cashier Gift Card operational endpoints.
+
+Validation expected:
+
+- `Category=CashierAuth` tests.
+- Related tenant/admin auth, redemption and points regressions where practical.
+- `dotnet ef migrations has-pending-model-changes`.
+- `dotnet build .\LoyaltyCloud.sln -c Release`.
+- No deploy, database update, commit or push.
+
+## 2026-09-07 - Cashier authentication roles Phase 0
+
+Current branch for this work: `feature/cashier-auth-roles`.
+
+Scope:
+
+- Introduces a persisted `TenantAdminUser.Role` with supported values `Admin` and `Cashier`.
+- Existing and newly provisioned tenant admin users default to `Admin`.
+- Tenant login emits a standard role claim from the persisted user role.
+- Cookie validation rehydrates the role claim from the database so historical cookies without the claim and changed roles are reconciled from the server-side source of truth.
+- Tenant authorization policies are centralized: `TenantUser`, `TenantAdmin` and `CashierOperations`.
+- The current Admin portal remains Admin-only. Phase 0 intentionally does not add `/cashier`, mobile JWT/auth tokens or cashier API endpoints.
+- Super Admin/platform auth remains separate through `loyaltycloud.platform.auth` and the `SuperAdmin` role.
+- Existing Admin-to-API HMAC remains unchanged and remains server-to-server only. Do not embed `AdminApi:SharedSecret` in any future mobile/PWA/native client.
+
+Migration:
+
+- `20260907162223_AddTenantAdminUserRole`.
+- Adds required `TenantAdminUsers.Role` as `nvarchar(30)` with default `Admin`.
+- Existing rows are backfilled by the SQL default when the migration is applied.
+
+Remaining future work:
+
+- Dedicated `/cashier` UI or PWA/mobile surface.
+- Mobile-safe server-issued sessions/tokens.
+- Cashier API authentication/authorization.
+- Gift Card cashier API endpoints.
+
+Validation expected:
+
+- Tenant admin auth and cashier auth focused tests.
+- Admin routing tests for Cashier denial on current Admin pages.
+- `dotnet ef migrations has-pending-model-changes`.
+- `dotnet build .\LoyaltyCloud.sln -c Release`.
+- No deploy, database update, commit or push.
 
 ## 2026-09-01 - Gift Card email delivery
 

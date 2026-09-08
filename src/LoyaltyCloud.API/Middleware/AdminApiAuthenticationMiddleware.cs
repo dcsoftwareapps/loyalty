@@ -1,4 +1,5 @@
 using LoyaltyCloud.Application.Common.Interfaces;
+using LoyaltyCloud.API.Auth;
 using LoyaltyCloud.Common.Security;
 
 namespace LoyaltyCloud.API.Middleware;
@@ -24,7 +25,18 @@ public sealed class AdminApiAuthenticationMiddleware
         IPublicTenantResolver tenantResolver,
         IMutableTenantContext tenantContext)
     {
-        if (!RequiresAdminApiAuthentication(context.Request))
+        var requiresAdminApiAuthentication = RequiresAdminApiAuthentication(context.Request);
+        var allowsCashierBearerAuthentication = AllowsCashierBearerAuthentication(context.Request);
+
+        if (!requiresAdminApiAuthentication && !allowsCashierBearerAuthentication)
+        {
+            await _next(context);
+            return;
+        }
+
+        if (allowsCashierBearerAuthentication
+            && context.User.Identity?.IsAuthenticated == true
+            && string.Equals(context.User.Identity.AuthenticationType, CashierAuthDefaults.AuthenticationScheme, StringComparison.Ordinal))
         {
             await _next(context);
             return;
@@ -107,16 +119,18 @@ public sealed class AdminApiAuthenticationMiddleware
         await _next(context);
     }
 
-    private static bool RequiresAdminApiAuthentication(HttpRequest request) =>
+    public static bool AllowsCashierBearerAuthentication(HttpRequest request) =>
         request.Path.Equals("/api/points", StringComparison.OrdinalIgnoreCase)
-        || request.Path.StartsWithSegments("/api/config", StringComparison.OrdinalIgnoreCase)
-        || request.Path.StartsWithSegments("/api/campaigns", StringComparison.OrdinalIgnoreCase)
-        || request.Path.StartsWithSegments("/api/rewards", StringComparison.OrdinalIgnoreCase)
-        || request.Path.StartsWithSegments("/api/levels", StringComparison.OrdinalIgnoreCase)
-        || request.Path.StartsWithSegments("/api/custom-notification-campaigns", StringComparison.OrdinalIgnoreCase)
         || request.Path.StartsWithSegments("/api/redemptions", StringComparison.OrdinalIgnoreCase)
         || (HttpMethods.IsGet(request.Method)
             && request.Path.StartsWithSegments("/api/customers", StringComparison.OrdinalIgnoreCase));
+
+    public static bool RequiresAdminApiAuthentication(HttpRequest request) =>
+        request.Path.StartsWithSegments("/api/config", StringComparison.OrdinalIgnoreCase)
+        || request.Path.StartsWithSegments("/api/campaigns", StringComparison.OrdinalIgnoreCase)
+        || request.Path.StartsWithSegments("/api/rewards", StringComparison.OrdinalIgnoreCase)
+        || request.Path.StartsWithSegments("/api/levels", StringComparison.OrdinalIgnoreCase)
+        || request.Path.StartsWithSegments("/api/custom-notification-campaigns", StringComparison.OrdinalIgnoreCase);
 
     private void Reject(HttpContext context, string reason, string? tenantSlug, int status = StatusCodes.Status401Unauthorized)
     {

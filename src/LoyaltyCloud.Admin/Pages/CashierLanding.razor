@@ -1,0 +1,563 @@
+@page "/cashier"
+@layout EmptyLayout
+@attribute [Authorize(Policy = LoyaltyCloud.Admin.Auth.TenantAuthorizationPolicies.TenantUser)]
+@rendermode InteractiveServer
+@implements IAsyncDisposable
+
+@using System.Globalization
+@using System.Security.Claims
+@using System.Text.RegularExpressions
+@using LoyaltyCloud.Admin.Auth
+@using LoyaltyCloud.Application.Customers.Queries.GetCustomerBySerial
+@using LoyaltyCloud.Application.Points.Commands.AddPoints
+@using LoyaltyCloud.Application.Redemptions.Commands.RedeemReward
+@using LoyaltyCloud.Application.Redemptions.Queries.GetRedemptionCatalog
+@inject AdminApiClient Api
+@inject AdminApiPointsClient PointsApi
+@inject AuthenticationStateProvider AuthenticationStateProvider
+@inject IJSRuntime JS
+@inject ILogger<CashierLanding> Logger
+
+<PageTitle>Acceso de caja - LoyaltyCloud</PageTitle>
+
+<main class="kb-cashier-shell">
+    <header class="kb-cashier-header">
+        <div>
+            <strong>LoyaltyCloud</strong>
+            <span>@CurrentUsername</span>
+        </div>
+        <form method="post" action="/logout">
+            <AntiforgeryToken />
+            <button type="submit" class="kb-btn kb-btn--ghost kb-btn--small">Cerrar sesión</button>
+        </form>
+    </header>
+
+    @if (customer is null)
+    {
+        <section class="kb-cashier-hero">
+            <p class="kb-muted">Acceso de caja</p>
+            <h1>Escanea o escribe el ID del cliente</h1>
+            <button type="button"
+                    class="kb-btn kb-btn--primary kb-btn--large kb-btn--block"
+                    @onclick="StartScannerAsync"
+                    disabled="@(busy || scanning)">
+                @(scanning ? "Escaneando..." : "Escanear cliente")
+            </button>
+            <button type="button"
+                    class="kb-btn kb-btn--ghost kb-btn--large kb-btn--block"
+                    @onclick="FocusManualEntry">
+                Escribir código
+            </button>
+        </section>
+
+        @if (scanning)
+        {
+            <section class="kb-qr-scanner kb-cashier-scanner" aria-label="Escáner de cliente">
+                <video @ref="qrVideo" class="kb-qr-video" autoplay muted playsinline></video>
+                <p>Apunta al QR de la tarjeta Wallet.</p>
+                <button type="button" class="kb-btn kb-btn--ghost kb-btn--block" @onclick="CancelScannerAsync">
+                    Cancelar
+                </button>
+            </section>
+        }
+
+        <section class="kb-cashier-panel" id="manual-entry">
+            <label for="cashier-serial">ID del cliente</label>
+            <input id="cashier-serial"
+                   type="text"
+                   inputmode="text"
+                   @bind="serialInput"
+                   @bind:event="oninput"
+                   @onkeydown="HandleSerialKeyDownAsync"
+                   placeholder="KB-A7B9C2X"
+                   autocomplete="off" />
+            <button type="button"
+                    class="kb-btn kb-btn--primary kb-btn--large kb-btn--block"
+                    @onclick="LoadCustomerAsync"
+                    disabled="@(busy || string.IsNullOrWhiteSpace(serialInput))">
+                @(busy ? "Buscando..." : "Buscar cliente")
+            </button>
+        </section>
+    }
+    else
+    {
+        <section class="kb-cashier-customer">
+            <div>
+                <span class="kb-muted">Cliente</span>
+                <h1>@customer.FullName</h1>
+                <p>@customer.SerialNumber</p>
+            </div>
+            <div class="kb-cashier-points">
+                <span>Puntos</span>
+                <strong>@customer.CurrentPoints.ToString("N0")</strong>
+                <small>@customer.Level</small>
+            </div>
+        </section>
+
+        @if (successMessage is not null)
+        {
+            <div class="kb-form-success kb-cashier-alert">@successMessage</div>
+        }
+
+        <section class="kb-cashier-actions">
+            <button type="button"
+                    class="kb-btn kb-btn--primary kb-btn--large kb-btn--block"
+                    @onclick="@(() => SetMode(CashierMode.AddPoints))"
+                    disabled="@busy">
+                + Sumar puntos
+            </button>
+            <button type="button"
+                    class="kb-btn kb-btn--secondary kb-btn--large kb-btn--block"
+                    @onclick="ShowRedeemAsync"
+                    disabled="@busy">
+                Canjear recompensa
+            </button>
+        </section>
+
+        @if (mode == CashierMode.AddPoints)
+        {
+            <section class="kb-cashier-panel">
+                <h2>Sumar puntos</h2>
+                <label for="cashier-amount">Monto de la compra (MXN)</label>
+                <input id="cashier-amount"
+                       type="number"
+                       inputmode="decimal"
+                       step="0.01"
+                       min="0"
+                       value="@amountInput"
+                       @oninput="HandleAmountInput"
+                       placeholder="0.00" />
+                <button type="button"
+                        class="kb-btn kb-btn--primary kb-btn--large kb-btn--block"
+                        @onclick="AddPointsAsync"
+                        disabled="@(!IsPurchaseAmountValid || busy)">
+                    @(busy ? "Procesando..." : $"Confirmar compra de ${PurchaseAmount:0.00}")
+                </button>
+            </section>
+        }
+
+        @if (mode == CashierMode.Redeem)
+        {
+            <section class="kb-cashier-panel">
+                <h2>Canjear recompensa</h2>
+                @if (catalogLoading)
+                {
+                    <p class="kb-muted">Cargando recompensas...</p>
+                }
+                else if (availableRewards.Count == 0)
+                {
+                    <p class="kb-muted">No hay recompensas disponibles para este cliente.</p>
+                }
+                else
+                {
+                    <div class="kb-cashier-rewards">
+                        @foreach (var reward in availableRewards)
+                        {
+                            <article class="kb-cashier-reward">
+                                <div>
+                                    <strong>@reward.Name</strong>
+                                    <span>@reward.PointsCost.ToString("N0") pts</span>
+                                </div>
+                                <button type="button"
+                                        class="kb-btn kb-btn--primary kb-btn--small"
+                                        @onclick="@(() => SelectReward(reward))"
+                                        disabled="@busy">
+                                    Elegir
+                                </button>
+                            </article>
+                        }
+                    </div>
+                }
+            </section>
+        }
+
+        @if (selectedReward is not null)
+        {
+            <section class="kb-cashier-panel kb-cashier-confirm">
+                <h2>Confirmar canje</h2>
+                <p>Canjear <strong>@selectedReward.Name</strong> por @selectedReward.PointsCost.ToString("N0") puntos.</p>
+                <div class="kb-actions-inline">
+                    <button type="button" class="kb-btn kb-btn--ghost kb-btn--large" @onclick="@(() => selectedReward = null)" disabled="@busy">
+                        Cancelar
+                    </button>
+                    <button type="button" class="kb-btn kb-btn--primary kb-btn--large" @onclick="RedeemSelectedRewardAsync" disabled="@busy">
+                        @(busy ? "Procesando..." : "Confirmar canje")
+                    </button>
+                </div>
+            </section>
+        }
+
+        <button type="button" class="kb-btn kb-btn--ghost kb-btn--block kb-cashier-reset" @onclick="Reset" disabled="@busy">
+            Escanear otro cliente
+        </button>
+    }
+
+    @if (errorMessage is not null)
+    {
+        <div class="kb-form-error kb-cashier-alert" role="alert">@errorMessage</div>
+    }
+</main>
+
+@code {
+    private static readonly Regex SerialRegex = new(@"KB-[A-Z0-9]{7}", RegexOptions.IgnoreCase | RegexOptions.Compiled);
+
+    private string serialInput = string.Empty;
+    private string amountInput = string.Empty;
+    private string currentUsername = "Caja";
+    private CustomerDetailDto? customer;
+    private IReadOnlyList<RewardCatalogItemDto>? catalog;
+    private RewardCatalogItemDto? selectedReward;
+    private string? errorMessage;
+    private string? successMessage;
+    private bool busy;
+    private bool scanning;
+    private bool scannerStarted;
+    private bool qrHandled;
+    private bool catalogLoading;
+    private CashierMode mode = CashierMode.None;
+    private ElementReference qrVideo;
+    private DotNetObjectReference<CashierLanding>? dotNetRef;
+
+    private string CurrentUsername => currentUsername;
+    private decimal PurchaseAmount => TryParseAmount(amountInput, out var parsed) ? parsed : 0m;
+    private bool IsPurchaseAmountValid => PurchaseAmount > 0m;
+    private IReadOnlyList<RewardCatalogItemDto> availableRewards => catalog?.Where(reward => reward.CanAfford).ToList() ?? [];
+
+    protected override async Task OnInitializedAsync()
+    {
+        var principal = (await AuthenticationStateProvider.GetAuthenticationStateAsync()).User;
+        currentUsername = principal.FindFirstValue(AdminClaimTypes.Name)
+            ?? principal.Identity?.Name
+            ?? "Caja";
+    }
+
+    private void FocusManualEntry()
+    {
+        errorMessage = null;
+        successMessage = null;
+    }
+
+    private async Task StartScannerAsync()
+    {
+        errorMessage = null;
+        successMessage = null;
+        scanning = true;
+        qrHandled = false;
+        await InvokeAsync(StateHasChanged);
+        await Task.Yield();
+
+        dotNetRef ??= DotNetObjectReference.Create(this);
+        try
+        {
+            var result = await JS.InvokeAsync<QrScannerStartResult>("kbeautyQrScanner.start", qrVideo, dotNetRef);
+            scannerStarted = result.Ok;
+            scanning = result.Ok;
+            if (!result.Ok)
+                errorMessage = result.Message ?? "No se pudo acceder a la cámara. Puedes escribir el ID manualmente.";
+        }
+        catch (InvalidOperationException)
+        {
+            scanning = false;
+            scannerStarted = false;
+            errorMessage = "La cámara estará disponible cuando termine de cargar la página.";
+        }
+        catch (JSException)
+        {
+            scanning = false;
+            scannerStarted = false;
+            errorMessage = "No fue posible iniciar la cámara. Puedes escribir el ID manualmente.";
+        }
+    }
+
+    private async Task CancelScannerAsync()
+    {
+        await StopScannerAsync();
+        qrHandled = false;
+    }
+
+    [JSInvokable]
+    public async Task OnQrDetected(string rawValue)
+    {
+        await InvokeAsync(async () =>
+        {
+            if (qrHandled)
+                return;
+
+            qrHandled = true;
+            await StopScannerAsync();
+
+            var serial = ExtractSerial(rawValue);
+            if (serial is null)
+            {
+                errorMessage = "Código QR no válido para LoyaltyCloud.";
+                qrHandled = false;
+                StateHasChanged();
+                return;
+            }
+
+            serialInput = serial;
+            await LoadCustomerAsync();
+            StateHasChanged();
+        });
+    }
+
+    private async Task HandleSerialKeyDownAsync(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter")
+            await LoadCustomerAsync();
+    }
+
+    private async Task LoadCustomerAsync()
+    {
+        var serial = ExtractSerial(serialInput);
+        if (serial is null)
+        {
+            errorMessage = "Ingresa un ID del cliente válido, por ejemplo KB-A7B9C2X.";
+            return;
+        }
+
+        serialInput = serial;
+        errorMessage = null;
+        successMessage = null;
+        busy = true;
+
+        try
+        {
+            var result = await Api.GetAsync<CustomerDetailDto>($"api/customers/{Uri.EscapeDataString(serial)}");
+            if (result.IsFailure)
+            {
+                errorMessage = NormalizeApiError(result.Error);
+                return;
+            }
+
+            customer = result.Value;
+            catalog = null;
+            selectedReward = null;
+            amountInput = string.Empty;
+            mode = CashierMode.None;
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Cashier customer lookup failed. Serial={Serial}", serial);
+            errorMessage = "Ocurrió un error inesperado.";
+        }
+        finally
+        {
+            busy = false;
+            qrHandled = false;
+        }
+    }
+
+    private void SetMode(CashierMode nextMode)
+    {
+        mode = nextMode;
+        selectedReward = null;
+        errorMessage = null;
+        successMessage = null;
+    }
+
+    private async Task ShowRedeemAsync()
+    {
+        if (customer is null || busy)
+            return;
+
+        SetMode(CashierMode.Redeem);
+        catalogLoading = true;
+
+        try
+        {
+            var result = await Api.GetAsync<IReadOnlyList<RewardCatalogItemDto>>($"api/redemptions/catalog/{Uri.EscapeDataString(customer.SerialNumber)}");
+            if (result.IsFailure)
+            {
+                errorMessage = NormalizeApiError(result.Error);
+                return;
+            }
+
+            catalog = result.Value;
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Cashier reward catalog load failed. Serial={Serial}", customer.SerialNumber);
+            errorMessage = "Ocurrió un error inesperado.";
+        }
+        finally
+        {
+            catalogLoading = false;
+        }
+    }
+
+    private void SelectReward(RewardCatalogItemDto reward)
+    {
+        selectedReward = reward;
+        errorMessage = null;
+        successMessage = null;
+    }
+
+    private async Task AddPointsAsync()
+    {
+        if (customer is null || !IsPurchaseAmountValid || busy)
+            return;
+
+        errorMessage = null;
+        successMessage = null;
+        busy = true;
+        var serial = customer.SerialNumber;
+
+        try
+        {
+            var result = await PointsApi.AddPointsAsync(serial, PurchaseAmount);
+            if (result.IsFailure)
+            {
+                errorMessage = NormalizeApiError(result.Error);
+                return;
+            }
+
+            successMessage = $"Compra registrada. Sumaste {result.Value.PointsAdded:N0} puntos.";
+            amountInput = string.Empty;
+            await RefreshCustomerAsync(serial);
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Cashier add points failed. Serial={Serial}", serial);
+            errorMessage = "Ocurrió un error inesperado.";
+        }
+        finally
+        {
+            busy = false;
+        }
+    }
+
+    private async Task RedeemSelectedRewardAsync()
+    {
+        if (customer is null || selectedReward is null || busy)
+            return;
+
+        errorMessage = null;
+        successMessage = null;
+        busy = true;
+        var serial = customer.SerialNumber;
+        var rewardName = selectedReward.Name;
+
+        try
+        {
+            var result = await Api.PostAsJsonAsync<RedeemRedemptionRequest, RedemptionResponse>(
+                "api/redemptions",
+                new RedeemRedemptionRequest(serial, selectedReward.Id));
+
+            if (result.IsFailure)
+            {
+                errorMessage = NormalizeApiError(result.Error);
+                return;
+            }
+
+            successMessage = $"Canje realizado: {rewardName}. Nuevo saldo: {result.Value.RemainingPoints:N0} pts.";
+            selectedReward = null;
+            await RefreshCustomerAsync(serial);
+            await LoadCatalogAsync(serial);
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Cashier reward redemption failed. Serial={Serial}", serial);
+            errorMessage = "Ocurrió un error inesperado.";
+        }
+        finally
+        {
+            busy = false;
+        }
+    }
+
+    private async Task RefreshCustomerAsync(string serial)
+    {
+        var result = await Api.GetAsync<CustomerDetailDto>($"api/customers/{Uri.EscapeDataString(serial)}");
+        if (result.IsSuccess)
+            customer = result.Value;
+        else
+            errorMessage = $"La operación se registró, pero no se pudo refrescar el saldo: {NormalizeApiError(result.Error)}";
+    }
+
+    private async Task LoadCatalogAsync(string serial)
+    {
+        var result = await Api.GetAsync<IReadOnlyList<RewardCatalogItemDto>>($"api/redemptions/catalog/{Uri.EscapeDataString(serial)}");
+        if (result.IsSuccess)
+            catalog = result.Value;
+        else
+            errorMessage ??= NormalizeApiError(result.Error);
+    }
+
+    private void HandleAmountInput(ChangeEventArgs e)
+    {
+        amountInput = e.Value?.ToString() ?? string.Empty;
+        errorMessage = null;
+    }
+
+    private void Reset()
+    {
+        customer = null;
+        catalog = null;
+        selectedReward = null;
+        serialInput = string.Empty;
+        amountInput = string.Empty;
+        errorMessage = null;
+        successMessage = null;
+        mode = CashierMode.None;
+        qrHandled = false;
+    }
+
+    private async Task StopScannerAsync()
+    {
+        scanning = false;
+        if (!scannerStarted)
+            return;
+
+        scannerStarted = false;
+        try
+        {
+            await JS.InvokeVoidAsync("kbeautyQrScanner.stop");
+        }
+        catch (JSDisconnectedException)
+        {
+        }
+    }
+
+    private static string NormalizeApiError(string error) =>
+        error.Contains("401", StringComparison.OrdinalIgnoreCase)
+        || error.Contains("Sesion no autenticada", StringComparison.OrdinalIgnoreCase)
+            ? "Tu sesión expiró. Vuelve a iniciar sesión."
+            : error;
+
+    private static string? ExtractSerial(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+            return null;
+
+        var decoded = Uri.UnescapeDataString(value.Trim()).ToUpperInvariant();
+        var match = SerialRegex.Match(decoded);
+        return match.Success ? match.Value.ToUpperInvariant() : null;
+    }
+
+    private static bool TryParseAmount(string? value, out decimal amount)
+    {
+        amount = 0m;
+        if (string.IsNullOrWhiteSpace(value))
+            return false;
+
+        var normalized = value.Trim().Replace(',', '.');
+        return decimal.TryParse(normalized, NumberStyles.Number, CultureInfo.InvariantCulture, out amount);
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        await StopScannerAsync();
+        dotNetRef?.Dispose();
+    }
+
+    private enum CashierMode
+    {
+        None,
+        AddPoints,
+        Redeem
+    }
+
+    private sealed record RedeemRedemptionRequest(string SerialNumber, Guid? RewardCatalogItemId);
+    private sealed record QrScannerStartResult(bool Ok, string? Message);
+}

@@ -30,6 +30,8 @@ public sealed class AdminRoutingTests : IClassFixture<AdminRoutingTests.AdminWeb
     private const string SuperAdminPassword = "Platform123!";
     private const string TenantAdminUsername = "owner";
     private const string TenantAdminPassword = "Tenant123!";
+    private const string TenantCashierUsername = "cashier";
+    private const string TenantCashierPassword = "Cashier123!";
 
     private readonly AdminWebApplicationFactory _factory;
 
@@ -290,6 +292,187 @@ public sealed class AdminRoutingTests : IClassFixture<AdminRoutingTests.AdminWeb
         Assert.Null(protectedResponse.Headers.Location);
     }
 
+    [Fact]
+    [Trait("Category", "AdminRouting")]
+    [Trait("Category", "TenantAdminAuth")]
+    public async Task Tenant_admin_login_rejects_external_return_url_and_uses_dashboard()
+    {
+        using var client = _factory.CreateClient(new WebApplicationFactoryClientOptions
+        {
+            AllowAutoRedirect = false
+        });
+
+        using var getLogin = await client.GetAsync("/kbeauty/login?returnUrl=https%3A%2F%2Fevil.test%2Fdashboard");
+        var loginHtml = await getLogin.Content.ReadAsStringAsync();
+
+        using var post = new HttpRequestMessage(HttpMethod.Post, "/kbeauty/login?returnUrl=https%3A%2F%2Fevil.test%2Fdashboard")
+        {
+            Content = new FormUrlEncodedContent(BuildLoginForm(loginHtml, TenantAdminUsername, TenantAdminPassword))
+        };
+        post.Headers.Add("Cookie", ExtractCookies(getLogin));
+
+        using var loginResponse = await client.SendAsync(post);
+
+        Assert.Equal(HttpStatusCode.Redirect, loginResponse.StatusCode);
+        Assert.Equal("/dashboard", loginResponse.Headers.Location?.OriginalString);
+    }
+
+    [Fact]
+    [Trait("Category", "AdminRouting")]
+    [Trait("Category", "TenantAdminAuth")]
+    [Trait("Category", "CashierAuth")]
+    public async Task Cashier_login_redirects_to_cashier_landing_instead_of_dashboard()
+    {
+        using var client = _factory.CreateClient(new WebApplicationFactoryClientOptions
+        {
+            AllowAutoRedirect = false
+        });
+        await _factory.EnsureTenantCashierExistsAsync();
+
+        using var getLogin = await client.GetAsync("/kbeauty/login");
+        var loginHtml = await getLogin.Content.ReadAsStringAsync();
+
+        using var post = new HttpRequestMessage(HttpMethod.Post, "/kbeauty/login")
+        {
+            Content = new FormUrlEncodedContent(BuildLoginForm(loginHtml, TenantCashierUsername, TenantCashierPassword))
+        };
+        post.Headers.Add("Cookie", ExtractCookies(getLogin));
+
+        using var loginResponse = await client.SendAsync(post);
+
+        Assert.Equal(HttpStatusCode.Redirect, loginResponse.StatusCode);
+        Assert.Equal("/cashier", loginResponse.Headers.Location?.OriginalString);
+        Assert.DoesNotContain("/dashboard", loginResponse.Headers.Location?.OriginalString ?? string.Empty, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    [Trait("Category", "AdminRouting")]
+    [Trait("Category", "TenantAdminAuth")]
+    [Trait("Category", "CashierAuth")]
+    public async Task Cashier_login_ignores_admin_return_url()
+    {
+        using var client = _factory.CreateClient(new WebApplicationFactoryClientOptions
+        {
+            AllowAutoRedirect = false
+        });
+        await _factory.EnsureTenantCashierExistsAsync();
+
+        using var getLogin = await client.GetAsync("/kbeauty/login?returnUrl=%2Fstaff");
+        var loginHtml = await getLogin.Content.ReadAsStringAsync();
+
+        using var post = new HttpRequestMessage(HttpMethod.Post, "/kbeauty/login?returnUrl=%2Fstaff")
+        {
+            Content = new FormUrlEncodedContent(BuildLoginForm(loginHtml, TenantCashierUsername, TenantCashierPassword))
+        };
+        post.Headers.Add("Cookie", ExtractCookies(getLogin));
+
+        using var loginResponse = await client.SendAsync(post);
+
+        Assert.Equal(HttpStatusCode.Redirect, loginResponse.StatusCode);
+        Assert.Equal("/cashier", loginResponse.Headers.Location?.OriginalString);
+    }
+
+    [Fact]
+    [Trait("Category", "AdminRouting")]
+    [Trait("Category", "CashierAuth")]
+    public async Task Cashier_can_open_cashier_landing()
+    {
+        using var client = _factory.CreateClient(new WebApplicationFactoryClientOptions
+        {
+            AllowAutoRedirect = false
+        });
+        client.DefaultRequestHeaders.Add("Cookie", await _factory.CreateTenantCashierCookieAsync());
+
+        using var response = await client.GetAsync("/cashier");
+        var html = await response.Content.ReadAsStringAsync();
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.Null(response.Headers.Location);
+        Assert.Contains("Acceso de caja", html);
+        Assert.Contains("Escanear cliente", html);
+        Assert.Contains("Escribir código", html);
+        Assert.Contains("ID del cliente", html);
+    }
+
+    [Fact]
+    [Trait("Category", "AdminRouting")]
+    [Trait("Category", "CashierAuth")]
+    public void Cashier_page_uses_mobile_operational_flow_without_frontend_secrets()
+    {
+        var source = File.ReadAllText(Path.Combine(GetRepositoryRoot(), "src", "LoyaltyCloud.Admin", "Pages", "CashierLanding.razor"));
+
+        Assert.Contains("@page \"/cashier\"", source);
+        Assert.Contains("TenantAuthorizationPolicies.TenantUser", source);
+        Assert.Contains("@layout EmptyLayout", source);
+        Assert.Contains("Escanear cliente", source);
+        Assert.Contains("Escribir código", source);
+        Assert.Contains("Buscar cliente", source);
+        Assert.Contains("+ Sumar puntos", source);
+        Assert.Contains("Canjear recompensa", source);
+        Assert.Contains("Escanear otro cliente", source);
+        Assert.Contains("form method=\"post\" action=\"/logout\"", source);
+        Assert.DoesNotContain("AdminApi:SharedSecret", source, StringComparison.Ordinal);
+        Assert.DoesNotContain("localStorage", source, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("sessionStorage", source, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("CashierAuth:SigningKey", source, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    [Trait("Category", "AdminRouting")]
+    [Trait("Category", "CashierAuth")]
+    public void Cashier_page_reuses_existing_customer_points_and_redemption_contracts()
+    {
+        var source = File.ReadAllText(Path.Combine(GetRepositoryRoot(), "src", "LoyaltyCloud.Admin", "Pages", "CashierLanding.razor"));
+
+        Assert.Contains("Api.GetAsync<CustomerDetailDto>", source);
+        Assert.Contains("api/customers/{Uri.EscapeDataString(serial)}", source);
+        Assert.Contains("PointsApi.AddPointsAsync(serial, PurchaseAmount)", source);
+        Assert.Contains("Api.GetAsync<IReadOnlyList<RewardCatalogItemDto>>", source);
+        Assert.Contains("api/redemptions/catalog/{Uri.EscapeDataString(customer.SerialNumber)}", source);
+        Assert.Contains("Api.PostAsJsonAsync<RedeemRedemptionRequest, RedemptionResponse>", source);
+        Assert.Contains("\"api/redemptions\"", source);
+        Assert.Contains("new RedeemRedemptionRequest(serial, selectedReward.Id)", source);
+        Assert.DoesNotContain("new AddPointsCommand", source, StringComparison.Ordinal);
+        Assert.DoesNotContain("new RedeemRewardCommand", source, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    [Trait("Category", "AdminRouting")]
+    [Trait("Category", "CashierAuth")]
+    public void Cashier_page_handles_qr_once_and_disposes_scanner_safely()
+    {
+        var source = File.ReadAllText(Path.Combine(GetRepositoryRoot(), "src", "LoyaltyCloud.Admin", "Pages", "CashierLanding.razor"));
+
+        Assert.Contains("kbeautyQrScanner.start", source);
+        Assert.Contains("kbeautyQrScanner.stop", source);
+        Assert.Contains("private bool scannerStarted;", source);
+        Assert.Contains("private bool qrHandled;", source);
+        Assert.Contains("if (qrHandled)", source);
+        Assert.Contains("qrHandled = true;", source);
+        Assert.Contains("if (!scannerStarted)", source);
+        Assert.Contains("catch (JSDisconnectedException)", source);
+        Assert.Contains("public async ValueTask DisposeAsync()", source);
+        Assert.Contains("await StopScannerAsync();", source);
+        Assert.Contains("[JSInvokable]", source);
+        Assert.Contains("public async Task OnQrDetected(string rawValue)", source);
+    }
+
+    [Fact]
+    [Trait("Category", "AdminRouting")]
+    [Trait("Category", "CashierAuth")]
+    public void Cashier_page_surfaces_safe_errors_for_expired_session_and_api_failures()
+    {
+        var source = File.ReadAllText(Path.Combine(GetRepositoryRoot(), "src", "LoyaltyCloud.Admin", "Pages", "CashierLanding.razor"));
+
+        Assert.Contains("NormalizeApiError", source);
+        Assert.Contains("Tu sesión expiró. Vuelve a iniciar sesión.", source);
+        Assert.Contains("Ocurrió un error inesperado.", source);
+        Assert.Contains("Logger.LogError", source);
+        Assert.Contains("Cashier customer lookup failed.", source);
+        Assert.Contains("Cashier add points failed.", source);
+        Assert.Contains("Cashier reward redemption failed.", source);
+    }
+
     [Theory]
     [InlineData(TenantSuspensionReason.PaymentPastDue)]
     [InlineData(TenantSuspensionReason.TrialExpired)]
@@ -434,6 +617,38 @@ public sealed class AdminRoutingTests : IClassFixture<AdminRoutingTests.AdminWeb
         Assert.DoesNotContain("/platform/platform/login", location.OriginalString, StringComparison.OrdinalIgnoreCase);
     }
 
+    [Theory]
+    [Trait("Category", "AdminRouting")]
+    [Trait("Category", "CashierAuth")]
+    [InlineData("/dashboard")]
+    [InlineData("/reports")]
+    [InlineData("/config")]
+    [InlineData("/campaigns")]
+    [InlineData("/rewards")]
+    [InlineData("/levels")]
+    [InlineData("/marketing-notifications")]
+    [InlineData("/giftcards/redeem")]
+    [InlineData("/staff")]
+    public async Task Cashier_authenticated_user_cannot_access_current_admin_portal(string path)
+    {
+        using var client = _factory.CreateClient(new WebApplicationFactoryClientOptions
+        {
+            AllowAutoRedirect = false
+        });
+        client.DefaultRequestHeaders.Add("Cookie", await _factory.CreateTenantCashierCookieAsync());
+
+        using var response = await client.GetAsync(path);
+
+        Assert.NotEqual(HttpStatusCode.OK, response.StatusCode);
+        Assert.Equal(HttpStatusCode.Redirect, response.StatusCode);
+        var redirectPath = response.Headers.Location?.IsAbsoluteUri == true
+            ? response.Headers.Location.PathAndQuery
+            : response.Headers.Location?.OriginalString;
+        Assert.Equal("/cashier", redirectPath);
+        Assert.DoesNotContain("/login?ReturnUrl=", response.Headers.Location?.OriginalString ?? string.Empty, StringComparison.Ordinal);
+        Assert.DoesNotContain("/dashboard", response.Headers.Location?.OriginalString ?? string.Empty, StringComparison.OrdinalIgnoreCase);
+    }
+
     [Fact]
     [Trait("Category", "AdminRouting")]
     public void Tenant_cookie_redirect_without_slug_uses_platform_login_not_legacy_login()
@@ -511,7 +726,7 @@ public sealed class AdminRoutingTests : IClassFixture<AdminRoutingTests.AdminWeb
             "<span class=\"kb-sidebar-section\">Reportes</span>",
             "href=\"/customers\"", "href=\"/reports/activity-trends\"", "href=\"/giftcards/reports\"",
             "<span class=\"kb-sidebar-section\">Gestión</span>",
-            "href=\"/levels\"", "href=\"/config\"", "href=\"/quick-help\""
+            "href=\"/levels\"", "href=\"/config\"", "href=\"/staff\"", "href=\"/quick-help\""
         };
 
         var previousIndex = -1;
@@ -525,6 +740,46 @@ public sealed class AdminRoutingTests : IClassFixture<AdminRoutingTests.AdminWeb
         Assert.DoesNotContain("href=\"/operacion\"", source, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("href=\"/puntos\"", source, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("href=\"/clientes\"", source, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    [Trait("Category", "AdminRouting")]
+    [Trait("Category", "StaffManagement")]
+    public async Task Staff_management_route_is_available_for_authenticated_tenant_admin()
+    {
+        using var client = _factory.CreateClient(new WebApplicationFactoryClientOptions
+        {
+            AllowAutoRedirect = false
+        });
+        client.DefaultRequestHeaders.Add("Cookie", await _factory.CreateTenantAdminCookieAsync());
+
+        using var response = await client.GetAsync("/staff");
+        var html = await response.Content.ReadAsStringAsync();
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.Contains("Personal", html);
+        Assert.Contains("Usuarios del tenant", html);
+        Assert.Contains("Crear usuario", html);
+    }
+
+    [Fact]
+    [Trait("Category", "AdminRouting")]
+    [Trait("Category", "StaffManagement")]
+    public void Staff_management_navigation_is_under_management_group()
+    {
+        var source = File.ReadAllText(Path.Combine(GetRepositoryRoot(), "src", "LoyaltyCloud.Admin", "Components", "Layout", "MainLayout.razor"));
+
+        var managementIndex = source.IndexOf("<span class=\"kb-sidebar-section\">Gestión</span>", StringComparison.Ordinal);
+        var configIndex = source.IndexOf("href=\"/config\"", managementIndex, StringComparison.Ordinal);
+        var billingIndex = source.IndexOf("href=\"@($\"/{TenantContext.TenantSlug}/billing\")", managementIndex, StringComparison.Ordinal);
+        var staffIndex = source.IndexOf("href=\"/staff\"", managementIndex, StringComparison.Ordinal);
+        var helpIndex = source.IndexOf("href=\"/quick-help\"", managementIndex, StringComparison.Ordinal);
+
+        Assert.True(managementIndex >= 0);
+        Assert.True(configIndex > managementIndex);
+        Assert.True(billingIndex > configIndex);
+        Assert.True(staffIndex > billingIndex);
+        Assert.True(helpIndex > staffIndex);
     }
 
     [Fact]
@@ -1420,6 +1675,43 @@ public sealed class AdminRoutingTests : IClassFixture<AdminRoutingTests.AdminWeb
 
             Assert.Equal(AdminLoginResult.Success, result);
             return ExtractCookie(context, "loyaltycloud.admin.auth");
+        }
+
+        public async Task<string> CreateTenantCashierCookieAsync()
+        {
+            using var scope = Services.CreateScope();
+            var context = CreateHttpContext(scope.ServiceProvider);
+            await EnsureTenantCashierExistsAsync();
+
+            var result = await scope.ServiceProvider.GetRequiredService<AdminAuthService>()
+                .TrySignInAsync(context, TenantSeed.KBeautySlug, TenantCashierUsername, TenantCashierPassword);
+
+            Assert.Equal(AdminLoginResult.Success, result);
+            return ExtractCookie(context, "loyaltycloud.admin.auth");
+        }
+
+        public async Task EnsureTenantCashierExistsAsync()
+        {
+            using var scope = Services.CreateScope();
+            var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+            scope.ServiceProvider.GetRequiredService<IMutableTenantContext>().SetTenant(TenantSeed.KBeautyTenantId, TenantSeed.KBeautySlug);
+            var passwords = scope.ServiceProvider.GetRequiredService<IPasswordHashingService>();
+            var normalizedUsername = TenantAdminUser.NormalizeUsername(TenantCashierUsername);
+            var cashier = await db.TenantAdminUsers.SingleOrDefaultAsync(user =>
+                user.TenantId == TenantSeed.KBeautyTenantId
+                && user.NormalizedUsername == normalizedUsername);
+            if (cashier is not null)
+                return;
+
+            cashier = new TenantAdminUser(
+                Guid.Parse("b4000000-0000-0000-0000-000000009002"),
+                TenantSeed.KBeautyTenantId,
+                TenantCashierUsername,
+                passwords.HashPassword(TenantCashierPassword),
+                DateTime.UtcNow,
+                role: TenantUserRole.Cashier);
+            db.TenantAdminUsers.Add(cashier);
+            await db.SaveChangesAsync();
         }
 
         private static DefaultHttpContext CreateHttpContext(IServiceProvider services)

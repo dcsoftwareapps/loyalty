@@ -52,6 +52,7 @@ var adminSessionHours = Math.Max(1, adminAuthOptions.SessionHours);
 builder.Services.Configure<AdminAuthOptions>(builder.Configuration.GetSection(AdminAuthOptions.SectionName));
 builder.Services.AddScoped<AdminAuthService>();
 builder.Services.AddScoped<LoyaltyCloud.Admin.Services.GiftCardFeatureState>();
+builder.Services.AddScoped<TenantStaffService>();
 builder.Services.Configure<SuperAdminAuthOptions>(builder.Configuration.GetSection(SuperAdminAuthOptions.SectionName));
 builder.Services.AddScoped<SuperAdminAuthService>();
 
@@ -119,14 +120,7 @@ builder.Services
 
 // Política por defecto: todo requiere autenticación; las páginas que no la
 // requieran usan [AllowAnonymous] (Login).
-builder.Services.AddAuthorization(options =>
-{
-    options.AddPolicy(GiftCardsAuthorization.Policy, policy =>
-        policy.RequireAuthenticatedUser().AddRequirements(new GiftCardsEnabledRequirement()));
-    options.FallbackPolicy = new AuthorizationPolicyBuilder()
-        .RequireAuthenticatedUser()
-        .Build();
-});
+builder.Services.AddAuthorization(TenantAuthorization.Configure);
 
 builder.Services.AddScoped<IAuthorizationHandler, GiftCardsEnabledHandler>();
 builder.Services.AddCascadingAuthenticationState();

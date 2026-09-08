@@ -147,6 +147,17 @@ public sealed class AdminAuthService
             Reject(context, tenantId, adminUserId, "admin_inactive_or_missing");
             return;
         }
+
+        var principal = context.Principal!;
+        var currentRole = principal.FindFirstValue(ClaimTypes.Role);
+        var expectedRole = adminUser.Role.ToString();
+        if (!string.Equals(currentRole, expectedRole, StringComparison.Ordinal))
+        {
+            var authTime = principal.FindFirstValue(AdminClaimTypes.AuthTime)
+                ?? new DateTimeOffset(_clock.UtcNow).ToUnixTimeSeconds().ToString(CultureInfo.InvariantCulture);
+            context.ReplacePrincipal(BuildPrincipal(tenant, adminUser, authTime));
+            context.ShouldRenew = true;
+        }
     }
 
     public async Task<bool> TrySetTenantContextFromPrincipalAsync(HttpContext context)
@@ -226,20 +237,7 @@ public sealed class AdminAuthService
     private async Task SignInAsync(HttpContext context, Tenant tenant, TenantAdminUser adminUser)
     {
         var authTime = new DateTimeOffset(_clock.UtcNow).ToUnixTimeSeconds().ToString(CultureInfo.InvariantCulture);
-        var claims = new List<Claim>
-        {
-            new(AdminClaimTypes.Subject, adminUser.Id.ToString()),
-            new(AdminClaimTypes.TenantId, tenant.Id.ToString()),
-            new(AdminClaimTypes.TenantSlug, tenant.Slug),
-            new(AdminClaimTypes.Name, adminUser.Username),
-            new(AdminClaimTypes.AuthTime, authTime)
-        };
-        var identity = new ClaimsIdentity(
-            claims,
-            CookieAuthenticationDefaults.AuthenticationScheme,
-            AdminClaimTypes.Name,
-            roleType: "role");
-        var principal = new ClaimsPrincipal(identity);
+        var principal = BuildPrincipal(tenant, adminUser, authTime);
 
         await context.SignInAsync(
             CookieAuthenticationDefaults.AuthenticationScheme,
@@ -249,6 +247,50 @@ public sealed class AdminAuthService
                 IsPersistent = true,
                 ExpiresUtc = DateTimeOffset.UtcNow.AddHours(Math.Max(1, _options.SessionHours))
             });
+        context.User = principal;
+    }
+
+    public string GetAuthenticatedLandingPath(ClaimsPrincipal principal)
+    {
+        var role = principal.FindFirstValue(ClaimTypes.Role);
+        return string.Equals(role, TenantUserRoles.Cashier, StringComparison.Ordinal)
+            ? "/cashier"
+            : "/dashboard";
+    }
+
+    public string GetPostLoginDestination(HttpContext context, string tenantSlug, bool billingOnly, string? returnUrl)
+    {
+        if (string.Equals(context.User.FindFirstValue(ClaimTypes.Role), TenantUserRoles.Cashier, StringComparison.Ordinal))
+            return "/cashier";
+
+        if (billingOnly)
+            return $"/{tenantSlug}/billing";
+
+        return IsLocalReturnUrl(returnUrl) ? returnUrl! : "/dashboard";
+    }
+
+    public static bool IsLocalReturnUrl(string? value) =>
+        !string.IsNullOrWhiteSpace(value)
+        && value.StartsWith('/')
+        && !value.StartsWith("//");
+
+    private static ClaimsPrincipal BuildPrincipal(Tenant tenant, TenantAdminUser adminUser, string authTime)
+    {
+        var claims = new List<Claim>
+        {
+            new(AdminClaimTypes.Subject, adminUser.Id.ToString()),
+            new(AdminClaimTypes.TenantId, tenant.Id.ToString()),
+            new(AdminClaimTypes.TenantSlug, tenant.Slug),
+            new(AdminClaimTypes.Name, adminUser.Username),
+            new(AdminClaimTypes.AuthTime, authTime),
+            new(ClaimTypes.Role, adminUser.Role.ToString())
+        };
+        var identity = new ClaimsIdentity(
+            claims,
+            CookieAuthenticationDefaults.AuthenticationScheme,
+            AdminClaimTypes.Name,
+            ClaimTypes.Role);
+        return new ClaimsPrincipal(identity);
     }
 
     private async Task<Tenant?> ResolveTenantAsync(string tenantSlug, CancellationToken ct)

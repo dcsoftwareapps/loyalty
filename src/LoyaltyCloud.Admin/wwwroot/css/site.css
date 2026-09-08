@@ -276,6 +276,165 @@ input[type=color].kb-color-picker {
 }
 
 /* ============================================================================
+   Cashier mobile surface
+   ============================================================================ */
+.kb-cashier-shell {
+    width: min(100%, 520px);
+    min-height: 100dvh;
+    margin: 0 auto;
+    padding: max(18px, env(safe-area-inset-top)) 18px max(24px, env(safe-area-inset-bottom));
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+}
+.kb-cashier-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+}
+.kb-cashier-header > div {
+    display: grid;
+    gap: 2px;
+}
+.kb-cashier-header strong {
+    font-size: 1rem;
+}
+.kb-cashier-header span {
+    color: var(--kb-ink-muted);
+    font-size: 0.84rem;
+}
+.kb-cashier-hero,
+.kb-cashier-panel,
+.kb-cashier-customer {
+    padding: 20px;
+    border: 1px solid var(--kb-sand-100);
+    border-radius: var(--kb-radius);
+    background: var(--kb-bg-card);
+    box-shadow: var(--kb-shadow);
+}
+.kb-cashier-hero {
+    display: grid;
+    gap: 12px;
+}
+.kb-cashier-hero p {
+    margin: 0;
+    font-size: 0.78rem;
+    font-weight: 800;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+}
+.kb-cashier-hero h1 {
+    margin-bottom: 8px;
+    font-size: 2rem;
+}
+.kb-cashier-panel {
+    display: grid;
+    gap: 14px;
+}
+.kb-cashier-panel h2 {
+    margin-bottom: 2px;
+    font-family: var(--font-body);
+    font-size: 1.08rem;
+    font-weight: 800;
+}
+.kb-cashier-panel input[type=text],
+.kb-cashier-panel input[type=number] {
+    min-height: 58px;
+    font-size: 1.35rem;
+    text-align: center;
+}
+.kb-cashier-scanner {
+    margin: 0;
+}
+.kb-cashier-customer {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 18px;
+}
+.kb-cashier-customer h1 {
+    margin: 3px 0 2px;
+    font-size: 1.75rem;
+}
+.kb-cashier-customer p {
+    margin: 0;
+    color: var(--kb-ink-muted);
+    font-weight: 700;
+}
+.kb-cashier-points {
+    min-width: 116px;
+    padding: 14px;
+    border-radius: var(--kb-radius-sm);
+    background: var(--kb-sand-50);
+    text-align: right;
+}
+.kb-cashier-points span,
+.kb-cashier-points small {
+    display: block;
+    color: var(--kb-ink-muted);
+    font-size: 0.78rem;
+    font-weight: 800;
+    text-transform: uppercase;
+}
+.kb-cashier-points strong {
+    display: block;
+    margin: 3px 0;
+    font-family: var(--font-display);
+    font-size: 2.3rem;
+    line-height: 1;
+}
+.kb-cashier-actions {
+    display: grid;
+    gap: 12px;
+}
+.kb-cashier-rewards {
+    display: grid;
+    gap: 10px;
+}
+.kb-cashier-reward {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 12px;
+    border: 1px solid var(--kb-sand-100);
+    border-radius: var(--kb-radius-sm);
+}
+.kb-cashier-reward div {
+    display: grid;
+    gap: 2px;
+}
+.kb-cashier-reward span {
+    color: var(--kb-ink-muted);
+    font-size: 0.9rem;
+}
+.kb-cashier-confirm p {
+    margin: 0;
+}
+.kb-cashier-alert,
+.kb-cashier-reset {
+    margin-top: 0;
+}
+@media (max-width: 430px) {
+    .kb-cashier-shell {
+        padding-right: 14px;
+        padding-left: 14px;
+    }
+    .kb-cashier-customer {
+        grid-template-columns: 1fr;
+    }
+    .kb-cashier-points {
+        width: 100%;
+        text-align: left;
+    }
+    .kb-cashier-confirm .kb-actions-inline {
+        display: grid;
+        width: 100%;
+    }
+}
+
+/* ============================================================================
    Quick help
    ============================================================================ */
 .kb-help { max-width: 980px; }
