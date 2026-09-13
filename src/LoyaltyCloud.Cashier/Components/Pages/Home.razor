@@ -1,14 +1,14 @@
 @page "/"
 @implements IDisposable
 @inject CashierApiClient Api
-@inject CashierApiOptions ApiOptions
 @inject CashierCustomerService Customers
 @inject IQrScannerService Scanner
 @inject CashierSessionService Sessions
+@inject CashierLoginPreferences LoginPreferences
 
 <PageTitle>LoyaltyCloud Caja</PageTitle>
 
-<main class="cashier-shell">
+<main class="cashier-shell @(!restoring && session is not null ? "cashier-shell--authenticated" : null)">
     @if (restoring)
     {
         <section class="cashier-card cashier-card--center">
@@ -22,7 +22,6 @@
         <section class="cashier-card">
             <p class="eyebrow">LoyaltyCloud</p>
             <h1>Iniciar sesión</h1>
-            <p class="muted">Usa el usuario creado en Admin &gt; Personal.</p>
 
             @if (!string.IsNullOrWhiteSpace(errorMessage))
             {
@@ -54,14 +53,17 @@
                            disabled="@busy"
                            @bind-Value="login.Password" />
 
+                <label class="remember-me" for="rememberMe">
+                    <InputCheckbox id="rememberMe" disabled="@busy" @bind-Value="rememberMe" />
+                    <span>Recordarme</span>
+                </label>
+
                 <ValidationSummary />
 
                 <button type="submit" class="primary-button" disabled="@IsLoginDisabled">
                     @(busy ? "Iniciando..." : "Iniciar sesión")
                 </button>
             </EditForm>
-
-            <p class="environment">API @ApiOptions.EnvironmentName</p>
         </section>
     }
     else
@@ -95,7 +97,7 @@
             {
                 <section class="operation-section">
                     <h2>Cliente</h2>
-                    <button type="button" class="secondary-button" @onclick="ScanCustomerAsync" disabled="@busy">
+                    <button type="button" class="scanner-button" @onclick="ScanCustomerAsync" disabled="@busy">
                         @(busy ? "Procesando..." : "Escanear")
                     </button>
 
@@ -174,6 +176,7 @@
     private CashierCustomerDetail? customer;
     private bool restoring = true;
     private bool busy;
+    private bool rememberMe;
     private string? errorMessage;
     private string? successMessage;
 
@@ -193,6 +196,8 @@
     {
         Sessions.SessionChanged += OnSessionChanged;
         session = await Sessions.RestoreAsync();
+        if (session is null)
+            RestoreLoginIdentifiers();
         restoring = false;
     }
 
@@ -219,6 +224,7 @@
             }
 
             await Sessions.SignInAsync(result.Session);
+            LoginPreferences.Save(rememberMe, login.TenantSlug, login.Username);
             session = result.Session;
             login.Password = string.Empty;
         }
@@ -350,8 +356,19 @@
 
     private void OnSessionChanged()
     {
-        session = Sessions.Current;
-        _ = InvokeAsync(StateHasChanged);
+        _ = InvokeAsync(() =>
+        {
+            session = Sessions.Current;
+            if (session is null)
+                RestoreLoginIdentifiers();
+            StateHasChanged();
+        });
+    }
+
+    private void RestoreLoginIdentifiers()
+    {
+        (rememberMe, login.TenantSlug, login.Username) = LoginPreferences.Load();
+        login.Password = string.Empty;
     }
 
     private sealed class LoginModel

@@ -16,7 +16,7 @@
         <RestoreSources>https://api.nuget.org/v3/index.json</RestoreSources>
 
         <!-- Display name -->
-        <ApplicationTitle>LoyaltyCloud Caja</ApplicationTitle>
+        <ApplicationTitle>LoyaltyCloud</ApplicationTitle>
 
         <!-- App Identifier -->
         <ApplicationId>com.loyaltycloud.cashier</ApplicationId>
@@ -43,10 +43,10 @@
 
     <ItemGroup>
         <!-- App Icon -->
-        <MauiIcon Include="Resources\AppIcon\appicon.svg" ForegroundFile="Resources\AppIcon\appiconfg.svg" Color="#512BD4" />
+        <MauiIcon Include="Resources\AppIcon\appicon.svg" BaseSize="1024,1024" />
 
         <!-- Splash Screen -->
-        <MauiSplashScreen Include="Resources\Splash\splash.svg" Color="#512BD4" BaseSize="128,128" />
+        <MauiSplashScreen Include="Resources\Splash\splash.svg" Color="#312ee9" BaseSize="256,256" />
 
         <!-- Custom Fonts -->
         <MauiFont Include="Resources\Fonts\*" />

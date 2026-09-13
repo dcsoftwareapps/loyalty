@@ -21,6 +21,7 @@ public static class MauiProgram
         builder.Services.AddSingleton(CashierApiOptions.Default);
         builder.Services.AddSingleton<ISecureTokenStore, MauiSecureTokenStore>();
         builder.Services.AddSingleton<CashierSessionService>();
+        builder.Services.AddSingleton<CashierLoginPreferences>();
         builder.Services.AddSingleton<CashierAuthorizationHandler>();
         builder.Services.AddSingleton<IQrScannerService, MauiQrScannerService>();
         builder.Services.AddSingleton<CashierCustomerService>();
