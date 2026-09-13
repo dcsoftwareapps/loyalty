@@ -16,7 +16,7 @@ public sealed class CashierMobileAppTests
         Assert.Contains("net9.0-android", project);
         Assert.Contains("net9.0-ios", project);
         Assert.Contains("Microsoft.AspNetCore.Components.WebView.Maui", project);
-        Assert.Contains("LoyaltyCloud Caja", project);
+        Assert.Contains("<ApplicationTitle>LoyaltyCloud</ApplicationTitle>", project);
         Assert.Contains("src\\LoyaltyCloud.Cashier\\LoyaltyCloud.Cashier.csproj", solution);
     }
 
