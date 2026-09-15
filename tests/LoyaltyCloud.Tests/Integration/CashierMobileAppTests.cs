@@ -129,8 +129,10 @@ public sealed class CashierMobileAppTests
         Assert.DoesNotContain("window.kbeautyQrScanner", source, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("api/redemptions/catalog/{Uri.EscapeDataString(serial)}", source);
         Assert.Contains("\"api/redemptions\"", source);
+        Assert.Contains("api/redemptions/monetary/preview", source);
         Assert.Contains("api/giftcards/lookup", source);
         Assert.DoesNotContain("AdminApi:SharedSecret", source, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("\"api/config\"", source, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("CashierAuth:SigningKey", source, StringComparison.OrdinalIgnoreCase);
     }
 
@@ -202,6 +204,7 @@ public sealed class CashierMobileAppTests
 
         Assert.Contains("AddSingleton<CashierRedemptionService>", program);
         Assert.Contains("Canjear recompensa", page);
+        Assert.Contains("Descuento con puntos", page);
         Assert.Contains("GetCatalogAsync", page);
         Assert.Contains("AvailableRewards", page);
         Assert.Contains("UnavailableRewards", page);
@@ -214,9 +217,16 @@ public sealed class CashierMobileAppTests
 
         Assert.Contains("api/redemptions/catalog/{Uri.EscapeDataString(serial)}", service);
         Assert.Contains("new CashierRedeemRewardRequest(serial, rewardCatalogItemId, IdempotencyKey: idempotencyKey.Trim())", service);
+        Assert.Contains("api/redemptions/monetary/preview", service);
+        Assert.Contains("Type: \"MonetaryDiscount\"", service);
+        Assert.Contains("MonetaryAmount: preview.MonetaryAmount", service);
+        Assert.Contains("MonetaryPointsPerPesoUnit: preview.MonetaryPointsPerPesoUnit", service);
         Assert.Contains("RewardRedemptionCoordinator", page);
+        Assert.Contains("MonetaryRedemptionCoordinator", page);
         Assert.Contains("RetryPendingRedemptionAsync", page);
+        Assert.Contains("RetryPendingMonetaryRedemptionAsync", page);
         Assert.Contains("pendingRewardOperation", page);
+        Assert.Contains("pendingMonetaryOperation", page);
         Assert.Contains("api/redemptions/{redemptionId}/confirm", service);
         Assert.Contains("api/redemptions/{redemptionId}/cancel", service);
         Assert.Contains("HttpStatusCode.Unauthorized", service);
@@ -225,6 +235,7 @@ public sealed class CashierMobileAppTests
         Assert.Contains("CanAfford", contracts);
         Assert.Contains("CashierRedemptionResponse", contracts);
         Assert.Contains("CashierCancelRedemptionResponse", contracts);
+        Assert.Contains("CashierMonetaryRedemptionPreview", contracts);
     }
 
     private static string Read(params string[] parts) =>

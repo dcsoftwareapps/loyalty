@@ -7,4 +7,8 @@ namespace LoyaltyCloud.Application.Redemptions.Commands.RedeemMonetaryDiscount;
 public sealed record RedeemMonetaryDiscountCommand(
     string SerialNumber,
     int PointsToRedeem,
-    string OperatorId) : IRequest<Result<RedemptionResponse>>;
+    string OperatorId,
+    string? IdempotencyKey = null,
+    decimal? ExpectedMonetaryAmount = null,
+    string? ExpectedMonetaryCurrency = null,
+    decimal? ExpectedPointsPerPesoUnit = null) : IRequest<Result<RedemptionResponse>>;

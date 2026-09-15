@@ -205,6 +205,14 @@ h1 {
     opacity: 0.55;
 }
 
+.segmented--compact {
+    min-height: 44px;
+}
+
+.segmented--compact .segment {
+    min-height: 40px;
+}
+
 .operation-section {
     display: grid;
     gap: 12px;
