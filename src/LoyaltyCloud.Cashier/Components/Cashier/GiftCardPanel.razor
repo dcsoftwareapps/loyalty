@@ -30,13 +30,13 @@
     }
     else if (card is null)
     {
-        <h2>Consultar tarjeta de regalo</h2>
-        <button class="scanner-button" disabled="@busy" @onclick="ScanAsync">@(busy ? "Procesando..." : "Escanear Gift Card")</button>
+        <h2>Tarjeta de regalo</h2>
+        <button class="scanner-button" disabled="@busy" @onclick="ScanAsync">@(busy ? "Procesando..." : "Escanear")</button>
         <form class="login-form" @onsubmit="LookupAsync" @onsubmit:preventDefault>
             <label for="gift-code">Código de Gift Card</label>
             <input id="gift-code" class="input input--mono" autocomplete="off" autocapitalize="characters"
                    placeholder="GC-XXXX-XXXX-XXXX" @bind="lookupText" disabled="@busy" />
-            <button type="submit" class="primary-button" disabled="@(busy || string.IsNullOrWhiteSpace(lookupText))">Buscar Gift Card</button>
+            <button type="submit" class="secondary-button" disabled="@(busy || string.IsNullOrWhiteSpace(lookupText))">Buscar</button>
         </form>
     }
     else

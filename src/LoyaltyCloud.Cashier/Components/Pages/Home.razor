@@ -119,7 +119,7 @@
                                        @bind-Value="lookup.SerialNumber" />
                             <ValidationSummary />
 
-                            <button type="submit" class="primary-button" disabled="@IsLookupDisabled">
+                            <button type="submit" class="secondary-button" disabled="@IsLookupDisabled">
                                 @(busy ? "Buscando..." : "Buscar")
                             </button>
                         </EditForm>
