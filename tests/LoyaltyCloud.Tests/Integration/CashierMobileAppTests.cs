@@ -165,6 +165,31 @@ public sealed class CashierMobileAppTests
         Assert.Contains("payload?.Trim()", parser);
     }
 
+    [Fact]
+    [Trait("Category", "CashierMobile")]
+    public void Cashier_mobile_uses_brand_colors_and_concise_gift_card_labels()
+    {
+        var css = Read("src", "LoyaltyCloud.Cashier", "wwwroot", "css", "app.css");
+        var page = Read("src", "LoyaltyCloud.Cashier", "Components", "Pages", "Home.razor");
+        var giftCardPanel = Read("src", "LoyaltyCloud.Cashier", "Components", "Cashier", "GiftCardPanel.razor");
+
+        Assert.Contains("--cashier-accent: #312ee9;", css);
+        Assert.Contains("--cashier-secondary: #99c4c4;", css);
+        Assert.Contains(".scanner-button", css);
+        Assert.Contains("background: var(--cashier-accent);", css);
+        Assert.Contains(".segment.active", css);
+        Assert.Contains("background: var(--cashier-secondary);", css);
+
+        Assert.Contains("class=\"scanner-button\"", page);
+        Assert.Contains("@(busy ? \"Procesando...\" : \"Escanear\")", page);
+        Assert.Contains("<h2>Tarjeta de regalo</h2>", giftCardPanel);
+        Assert.Contains("@(busy ? \"Procesando...\" : \"Escanear\")", giftCardPanel);
+        Assert.Contains(">Buscar</button>", giftCardPanel);
+        Assert.DoesNotContain("Consultar tarjeta de regalo", giftCardPanel);
+        Assert.DoesNotContain("Escanear Gift Card", giftCardPanel);
+        Assert.DoesNotContain("Buscar Gift Card", giftCardPanel);
+    }
+
     private static string Read(params string[] parts) =>
         File.ReadAllText(Path.Combine(GetRepositoryRoot(), Path.Combine(parts)));
 
