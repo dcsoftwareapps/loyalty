@@ -33,7 +33,7 @@ public sealed class RedemptionsController : ControllerBase
                 ct)
             : body.RewardCatalogItemId.HasValue
                 ? await _sender.Send(
-                    new RedeemRewardCommand(body.SerialNumber, body.RewardCatalogItemId.Value, resolvedOperatorId),
+                    new RedeemRewardCommand(body.SerialNumber, body.RewardCatalogItemId.Value, resolvedOperatorId, body.IdempotencyKey),
                     ct)
                 : null;
 
@@ -114,7 +114,8 @@ public sealed class RedemptionsController : ControllerBase
         string SerialNumber,
         Guid? RewardCatalogItemId,
         string? Type = null,
-        int? PointsToRedeem = null);
+        int? PointsToRedeem = null,
+        string? IdempotencyKey = null);
     public sealed record ConfirmRedemptionRequest(string? Notes);
     public sealed record CancelRedemptionRequest(string? Notes);
 }

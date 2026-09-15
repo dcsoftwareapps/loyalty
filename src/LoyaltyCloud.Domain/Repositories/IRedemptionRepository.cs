@@ -9,6 +9,8 @@ public interface IRedemptionRepository
 {
     Task<Redemption?> GetByIdAsync(Guid id, CancellationToken ct = default);
 
+    Task<Redemption?> GetByIdempotencyKeyAsync(string idempotencyKey, CancellationToken ct = default);
+
     /// <summary>Historial de canjes de una tarjeta, paginado.</summary>
     Task<PagedResult<Redemption>> GetByCardIdAsync(
         Guid loyaltyCardId,

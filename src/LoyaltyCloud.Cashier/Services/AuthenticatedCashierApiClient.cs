@@ -19,4 +19,10 @@ public sealed class AuthenticatedCashierApiClient
         TValue value,
         CancellationToken ct = default) =>
         _http.PostAsJsonAsync(requestUri, value, ct);
+
+    public Task<HttpResponseMessage> PutAsJsonAsync<TValue>(
+        string requestUri,
+        TValue value,
+        CancellationToken ct = default) =>
+        _http.PutAsJsonAsync(requestUri, value, ct);
 }

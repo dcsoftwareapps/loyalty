@@ -23,6 +23,13 @@ internal sealed class RedemptionRepository : IRedemptionRepository
     public Task<Redemption?> GetByIdAsync(Guid id, CancellationToken ct = default) =>
         _db.Redemptions.FirstOrDefaultAsync(r => r.TenantId == _tenantContext.RequireTenantId() && r.Id == id, ct);
 
+    public Task<Redemption?> GetByIdempotencyKeyAsync(string idempotencyKey, CancellationToken ct = default) =>
+        _db.Redemptions
+            .AsNoTracking()
+            .FirstOrDefaultAsync(r =>
+                r.TenantId == _tenantContext.RequireTenantId()
+                && r.IdempotencyKey == idempotencyKey.Trim(), ct);
+
     public async Task<PagedResult<Redemption>> GetByCardIdAsync(
         Guid loyaltyCardId,
         PaginationParams pagination,

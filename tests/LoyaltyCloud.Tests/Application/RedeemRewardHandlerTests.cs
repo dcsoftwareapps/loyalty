@@ -145,6 +145,91 @@ public class RedeemRewardHandlerTests
     }
 
     [Fact]
+    public async Task Handle_ShouldReturnExistingRedemption_ForSameIdempotencyKeyAndRequest()
+    {
+        var dt = Clock().Object;
+        var card = CardWith(200, dt);
+        var reward = NewReward(300, LoyaltyConstants.Levels.Mist);
+        var existing = new Redemption(
+            Guid.NewGuid(),
+            card.TenantId,
+            card.Id,
+            reward.Id,
+            reward.PointsCost,
+            Now.AddMinutes(-1),
+            "same-key");
+        var handler = BuildHandler(card, reward, out var redemptions);
+        redemptions.Setup(r => r.GetByIdempotencyKeyAsync("same-key", It.IsAny<CancellationToken>()))
+            .ReturnsAsync(existing);
+
+        var result = await handler.Handle(
+            new RedeemRewardCommand("KB-TEST001", reward.Id, "test", "same-key"),
+            CancellationToken.None);
+
+        Assert.True(result.IsSuccess);
+        Assert.Equal(existing.Id, result.Value.RedemptionId);
+        Assert.Equal(200, result.Value.RemainingPoints);
+        Assert.Equal(200, card.CurrentPoints);
+        redemptions.Verify(r => r.AddAsync(It.IsAny<Redemption>(), It.IsAny<CancellationToken>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task Handle_ShouldRejectIdempotencyKey_WhenItBelongsToDifferentReward()
+    {
+        var dt = Clock().Object;
+        var card = CardWith(500, dt);
+        var reward = NewReward(300, LoyaltyConstants.Levels.Mist);
+        var existing = new Redemption(
+            Guid.NewGuid(),
+            card.TenantId,
+            card.Id,
+            Guid.NewGuid(),
+            reward.PointsCost,
+            Now.AddMinutes(-1),
+            "same-key");
+        var handler = BuildHandler(card, reward, out var redemptions);
+        redemptions.Setup(r => r.GetByIdempotencyKeyAsync("same-key", It.IsAny<CancellationToken>()))
+            .ReturnsAsync(existing);
+
+        var result = await handler.Handle(
+            new RedeemRewardCommand("KB-TEST001", reward.Id, "test", "same-key"),
+            CancellationToken.None);
+
+        Assert.True(result.IsFailure);
+        Assert.Contains("idempotencia", result.Error, StringComparison.OrdinalIgnoreCase);
+        Assert.Equal(500, card.CurrentPoints);
+        redemptions.Verify(r => r.AddAsync(It.IsAny<Redemption>(), It.IsAny<CancellationToken>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task Handle_ShouldRejectIdempotencyKey_WhenItBelongsToDifferentCustomer()
+    {
+        var dt = Clock().Object;
+        var card = CardWith(500, dt);
+        var reward = NewReward(300, LoyaltyConstants.Levels.Mist);
+        var existing = new Redemption(
+            Guid.NewGuid(),
+            card.TenantId,
+            Guid.NewGuid(),
+            reward.Id,
+            reward.PointsCost,
+            Now.AddMinutes(-1),
+            "same-key");
+        var handler = BuildHandler(card, reward, out var redemptions);
+        redemptions.Setup(r => r.GetByIdempotencyKeyAsync("same-key", It.IsAny<CancellationToken>()))
+            .ReturnsAsync(existing);
+
+        var result = await handler.Handle(
+            new RedeemRewardCommand("KB-TEST001", reward.Id, "test", "same-key"),
+            CancellationToken.None);
+
+        Assert.True(result.IsFailure);
+        Assert.Contains("idempotencia", result.Error, StringComparison.OrdinalIgnoreCase);
+        Assert.Equal(500, card.CurrentPoints);
+        redemptions.Verify(r => r.AddAsync(It.IsAny<Redemption>(), It.IsAny<CancellationToken>()), Times.Never);
+    }
+
+    [Fact]
     public async Task Handle_ShouldFail_WhenRewardNotFound()
     {
         var dt = Clock().Object;
