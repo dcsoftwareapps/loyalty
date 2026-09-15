@@ -1,3 +1,4 @@
+@using LoyaltyCloud.Cashier.Components.Cashier
 @page "/"
 @implements IDisposable
 @inject CashierApiClient Api
@@ -72,97 +73,103 @@
             <div class="cashier-header">
                 <div>
                     <p class="eyebrow">LoyaltyCloud Caja</p>
-                    <h1>Puntos</h1>
+                    <h1>@(giftMode ? "Tarjeta de regalo" : "Puntos")</h1>
                 </div>
-                <button type="button" class="link-button" @onclick="LogoutAsync" disabled="@busy">
+                <button type="button" class="link-button" @onclick="LogoutAsync" disabled="@(busy || giftBusy)">
                     Salir
                 </button>
             </div>
 
             <div class="segmented" role="group" aria-label="Modo de caja">
-                <button type="button" class="segment active">Puntos</button>
-                <button type="button" class="segment" disabled>Tarjeta de regalo</button>
+                <button type="button" class="segment @(!giftMode ? "active" : null)" disabled="@(busy || giftBusy || giftPending)" @onclick="ShowPoints">Puntos</button>
+                <button type="button" class="segment @(giftMode ? "active" : null)" disabled="@(busy || giftBusy)" @onclick="ShowGiftCards">Tarjeta de regalo</button>
             </div>
 
-            @if (!string.IsNullOrWhiteSpace(errorMessage))
+            <div hidden="@(!giftMode)">
+                <GiftCardPanel @key="session" Session="session" BusyChanged="GiftBusyChanged" PendingChanged="GiftPendingChanged" />
+            </div>
+            @if (!giftMode)
             {
-                <div class="alert alert-error">@errorMessage</div>
-            }
-            @if (!string.IsNullOrWhiteSpace(successMessage))
-            {
-                <div class="alert alert-success">@successMessage</div>
-            }
+                @if (!string.IsNullOrWhiteSpace(errorMessage))
+                {
+                    <div class="alert alert-error">@errorMessage</div>
+                }
+                @if (!string.IsNullOrWhiteSpace(successMessage))
+                {
+                    <div class="alert alert-success">@successMessage</div>
+                }
 
-            @if (customer is null)
-            {
-                <section class="operation-section">
-                    <h2>Cliente</h2>
-                    <button type="button" class="scanner-button" @onclick="ScanCustomerAsync" disabled="@busy">
-                        @(busy ? "Procesando..." : "Escanear")
-                    </button>
-
-                    <EditForm Model="lookup" OnValidSubmit="SearchCustomerAsync" FormName="cashier-customer-lookup" class="login-form">
-                        <DataAnnotationsValidator />
-
-                        <label for="customerSerial">ID del cliente</label>
-                        <InputText id="customerSerial"
-                                   class="input input--mono"
-                                   autocomplete="off"
-                                   autocapitalize="characters"
-                                   disabled="@busy"
-                                   @bind-Value="lookup.SerialNumber" />
-                        <ValidationSummary />
-
-                        <button type="submit" class="primary-button" disabled="@IsLookupDisabled">
-                            @(busy ? "Buscando..." : "Buscar")
+                @if (customer is null)
+                {
+                    <section class="operation-section">
+                        <h2>Cliente</h2>
+                        <button type="button" class="scanner-button" @onclick="ScanCustomerAsync" disabled="@busy">
+                            @(busy ? "Procesando..." : "Escanear")
                         </button>
-                    </EditForm>
-                </section>
-            }
-            else
-            {
-                <section class="customer-panel">
-                    <div>
-                        <span>Cliente</span>
-                        <strong>@customer.FullName</strong>
-                        <small>@customer.SerialNumber</small>
-                    </div>
-                    <div class="points-balance">
-                        <span>Puntos</span>
-                        <strong>@customer.CurrentPoints.ToString("N0")</strong>
-                    </div>
-                    <div class="customer-meta">
-                        <span>Nivel</span>
-                        <strong>@customer.Level</strong>
-                    </div>
-                </section>
 
-                <section class="operation-section">
-                    <h2>Sumar puntos</h2>
-                    <EditForm Model="points" OnValidSubmit="AddPointsAsync" FormName="cashier-add-points" class="login-form">
-                        <DataAnnotationsValidator />
+                        <EditForm Model="lookup" OnValidSubmit="SearchCustomerAsync" FormName="cashier-customer-lookup" class="login-form">
+                            <DataAnnotationsValidator />
 
-                        <label for="purchaseAmount">Monto de compra</label>
-                        <div class="money-input">
-                            <span>$</span>
-                            <InputNumber id="purchaseAmount"
-                                         class="input"
-                                         min="0"
-                                         step="0.01"
-                                         disabled="@busy"
-                                         @bind-Value="points.PurchaseAmount" />
+                            <label for="customerSerial">ID del cliente</label>
+                            <InputText id="customerSerial"
+                                       class="input input--mono"
+                                       autocomplete="off"
+                                       autocapitalize="characters"
+                                       disabled="@busy"
+                                       @bind-Value="lookup.SerialNumber" />
+                            <ValidationSummary />
+
+                            <button type="submit" class="primary-button" disabled="@IsLookupDisabled">
+                                @(busy ? "Buscando..." : "Buscar")
+                            </button>
+                        </EditForm>
+                    </section>
+                }
+                else
+                {
+                    <section class="customer-panel">
+                        <div>
+                            <span>Cliente</span>
+                            <strong>@customer.FullName</strong>
+                            <small>@customer.SerialNumber</small>
                         </div>
-                        <ValidationSummary />
+                        <div class="points-balance">
+                            <span>Puntos</span>
+                            <strong>@customer.CurrentPoints.ToString("N0")</strong>
+                        </div>
+                        <div class="customer-meta">
+                            <span>Nivel</span>
+                            <strong>@customer.Level</strong>
+                        </div>
+                    </section>
 
-                        <button type="submit" class="primary-button" disabled="@IsAddPointsDisabled">
-                            @(busy ? "Agregando..." : "Agregar puntos")
-                        </button>
-                    </EditForm>
-                </section>
+                    <section class="operation-section">
+                        <h2>Sumar puntos</h2>
+                        <EditForm Model="points" OnValidSubmit="AddPointsAsync" FormName="cashier-add-points" class="login-form">
+                            <DataAnnotationsValidator />
 
-                <button type="button" class="secondary-button" @onclick="ClearCustomer" disabled="@busy">
-                    Otro cliente
-                </button>
+                            <label for="purchaseAmount">Monto de compra</label>
+                            <div class="money-input">
+                                <span>$</span>
+                                <InputNumber id="purchaseAmount"
+                                             class="input"
+                                             min="0"
+                                             step="0.01"
+                                             disabled="@busy"
+                                             @bind-Value="points.PurchaseAmount" />
+                            </div>
+                            <ValidationSummary />
+
+                            <button type="submit" class="primary-button" disabled="@IsAddPointsDisabled">
+                                @(busy ? "Agregando..." : "Agregar puntos")
+                            </button>
+                        </EditForm>
+                    </section>
+
+                    <button type="button" class="secondary-button" @onclick="ClearCustomer" disabled="@busy">
+                        Otro cliente
+                    </button>
+                }
             }
         </section>
     }
@@ -177,6 +184,18 @@
     private bool restoring = true;
     private bool busy;
     private bool rememberMe;
+    private bool giftMode;
+    private bool giftBusy;
+    private bool giftPending;
+
+    private void ShowPoints() { if (!busy && !giftBusy && !giftPending) giftMode = false; }
+    private void ShowGiftCards() { if (!busy && !giftBusy) giftMode = true; }
+    private void GiftBusyChanged(bool value) => giftBusy = value;
+    private void GiftPendingChanged(bool value)
+    {
+        giftPending = value;
+        if (value) giftMode = true;
+    }
     private string? errorMessage;
     private string? successMessage;
 
@@ -250,7 +269,10 @@
 
         errorMessage = null;
         successMessage = null;
-        var result = await Scanner.ScanAsync();
+        busy = true;
+        QrScanResult result;
+        try { result = await Scanner.ScanAsync(); }
+        finally { busy = false; }
         if (!result.Succeeded)
         {
             if (!string.IsNullOrWhiteSpace(result.ErrorMessage))
@@ -360,7 +382,10 @@
         {
             session = Sessions.Current;
             if (session is null)
+            {
+                giftMode = giftBusy = giftPending = false;
                 RestoreLoginIdentifiers();
+            }
             StateHasChanged();
         });
     }

@@ -307,3 +307,12 @@ h1 {
 #blazor-error-ui {
     display: none;
 }
+
+.gift-card-panel {
+    min-width: 0;
+}
+
+.gift-card-panel .points-balance strong {
+    font-size: clamp(1.35rem, 6vw, 2rem);
+    overflow-wrap: anywhere;
+}

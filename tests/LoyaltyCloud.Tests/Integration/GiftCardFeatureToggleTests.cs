@@ -55,7 +55,8 @@ public sealed class GiftCardFeatureToggleTests
         var redirect = Read("src", "LoyaltyCloud.Admin", "Components", "RedirectUnauthorized.razor");
         Assert.Contains("RedirectUnauthorized", routes);
         Assert.Contains("IsAuthenticated == true", redirect);
-        Assert.Contains("NavigateTo(\"/dashboard\")", redirect);
+        Assert.Contains("principal.IsInRole(TenantUserRoles.Cashier) ? \"/cashier\" : \"/dashboard\"", redirect);
+        Assert.Contains("Nav.NavigateTo(destination)", redirect);
     }
 
     [Fact]
@@ -262,9 +263,14 @@ public sealed class GiftCardFeatureToggleTests
     [Fact]
     public void EveryAdministrativeGiftCardRoute_UsesFeaturePolicy()
     {
-        var pages = new[] { "GiftCards.razor", "GiftCardIssue.razor", "GiftCardRedeem.razor", "GiftCardList.razor", "GiftCardDetail.razor", "GiftCardReports.razor", "GiftCardSettings.razor" };
+        var pages = new[] { "GiftCards.razor", "GiftCardIssue.razor", "GiftCardRedeem.razor", "GiftCardList.razor", "GiftCardDetail.razor", "GiftCardReports.razor" };
         foreach (var page in pages)
             Assert.Contains("Authorize(Policy = LoyaltyCloud.Admin.Auth.GiftCardsAuthorization.Policy)", Read("src", "LoyaltyCloud.Admin", "Pages", page));
+
+        var settings = Read("src", "LoyaltyCloud.Admin", "Pages", "GiftCardSettings.razor");
+        Assert.Contains("@attribute [Authorize]", settings);
+        Assert.Contains("Navigation.NavigateTo(\"/config?section=giftcards\", replace: true)", settings);
+        Assert.Contains("@attribute [Authorize]", Read("src", "LoyaltyCloud.Admin", "Pages", "Config.razor"));
     }
 
     [Fact]
