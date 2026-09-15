@@ -128,7 +128,7 @@ public sealed class CashierMobileAppTests
         Assert.Contains("if (_completed)", source);
         Assert.DoesNotContain("window.kbeautyQrScanner", source, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("api/redemptions", source, StringComparison.OrdinalIgnoreCase);
-        Assert.DoesNotContain("giftcards", source, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("api/giftcards/lookup", source);
         Assert.DoesNotContain("AdminApi:SharedSecret", source, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("CashierAuth:SigningKey", source, StringComparison.OrdinalIgnoreCase);
     }
@@ -155,7 +155,8 @@ public sealed class CashierMobileAppTests
         Assert.Contains("Otro cliente", page);
         Assert.Contains("customer = null", page);
         Assert.Contains("Tarjeta de regalo", page);
-        Assert.Contains("disabled>Tarjeta de regalo", page);
+        Assert.Contains("<GiftCardPanel", page);
+        Assert.Contains("ShowGiftCards", page);
 
         Assert.Contains("PostAsJsonAsync", service);
         Assert.Contains("new CashierAddPointsRequest(serial, purchaseAmount)", service);

@@ -17,25 +17,31 @@ public sealed record QrScanResult(bool Succeeded, string? Value, string? ErrorMe
 
 public sealed class MauiQrScannerService : IQrScannerService
 {
+    private int scanning;
     public async Task<QrScanResult> ScanAsync(CancellationToken ct = default)
     {
+        if (Interlocked.Exchange(ref scanning, 1) != 0) return QrScanResult.Cancelled();
+        try
+        {
 #if WINDOWS
-        await Task.CompletedTask;
-        return QrScanResult.Failure("El scanner de cámara está disponible en Android y iPhone.");
+            await Task.CompletedTask;
+            return QrScanResult.Failure("El scanner de cámara está disponible en Android y iPhone.");
 #else
-        var permission = await Permissions.RequestAsync<Permissions.Camera>();
-        if (permission != PermissionStatus.Granted)
-            return QrScanResult.Failure("Activa el permiso de cámara para escanear códigos QR.");
+            var permission = await Permissions.RequestAsync<Permissions.Camera>();
+            if (permission != PermissionStatus.Granted)
+                return QrScanResult.Failure("Activa el permiso de cámara para escanear códigos QR.");
 
-        var currentPage = Application.Current?.Windows.FirstOrDefault()?.Page;
-        if (currentPage is null)
-            return QrScanResult.Failure("No fue posible abrir la cámara. Ingresa el ID manualmente.");
+            var currentPage = Application.Current?.Windows.FirstOrDefault()?.Page;
+            if (currentPage is null)
+                return QrScanResult.Failure("No fue posible abrir la cámara. Ingresa el ID manualmente.");
 
-        var scannerPage = new QrScannerPage();
-        await currentPage.Navigation.PushModalAsync(scannerPage);
-        await using var registration = ct.Register(() => scannerPage.Cancel());
-        return await scannerPage.Result;
+            var scannerPage = new QrScannerPage();
+            await currentPage.Navigation.PushModalAsync(scannerPage);
+            await using var registration = ct.Register(() => scannerPage.Cancel());
+            return await scannerPage.Result;
 #endif
+        }
+        finally { Interlocked.Exchange(ref scanning, 0); }
     }
 }
 
@@ -127,9 +133,11 @@ public sealed class QrScannerPage : ContentPage
         _completed = true;
         _reader.IsDetecting = false;
         _reader.BarcodesDetected -= OnBarcodesDetected;
-        _completion.TrySetResult(result);
-
-        if (Navigation.ModalStack.Contains(this))
-            await Navigation.PopModalAsync();
+        try
+        {
+            if (Navigation.ModalStack.Contains(this))
+                await Navigation.PopModalAsync();
+        }
+        finally { _completion.TrySetResult(result); }
     }
 }

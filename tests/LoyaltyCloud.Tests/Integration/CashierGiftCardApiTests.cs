@@ -1,0 +1,223 @@
+using System.Net;
+using System.Net.Http.Headers;
+using System.Net.Http.Json;
+using System.Text.Json;
+using LoyaltyCloud.API.Auth;
+using LoyaltyCloud.API.Controllers;
+using LoyaltyCloud.Application.Common.Interfaces;
+using LoyaltyCloud.Application.GiftCards;
+using LoyaltyCloud.Domain.Entities;
+using LoyaltyCloud.Domain.Enums;
+using LoyaltyCloud.Infrastructure.Persistence;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
+using Xunit;
+
+namespace LoyaltyCloud.Tests.Integration;
+
+[Trait("Category", "CashierGiftCards")]
+public sealed class CashierGiftCardApiTests(CustomWebApplicationFactory factory)
+    : IClassFixture<CustomWebApplicationFactory>
+{
+    [Theory]
+    [InlineData(TenantUserRole.Cashier)]
+    [InlineData(TenantUserRole.Admin)]
+    public async Task Authorized_roles_lookup_redeem_and_replay_without_exposing_internal_data(TenantUserRole role)
+    {
+        var actor = await SeedAsync(role);
+        using var client = Client(actor.Token);
+        var lookup = await client.PostAsJsonAsync("/api/giftcards/lookup", new { code = "  " + actor.Code.ToLowerInvariant() + "  " });
+        Assert.Equal(HttpStatusCode.OK, lookup.StatusCode);
+        var json = await lookup.Content.ReadAsStringAsync();
+        Assert.DoesNotContain("email", json, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("claim", json, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("transactions", json, StringComparison.OrdinalIgnoreCase);
+        var summary = await lookup.Content.ReadFromJsonAsync<GiftCardsController.CardSummary>();
+        Assert.Equal(100m, summary!.RemainingBalance);
+        Assert.True(summary.AllowPartialRedemption);
+        var key = Guid.NewGuid().ToString("N");
+        for (var i = 0; i < 2; i++)
+        {
+            var response = await client.PostAsJsonAsync($"/api/giftcards/{actor.Code}/redeem", new { amount = 25m, idempotencyKey = key });
+            Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+            var body = await response.Content.ReadFromJsonAsync<GiftCardsController.RedeemResponse>();
+            Assert.Equal(25m, body!.RedeemedAmount);
+            Assert.Equal(75m, body.Card.RemainingBalance);
+            Assert.Equal(i == 1, body.WasIdempotent);
+        }
+        using var scope = factory.Services.CreateScope();
+        scope.ServiceProvider.GetRequiredService<IMutableTenantContext>().SetTenant(actor.TenantId, actor.Slug);
+        var transactions = await scope.ServiceProvider.GetRequiredService<AppDbContext>().GiftCardTransactions.ToListAsync();
+        Assert.Equal(actor.UserId, Assert.Single(transactions).PerformedByUserId);
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("invalid-token")]
+    public async Task Missing_or_invalid_bearer_is_rejected(string? token)
+    {
+        using var client = Client(token);
+        Assert.Equal(HttpStatusCode.Unauthorized, (await client.PostAsJsonAsync("/api/giftcards/lookup", new { code = "GC-AAAA-BBBB-CCCC" })).StatusCode);
+        Assert.Equal(HttpStatusCode.Unauthorized, (await client.PostAsJsonAsync("/api/giftcards/GC-AAAA-BBBB-CCCC/redeem", new { amount = 1, idempotencyKey = "key" })).StatusCode);
+    }
+
+    [Fact]
+    public async Task Claims_and_request_headers_cannot_cross_tenant_boundaries()
+    {
+        var a = await SeedAsync(); var b = await SeedAsync();
+        using var client = Client(a.Token);
+        client.DefaultRequestHeaders.Add("X-Tenant-Slug", b.Slug);
+        client.DefaultRequestHeaders.Add("X-Operator-Id", b.UserId.ToString());
+        foreach (var body in new object[] { new { code = b.Code, tenantSlug = b.Slug }, new { claimToken = b.ClaimToken } })
+            Assert.Equal(HttpStatusCode.NotFound, (await client.PostAsJsonAsync("/api/giftcards/lookup", body)).StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, (await client.PostAsJsonAsync($"/api/giftcards/{b.Code}/redeem",
+            new { amount = 10, idempotencyKey = "cross-tenant", tenantId = b.TenantId, operatorId = b.UserId })).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await client.PostAsJsonAsync($"/api/giftcards/{a.Code}/redeem",
+            new { amount = 10, idempotencyKey = "own-tenant", tenantId = b.TenantId, operatorId = b.UserId })).StatusCode);
+        using var scope = factory.Services.CreateScope();
+        scope.ServiceProvider.GetRequiredService<IMutableTenantContext>().SetTenant(a.TenantId, a.Slug);
+        Assert.Equal(a.UserId, (await scope.ServiceProvider.GetRequiredService<AppDbContext>().GiftCardTransactions.SingleAsync()).PerformedByUserId);
+    }
+
+    [Fact]
+    public async Task Claim_lookup_is_tenant_scoped_and_does_not_redeem()
+    {
+        var a = await SeedAsync(); using var client = Client(a.Token);
+        var response = await client.PostAsJsonAsync("/api/giftcards/lookup", new { claimToken = a.ClaimToken });
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.Equal(100m, (await response.Content.ReadFromJsonAsync<GiftCardsController.CardSummary>())!.RemainingBalance);
+        using var scope = factory.Services.CreateScope();
+        scope.ServiceProvider.GetRequiredService<IMutableTenantContext>().SetTenant(a.TenantId, a.Slug);
+        Assert.Empty(await scope.ServiceProvider.GetRequiredService<AppDbContext>().GiftCardTransactions.ToListAsync());
+    }
+
+    [Theory]
+    [InlineData("{}")]
+    [InlineData("{\"code\":\"GC-AAAA-BBBB-CCCC\",\"claimToken\":\"token\"}")]
+    [InlineData("{\"claimToken\":\"https://example.test/giftcards/claim/token\"}")]
+    public async Task Lookup_rejects_invalid_identifier_combinations(string json)
+    {
+        var a = await SeedAsync(); using var client = Client(a.Token);
+        Assert.Equal(HttpStatusCode.BadRequest, (await client.PostAsync("/api/giftcards/lookup", new StringContent(json, System.Text.Encoding.UTF8, "application/json"))).StatusCode);
+    }
+
+    [Fact]
+    public async Task Same_key_different_amount_is_conflict_and_full_redemption_updates_status()
+    {
+        var a = await SeedAsync(); using var client = Client(a.Token);
+        var path = $"/api/giftcards/{a.Code}/redeem";
+        Assert.Equal(HttpStatusCode.OK, (await client.PostAsJsonAsync(path, new { amount = 40, idempotencyKey = "one" })).StatusCode);
+        var conflict = await client.PostAsJsonAsync(path, new { amount = 41, idempotencyKey = "one" });
+        Assert.Equal(HttpStatusCode.Conflict, conflict.StatusCode);
+        Assert.Contains("IdempotencyConflict", await conflict.Content.ReadAsStringAsync());
+        var full = await client.PostAsJsonAsync(path, new { amount = 60, idempotencyKey = "two" });
+        var result = await full.Content.ReadFromJsonAsync<GiftCardsController.RedeemResponse>();
+        Assert.Equal("FullyRedeemed", result!.Card.Status);
+        Assert.Equal(0m, result.Card.RemainingBalance);
+        var replay = await client.PostAsJsonAsync(path, new { amount = 40, idempotencyKey = "one" });
+        var prior = await replay.Content.ReadFromJsonAsync<GiftCardsController.RedeemResponse>();
+        Assert.Equal(40m, prior!.RedeemedAmount);
+        Assert.Equal(0m, prior.Card.RemainingBalance);
+    }
+
+    [Theory]
+    [InlineData(0, 400, "InvalidInput")]
+    [InlineData(101, 422, "InsufficientBalance")]
+    public async Task Invalid_amounts_are_distinguished(decimal amount, int status, string error)
+    {
+        var a = await SeedAsync(); using var client = Client(a.Token);
+        var response = await client.PostAsJsonAsync($"/api/giftcards/{a.Code}/redeem", new { amount, idempotencyKey = "invalid" });
+        Assert.Equal(status, (int)response.StatusCode);
+        Assert.Contains(error, await response.Content.ReadAsStringAsync());
+    }
+
+    [Theory]
+    [InlineData("disabled", 403, "Unavailable")]
+    [InlineData("expired", 422, "Expired")]
+    [InlineData("cancelled", 422, "Inactive")]
+    [InlineData("full-only", 422, "PartialRedemptionNotAllowed")]
+    public async Task Server_enforces_card_status_and_tenant_settings(string state, int status, string error)
+    {
+        var a = await SeedAsync();
+        using (var scope = factory.Services.CreateScope())
+        {
+            scope.ServiceProvider.GetRequiredService<IMutableTenantContext>().SetTenant(a.TenantId, a.Slug);
+            var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+            var config = await db.GiftCardConfigurations.SingleAsync();
+            var card = await db.GiftCards.SingleAsync();
+            if (state == "disabled") config.SetEnabled(false, DateTime.UtcNow);
+            if (state == "full-only") config.Update(true, true, false, true, GiftCardExpirationMode.Never, null,
+                "MXN", "Gift Card", "#312ee9", "#FFFFFF", null, null, null, null, DateTime.UtcNow);
+            if (state == "expired") db.Entry(card).Property(nameof(GiftCard.ExpiresAtUtc)).CurrentValue = DateTime.UtcNow.AddDays(-1);
+            if (state == "cancelled") card.Cancel(DateTime.UtcNow);
+            await db.SaveChangesAsync();
+        }
+        using var client = Client(a.Token);
+        var response = await client.PostAsJsonAsync($"/api/giftcards/{a.Code}/redeem", new { amount = 10, idempotencyKey = "status" });
+        Assert.Equal(status, (int)response.StatusCode);
+        Assert.Contains(error, await response.Content.ReadAsStringAsync());
+        if (state == "disabled")
+            Assert.Equal(HttpStatusCode.Forbidden, (await client.PostAsJsonAsync("/api/giftcards/lookup", new { code = a.Code })).StatusCode);
+    }
+
+    [Fact]
+    public async Task Same_key_different_card_is_conflict_without_another_debit()
+    {
+        var a = await SeedAsync();
+        const string other = "GC-1111-2222-3333";
+        using (var scope = factory.Services.CreateScope())
+        {
+            scope.ServiceProvider.GetRequiredService<IMutableTenantContext>().SetTenant(a.TenantId, a.Slug);
+            var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+            db.Add(new GiftCard(Guid.NewGuid(), a.TenantId, other, GiftCard.HashClaimToken(Guid.NewGuid().ToString()),
+                100, "MXN", null, "Other", null, null, null, null, GiftCardSource.Manual, a.UserId, DateTime.UtcNow, null));
+            await db.SaveChangesAsync();
+        }
+        using var client = Client(a.Token);
+        Assert.Equal(HttpStatusCode.OK, (await client.PostAsJsonAsync($"/api/giftcards/{a.Code}/redeem", new { amount = 10, idempotencyKey = "same" })).StatusCode);
+        var response = await client.PostAsJsonAsync($"/api/giftcards/{other}/redeem", new { amount = 10, idempotencyKey = "same" });
+        Assert.Equal(HttpStatusCode.Conflict, response.StatusCode);
+        Assert.Contains("IdempotencyConflict", await response.Content.ReadAsStringAsync());
+    }
+
+    [Fact]
+    public async Task Transport_rejects_missing_key_excess_precision_and_oversized_reference()
+    {
+        var a = await SeedAsync(); using var client = Client(a.Token);
+        foreach (var body in new object[] { new { amount = 1 }, new { amount = 1.001m, idempotencyKey = "precision" },
+            new { amount = 1, idempotencyKey = "reference", reference = new string('x', 201) } })
+            Assert.Equal(HttpStatusCode.BadRequest, (await client.PostAsJsonAsync($"/api/giftcards/{a.Code}/redeem", body)).StatusCode);
+    }
+
+    private HttpClient Client(string? token)
+    {
+        var client = factory.CreateClient();
+        if (token is not null) client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
+        return client;
+    }
+
+    private async Task<Actor> SeedAsync(TenantUserRole role = TenantUserRole.Cashier)
+    {
+        await factory.EnsureDatabaseCreatedAsync();
+        using var scope = factory.Services.CreateScope();
+        var tenantId = Guid.NewGuid(); var userId = Guid.NewGuid(); var now = DateTime.UtcNow;
+        var slug = "gift-" + tenantId.ToString("N")[..12];
+        scope.ServiceProvider.GetRequiredService<IMutableTenantContext>().SetTenant(tenantId, slug);
+        var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        var tenant = new Tenant(tenantId, slug, "Gift test", "UTC", now);
+        var user = new TenantAdminUser(userId, tenantId, "cashier", "unused-test-hash", now, role: role);
+        var config = new GiftCardConfiguration(Guid.NewGuid(), tenantId, now);
+        config.Update(true, true, true, true, GiftCardExpirationMode.Never, null, "MXN", "Gift Card", "#312ee9", "#FFFFFF", null, null, null, null, now);
+        var raw = Guid.NewGuid().ToString("N").ToUpperInvariant();
+        var code = $"GC-{raw[..4]}-{raw[4..8]}-{raw[8..12]}";
+        var claimToken = Guid.NewGuid().ToString("N");
+        db.Add(tenant); db.Add(new TenantSubscription(tenantId, TenantSubscriptionStatus.Active, "test", paidThroughUtc: now.AddYears(1)));
+        db.Add(user); db.Add(config);
+        db.Add(new GiftCard(Guid.NewGuid(), tenantId, code, GiftCard.HashClaimToken(claimToken), 100m, "MXN", null, "Recipient", "private@example.test", null, null, "private", GiftCardSource.Manual, userId, now, null));
+        await db.SaveChangesAsync();
+        var token = scope.ServiceProvider.GetRequiredService<CashierAccessTokenService>().CreateToken(tenant, user).AccessToken;
+        return new(tenantId, userId, slug, code, claimToken, token);
+    }
+
+    private sealed record Actor(Guid TenantId, Guid UserId, string Slug, string Code, string ClaimToken, string Token);
+}

@@ -13,7 +13,7 @@ public sealed record IssuedGiftCardDto(GiftCardDto Card, string ClaimToken);
 public sealed record GiftCardPage(IReadOnlyList<GiftCardDto> Items, int Total, int Page, int PageSize);
 public sealed record GiftCardDashboardDto(int ActiveCards, decimal OutstandingBalance, decimal IssuedValue, decimal RedeemedValue, int FullyRedeemedCards, int ExpiredCards, int CancelledCards);
 public sealed record GiftCardReportPoint(DateTime DateUtc, decimal Issued, decimal Redeemed, int IssuedCount, int RedemptionCount);
-public sealed record GiftCardOperationResult(bool Success, string? Error, GiftCardDetailDto? Detail, bool WasIdempotent = false);
+public sealed record GiftCardOperationResult(bool Success, string? Error, GiftCardDetailDto? Detail, bool WasIdempotent = false, GiftCardFailure? Failure = null, decimal? RedeemedAmount = null);
 public sealed record GiftCardClaimDto(GiftCardDto Card, string DisplayName, string PrimaryColor, string TextColor, string? LogoUrl, string? SecondaryText, string? Terms, string? FooterMessage);
 public enum GiftCardDeliveryStatus { Sent, NotSent, Failed }
 public sealed record GiftCardDeliveryResult(GiftCardDeliveryStatus Status, string? Message, string? ClaimUrl)
@@ -81,3 +81,11 @@ public interface IGiftCardAppleWalletService
     Task<GiftCardAppleUpdates> GetUpdatesAsync(string deviceId, string passTypeId, DateTime? sinceUtc, CancellationToken ct = default);
     Task SynchronizeAsync(Guid giftCardId, CancellationToken ct = default);
 }
+
+public enum GiftCardFailure
+{
+    InvalidInput, NotFound, Unavailable, Inactive, Expired, InsufficientBalance,
+    PartialRedemptionNotAllowed, IdempotencyConflict, ConcurrencyConflict
+}
+
+public sealed class GiftCardUnavailableException(string message) : InvalidOperationException(message);

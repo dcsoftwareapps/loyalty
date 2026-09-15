@@ -38,4 +38,14 @@
     <PackageReference Include="ZXing.Net" Version="0.16.10" />
   </ItemGroup>
 
+  <!-- Compile the platform-independent mobile logic for executable host tests. -->
+  <ItemGroup>
+    <Compile Include="../../src/LoyaltyCloud.Cashier/Services/CashierContracts.cs" Link="Cashier/CashierContracts.cs" />
+    <Compile Include="../../src/LoyaltyCloud.Cashier/Services/AuthenticatedCashierApiClient.cs" Link="Cashier/AuthenticatedCashierApiClient.cs" />
+    <Compile Include="../../src/LoyaltyCloud.Cashier/Services/CashierGiftCardContracts.cs" Link="Cashier/CashierGiftCardContracts.cs" />
+    <Compile Include="../../src/LoyaltyCloud.Cashier/Services/CashierGiftCardApi.cs" Link="Cashier/CashierGiftCardApi.cs" />
+    <Compile Include="../../src/LoyaltyCloud.Cashier/Services/GiftCardQrParser.cs" Link="Cashier/GiftCardQrParser.cs" />
+    <Compile Include="../../src/LoyaltyCloud.Cashier/Services/GiftCardRedemptionCoordinator.cs" Link="Cashier/GiftCardRedemptionCoordinator.cs" />
+    <Compile Include="../../src/LoyaltyCloud.Cashier/Services/CashierQrPayloadParser.cs" Link="Cashier/CashierQrPayloadParser.cs" />
+  </ItemGroup>
 </Project>
