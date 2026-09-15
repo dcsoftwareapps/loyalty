@@ -127,7 +127,8 @@ public sealed class CashierMobileAppTests
         Assert.Contains("Multiple = false", source);
         Assert.Contains("if (_completed)", source);
         Assert.DoesNotContain("window.kbeautyQrScanner", source, StringComparison.OrdinalIgnoreCase);
-        Assert.DoesNotContain("api/redemptions", source, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("api/redemptions/catalog/{Uri.EscapeDataString(serial)}", source);
+        Assert.Contains("\"api/redemptions\"", source);
         Assert.Contains("api/giftcards/lookup", source);
         Assert.DoesNotContain("AdminApi:SharedSecret", source, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("CashierAuth:SigningKey", source, StringComparison.OrdinalIgnoreCase);
@@ -188,6 +189,42 @@ public sealed class CashierMobileAppTests
         Assert.DoesNotContain("Consultar tarjeta de regalo", giftCardPanel);
         Assert.DoesNotContain("Escanear Gift Card", giftCardPanel);
         Assert.DoesNotContain("Buscar Gift Card", giftCardPanel);
+    }
+
+    [Fact]
+    [Trait("Category", "CashierMobile")]
+    public void Cashier_mobile_reward_redemptions_use_existing_api_and_require_confirmation()
+    {
+        var page = Read("src", "LoyaltyCloud.Cashier", "Components", "Pages", "Home.razor");
+        var service = Read("src", "LoyaltyCloud.Cashier", "Services", "CashierRedemptionService.cs");
+        var contracts = Read("src", "LoyaltyCloud.Cashier", "Services", "CashierContracts.cs");
+        var program = Read("src", "LoyaltyCloud.Cashier", "MauiProgram.cs");
+
+        Assert.Contains("AddSingleton<CashierRedemptionService>", program);
+        Assert.Contains("Canjear recompensa", page);
+        Assert.Contains("GetCatalogAsync", page);
+        Assert.Contains("AvailableRewards", page);
+        Assert.Contains("UnavailableRewards", page);
+        Assert.Contains("Confirmar canje", page);
+        Assert.Contains("RedeemSelectedRewardAsync", page);
+        Assert.Contains("pendingRedemption", page);
+        Assert.Contains("Confirmar entrega", page);
+        Assert.Contains("CancelPendingRedemptionAsync", page);
+        Assert.Contains("RefreshCustomerAndCatalogAsync", page);
+
+        Assert.Contains("api/redemptions/catalog/{Uri.EscapeDataString(serial)}", service);
+        Assert.Contains("new CashierRedeemRewardRequest(serial, rewardCatalogItemId, IdempotencyKey: idempotencyKey.Trim())", service);
+        Assert.Contains("RewardRedemptionCoordinator", page);
+        Assert.Contains("RetryPendingRedemptionAsync", page);
+        Assert.Contains("pendingRewardOperation", page);
+        Assert.Contains("api/redemptions/{redemptionId}/confirm", service);
+        Assert.Contains("api/redemptions/{redemptionId}/cancel", service);
+        Assert.Contains("HttpStatusCode.Unauthorized", service);
+        Assert.Contains("ReadApiErrorAsync", service);
+        Assert.Contains("CashierRewardCatalogItem", contracts);
+        Assert.Contains("CanAfford", contracts);
+        Assert.Contains("CashierRedemptionResponse", contracts);
+        Assert.Contains("CashierCancelRedemptionResponse", contracts);
     }
 
     private static string Read(params string[] parts) =>

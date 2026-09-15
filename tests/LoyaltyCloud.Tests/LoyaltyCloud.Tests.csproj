@@ -42,6 +42,8 @@
   <ItemGroup>
     <Compile Include="../../src/LoyaltyCloud.Cashier/Services/CashierContracts.cs" Link="Cashier/CashierContracts.cs" />
     <Compile Include="../../src/LoyaltyCloud.Cashier/Services/AuthenticatedCashierApiClient.cs" Link="Cashier/AuthenticatedCashierApiClient.cs" />
+    <Compile Include="../../src/LoyaltyCloud.Cashier/Services/CashierRedemptionService.cs" Link="Cashier/CashierRedemptionService.cs" />
+    <Compile Include="../../src/LoyaltyCloud.Cashier/Services/RewardRedemptionCoordinator.cs" Link="Cashier/RewardRedemptionCoordinator.cs" />
     <Compile Include="../../src/LoyaltyCloud.Cashier/Services/CashierGiftCardContracts.cs" Link="Cashier/CashierGiftCardContracts.cs" />
     <Compile Include="../../src/LoyaltyCloud.Cashier/Services/CashierGiftCardApi.cs" Link="Cashier/CashierGiftCardApi.cs" />
     <Compile Include="../../src/LoyaltyCloud.Cashier/Services/GiftCardQrParser.cs" Link="Cashier/GiftCardQrParser.cs" />

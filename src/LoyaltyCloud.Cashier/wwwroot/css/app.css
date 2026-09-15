@@ -215,6 +215,16 @@ h1 {
     font-size: 1rem;
 }
 
+.operation-section h3 {
+    margin: 0;
+    font-size: 0.95rem;
+}
+
+.cashier-actions {
+    display: grid;
+    gap: 10px;
+}
+
 .session-panel {
     display: grid;
     gap: 2px;
@@ -315,4 +325,58 @@ h1 {
 .gift-card-panel .points-balance strong {
     font-size: clamp(1.35rem, 6vw, 2rem);
     overflow-wrap: anywhere;
+}
+
+.reward-list {
+    display: grid;
+    gap: 10px;
+}
+
+.reward-card {
+    display: grid;
+    gap: 12px;
+    padding: 14px;
+    border: 1px solid var(--cashier-border);
+    border-radius: 10px;
+    background: white;
+}
+
+.reward-card > div {
+    display: grid;
+    gap: 4px;
+}
+
+.reward-card small,
+.reward-card span {
+    color: var(--cashier-muted);
+    line-height: 1.35;
+}
+
+.reward-card--unavailable {
+    background: var(--cashier-card);
+    opacity: 0.78;
+}
+
+.redemption-confirm {
+    display: grid;
+    gap: 10px;
+    padding: 14px;
+    border: 1px solid var(--cashier-secondary);
+    border-radius: 10px;
+    background: var(--cashier-card);
+}
+
+.redemption-confirm p {
+    margin: 0;
+    line-height: 1.45;
+}
+
+.redemption-summary {
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
+}
+
+.redemption-summary span {
+    color: var(--cashier-muted);
 }
