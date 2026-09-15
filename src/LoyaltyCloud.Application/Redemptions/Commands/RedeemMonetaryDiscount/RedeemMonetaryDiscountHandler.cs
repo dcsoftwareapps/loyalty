@@ -64,6 +64,30 @@ public sealed class RedeemMonetaryDiscountHandler
             return Result.Fail<RedemptionResponse>($"No se encontro tarjeta '{command.SerialNumber}'.");
         if (card.TenantId != _tenantContext.RequireTenantId())
             return Result.Fail<RedemptionResponse>("La tarjeta no pertenece al tenant actual.");
+
+        var idempotencyKey = string.IsNullOrWhiteSpace(command.IdempotencyKey)
+            ? null
+            : command.IdempotencyKey.Trim();
+        if (idempotencyKey is not null)
+        {
+            var existing = await _redemptions.GetByIdempotencyKeyAsync(idempotencyKey, ct);
+            if (existing is not null)
+            {
+                if (existing.Type != RedemptionType.MonetaryDiscount
+                    || existing.LoyaltyCardId != card.Id
+                    || existing.PointsSpent != command.PointsToRedeem
+                    || existing.MonetaryAmount != command.ExpectedMonetaryAmount
+                    || !string.Equals(existing.MonetaryCurrency, command.ExpectedMonetaryCurrency, StringComparison.OrdinalIgnoreCase)
+                    || existing.MonetaryPointsPerPesoUnit != command.ExpectedPointsPerPesoUnit)
+                {
+                    return Result.Fail<RedemptionResponse>(
+                        "La clave de idempotencia corresponde a otro canje. Revisa el canje pendiente antes de intentar de nuevo.");
+                }
+
+                return Result.Ok(ToResponse(existing, card.CurrentPoints));
+            }
+        }
+
         if (!card.IsActive)
             return Result.Fail<RedemptionResponse>("La tarjeta esta inactiva.");
 
@@ -71,6 +95,16 @@ public sealed class RedeemMonetaryDiscountHandler
         var calculation = MonetaryRedemptionCalculator.Calculate(command.PointsToRedeem, snapshot);
         if (!calculation.IsValid)
             return Result.Fail<RedemptionResponse>(calculation.Error!);
+
+        if (command.ExpectedMonetaryAmount is not null
+            && command.ExpectedMonetaryAmount != calculation.Amount)
+            return Result.Fail<RedemptionResponse>("La tasa de canje cambió. Recalcula el descuento antes de continuar.");
+        if (!string.IsNullOrWhiteSpace(command.ExpectedMonetaryCurrency)
+            && !string.Equals(command.ExpectedMonetaryCurrency, calculation.Currency, StringComparison.OrdinalIgnoreCase))
+            return Result.Fail<RedemptionResponse>("La moneda del canje cambió. Recalcula el descuento antes de continuar.");
+        if (command.ExpectedPointsPerPesoUnit is not null
+            && command.ExpectedPointsPerPesoUnit != calculation.PointsPerPesoUnit)
+            return Result.Fail<RedemptionResponse>("La tasa de canje cambió. Recalcula el descuento antes de continuar.");
 
         if (card.CurrentPoints < command.PointsToRedeem)
             return Result.Fail<RedemptionResponse>(
@@ -95,7 +129,8 @@ public sealed class RedeemMonetaryDiscountHandler
             monetaryAmount: calculation.Amount,
             monetaryCurrency: calculation.Currency,
             pointsPerPesoUnit: calculation.PointsPerPesoUnit,
-            redeemedAtUtc: now);
+            redeemedAtUtc: now,
+            idempotencyKey: idempotencyKey);
         await _redemptions.AddAsync(redemption, ct);
 
         var transactionId = Guid.NewGuid();
@@ -120,17 +155,20 @@ public sealed class RedeemMonetaryDiscountHandler
 
         await TryPushWalletUpdateAsync(card.SerialNumber, ct);
 
-        return Result.Ok(new RedemptionResponse(
+        return Result.Ok(ToResponse(redemption, card.CurrentPoints));
+    }
+
+    private static RedemptionResponse ToResponse(Redemption redemption, int remainingPoints) =>
+        new(
             RedemptionId: redemption.Id,
             RewardName: "Descuento en dinero",
-            PointsSpent: command.PointsToRedeem,
-            RemainingPoints: card.CurrentPoints,
+            PointsSpent: redemption.PointsSpent,
+            RemainingPoints: remainingPoints,
             Status: redemption.Status,
             RedeemedAt: redemption.RedeemedAt,
-            MonetaryAmount: calculation.Amount,
-            MonetaryCurrency: calculation.Currency,
-            MonetaryPointsPerPesoUnit: calculation.PointsPerPesoUnit));
-    }
+            MonetaryAmount: redemption.MonetaryAmount,
+            MonetaryCurrency: redemption.MonetaryCurrency,
+            MonetaryPointsPerPesoUnit: redemption.MonetaryPointsPerPesoUnit);
 
     private async Task TryPushWalletUpdateAsync(string serial, CancellationToken ct)
     {

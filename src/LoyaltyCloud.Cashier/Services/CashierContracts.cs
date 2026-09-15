@@ -81,7 +81,23 @@ public sealed record CashierRedeemRewardRequest(
     [property: JsonPropertyName("rewardCatalogItemId")] Guid? RewardCatalogItemId,
     [property: JsonPropertyName("type")] string? Type = null,
     [property: JsonPropertyName("pointsToRedeem")] int? PointsToRedeem = null,
-    [property: JsonPropertyName("idempotencyKey")] string? IdempotencyKey = null);
+    [property: JsonPropertyName("idempotencyKey")] string? IdempotencyKey = null,
+    [property: JsonPropertyName("monetaryAmount")] decimal? MonetaryAmount = null,
+    [property: JsonPropertyName("monetaryCurrency")] string? MonetaryCurrency = null,
+    [property: JsonPropertyName("monetaryPointsPerPesoUnit")] decimal? MonetaryPointsPerPesoUnit = null);
+
+public sealed record CashierMonetaryPreviewRequest(
+    [property: JsonPropertyName("serialNumber")] string SerialNumber,
+    [property: JsonPropertyName("pointsToRedeem")] int PointsToRedeem);
+
+public sealed record CashierMonetaryRedemptionPreview(
+    [property: JsonPropertyName("serialNumber")] string SerialNumber,
+    [property: JsonPropertyName("pointsToRedeem")] int PointsToRedeem,
+    [property: JsonPropertyName("monetaryAmount")] decimal MonetaryAmount,
+    [property: JsonPropertyName("monetaryCurrency")] string MonetaryCurrency,
+    [property: JsonPropertyName("monetaryPointsPerPesoUnit")] decimal MonetaryPointsPerPesoUnit,
+    [property: JsonPropertyName("currentPoints")] int CurrentPoints,
+    [property: JsonPropertyName("remainingPoints")] int RemainingPoints);
 
 public sealed record CashierRedemptionActionRequest(
     [property: JsonPropertyName("notes")] string? Notes);

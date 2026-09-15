@@ -3,7 +3,10 @@ using LoyaltyCloud.Application.Redemptions.Commands.CancelRedemption;
 using LoyaltyCloud.Application.Redemptions.Commands.RedeemMonetaryDiscount;
 using LoyaltyCloud.Application.Redemptions.Commands.RedeemReward;
 using LoyaltyCloud.Application.Redemptions.Queries.GetRedemptionCatalog;
+using LoyaltyCloud.Application.Redemptions.Queries.PreviewMonetaryRedemption;
+using LoyaltyCloud.API.Auth;
 using MediatR;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
 namespace LoyaltyCloud.API.Controllers;
@@ -29,7 +32,14 @@ public sealed class RedemptionsController : ControllerBase
         var resolvedOperatorId = operatorId ?? "api";
         var result = IsMonetaryDiscount(body)
             ? await _sender.Send(
-                new RedeemMonetaryDiscountCommand(body.SerialNumber, body.PointsToRedeem.GetValueOrDefault(), resolvedOperatorId),
+                new RedeemMonetaryDiscountCommand(
+                    body.SerialNumber,
+                    body.PointsToRedeem.GetValueOrDefault(),
+                    resolvedOperatorId,
+                    body.IdempotencyKey,
+                    body.MonetaryAmount,
+                    body.MonetaryCurrency,
+                    body.MonetaryPointsPerPesoUnit),
                 ct)
             : body.RewardCatalogItemId.HasValue
                 ? await _sender.Send(
@@ -51,6 +61,27 @@ public sealed class RedemptionsController : ControllerBase
             actionName: nameof(Confirm),
             routeValues: new { id = result.Value.RedemptionId },
             value: result.Value);
+    }
+
+    /// <summary>POST /api/redemptions/monetary/preview - calcula un canje monetario sin descontar puntos.</summary>
+    [HttpPost("monetary/preview")]
+    [Authorize(
+        AuthenticationSchemes = CashierAuthDefaults.AuthenticationScheme,
+        Policy = CashierAuthorizationPolicies.CashierOperations)]
+    [ProducesResponseType(typeof(MonetaryRedemptionPreviewDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
+    public async Task<IActionResult> PreviewMonetary(
+        [FromBody] PreviewMonetaryRedemptionRequest body,
+        CancellationToken ct)
+    {
+        var result = await _sender.Send(
+            new PreviewMonetaryRedemptionQuery(body.SerialNumber, body.PointsToRedeem),
+            ct);
+
+        if (result.IsFailure)
+            return BadRequest(new ProblemDetails { Title = "Canje", Detail = result.Error });
+
+        return Ok(result.Value);
     }
 
     /// <summary>PUT /api/redemptions/{id}/confirm — el operador confirma entrega.</summary>
@@ -115,7 +146,11 @@ public sealed class RedemptionsController : ControllerBase
         Guid? RewardCatalogItemId,
         string? Type = null,
         int? PointsToRedeem = null,
-        string? IdempotencyKey = null);
+        string? IdempotencyKey = null,
+        decimal? MonetaryAmount = null,
+        string? MonetaryCurrency = null,
+        decimal? MonetaryPointsPerPesoUnit = null);
+    public sealed record PreviewMonetaryRedemptionRequest(string SerialNumber, int PointsToRedeem);
     public sealed record ConfirmRedemptionRequest(string? Notes);
     public sealed record CancelRedemptionRequest(string? Notes);
 }

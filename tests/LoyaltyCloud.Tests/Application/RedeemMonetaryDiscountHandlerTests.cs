@@ -145,6 +145,82 @@ public class RedeemMonetaryDiscountHandlerTests
 
     [Fact]
     [Trait("Category", "MonetaryRedemption")]
+    public async Task Handle_ShouldReturnExistingRedemption_ForSameIdempotencyKeyAndMonetarySnapshot()
+    {
+        var card = CardWith(250);
+        var existing = new Redemption(
+            Guid.NewGuid(),
+            card.TenantId,
+            card.Id,
+            pointsSpent: 100,
+            monetaryAmount: 10m,
+            monetaryCurrency: "MXN",
+            pointsPerPesoUnit: 10m,
+            redeemedAtUtc: Now,
+            idempotencyKey: "same-key");
+        var lots = new[] { new PointLot(Guid.NewGuid(), card.TenantId, card.Id, Guid.NewGuid(), 250, Now, Now.AddMonths(12), Now) };
+        var handler = BuildHandler(card, lots, rate: 20m, out var captured, existingRedemption: existing);
+
+        var result = await handler.Handle(
+            new RedeemMonetaryDiscountCommand(card.SerialNumber, 100, "cashier", "same-key", 10m, "MXN", 10m),
+            CancellationToken.None);
+
+        Assert.True(result.IsSuccess);
+        Assert.Equal(existing.Id, result.Value.RedemptionId);
+        Assert.Equal(250, card.CurrentPoints);
+        Assert.Null(captured.Redemption);
+        Assert.Null(captured.Transaction);
+        Assert.Empty(captured.Consumptions);
+    }
+
+    [Fact]
+    [Trait("Category", "MonetaryRedemption")]
+    public async Task Handle_ShouldRejectIdempotencyKey_WhenItBelongsToDifferentMonetaryRequest()
+    {
+        var card = CardWith(250);
+        var existing = new Redemption(
+            Guid.NewGuid(),
+            card.TenantId,
+            card.Id,
+            pointsSpent: 100,
+            monetaryAmount: 10m,
+            monetaryCurrency: "MXN",
+            pointsPerPesoUnit: 10m,
+            redeemedAtUtc: Now,
+            idempotencyKey: "same-key");
+        var lots = new[] { new PointLot(Guid.NewGuid(), card.TenantId, card.Id, Guid.NewGuid(), 250, Now, Now.AddMonths(12), Now) };
+        var handler = BuildHandler(card, lots, rate: 10m, out var captured, existingRedemption: existing);
+
+        var result = await handler.Handle(
+            new RedeemMonetaryDiscountCommand(card.SerialNumber, 200, "cashier", "same-key", 20m, "MXN", 10m),
+            CancellationToken.None);
+
+        Assert.True(result.IsFailure);
+        Assert.Contains("idempotencia", result.Error, StringComparison.OrdinalIgnoreCase);
+        Assert.Equal(250, card.CurrentPoints);
+        Assert.Null(captured.Redemption);
+    }
+
+    [Fact]
+    [Trait("Category", "MonetaryRedemption")]
+    public async Task Handle_ShouldRejectCreate_WhenExpectedSnapshotNoLongerMatchesTenantRate()
+    {
+        var card = CardWith(250);
+        var lots = new[] { new PointLot(Guid.NewGuid(), card.TenantId, card.Id, Guid.NewGuid(), 250, Now, Now.AddMonths(12), Now) };
+        var handler = BuildHandler(card, lots, rate: 20m, out var captured);
+
+        var result = await handler.Handle(
+            new RedeemMonetaryDiscountCommand(card.SerialNumber, 100, "cashier", "safe-key", 10m, "MXN", 10m),
+            CancellationToken.None);
+
+        Assert.True(result.IsFailure);
+        Assert.Contains("Recalcula", result.Error, StringComparison.OrdinalIgnoreCase);
+        Assert.Equal(250, card.CurrentPoints);
+        Assert.Null(captured.Redemption);
+    }
+
+    [Fact]
+    [Trait("Category", "MonetaryRedemption")]
     public async Task Cancel_ShouldRestoreMonetaryRedemptionPointsAndLots()
     {
         var card = CardWith(250);
@@ -197,7 +273,8 @@ public class RedeemMonetaryDiscountHandlerTests
         LoyaltyCard card,
         IReadOnlyList<PointLot> lots,
         decimal rate,
-        out CapturedRedemption captured)
+        out CapturedRedemption captured,
+        Redemption? existingRedemption = null)
     {
         captured = new CapturedRedemption();
         var capturedRef = captured;
@@ -221,6 +298,11 @@ public class RedeemMonetaryDiscountHandlerTests
             });
 
         var redemptions = new Mock<IRedemptionRepository>();
+        redemptions.Setup(r => r.GetByIdempotencyKeyAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync((string key, CancellationToken _) =>
+                existingRedemption is not null && existingRedemption.IdempotencyKey == key
+                    ? existingRedemption
+                    : null);
         redemptions.Setup(r => r.AddAsync(It.IsAny<Redemption>(), It.IsAny<CancellationToken>()))
             .Callback<Redemption, CancellationToken>((r, _) => capturedRef.Redemption = r);
 

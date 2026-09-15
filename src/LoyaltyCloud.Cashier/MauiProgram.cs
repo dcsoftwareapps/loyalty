@@ -28,10 +28,18 @@ public static class MauiProgram
         builder.Services.AddSingleton<CashierRedemptionService>();
         builder.Services.AddSingleton<ICashierRewardRedemptionApi>(services =>
             services.GetRequiredService<CashierRedemptionService>());
+        builder.Services.AddSingleton<ICashierMonetaryRedemptionApi>(services =>
+            services.GetRequiredService<CashierRedemptionService>());
         builder.Services.AddSingleton<IRewardRedemptionPendingStore, MauiRewardRedemptionPendingStore>();
         builder.Services.AddSingleton(services => new RewardRedemptionCoordinator(
             services.GetRequiredService<ICashierRewardRedemptionApi>(),
             services.GetRequiredService<IRewardRedemptionPendingStore>(),
+            () => services.GetRequiredService<CashierSessionService>().Current,
+            services.GetRequiredService<CashierApiOptions>().BaseUri.AbsoluteUri));
+        builder.Services.AddSingleton<IMonetaryRedemptionPendingStore, MauiMonetaryRedemptionPendingStore>();
+        builder.Services.AddSingleton(services => new MonetaryRedemptionCoordinator(
+            services.GetRequiredService<ICashierMonetaryRedemptionApi>(),
+            services.GetRequiredService<IMonetaryRedemptionPendingStore>(),
             () => services.GetRequiredService<CashierSessionService>().Current,
             services.GetRequiredService<CashierApiOptions>().BaseUri.AbsoluteUri));
         builder.Services.AddSingleton<ICashierGiftCardApi, CashierGiftCardApi>();

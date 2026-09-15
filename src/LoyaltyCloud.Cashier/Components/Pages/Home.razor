@@ -6,6 +6,7 @@
 @inject IQrScannerService Scanner
 @inject CashierRedemptionService Redemptions
 @inject RewardRedemptionCoordinator RewardRedemptions
+@inject MonetaryRedemptionCoordinator MonetaryRedemptions
 @inject CashierSessionService Sessions
 @inject CashierLoginPreferences LoginPreferences
 
@@ -84,7 +85,7 @@
 
             <div class="segmented" role="group" aria-label="Modo de caja">
                 <button type="button" class="segment @(!giftMode ? "active" : null)" disabled="@(busy || giftBusy || giftPending)" @onclick="ShowPoints">Puntos</button>
-                <button type="button" class="segment @(giftMode ? "active" : null)" disabled="@(busy || giftBusy || HasRewardRedemptionPending)" @onclick="ShowGiftCards">Tarjeta de regalo</button>
+                <button type="button" class="segment @(giftMode ? "active" : null)" disabled="@(busy || giftBusy || HasRedemptionPending)" @onclick="ShowGiftCards">Tarjeta de regalo</button>
             </div>
 
             <div hidden="@(!giftMode)">
@@ -149,7 +150,7 @@
                         <button type="button"
                                 class="primary-button"
                                 @onclick="ShowAddPoints"
-                                disabled="@(busy || HasRewardRedemptionPending)">
+                                disabled="@(busy || HasRedemptionPending)">
                             Sumar puntos
                         </button>
                         <button type="button"
@@ -194,6 +195,20 @@
                             {
                                 <p class="muted">Cargando recompensas...</p>
                             }
+                            else if (pendingMonetaryOperation is not null && pendingRedemption is null)
+                            {
+                                <section class="redemption-confirm">
+                                    <h3>Descuento por resolver</h3>
+                                    <p>No pudimos confirmar si el descuento de <strong>@FormatMoney(pendingMonetaryOperation.MonetaryAmount, pendingMonetaryOperation.MonetaryCurrency)</strong> se registró. Reintenta con la misma cuenta para evitar duplicados.</p>
+                                    <div class="redemption-summary">
+                                        <span>Puntos</span>
+                                        <strong>@pendingMonetaryOperation.PointsToRedeem.ToString("N0") pts</strong>
+                                    </div>
+                                    <button type="button" class="primary-button" @onclick="RetryPendingMonetaryRedemptionAsync" disabled="@busy">
+                                        @(busy ? "Reintentando..." : "Reintentar descuento pendiente")
+                                    </button>
+                                </section>
+                            }
                             else if (pendingRewardOperation is not null && pendingRedemption is null)
                             {
                                 <section class="redemption-confirm">
@@ -212,11 +227,18 @@
                             {
                                 <section class="redemption-confirm">
                                     <h3>Canje pendiente</h3>
-                                    <p>Entrega <strong>@pendingRedemption.RewardName</strong> y confirma el canje.</p>
+                                    <p>@PendingRedemptionInstruction</p>
                                     <div class="redemption-summary">
                                         <span>Costo</span>
                                         <strong>@pendingRedemption.PointsSpent.ToString("N0") pts</strong>
                                     </div>
+                                    @if (pendingRedemption.MonetaryAmount is not null)
+                                    {
+                                        <div class="redemption-summary">
+                                            <span>Descuento</span>
+                                            <strong>@FormatMoney(pendingRedemption.MonetaryAmount.Value, pendingRedemption.MonetaryCurrency)</strong>
+                                        </div>
+                                    }
                                     <div class="redemption-summary">
                                         <span>Saldo después</span>
                                         <strong>@pendingRedemption.RemainingPoints.ToString("N0") pts</strong>
@@ -256,57 +278,107 @@
                             }
                             else
                             {
-                                @if (AvailableRewards.Count > 0)
-                                {
-                                    <div class="reward-list">
-                                        @foreach (var reward in AvailableRewards)
-                                        {
-                                            <article class="reward-card">
-                                                <div>
-                                                    <strong>@reward.Name</strong>
-                                                    @if (!string.IsNullOrWhiteSpace(reward.Description))
-                                                    {
-                                                        <small>@reward.Description</small>
-                                                    }
-                                                    <span>@reward.PointsCost.ToString("N0") pts</span>
-                                                </div>
-                                                <button type="button" class="primary-button" @onclick="@(() => SelectReward(reward))" disabled="@busy">
-                                                    Elegir
-                                                </button>
-                                            </article>
-                                        }
-                                    </div>
-                                }
+                                <div class="segmented segmented--compact" role="group" aria-label="Tipo de canje">
+                                    <button type="button" class="segment @(redemptionMode == RedemptionMode.CatalogRewards ? "active" : null)" disabled="@busy" @onclick="ShowCatalogRewards">Recompensas</button>
+                                    <button type="button" class="segment @(redemptionMode == RedemptionMode.MonetaryDiscount ? "active" : null)" disabled="@busy" @onclick="ShowMonetaryDiscount">Descuento con puntos</button>
+                                </div>
 
-                                @if (UnavailableRewards.Count > 0)
+                                @if (redemptionMode == RedemptionMode.CatalogRewards)
                                 {
-                                    <div class="reward-list">
-                                        @foreach (var reward in UnavailableRewards)
-                                        {
-                                            <article class="reward-card reward-card--unavailable">
-                                                <div>
-                                                    <strong>@reward.Name</strong>
-                                                    @if (!string.IsNullOrWhiteSpace(reward.Description))
-                                                    {
-                                                        <small>@reward.Description</small>
-                                                    }
-                                                    <span>@reward.PointsCost.ToString("N0") pts</span>
-                                                    <small>Faltan @Math.Max(0, reward.PointsCost - customer.CurrentPoints).ToString("N0") pts</small>
-                                                </div>
-                                            </article>
-                                        }
-                                    </div>
-                                }
+                                    @if (AvailableRewards.Count > 0)
+                                    {
+                                        <div class="reward-list">
+                                            @foreach (var reward in AvailableRewards)
+                                            {
+                                                <article class="reward-card">
+                                                    <div>
+                                                        <strong>@reward.Name</strong>
+                                                        @if (!string.IsNullOrWhiteSpace(reward.Description))
+                                                        {
+                                                            <small>@reward.Description</small>
+                                                        }
+                                                        <span>@reward.PointsCost.ToString("N0") pts</span>
+                                                    </div>
+                                                    <button type="button" class="primary-button" @onclick="@(() => SelectReward(reward))" disabled="@busy">
+                                                        Elegir
+                                                    </button>
+                                                </article>
+                                            }
+                                        </div>
+                                    }
 
-                                @if (catalog is not null && catalog.Count == 0)
+                                    @if (UnavailableRewards.Count > 0)
+                                    {
+                                        <div class="reward-list">
+                                            @foreach (var reward in UnavailableRewards)
+                                            {
+                                                <article class="reward-card reward-card--unavailable">
+                                                    <div>
+                                                        <strong>@reward.Name</strong>
+                                                        @if (!string.IsNullOrWhiteSpace(reward.Description))
+                                                        {
+                                                            <small>@reward.Description</small>
+                                                        }
+                                                        <span>@reward.PointsCost.ToString("N0") pts</span>
+                                                        <small>Faltan @Math.Max(0, reward.PointsCost - customer.CurrentPoints).ToString("N0") pts</small>
+                                                    </div>
+                                                </article>
+                                            }
+                                        </div>
+                                    }
+
+                                    @if (catalog is not null && catalog.Count == 0)
+                                    {
+                                        <p class="muted">No hay recompensas disponibles para este cliente.</p>
+                                    }
+                                }
+                                else if (monetaryPreview is not null)
                                 {
-                                    <p class="muted">No hay recompensas disponibles para este cliente.</p>
+                                    <section class="redemption-confirm">
+                                        <h3>Confirmar descuento</h3>
+                                        <p>Aplicar descuento de <strong>@FormatMoney(monetaryPreview.MonetaryAmount, monetaryPreview.MonetaryCurrency)</strong>.</p>
+                                        <div class="redemption-summary">
+                                            <span>Puntos</span>
+                                            <strong>@monetaryPreview.PointsToRedeem.ToString("N0") pts</strong>
+                                        </div>
+                                        <div class="redemption-summary">
+                                            <span>Saldo actual</span>
+                                            <strong>@monetaryPreview.CurrentPoints.ToString("N0") pts</strong>
+                                        </div>
+                                        <div class="redemption-summary">
+                                            <span>Saldo después</span>
+                                            <strong>@monetaryPreview.RemainingPoints.ToString("N0") pts</strong>
+                                        </div>
+                                        <button type="button" class="primary-button" @onclick="RedeemMonetaryDiscountAsync" disabled="@busy">
+                                            @(busy ? "Procesando..." : "Confirmar canje")
+                                        </button>
+                                        <button type="button" class="secondary-button" @onclick="CancelMonetaryPreview" disabled="@busy">
+                                            Cancelar
+                                        </button>
+                                    </section>
+                                }
+                                else
+                                {
+                                    <div class="login-form">
+                                        <p class="muted">Convierte puntos disponibles en descuento para la compra actual.</p>
+                                        <label for="monetaryPoints">Puntos a utilizar</label>
+                                        <input id="monetaryPoints"
+                                               class="input"
+                                               inputmode="numeric"
+                                               autocomplete="off"
+                                               disabled="@busy"
+                                               @bind="monetaryPointsInput"
+                                               @bind:event="oninput" />
+                                        <button type="button" class="primary-button" @onclick="PreviewMonetaryDiscountAsync" disabled="@IsPreviewMonetaryDisabled">
+                                            @(busy ? "Calculando..." : "Continuar")
+                                        </button>
+                                    </div>
                                 }
                             }
                         </section>
                     }
 
-                    <button type="button" class="secondary-button" @onclick="ClearCustomer" disabled="@(busy || HasRewardRedemptionPending)">
+                    <button type="button" class="secondary-button" @onclick="ClearCustomer" disabled="@(busy || HasRedemptionPending)">
                         Otro cliente
                     </button>
                 }
@@ -324,8 +396,12 @@
     private IReadOnlyList<CashierRewardCatalogItem>? catalog;
     private CashierRewardCatalogItem? selectedReward;
     private PendingRewardRedemption? pendingRewardOperation;
+    private PendingMonetaryRedemption? pendingMonetaryOperation;
     private CashierRedemptionResponse? pendingRedemption;
+    private CashierMonetaryRedemptionPreview? monetaryPreview;
     private PointsOperation pointsOperation = PointsOperation.AddPoints;
+    private RedemptionMode redemptionMode = RedemptionMode.CatalogRewards;
+    private string monetaryPointsInput = string.Empty;
     private bool restoring = true;
     private bool busy;
     private bool catalogLoading;
@@ -357,7 +433,15 @@
     private bool IsAddPointsDisabled =>
         busy || customer is null || points.PurchaseAmount is null || points.PurchaseAmount <= 0m;
 
-    private bool HasRewardRedemptionPending => pendingRewardOperation is not null || pendingRedemption is not null;
+    private bool HasRedemptionPending => pendingRewardOperation is not null || pendingMonetaryOperation is not null || pendingRedemption is not null;
+
+    private bool IsPreviewMonetaryDisabled =>
+        busy || customer is null || !TryParsePositivePoints(monetaryPointsInput, out _);
+
+    private string PendingRedemptionInstruction =>
+        pendingRedemption?.MonetaryAmount is not null
+            ? $"Aplica el descuento de {FormatMoney(pendingRedemption.MonetaryAmount.Value, pendingRedemption.MonetaryCurrency)} y confirma el canje."
+            : $"Entrega {pendingRedemption?.RewardName} y confirma el canje.";
 
     private IReadOnlyList<CashierRewardCatalogItem> AvailableRewards =>
         catalog?.Where(reward => reward.CanAfford).ToList() ?? [];
@@ -528,11 +612,11 @@
 
     private void ShowAddPoints()
     {
-        if (busy || HasRewardRedemptionPending)
+        if (busy || HasRedemptionPending)
             return;
 
         pointsOperation = PointsOperation.AddPoints;
-        selectedReward = null;
+        ClearRedemptionSelection();
         errorMessage = null;
         successMessage = null;
     }
@@ -543,7 +627,7 @@
             return;
 
         pointsOperation = PointsOperation.RedeemReward;
-        selectedReward = null;
+        ClearRedemptionSelection();
         errorMessage = null;
         successMessage = null;
 
@@ -579,6 +663,7 @@
             return;
 
         selectedReward = reward;
+        monetaryPreview = null;
         errorMessage = null;
         successMessage = null;
     }
@@ -587,6 +672,91 @@
     {
         selectedReward = null;
         errorMessage = null;
+    }
+
+    private void ShowCatalogRewards()
+    {
+        if (busy)
+            return;
+
+        redemptionMode = RedemptionMode.CatalogRewards;
+        ClearRedemptionSelection();
+    }
+
+    private void ShowMonetaryDiscount()
+    {
+        if (busy)
+            return;
+
+        redemptionMode = RedemptionMode.MonetaryDiscount;
+        ClearRedemptionSelection();
+    }
+
+    private void CancelMonetaryPreview()
+    {
+        monetaryPreview = null;
+        errorMessage = null;
+    }
+
+    private async Task PreviewMonetaryDiscountAsync()
+    {
+        if (busy || customer is null || !TryParsePositivePoints(monetaryPointsInput, out var pointsToRedeem))
+            return;
+
+        busy = true;
+        errorMessage = null;
+        successMessage = null;
+        try
+        {
+            var result = await Redemptions.PreviewMonetaryAsync(customer.SerialNumber, pointsToRedeem);
+            if (!result.Succeeded || result.Value is null)
+            {
+                errorMessage = result.ErrorMessage ?? "No fue posible calcular el descuento.";
+                if (result.Unauthorized)
+                    session = null;
+                return;
+            }
+
+            monetaryPreview = result.Value;
+        }
+        finally
+        {
+            busy = false;
+        }
+    }
+
+    private async Task RedeemMonetaryDiscountAsync()
+    {
+        if (busy || customer is null || monetaryPreview is null)
+            return;
+
+        busy = true;
+        errorMessage = null;
+        successMessage = null;
+        var serial = customer.SerialNumber;
+        try
+        {
+            var result = await MonetaryRedemptions.BeginAsync(monetaryPreview);
+            pendingMonetaryOperation = await MonetaryRedemptions.LoadAsync();
+            if (!result.Succeeded || result.Value is null)
+            {
+                errorMessage = result.ErrorMessage ?? "No fue posible iniciar el descuento.";
+                if (result.Unauthorized)
+                    session = null;
+                return;
+            }
+
+            pendingRedemption = result.Value;
+            pendingMonetaryOperation ??= await MonetaryRedemptions.LoadAsync();
+            monetaryPreview = null;
+            monetaryPointsInput = string.Empty;
+            successMessage = "Descuento iniciado. Confirma la entrega o cancela para restaurar puntos.";
+            await RefreshCustomerAndCatalogAsync(serial);
+        }
+        finally
+        {
+            busy = false;
+        }
     }
 
     private async Task RedeemSelectedRewardAsync()
@@ -654,6 +824,38 @@
         }
     }
 
+    private async Task RetryPendingMonetaryRedemptionAsync()
+    {
+        if (busy || customer is null || pendingMonetaryOperation is null)
+            return;
+
+        busy = true;
+        errorMessage = null;
+        successMessage = null;
+        var serial = customer.SerialNumber;
+        try
+        {
+            var result = await MonetaryRedemptions.RetryAsync();
+            pendingMonetaryOperation = await MonetaryRedemptions.LoadAsync();
+            if (!result.Succeeded || result.Value is null)
+            {
+                errorMessage = result.ErrorMessage ?? "No fue posible resolver el descuento pendiente.";
+                if (result.Unauthorized)
+                    session = null;
+                return;
+            }
+
+            pendingRedemption = result.Value;
+            pendingMonetaryOperation ??= await MonetaryRedemptions.LoadAsync();
+            successMessage = "Descuento iniciado. Confirma la entrega o cancela para restaurar puntos.";
+            await RefreshCustomerAndCatalogAsync(serial);
+        }
+        finally
+        {
+            busy = false;
+        }
+    }
+
     private async Task ConfirmPendingRedemptionAsync()
     {
         if (busy || customer is null || pendingRedemption is null)
@@ -675,9 +877,7 @@
                 return;
             }
 
-            pendingRedemption = null;
-            pendingRewardOperation = null;
-            await RewardRedemptions.ClearAsync();
+            await ClearPendingRedemptionAsync();
             successMessage = $"Canje confirmado: {rewardName}.";
             await RefreshCustomerAndCatalogAsync(serial);
         }
@@ -707,9 +907,7 @@
                 return;
             }
 
-            pendingRedemption = null;
-            pendingRewardOperation = null;
-            await RewardRedemptions.ClearAsync();
+            await ClearPendingRedemptionAsync();
             successMessage = $"Canje cancelado. Se restauraron {result.Value.PointsRestored:N0} puntos.";
             await RefreshCustomerAndCatalogAsync(serial);
         }
@@ -750,13 +948,34 @@
         catalog = null;
         selectedReward = null;
         pendingRewardOperation = null;
+        pendingMonetaryOperation = null;
         pendingRedemption = null;
+        monetaryPreview = null;
+        monetaryPointsInput = string.Empty;
+        redemptionMode = RedemptionMode.CatalogRewards;
         pointsOperation = PointsOperation.AddPoints;
         catalogLoading = false;
     }
 
+    private void ClearRedemptionSelection()
+    {
+        selectedReward = null;
+        monetaryPreview = null;
+        monetaryPointsInput = string.Empty;
+    }
+
     private async Task RestorePendingRewardRedemptionAsync()
     {
+        try
+        {
+            pendingMonetaryOperation = await MonetaryRedemptions.LoadAsync();
+        }
+        catch (InvalidOperationException)
+        {
+            errorMessage = "Hay un descuento pendiente que no se pudo verificar. Inicia sesión con la misma cuenta y contacta al administrador.";
+            return;
+        }
+
         try
         {
             pendingRewardOperation = await RewardRedemptions.LoadAsync();
@@ -767,16 +986,19 @@
             return;
         }
 
-        if (pendingRewardOperation is null)
+        if (pendingMonetaryOperation is null && pendingRewardOperation is null)
             return;
 
         giftMode = false;
         pointsOperation = PointsOperation.RedeemReward;
         selectedReward = null;
-        pendingRedemption = pendingRewardOperation.CreatedRedemption;
-        lookup.SerialNumber = pendingRewardOperation.SerialNumber;
+        monetaryPreview = null;
+        redemptionMode = pendingMonetaryOperation is not null ? RedemptionMode.MonetaryDiscount : RedemptionMode.CatalogRewards;
+        pendingRedemption = pendingMonetaryOperation?.CreatedRedemption ?? pendingRewardOperation?.CreatedRedemption;
+        var serial = pendingMonetaryOperation?.SerialNumber ?? pendingRewardOperation!.SerialNumber;
+        lookup.SerialNumber = serial;
 
-        var result = await Customers.GetCustomerAsync(pendingRewardOperation.SerialNumber);
+        var result = await Customers.GetCustomerAsync(serial);
         if (result.Succeeded && result.Value is not null)
             customer = result.Value;
         else if (result.Unauthorized)
@@ -786,6 +1008,28 @@
             ? "Hay un canje pendiente por resolver. Reintenta antes de iniciar otro."
             : "Hay un canje pendiente. Confirma la entrega o cancela para restaurar puntos.";
     }
+
+    private async Task ClearPendingRedemptionAsync()
+    {
+        var wasMonetary = pendingMonetaryOperation is not null
+            || pendingRedemption?.MonetaryAmount is not null;
+        pendingRedemption = null;
+        pendingRewardOperation = null;
+        pendingMonetaryOperation = null;
+        if (wasMonetary)
+            await MonetaryRedemptions.ClearAsync();
+        else
+            await RewardRedemptions.ClearAsync();
+    }
+
+    private static bool TryParsePositivePoints(string value, out int pointsToRedeem) =>
+        int.TryParse(value, System.Globalization.NumberStyles.Integer, System.Globalization.CultureInfo.InvariantCulture, out pointsToRedeem)
+        && pointsToRedeem > 0;
+
+    private static string FormatMoney(decimal amount, string? currency) =>
+        string.Equals(currency, "MXN", StringComparison.OrdinalIgnoreCase)
+            ? $"${amount:N2}"
+            : $"{amount:N2} {currency}";
 
     private void OnSessionChanged()
     {
@@ -835,5 +1079,11 @@
     {
         AddPoints,
         RedeemReward
+    }
+
+    private enum RedemptionMode
+    {
+        CatalogRewards,
+        MonetaryDiscount
     }
 }
