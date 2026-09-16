@@ -1,6 +1,7 @@
 using System.ComponentModel.DataAnnotations;
 using LoyaltyCloud.API.Auth;
 using LoyaltyCloud.Application.GiftCards;
+using LoyaltyCloud.Domain.Enums;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
@@ -11,8 +12,45 @@ namespace LoyaltyCloud.API.Controllers;
 [Produces("application/json")]
 [Authorize(AuthenticationSchemes = CashierAuthDefaults.AuthenticationScheme,
     Policy = CashierAuthorizationPolicies.CashierOperations)]
-public sealed class GiftCardsController(IGiftCardService giftCards) : ControllerBase
+public sealed class GiftCardsController(IGiftCardService giftCards, IGiftCardDeliveryService delivery) : ControllerBase
 {
+    [HttpGet("issue/options")]
+    public async Task<IActionResult> IssueOptions(CancellationToken ct)
+    {
+        var settings = await giftCards.GetSettingsAsync(ct);
+        if (!settings.IsEnabled)
+            return Error(403, GiftCardFailure.Unavailable, "El módulo de tarjetas de regalo no está disponible.");
+
+        return Ok(new IssueOptionsResponse(settings.Currency, settings.AllowCustomAmount,
+            settings.ExpirationMode.ToString(), settings.DefaultExpirationMonths,
+            settings.Denominations.Where(x => x.IsActive)
+                .OrderBy(x => x.Amount)
+                .Select(x => new IssueDenomination(x.Amount, x.Currency))
+                .ToList()));
+    }
+
+    [HttpPost("issue")]
+    public async Task<IActionResult> Issue(IssueRequest request, CancellationToken ct)
+    {
+        try
+        {
+            var issued = await giftCards.IssueAsync(new IssueGiftCardRequest(request.Amount, null,
+                request.RecipientName, request.RecipientEmail, null, request.SenderName,
+                request.PersonalMessage, GiftCardSource.Manual, request.ExpiresAtUtc,
+                request.IdempotencyKey), ct);
+            var settings = await giftCards.GetSettingsAsync(ct);
+            var claimUrl = await delivery.GetClaimUrlAsync(issued.ClaimToken, ct);
+            return Ok(new IssueResponse(Summarize(issued.Card, settings.AllowPartialRedemption), claimUrl));
+        }
+        catch (GiftCardUnavailableException ex) { return Error(403, GiftCardFailure.Unavailable, ex.Message); }
+        catch (ArgumentException ex) { return Error(400, GiftCardFailure.InvalidInput, ex.Message); }
+        catch (InvalidOperationException ex) when (ex.Message.Contains("idempotencia", StringComparison.OrdinalIgnoreCase))
+        {
+            return Error(409, GiftCardFailure.IdempotencyConflict, ex.Message);
+        }
+        catch (InvalidOperationException ex) { return Error(400, GiftCardFailure.InvalidInput, ex.Message); }
+    }
+
     [HttpPost("lookup")]
     public async Task<IActionResult> Lookup(LookupRequest request, CancellationToken ct)
     {
@@ -80,8 +118,19 @@ public sealed class GiftCardsController(IGiftCardService giftCards) : Controller
     public sealed record RedeemRequest(decimal Amount,
         [Required, StringLength(100)] string IdempotencyKey,
         [StringLength(200)] string? Reference);
+    public sealed record IssueRequest(decimal Amount,
+        [Required, StringLength(150)] string RecipientName,
+        [StringLength(254), EmailAddress] string? RecipientEmail,
+        [StringLength(150)] string? SenderName,
+        [StringLength(500)] string? PersonalMessage,
+        DateTime? ExpiresAtUtc,
+        [Required, StringLength(100)] string IdempotencyKey);
+    public sealed record IssueDenomination(decimal Amount, string Currency);
+    public sealed record IssueOptionsResponse(string Currency, bool AllowCustomAmount,
+        string ExpirationMode, int? DefaultExpirationMonths, IReadOnlyList<IssueDenomination> Denominations);
 
     public sealed record CardSummary(string Code, decimal InitialBalance, decimal RemainingBalance,
         string Currency, string Status, DateTime? ExpiresAtUtc, bool AllowPartialRedemption, string RecipientName);
     public sealed record RedeemResponse(decimal RedeemedAmount, CardSummary Card, bool WasIdempotent);
+    public sealed record IssueResponse(CardSummary Card, string? ClaimUrl);
 }

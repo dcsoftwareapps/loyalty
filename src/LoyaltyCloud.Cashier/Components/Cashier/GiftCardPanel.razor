@@ -1,10 +1,18 @@
 @implements IDisposable
 @inject ICashierGiftCardApi GiftCards
 @inject GiftCardRedemptionCoordinator Redemptions
+@inject GiftCardIssuanceCoordinator Issuances
 @inject IQrScannerService Scanner
 @inject CashierSessionService Sessions
 
 <div class="operation-section gift-card-panel">
+    <div class="segmented segmented--compact" role="group" aria-label="Modo de tarjeta de regalo">
+        <button type="button" class="segment @(surface == GiftCardSurface.LookupRedeem ? "active" : null)"
+                disabled="@busy" @onclick="ShowLookupRedeem">Consultar / Canjear</button>
+        <button type="button" class="segment @(surface == GiftCardSurface.Issue ? "active" : null)"
+                disabled="@busy" @onclick="ShowIssueAsync">Emitir</button>
+    </div>
+
     @if (error is not null)
     {
         <div class="alert alert-error" role="alert">@error</div>
@@ -13,61 +21,14 @@
     {
         <div class="alert alert-success" role="status">@success</div>
     }
-    @if (storageBlocked)
+
+    @if (surface == GiftCardSurface.Issue)
     {
-        <p class="muted">No se puede verificar si hay un canje pendiente. No inicies otro cobro.</p>
-        <button class="secondary-button" disabled="@busy" @onclick="RestoreAsync">Volver a comprobar</button>
-    }
-    else if (pending is not null)
-    {
-        <section class="customer-panel">
-            <h2>Canje pendiente de confirmación</h2>
-            <div><span>Tarjeta</span><strong>@pending.Code</strong></div>
-            <div><span>Monto solicitado</span><strong>@pending.Request.Amount.ToString("N2")</strong></div>
-            <p class="muted">Comprueba el resultado antes de iniciar otro canje. Se reenviará la misma operación, sin cambiar el monto.</p>
-            <button class="primary-button" disabled="@busy" @onclick="RetryAsync">@(busy ? "Confirmando..." : "Reintentar confirmación")</button>
-        </section>
-    }
-    else if (card is null)
-    {
-        <h2>Tarjeta de regalo</h2>
-        <button class="scanner-button" disabled="@busy" @onclick="ScanAsync">@(busy ? "Procesando..." : "Escanear")</button>
-        <form class="login-form" @onsubmit="LookupAsync" @onsubmit:preventDefault>
-            <label for="gift-code">Código de Gift Card</label>
-            <input id="gift-code" class="input input--mono" autocomplete="off" autocapitalize="characters"
-                   placeholder="GC-XXXX-XXXX-XXXX" @bind="lookupText" disabled="@busy" />
-            <button type="submit" class="secondary-button" disabled="@(busy || string.IsNullOrWhiteSpace(lookupText))">Buscar</button>
-        </form>
+        @IssueContent()
     }
     else
     {
-        <section class="customer-panel">
-            <div><span>Gift Card</span><strong>@card.Code</strong></div>
-            @if (!string.IsNullOrWhiteSpace(card.RecipientName))
-            {
-                <div><span>Destinatario</span><strong>@card.RecipientName</strong></div>
-            }
-            <div><span>Saldo original</span><strong>@Money(card.InitialBalance, card.Currency)</strong></div>
-            <div class="points-balance"><span>Saldo @((card.Status == "Active") ? "disponible" : "registrado")</span><strong>@Money(card.RemainingBalance, card.Currency)</strong></div>
-            <div><span>Estado</span><strong>@StatusLabel(card.Status)</strong></div>
-            <div><span>Vigencia</span><strong>@(card.ExpiresAtUtc?.ToLocalTime().ToString("g") ?? "Sin expiración")</strong></div>
-        </section>
-        @if (card.Status == "Active" && card.RemainingBalance > 0)
-        {
-            <form class="login-form" @onsubmit="RedeemAsync" @onsubmit:preventDefault>
-                <label for="gift-amount">Monto a canjear (@card.Currency)</label>
-                <input id="gift-amount" type="number" class="input" min="0.01" step="0.01"
-                       max="@card.RemainingBalance.ToString(System.Globalization.CultureInfo.InvariantCulture)"
-                       @bind="amount" disabled="@busy" readonly="@(!card.AllowPartialRedemption)" />
-                @if (!card.AllowPartialRedemption)
-                {
-                    <p class="muted">Este negocio solo permite canjear el saldo completo.</p>
-                }
-                <button type="button" class="secondary-button" disabled="@busy" @onclick="UseFullBalance">Usar saldo completo</button>
-                <button type="submit" class="primary-button" disabled="@(busy || amount is null || amount <= 0)">@(busy ? "Canjeando..." : "Confirmar canje")</button>
-            </form>
-        }
-        <button class="secondary-button" disabled="@busy" @onclick="Reset">Otra Gift Card</button>
+        @LookupRedeemContent()
     }
 </div>
 
@@ -75,12 +36,23 @@
     [Parameter, EditorRequired] public CashierSession Session { get; set; } = null!;
     [Parameter] public EventCallback<bool> BusyChanged { get; set; }
     [Parameter] public EventCallback<bool> PendingChanged { get; set; }
+
+    private GiftCardSurface surface = GiftCardSurface.LookupRedeem;
     private CashierGiftCard? card;
     private PendingGiftCardRedemption? pending;
+    private PendingGiftCardIssuance? pendingIssue;
+    private GiftCardIssueOptions? issueOptions;
+    private GiftCardIssueReceipt? issued;
     private string lookupText = string.Empty;
     private decimal? amount;
+    private decimal? issueAmount;
+    private string issueRecipientName = string.Empty;
+    private string? issueRecipientEmail;
+    private DateTime? issueExpiresAtUtc;
+    private bool confirmingIssue;
     private bool busy;
     private bool storageBlocked;
+    private bool issueOptionsLoaded;
     private bool disposed;
     private string? error;
     private string? success;
@@ -88,6 +60,161 @@
 
     protected override Task OnInitializedAsync() => RestoreAsync();
     public void Dispose() => disposed = true;
+
+    private RenderFragment LookupRedeemContent() => @<text>
+        @if (storageBlocked)
+        {
+            <p class="muted">No se puede verificar si hay un canje pendiente. No inicies otro cobro.</p>
+            <button class="secondary-button" disabled="@busy" @onclick="RestoreAsync">Volver a comprobar</button>
+        }
+        else if (pending is not null)
+        {
+            <section class="customer-panel">
+                <h2>Canje pendiente de confirmación</h2>
+                <div><span>Tarjeta</span><strong>@pending.Code</strong></div>
+                <div><span>Monto solicitado</span><strong>@pending.Request.Amount.ToString("N2")</strong></div>
+                <p class="muted">Comprueba el resultado antes de iniciar otro canje. Se reenviará la misma operación, sin cambiar el monto.</p>
+                <button class="primary-button" disabled="@busy" @onclick="RetryAsync">@(busy ? "Confirmando..." : "Reintentar confirmación")</button>
+            </section>
+        }
+        else if (card is null)
+        {
+            <h2>Tarjeta de regalo</h2>
+            <button class="scanner-button" disabled="@busy" @onclick="ScanAsync">@(busy ? "Procesando..." : "Escanear")</button>
+            <form class="login-form" @onsubmit="LookupAsync" @onsubmit:preventDefault>
+                <label for="gift-code">Código</label>
+                <input id="gift-code" class="input input--mono" autocomplete="off" autocapitalize="characters"
+                       placeholder="GC-XXXX-XXXX-XXXX" @bind="lookupText" disabled="@busy" />
+                <button type="submit" class="secondary-button" disabled="@(busy || string.IsNullOrWhiteSpace(lookupText))">Buscar</button>
+            </form>
+        }
+        else
+        {
+            <section class="customer-panel">
+                <div><span>Gift Card</span><strong>@card.Code</strong></div>
+                @if (!string.IsNullOrWhiteSpace(card.RecipientName))
+                {
+                    <div><span>Destinatario</span><strong>@card.RecipientName</strong></div>
+                }
+                <div><span>Saldo original</span><strong>@Money(card.InitialBalance, card.Currency)</strong></div>
+                <div class="points-balance"><span>Saldo @((card.Status == "Active") ? "disponible" : "registrado")</span><strong>@Money(card.RemainingBalance, card.Currency)</strong></div>
+                <div><span>Estado</span><strong>@StatusLabel(card.Status)</strong></div>
+                <div><span>Vigencia</span><strong>@(card.ExpiresAtUtc?.ToLocalTime().ToString("g") ?? "Sin expiración")</strong></div>
+            </section>
+            @if (card.Status == "Active" && card.RemainingBalance > 0)
+            {
+                <form class="login-form" @onsubmit="RedeemAsync" @onsubmit:preventDefault>
+                    <label for="gift-amount">Monto a canjear (@card.Currency)</label>
+                    <input id="gift-amount" type="number" class="input" min="0.01" step="0.01"
+                           max="@card.RemainingBalance.ToString(System.Globalization.CultureInfo.InvariantCulture)"
+                           @bind="amount" disabled="@busy" readonly="@(!card.AllowPartialRedemption)" />
+                    @if (!card.AllowPartialRedemption)
+                    {
+                        <p class="muted">Este negocio solo permite canjear el saldo completo.</p>
+                    }
+                    <button type="button" class="secondary-button" disabled="@busy" @onclick="UseFullBalance">Usar saldo completo</button>
+                    <button type="submit" class="primary-button" disabled="@(busy || amount is null || amount <= 0)">@(busy ? "Canjeando..." : "Confirmar canje")</button>
+                </form>
+            }
+            <button class="secondary-button" disabled="@busy" @onclick="Reset">Otra Gift Card</button>
+        }
+    </text>;
+
+    private RenderFragment IssueContent() => @<text>
+        @if (storageBlocked)
+        {
+            <p class="muted">No se puede verificar si hay una emisión pendiente. No inicies otra venta.</p>
+            <button class="secondary-button" disabled="@busy" @onclick="RestoreAsync">Volver a comprobar</button>
+        }
+        else if (pendingIssue is not null)
+        {
+            <section class="customer-panel">
+                <h2>Emisión pendiente de confirmación</h2>
+                <div><span>Destinatario</span><strong>@pendingIssue.Request.RecipientName</strong></div>
+                <div><span>Monto</span><strong>@Money(pendingIssue.Request.Amount, issueOptions?.Currency ?? "MXN")</strong></div>
+                <p class="muted">Comprueba el resultado antes de iniciar otra venta. Se reenviará la misma operación.</p>
+                <button class="primary-button" disabled="@busy" @onclick="RetryIssueAsync">@(busy ? "Confirmando..." : "Reintentar confirmación")</button>
+            </section>
+        }
+        else if (issued is not null)
+        {
+            <section class="customer-panel">
+                <h2>Gift Card emitida</h2>
+                <div><span>Código</span><strong>@issued.Card.Code</strong></div>
+                <div class="points-balance"><span>Saldo</span><strong>@Money(issued.Card.RemainingBalance, issued.Card.Currency)</strong></div>
+                @if (!string.IsNullOrWhiteSpace(issued.Card.RecipientName))
+                {
+                    <div><span>Destinatario</span><strong>@issued.Card.RecipientName</strong></div>
+                }
+                <div><span>Estado</span><strong>@StatusLabel(issued.Card.Status)</strong></div>
+                <div><span>Vigencia</span><strong>@(issued.Card.ExpiresAtUtc?.ToLocalTime().ToString("g") ?? "Sin expiración")</strong></div>
+                @if (!string.IsNullOrWhiteSpace(issued.ClaimUrl))
+                {
+                    <div><span>Enlace</span><strong>@issued.ClaimUrl</strong></div>
+                }
+            </section>
+            @if (!string.IsNullOrWhiteSpace(issued.ClaimUrl))
+            {
+                <button class="secondary-button" disabled="@busy" @onclick="ShareIssuedGiftCardAsync">Compartir enlace</button>
+            }
+            <button class="secondary-button" disabled="@busy" @onclick="ResetIssue">Emitir otra tarjeta</button>
+        }
+        else if (issueOptions is null)
+        {
+            <h2>Emitir Gift Card</h2>
+            <p class="muted">No fue posible cargar las opciones de emisión.</p>
+            <button class="secondary-button" disabled="@busy" @onclick="LoadIssueOptionsAsync">Reintentar</button>
+        }
+        else if (confirmingIssue)
+        {
+            <section class="redemption-confirm">
+                <h2>Confirmar emisión</h2>
+                <p>Se emitirá una Gift Card por <strong>@Money(issueAmount!.Value, issueOptions.Currency)</strong> para <strong>@issueRecipientName.Trim()</strong>.</p>
+                @if (issueExpiresAtUtc is not null)
+                {
+                    <p>Vigencia: @issueExpiresAtUtc.Value.ToString("g")</p>
+                }
+                <div class="cashier-actions">
+                    <button class="secondary-button" disabled="@busy" @onclick="CancelIssueConfirmation">Cancelar</button>
+                    <button class="primary-button" disabled="@busy" @onclick="IssueAsync">@(busy ? "Emitiendo..." : "Emitir tarjeta")</button>
+                </div>
+            </section>
+        }
+        else
+        {
+            <h2>Emitir Gift Card</h2>
+            <form class="login-form" @onsubmit="RequestIssueConfirmation" @onsubmit:preventDefault>
+                @if (issueOptions.Denominations.Count > 0)
+                {
+                    <div class="gift-denominations" role="group" aria-label="Denominaciones">
+                        @foreach (var denomination in issueOptions.Denominations)
+                        {
+                            <button type="button" class="secondary-button @(issueAmount == denomination.Amount ? "is-selected" : null)"
+                                    disabled="@busy" @onclick="() => SelectIssueAmount(denomination.Amount)">
+                                @Money(denomination.Amount, denomination.Currency)
+                            </button>
+                        }
+                    </div>
+                }
+                @if (issueOptions.AllowCustomAmount)
+                {
+                    <label for="gift-issue-amount">Monto (@issueOptions.Currency)</label>
+                    <input id="gift-issue-amount" type="number" class="input" min="0.01" step="0.01"
+                           @bind="issueAmount" disabled="@busy" />
+                }
+                <label for="gift-recipient">Destinatario</label>
+                <input id="gift-recipient" class="input" autocomplete="name" @bind="issueRecipientName" disabled="@busy" />
+                <label for="gift-recipient-email">Email opcional</label>
+                <input id="gift-recipient-email" type="email" class="input" autocomplete="email" @bind="issueRecipientEmail" disabled="@busy" />
+                @if (issueOptions.ExpirationMode == "SelectAtIssue")
+                {
+                    <label for="gift-expiration">Expira</label>
+                    <input id="gift-expiration" type="datetime-local" class="input" @bind="issueExpiresAtUtc" disabled="@busy" />
+                }
+                <button type="submit" class="primary-button" disabled="@(busy || issueAmount is null || issueAmount <= 0 || string.IsNullOrWhiteSpace(issueRecipientName))">Emitir tarjeta</button>
+            </form>
+        }
+    </text>;
 
     private async Task SetBusy(bool value)
     {
@@ -101,18 +228,52 @@
         try
         {
             pending = await Redemptions.LoadAsync();
+            pendingIssue = await Issuances.LoadAsync();
             storageBlocked = false;
         }
-        catch { error = "No fue posible leer el canje pendiente de forma segura."; }
-        if (IsCurrent) await PendingChanged.InvokeAsync(storageBlocked || pending is not null);
+        catch { error = "No fue posible leer una operación pendiente de forma segura."; }
+        if (IsCurrent) await PendingChanged.InvokeAsync(storageBlocked || pending is not null || pendingIssue is not null);
     }
 
     private async Task RestoreAsync()
     {
         if (busy) return;
         await SetBusy(true);
-        try { error = null; await ReadPendingAsync(); }
+        try { error = null; await ReadPendingAsync(); if (surface == GiftCardSurface.Issue) await LoadIssueOptionsCoreAsync(); }
         finally { await SetBusy(false); }
+    }
+
+    private void ShowLookupRedeem()
+    {
+        surface = GiftCardSurface.LookupRedeem;
+        error = success = null;
+    }
+
+    private async Task ShowIssueAsync()
+    {
+        surface = GiftCardSurface.Issue;
+        error = success = null;
+        if (!issueOptionsLoaded) await LoadIssueOptionsAsync();
+    }
+
+    private async Task LoadIssueOptionsAsync()
+    {
+        if (busy) return;
+        await SetBusy(true);
+        try { error = null; await LoadIssueOptionsCoreAsync(); }
+        finally { await SetBusy(false); }
+    }
+
+    private async Task LoadIssueOptionsCoreAsync()
+    {
+        var result = await GiftCards.GetIssueOptionsAsync();
+        issueOptionsLoaded = true;
+        if (!IsCurrent) return;
+        if (!result.Succeeded) { issueOptions = null; error = result.Message; return; }
+        var options = result.Value!;
+        issueOptions = options;
+        if (issueAmount is null && options.Denominations.Count == 1)
+            issueAmount = options.Denominations[0].Amount;
     }
 
     private async Task LookupAsync()
@@ -159,14 +320,14 @@
     private async Task RedeemAsync()
     {
         if (busy || storageBlocked || pending is not null || card is null || amount is null || amount <= 0) return;
-        await SubmitAsync(() => Redemptions.BeginAsync(card.Code, amount.Value));
+        await SubmitRedemptionAsync(() => Redemptions.BeginAsync(card.Code, amount.Value));
     }
     private async Task RetryAsync()
     {
         if (busy || storageBlocked || pending is null) return;
-        await SubmitAsync(Redemptions.RetryAsync);
+        await SubmitRedemptionAsync(Redemptions.RetryAsync);
     }
-    private async Task SubmitAsync(Func<Task<GiftCardResult<GiftCardReceipt>>> send)
+    private async Task SubmitRedemptionAsync(Func<Task<GiftCardResult<GiftCardReceipt>>> send)
     {
         await SetBusy(true);
         error = success = null;
@@ -190,15 +351,102 @@
         }
         finally { await SetBusy(false); }
     }
+
+    private void SelectIssueAmount(decimal value) => issueAmount = value;
+    private void RequestIssueConfirmation()
+    {
+        error = success = null;
+        if (issueOptions is null) { error = "Carga las opciones de emisión antes de continuar."; return; }
+        if (issueAmount is null || issueAmount <= 0) { error = "Ingresa un monto mayor a cero."; return; }
+        if (!issueOptions.AllowCustomAmount && !issueOptions.Denominations.Any(x => x.Amount == issueAmount.Value))
+        {
+            error = "Selecciona una denominación disponible.";
+            return;
+        }
+        if (string.IsNullOrWhiteSpace(issueRecipientName)) { error = "Ingresa el destinatario."; return; }
+        if (issueOptions.ExpirationMode == "SelectAtIssue" && issueExpiresAtUtc is null)
+        {
+            error = "Selecciona una fecha de expiración.";
+            return;
+        }
+        confirmingIssue = true;
+    }
+
+    private void CancelIssueConfirmation() => confirmingIssue = false;
+
+    private async Task IssueAsync()
+    {
+        if (busy || storageBlocked || pendingIssue is not null || issueAmount is null || string.IsNullOrWhiteSpace(issueRecipientName)) return;
+        await SubmitIssueAsync(() => Issuances.BeginAsync(new GiftCardIssueDraft(issueAmount.Value, issueRecipientName,
+            issueRecipientEmail, null, null, issueExpiresAtUtc)));
+    }
+
+    private async Task RetryIssueAsync()
+    {
+        if (busy || storageBlocked || pendingIssue is null) return;
+        await SubmitIssueAsync(Issuances.RetryAsync);
+    }
+
+    private async Task SubmitIssueAsync(Func<Task<GiftCardResult<GiftCardIssueReceipt>>> send)
+    {
+        await SetBusy(true);
+        error = success = null;
+        try
+        {
+            var result = await send();
+            if (!IsCurrent) return;
+            if (result.Error == "Unauthorized")
+            {
+                await Sessions.ClearAfterUnauthorizedAsync();
+                return;
+            }
+            if (result.Succeeded)
+            {
+                issued = result.Value!;
+                confirmingIssue = false;
+                success = $"Gift Card emitida: {issued.Card.Code} por {Money(issued.Card.InitialBalance, issued.Card.Currency)}.";
+            }
+            else { error = result.Message; }
+            await ReadPendingAsync();
+        }
+        finally { await SetBusy(false); }
+    }
+
+    private async Task ShareIssuedGiftCardAsync()
+    {
+        if (string.IsNullOrWhiteSpace(issued?.ClaimUrl)) return;
+        await Microsoft.Maui.ApplicationModel.DataTransfer.Share.Default.RequestAsync(
+            new Microsoft.Maui.ApplicationModel.DataTransfer.ShareTextRequest
+            {
+                Uri = issued.ClaimUrl,
+                Title = "Tarjeta de regalo"
+            });
+    }
+
     private void Reset()
     {
         if (busy || storageBlocked || pending is not null) return;
         card = null; amount = null; lookupText = string.Empty; error = success = null;
     }
+
+    private void ResetIssue()
+    {
+        if (busy || storageBlocked || pendingIssue is not null) return;
+        issued = null;
+        confirmingIssue = false;
+        issueAmount = null;
+        issueRecipientName = string.Empty;
+        issueRecipientEmail = null;
+        issueExpiresAtUtc = null;
+        error = success = null;
+    }
+
     private static string Money(decimal value, string currency) => $"{value:N2} {currency}";
     private static string StatusLabel(string status) => status switch
     {
         "Active" => "Activa", "FullyRedeemed" => "Canjeada", "Expired" => "Expirada",
         "Cancelled" => "Cancelada", _ => "No disponible"
     };
+
+    private enum GiftCardSurface { LookupRedeem, Issue }
 }

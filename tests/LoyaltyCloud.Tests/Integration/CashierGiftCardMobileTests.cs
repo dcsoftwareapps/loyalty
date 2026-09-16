@@ -14,6 +14,9 @@ public sealed class CashierGiftCardMobileTests
         DateTimeOffset.UtcNow.AddHours(1), tenant, user ?? Guid.Parse("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"), "cashier", "Cashier");
     private static CashierGiftCard Card(string code = Code) => new(code, 100m, 75m, "MXN", "Active", null, true, "Cliente");
     private static GiftCardResult<GiftCardReceipt> Receipt() => new(new(25m, Card(), false));
+    private static GiftCardIssueOptions IssueOptions() => new("MXN", true, "Never", null,
+        [new(100m, "MXN"), new(200m, "MXN")]);
+    private static GiftCardIssueReceipt IssueReceipt() => new(new("GC-ZZZZ-YYYY-XXXX", 200m, 200m, "MXN", "Active", null, true, "Cliente"), "https://admin.example.test/giftcards/claim/token");
 
     [Theory]
     [InlineData(" gc-aaaa-bbbb-cccc ", Code, null)]
@@ -42,19 +45,30 @@ public sealed class CashierGiftCardMobileTests
     {
         var handler = new RecordingHandler();
         handler.Reply = request => Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK)
-        { Content = JsonContent.Create(request.RequestUri!.AbsolutePath.EndsWith("lookup") ? (object)Card() : new GiftCardReceipt(25m, Card(), false)) });
+        { Content = JsonContent.Create(request.RequestUri!.AbsolutePath.EndsWith("lookup") ? (object)Card() :
+            request.RequestUri!.AbsolutePath.EndsWith("issue/options") ? IssueOptions() :
+            request.RequestUri!.AbsolutePath.EndsWith("issue") ? IssueReceipt() : new GiftCardReceipt(25m, Card(), false)) });
         var api = Api(handler);
+        Assert.True((await api.GetIssueOptionsAsync()).Succeeded);
+        Assert.True((await api.IssueAsync(new(200m, "Cliente", null, null, null, null, "issue-key"))).Succeeded);
         Assert.True((await api.LookupAsync(new(null, "secret-claim"))).Succeeded);
         Assert.True((await api.RedeemAsync(Code, new(25m, "same-key"))).Succeeded);
-        Assert.Equal("https://api.example.test/api/giftcards/lookup", handler.Requests[0].Url);
-        Assert.Equal("https://api.example.test/api/giftcards/" + Code + "/redeem", handler.Requests[1].Url);
-        Assert.All(handler.Requests, r => Assert.Equal(HttpMethod.Post, r.Method));
-        using var json = JsonDocument.Parse(handler.Requests[1].Body);
+        Assert.Equal("https://api.example.test/api/giftcards/issue/options", handler.Requests[0].Url);
+        Assert.Equal(HttpMethod.Get, handler.Requests[0].Method);
+        Assert.Equal("https://api.example.test/api/giftcards/issue", handler.Requests[1].Url);
+        Assert.Equal("https://api.example.test/api/giftcards/lookup", handler.Requests[2].Url);
+        Assert.Equal("https://api.example.test/api/giftcards/" + Code + "/redeem", handler.Requests[3].Url);
+        Assert.All(handler.Requests.Skip(1), r => Assert.Equal(HttpMethod.Post, r.Method));
+        using var issueJson = JsonDocument.Parse(handler.Requests[1].Body);
+        Assert.Equal(200m, issueJson.RootElement.GetProperty("amount").GetDecimal());
+        Assert.Equal("Cliente", issueJson.RootElement.GetProperty("recipientName").GetString());
+        Assert.Equal("issue-key", issueJson.RootElement.GetProperty("idempotencyKey").GetString());
+        using var json = JsonDocument.Parse(handler.Requests[3].Body);
         Assert.Equal(25m, json.RootElement.GetProperty("amount").GetDecimal());
         Assert.Equal("same-key", json.RootElement.GetProperty("idempotencyKey").GetString());
-        Assert.DoesNotContain("tenant", handler.Requests[1].Body, StringComparison.OrdinalIgnoreCase);
-        Assert.DoesNotContain("operator", handler.Requests[1].Body, StringComparison.OrdinalIgnoreCase);
-        Assert.DoesNotContain("secret-claim", handler.Requests[0].Url);
+        Assert.DoesNotContain("tenant", handler.Requests[1].Body + handler.Requests[3].Body, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("operator", handler.Requests[1].Body + handler.Requests[3].Body, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("secret-claim", handler.Requests[2].Url);
     }
 
     [Theory]
@@ -217,6 +231,53 @@ public sealed class CashierGiftCardMobileTests
     }
 
     [Fact]
+    public async Task Issuance_timeout_then_restart_reuses_identical_payload_and_clears_after_confirmation()
+    {
+        var store = new IssueMemoryStore(); var session = Session(); var api = new FakeApi();
+        api.IssueReply = () => Task.FromResult(GiftCardResult<GiftCardIssueReceipt>.Fail("Uncertain", "timeout"));
+        var first = IssueCoordinator(api, store, () => session);
+        Assert.False((await first.BeginAsync(new(200m, "Cliente"))).Succeeded);
+        Assert.NotNull(await first.LoadAsync());
+        var saved = Assert.Single(store.Data.Values);
+        Assert.DoesNotContain("test-token", saved);
+
+        var restarted = IssueCoordinator(api, store, () => session);
+        Assert.Equal("Pending", (await restarted.BeginAsync(new(100m, "Otro"))).Error);
+        api.IssueReply = () => Task.FromResult(new GiftCardResult<GiftCardIssueReceipt>(IssueReceipt()));
+        Assert.True((await restarted.RetryAsync()).Succeeded);
+        Assert.Null(await restarted.LoadAsync());
+        Assert.Equal(2, api.IssueCalls);
+    }
+
+    [Fact]
+    public async Task Issuance_failure_to_clear_after_success_keeps_same_operation_for_safe_replay()
+    {
+        var session = Session(); var store = new IssueMemoryStore();
+        var api = new FakeApi { IssueReply = () => { store.FailWrites = true; return Task.FromResult(new GiftCardResult<GiftCardIssueReceipt>(IssueReceipt())); } };
+        var coordinator = IssueCoordinator(api, store, () => session);
+        Assert.False((await coordinator.BeginAsync(new(200m, "Cliente"))).Succeeded);
+        Assert.NotNull(await coordinator.LoadAsync());
+        store.FailWrites = false;
+        api.IssueReply = () => Task.FromResult(new GiftCardResult<GiftCardIssueReceipt>(IssueReceipt()));
+        Assert.True((await coordinator.RetryAsync()).Succeeded);
+        Assert.Null(await coordinator.LoadAsync());
+    }
+
+    [Fact]
+    public async Task Issuance_pending_is_isolated_by_api_environment_and_account()
+    {
+        var session = Session(); var store = new IssueMemoryStore();
+        var api = new FakeApi { IssueReply = () => Task.FromResult(GiftCardResult<GiftCardIssueReceipt>.Fail("Uncertain", "timeout")) };
+        var staging = IssueCoordinator(api, store, () => session);
+        await staging.BeginAsync(new(200m, "Cliente"));
+        var production = new GiftCardIssuanceCoordinator(api, store, () => session, "https://production.example.test");
+        Assert.Null(await production.LoadAsync());
+        Assert.Equal("NoPending", (await production.RetryAsync()).Error);
+        Assert.NotNull(await staging.LoadAsync());
+        Assert.Equal(1, api.IssueCalls);
+    }
+
+    [Fact]
     public async Task Session_change_during_persistence_prevents_sending_under_another_account()
     {
         CashierSession? active = Session(); var original = active; var store = new MemoryStore(); var api = new FakeApi();
@@ -229,6 +290,7 @@ public sealed class CashierGiftCardMobileTests
     }
 
     private static GiftCardRedemptionCoordinator Coordinator(ICashierGiftCardApi api, MemoryStore store, Func<CashierSession?> session) => new(api, store, session, "https://api.example.test");
+    private static GiftCardIssuanceCoordinator IssueCoordinator(ICashierGiftCardApi api, IssueMemoryStore store, Func<CashierSession?> session) => new(api, store, session, "https://api.example.test");
     private static CashierGiftCardApi Api(RecordingHandler handler) => new(new AuthenticatedCashierApiClient(new HttpClient(handler) { BaseAddress = new Uri("https://api.example.test") }));
     private sealed class RecordingHandler : HttpMessageHandler
     {
@@ -236,7 +298,7 @@ public sealed class CashierGiftCardMobileTests
         public Func<HttpRequestMessage, Task<HttpResponseMessage>> Reply { get; set; } = _ => throw new NotImplementedException();
         protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken ct)
         {
-            Requests.Add((request.RequestUri!.AbsoluteUri, request.Method, await request.Content!.ReadAsStringAsync(ct)));
+            Requests.Add((request.RequestUri!.AbsoluteUri, request.Method, request.Content is null ? string.Empty : await request.Content.ReadAsStringAsync(ct)));
             return await Reply(request);
         }
     }
@@ -252,10 +314,25 @@ public sealed class CashierGiftCardMobileTests
             Data[key] = value; AfterWrite?.Invoke(); return Task.CompletedTask;
         }
     }
+    private sealed class IssueMemoryStore : IGiftCardIssuancePendingStore
+    {
+        public Dictionary<string, string> Data { get; } = [];
+        public bool FailWrites { get; set; }
+        public Task<string?> GetAsync(string key) => Task.FromResult(Data.GetValueOrDefault(key));
+        public Task SetAsync(string key, string value)
+        {
+            if (FailWrites) throw new IOException();
+            Data[key] = value; return Task.CompletedTask;
+        }
+    }
     private sealed class FakeApi : ICashierGiftCardApi
     {
         public int Calls { get; private set; }
+        public int IssueCalls { get; private set; }
         public Func<Task<GiftCardResult<GiftCardReceipt>>> Reply { get; set; } = () => Task.FromResult(Receipt());
+        public Func<Task<GiftCardResult<GiftCardIssueReceipt>>> IssueReply { get; set; } = () => Task.FromResult(new GiftCardResult<GiftCardIssueReceipt>(IssueReceipt()));
+        public Task<GiftCardResult<GiftCardIssueOptions>> GetIssueOptionsAsync() => Task.FromResult(new GiftCardResult<GiftCardIssueOptions>(IssueOptions()));
+        public Task<GiftCardResult<GiftCardIssueReceipt>> IssueAsync(GiftCardIssueRequest request) { IssueCalls++; return IssueReply(); }
         public Task<GiftCardResult<CashierGiftCard>> LookupAsync(GiftCardLookup lookup) => Task.FromResult(new GiftCardResult<CashierGiftCard>(Card()));
         public Task<GiftCardResult<GiftCardReceipt>> RedeemAsync(string code, GiftCardRedemption request) { Calls++; return Reply(); }
     }

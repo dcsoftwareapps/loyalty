@@ -75,8 +75,15 @@ internal sealed class GiftCardService(AppDbContext db, IDbContextFactory<AppDbCo
             throw new ArgumentException("Ingresa un número de teléfono válido.");
         var senderName = Optional(request.SenderName, 150);
         var personalMessage = Optional(request.PersonalMessage, 500);
+        var amount = decimal.Round(request.Amount, 2);
+        var idempotencyKey = NormalizeIdempotencyKey(request.IdempotencyKey);
+        if (idempotencyKey is not null)
+        {
+            var replay = await ReplayIssueAsync(idempotencyKey, amount, request.RecipientMemberId, recipientName,
+                email, phone, senderName, personalMessage, request.Source, request.ExpiresAtUtc, ct);
+            if (replay is not null) return replay;
+        }
         var config = await EnabledConfigurationAsync(ct);
-        var amount = request.Amount;
         if (!config.AllowCustomAmount && !await db.GiftCardDenominations.AnyAsync(x => x.IsActive && x.Currency == config.Currency && x.Amount == amount, ct))
             throw new InvalidOperationException("Selecciona una denominación habilitada.");
         if (request.Source == GiftCardSource.Promotional && !config.AllowPromotionalIssuance)
@@ -86,8 +93,19 @@ internal sealed class GiftCardService(AppDbContext db, IDbContextFactory<AppDbCo
         var token = GenerateClaimToken();
         var card = new GiftCard(Guid.NewGuid(), TenantId(), await UniqueCodeAsync(ct), GiftCard.HashClaimToken(token), amount, config.Currency, request.RecipientMemberId, recipientName, email, phone, senderName, personalMessage, request.Source, UserId(), now, expires);
         db.GiftCards.Add(card);
-        db.GiftCardTransactions.Add(new GiftCardTransaction(Guid.NewGuid(), TenantId(), card.Id, GiftCardTransactionType.Issued, amount, 0, amount, UserId(), now, notes: personalMessage));
-        await db.SaveChangesAsync(ct);
+        db.GiftCardTransactions.Add(new GiftCardTransaction(Guid.NewGuid(), TenantId(), card.Id, GiftCardTransactionType.Issued, amount, 0, amount, UserId(), now, notes: personalMessage, idempotencyKey: idempotencyKey));
+        try
+        {
+            await db.SaveChangesAsync(ct);
+        }
+        catch (DbUpdateException) when (idempotencyKey is not null)
+        {
+            db.ChangeTracker.Clear();
+            var replay = await ReplayIssueAsync(idempotencyKey, amount, request.RecipientMemberId, recipientName,
+                email, phone, senderName, personalMessage, request.Source, request.ExpiresAtUtc, ct);
+            if (replay is not null) return replay;
+            throw;
+        }
         return new(ToDto(card), token);
     }
     public async Task<GiftCardPage> SearchAsync(string? search, GiftCardStatus? status, DateTime? fromUtc, DateTime? toUtc, int page = 1, int pageSize = 25, CancellationToken ct = default)
@@ -261,6 +279,53 @@ internal sealed class GiftCardService(AppDbContext db, IDbContextFactory<AppDbCo
         return new(true, null, await DetailAsync(current, ct), true,
             RedeemedAmount: operation == GiftCardTransactionType.Redeemed ? -transaction.Amount : null);
     }
+
+    private async Task<IssuedGiftCardDto?> ReplayIssueAsync(
+        string key,
+        decimal amount,
+        Guid? recipientMemberId,
+        string recipientName,
+        string? email,
+        string? phone,
+        string? senderName,
+        string? personalMessage,
+        GiftCardSource source,
+        DateTime? explicitExpirationUtc,
+        CancellationToken ct)
+    {
+        var transaction = await db.GiftCardTransactions.AsNoTracking()
+            .SingleOrDefaultAsync(x => x.IdempotencyKey == key, ct);
+        if (transaction is null) return null;
+        if (transaction.Type != GiftCardTransactionType.Issued || transaction.Amount != amount)
+            throw IssueIdempotencyConflict();
+
+        var card = await db.GiftCards.SingleOrDefaultAsync(x => x.Id == transaction.GiftCardId, ct)
+            ?? throw IssueIdempotencyConflict();
+
+        var explicitExpirationMatches = explicitExpirationUtc is null || card.ExpiresAtUtc == explicitExpirationUtc;
+        if (card.InitialValue != amount || card.RecipientMemberId != recipientMemberId
+            || card.RecipientName != recipientName || card.RecipientEmail != email
+            || card.RecipientPhone != phone || card.SenderName != senderName
+            || card.PersonalMessage != personalMessage || card.Source != source
+            || !explicitExpirationMatches)
+            throw IssueIdempotencyConflict();
+
+        var token = GenerateClaimToken();
+        card.ReplaceClaimTokenHash(GiftCard.HashClaimToken(token), clock.UtcNow);
+        await db.SaveChangesAsync(ct);
+        return new(ToDto(card), token);
+    }
+
+    private static string? NormalizeIdempotencyKey(string? value)
+    {
+        var key = value?.Trim();
+        if (string.IsNullOrWhiteSpace(key)) return null;
+        if (key.Length > 100) throw new ArgumentException("Idempotency key requerida.");
+        return key;
+    }
+
+    private static InvalidOperationException IssueIdempotencyConflict() =>
+        new("La clave de idempotencia ya corresponde a otra emisión.");
 
     private async Task<GiftCardConfiguration> ConfigurationAsync(bool create, CancellationToken ct) { var result = await db.GiftCardConfigurations.SingleOrDefaultAsync(ct); if (result is null && create) { result = new GiftCardConfiguration(Guid.NewGuid(), TenantId(), clock.UtcNow); db.GiftCardConfigurations.Add(result); await db.SaveChangesAsync(ct); } return result ?? throw new InvalidOperationException("El módulo de tarjetas de regalo no está configurado."); }
     private async Task<GiftCardConfiguration> EnabledConfigurationAsync(CancellationToken ct)

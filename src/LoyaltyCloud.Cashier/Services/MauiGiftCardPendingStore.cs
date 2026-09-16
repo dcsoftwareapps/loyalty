@@ -6,3 +6,9 @@ public sealed class MauiGiftCardPendingStore(ISecureTokenStore secureStore) : IG
     public Task<string?> GetAsync(string key) => secureStore.GetAsync(key);
     public Task SetAsync(string key, string value) => secureStore.SetAsync(key, value);
 }
+
+public sealed class MauiGiftCardIssuancePendingStore(ISecureTokenStore secureStore) : IGiftCardIssuancePendingStore
+{
+    public Task<string?> GetAsync(string key) => secureStore.GetAsync(key);
+    public Task SetAsync(string key, string value) => secureStore.SetAsync(key, value);
+}

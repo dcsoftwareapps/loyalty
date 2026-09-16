@@ -49,6 +49,7 @@
     <Compile Include="../../src/LoyaltyCloud.Cashier/Services/CashierGiftCardApi.cs" Link="Cashier/CashierGiftCardApi.cs" />
     <Compile Include="../../src/LoyaltyCloud.Cashier/Services/GiftCardQrParser.cs" Link="Cashier/GiftCardQrParser.cs" />
     <Compile Include="../../src/LoyaltyCloud.Cashier/Services/GiftCardRedemptionCoordinator.cs" Link="Cashier/GiftCardRedemptionCoordinator.cs" />
+    <Compile Include="../../src/LoyaltyCloud.Cashier/Services/GiftCardIssuanceCoordinator.cs" Link="Cashier/GiftCardIssuanceCoordinator.cs" />
     <Compile Include="../../src/LoyaltyCloud.Cashier/Services/CashierQrPayloadParser.cs" Link="Cashier/CashierQrPayloadParser.cs" />
   </ItemGroup>
 </Project>
