@@ -17,6 +17,8 @@ public sealed class CashierMobileAppTests
         Assert.Contains("net9.0-ios", project);
         Assert.Contains("Microsoft.AspNetCore.Components.WebView.Maui", project);
         Assert.Contains("<ApplicationTitle>LoyaltyCloud</ApplicationTitle>", project);
+        Assert.Contains("<ApplicationDisplayVersion>1.0.0</ApplicationDisplayVersion>", project);
+        Assert.Contains("<ApplicationVersion>1</ApplicationVersion>", project);
         Assert.Contains("src\\LoyaltyCloud.Cashier\\LoyaltyCloud.Cashier.csproj", solution);
     }
 
@@ -78,6 +80,8 @@ public sealed class CashierMobileAppTests
         Assert.Contains("LOYALTYCLOUD_PROD", options);
         Assert.Contains("LOYALTYCLOUD_STG", options);
         Assert.Contains("<CashierEnvironment", project);
+        Assert.Contains("'$(Configuration)' == 'Release'\">Production</CashierEnvironment>", project);
+        Assert.Contains("CashierEnvironment must be Production or Staging.", project);
         Assert.Contains("AddHttpClient<CashierApiClient>", program);
         Assert.Contains("AddHttpClient<AuthenticatedCashierApiClient>", program);
         Assert.DoesNotContain("AdminApi", options);
@@ -118,7 +122,10 @@ public sealed class CashierMobileAppTests
         Assert.Contains("ZXing.Net.Maui.Controls", project);
         Assert.Contains(".UseBarcodeReader()", program);
         Assert.Contains("android.permission.CAMERA", androidManifest);
+        Assert.Contains("android.hardware.camera", androidManifest);
+        Assert.Contains("android:required=\"false\"", androidManifest);
         Assert.Contains("NSCameraUsageDescription", iosInfo);
+        Assert.Contains("códigos QR de clientes y tarjetas de regalo", iosInfo);
         Assert.Contains("api/customers/{Uri.EscapeDataString(serial)}", source);
         Assert.Contains("\"api/points\"", source);
         Assert.Contains("CashierAddPointsRequest", source);

@@ -21,13 +21,14 @@
         <!-- App Identifier -->
         <ApplicationId>com.loyaltycloud.cashier</ApplicationId>
 
-        <!-- Build with -p:CashierEnvironment=Production to point the app at PROD. Defaults to STG. -->
+        <!-- Release builds default to PROD for store packages. Override with -p:CashierEnvironment=Staging for STG validation builds. -->
+        <CashierEnvironment Condition="'$(CashierEnvironment)' == '' and '$(Configuration)' == 'Release'">Production</CashierEnvironment>
         <CashierEnvironment Condition="'$(CashierEnvironment)' == ''">Staging</CashierEnvironment>
         <DefineConstants Condition="'$(CashierEnvironment)' == 'Production'">$(DefineConstants);LOYALTYCLOUD_PROD</DefineConstants>
         <DefineConstants Condition="'$(CashierEnvironment)' != 'Production'">$(DefineConstants);LOYALTYCLOUD_STG</DefineConstants>
 
         <!-- Versions -->
-        <ApplicationDisplayVersion>1.0</ApplicationDisplayVersion>
+        <ApplicationDisplayVersion>1.0.0</ApplicationDisplayVersion>
         <ApplicationVersion>1</ApplicationVersion>
 
         <!-- To develop, package, and publish an app to the Microsoft Store, see: https://aka.ms/MauiTemplateUnpackaged -->
@@ -40,6 +41,11 @@
         <TargetPlatformMinVersion Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'windows'">10.0.17763.0</TargetPlatformMinVersion>
         <SupportedOSPlatformVersion Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'tizen'">6.5</SupportedOSPlatformVersion>
     </PropertyGroup>
+
+    <Target Name="ValidateCashierEnvironment" BeforeTargets="CoreCompile">
+        <Error Condition="'$(CashierEnvironment)' != 'Production' and '$(CashierEnvironment)' != 'Staging'"
+               Text="CashierEnvironment must be Production or Staging." />
+    </Target>
 
     <ItemGroup>
         <!-- App Icon -->
