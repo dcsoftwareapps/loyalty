@@ -12,11 +12,11 @@ public sealed class CashierGiftCardMobileTests
     private const string Code = "GC-AAAA-BBBB-CCCC";
     private static CashierSession Session(string tenant = "one", Guid? user = null) => new("test-token", "Bearer",
         DateTimeOffset.UtcNow.AddHours(1), tenant, user ?? Guid.Parse("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"), "cashier", "Cashier");
-    private static CashierGiftCard Card(string code = Code) => new(code, 100m, 75m, "MXN", "Active", null, true, "Cliente");
+    private static CashierGiftCard Card(string code = Code) => new(code, 100m, 75m, "MXN", "Active", null, true, "Cliente", "Daniel", "Feliz cumple");
     private static GiftCardResult<GiftCardReceipt> Receipt() => new(new(25m, Card(), false));
     private static GiftCardIssueOptions IssueOptions() => new("MXN", true, "Never", null,
         [new(100m, "MXN"), new(200m, "MXN")]);
-    private static GiftCardIssueReceipt IssueReceipt() => new(new("GC-ZZZZ-YYYY-XXXX", 200m, 200m, "MXN", "Active", null, true, "Cliente"), "https://admin.example.test/giftcards/claim/token");
+    private static GiftCardIssueReceipt IssueReceipt() => new(new("GC-ZZZZ-YYYY-XXXX", 200m, 200m, "MXN", "Active", null, true, "Cliente", "Daniel", "Feliz cumple"), "https://admin.example.test/giftcards/claim/token");
 
     [Theory]
     [InlineData(" gc-aaaa-bbbb-cccc ", Code, null)]
@@ -50,7 +50,7 @@ public sealed class CashierGiftCardMobileTests
             request.RequestUri!.AbsolutePath.EndsWith("issue") ? IssueReceipt() : new GiftCardReceipt(25m, Card(), false)) });
         var api = Api(handler);
         Assert.True((await api.GetIssueOptionsAsync()).Succeeded);
-        Assert.True((await api.IssueAsync(new(200m, "Cliente", null, null, null, null, "issue-key"))).Succeeded);
+        Assert.True((await api.IssueAsync(new(200m, "Cliente", null, "Daniel", "Feliz cumple", null, "issue-key"))).Succeeded);
         Assert.True((await api.LookupAsync(new(null, "secret-claim"))).Succeeded);
         Assert.True((await api.RedeemAsync(Code, new(25m, "same-key"))).Succeeded);
         Assert.Equal("https://api.example.test/api/giftcards/issue/options", handler.Requests[0].Url);
@@ -62,6 +62,8 @@ public sealed class CashierGiftCardMobileTests
         using var issueJson = JsonDocument.Parse(handler.Requests[1].Body);
         Assert.Equal(200m, issueJson.RootElement.GetProperty("amount").GetDecimal());
         Assert.Equal("Cliente", issueJson.RootElement.GetProperty("recipientName").GetString());
+        Assert.Equal("Daniel", issueJson.RootElement.GetProperty("senderName").GetString());
+        Assert.Equal("Feliz cumple", issueJson.RootElement.GetProperty("personalMessage").GetString());
         Assert.Equal("issue-key", issueJson.RootElement.GetProperty("idempotencyKey").GetString());
         using var json = JsonDocument.Parse(handler.Requests[3].Body);
         Assert.Equal(25m, json.RootElement.GetProperty("amount").GetDecimal());
@@ -236,10 +238,19 @@ public sealed class CashierGiftCardMobileTests
         var store = new IssueMemoryStore(); var session = Session(); var api = new FakeApi();
         api.IssueReply = () => Task.FromResult(GiftCardResult<GiftCardIssueReceipt>.Fail("Uncertain", "timeout"));
         var first = IssueCoordinator(api, store, () => session);
-        Assert.False((await first.BeginAsync(new(200m, "Cliente"))).Succeeded);
+        Assert.False((await first.BeginAsync(new(200m, "Cliente", null, "Daniel", "Feliz cumple"))).Succeeded);
         Assert.NotNull(await first.LoadAsync());
         var saved = Assert.Single(store.Data.Values);
         Assert.DoesNotContain("test-token", saved);
+        using (var savedJson = JsonDocument.Parse(saved))
+        {
+            var request = savedJson.RootElement.GetProperty("request");
+            Assert.Equal(200m, request.GetProperty("amount").GetDecimal());
+            Assert.Equal("Cliente", request.GetProperty("recipientName").GetString());
+            Assert.Equal("Daniel", request.GetProperty("senderName").GetString());
+            Assert.Equal("Feliz cumple", request.GetProperty("personalMessage").GetString());
+            Assert.False(string.IsNullOrWhiteSpace(request.GetProperty("idempotencyKey").GetString()));
+        }
 
         var restarted = IssueCoordinator(api, store, () => session);
         Assert.Equal("Pending", (await restarted.BeginAsync(new(100m, "Otro"))).Error);

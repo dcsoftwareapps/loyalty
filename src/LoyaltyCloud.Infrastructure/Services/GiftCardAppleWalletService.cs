@@ -69,11 +69,30 @@ internal sealed class GiftCardAppleWalletService(
         var giftBranding=GiftCardBrandingResolver.Resolve(config.PrimaryColor,config.TextColor,config.DisplayName,config.LogoUrl,tenantBranding.BackgroundHex,tenantBranding.DisplayName,null);
         var backgroundColor=WalletColorContrast.ToAppleRgb(giftBranding.BackgroundColor);
         var textColor=WalletColorContrast.ToAppleRgb(giftBranding.TextColor);
-        var pass=new{formatVersion=1,passTypeIdentifier=_options.PassTypeIdentifier,serialNumber=wallet.ExternalObjectId,teamIdentifier=_options.TeamIdentifier,webServiceURL=_options.WebServiceURL,authenticationToken=wallet.AuthenticationToken,organizationName=tenant.DisplayName,description=$"{giftBranding.DisplayName} - {tenant.DisplayName}",backgroundColor,foregroundColor=textColor,labelColor=textColor,storeCard=new{headerFields=new[]{new{key="gift_card_title",label=string.Empty,value=giftBranding.DisplayName}},primaryFields=new[]{new{key="balance",label=string.Empty,value=FormatBalance(card.CurrentBalance,card.Currency),changeMessage="Tu nuevo saldo es %@",textAlignment="PKTextAlignmentCenter"}},secondaryFields=BuildSecondaryFields(card),auxiliaryFields=Array.Empty<object>(),backFields=new[]{new{key="code",label="Código",value=card.PublicCode},new{key="terms",label="Términos",value=config.Terms??"Presenta este código al pagar"}}},barcodes=new[]{new{format="PKBarcodeFormatQR",message=card.PublicCode,messageEncoding="iso-8859-1",altText="Presenta este código al pagar"}}};
+        var pass=new{formatVersion=1,passTypeIdentifier=_options.PassTypeIdentifier,serialNumber=wallet.ExternalObjectId,teamIdentifier=_options.TeamIdentifier,webServiceURL=_options.WebServiceURL,authenticationToken=wallet.AuthenticationToken,organizationName=tenant.DisplayName,description=$"{giftBranding.DisplayName} - {tenant.DisplayName}",backgroundColor,foregroundColor=textColor,labelColor=textColor,storeCard=new{headerFields=new[]{new{key="gift_card_title",label=string.Empty,value=giftBranding.DisplayName}},primaryFields=new[]{new{key="balance",label=string.Empty,value=FormatBalance(card.CurrentBalance,card.Currency),changeMessage="Tu nuevo saldo es %@",textAlignment="PKTextAlignmentCenter"}},secondaryFields=BuildSecondaryFields(card),auxiliaryFields=Array.Empty<object>(),backFields=BuildBackFields(card,config)},barcodes=new[]{new{format="PKBarcodeFormatQR",message=card.PublicCode,messageEncoding="iso-8859-1",altText="Presenta este código al pagar"}}};
         var walletLogoBlobName=IsGiftCardLogoBlobName(config.LogoUrl)?config.LogoUrl:tenantBranding.WalletLogoBlobName;
         var assetBytes=await assets.LoadAssetsAsync(tenantBranding.TenantId,tenantBranding.TenantSlug,walletLogoBlobName,tenantBranding.LogoBlobName,includeStripImage:false,stripImageBlobName:null,ct);var bytes=await package.BuildAsync(JsonSerializer.SerializeToUtf8Bytes(pass),assetBytes,ct);return new(bytes,wallet.ExternalObjectId,card.UpdatedAtUtc);
     }
 
+    private static object[] BuildBackFields(GiftCard card, GiftCardConfiguration config)
+    {
+        var fields = new List<object>
+        {
+            new { key="code",label="Código",value=card.PublicCode }
+        };
+
+        if (!string.IsNullOrWhiteSpace(card.RecipientName))
+            fields.Add(new { key="recipient",label="Para",value=card.RecipientName.Trim() });
+
+        if (!string.IsNullOrWhiteSpace(card.SenderName))
+            fields.Add(new { key="sender_back",label="De",value=card.SenderName.Trim() });
+
+        if (!string.IsNullOrWhiteSpace(card.PersonalMessage))
+            fields.Add(new { key="message",label="Mensaje",value=card.PersonalMessage.Trim() });
+
+        fields.Add(new { key="terms",label="Términos",value=config.Terms??"Presenta este código al pagar" });
+        return fields.ToArray();
+    }
     private static object[] BuildSecondaryFields(GiftCard card)
     {
         var fields = new List<object>();

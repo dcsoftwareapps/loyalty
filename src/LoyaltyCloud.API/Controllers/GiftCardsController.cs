@@ -109,7 +109,8 @@ public sealed class GiftCardsController(IGiftCardService giftCards, IGiftCardDel
 
     private static CardSummary Summarize(GiftCardDto card, bool partial) =>
         new(card.Code, card.InitialValue, card.CurrentBalance, card.Currency,
-            card.Status.ToString(), card.ExpiresAtUtc, partial, card.RecipientName);
+            card.Status.ToString(), card.ExpiresAtUtc, partial, card.RecipientName,
+            card.SenderName, card.PersonalMessage);
 
     public sealed record LookupRequest(
         [StringLength(32), RegularExpression(@"(?i)^\s*GC-[A-Z0-9]{4}-[A-Z0-9]{4}-[A-Z0-9]{4}\s*$")] string? Code,
@@ -130,7 +131,8 @@ public sealed class GiftCardsController(IGiftCardService giftCards, IGiftCardDel
         string ExpirationMode, int? DefaultExpirationMonths, IReadOnlyList<IssueDenomination> Denominations);
 
     public sealed record CardSummary(string Code, decimal InitialBalance, decimal RemainingBalance,
-        string Currency, string Status, DateTime? ExpiresAtUtc, bool AllowPartialRedemption, string RecipientName);
+        string Currency, string Status, DateTime? ExpiresAtUtc, bool AllowPartialRedemption,
+        string RecipientName, string? SenderName, string? PersonalMessage);
     public sealed record RedeemResponse(decimal RedeemedAmount, CardSummary Card, bool WasIdempotent);
     public sealed record IssueResponse(CardSummary Card, string? ClaimUrl);
 }

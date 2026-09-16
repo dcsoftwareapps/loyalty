@@ -140,7 +140,7 @@ internal sealed class GoogleWalletClient : IGoogleWalletClient
             hexBackgroundColor = value.HexBackgroundColor,
             logo = string.IsNullOrWhiteSpace(value.LogoUri) ? null : new { sourceUri = new { uri = value.LogoUri }, contentDescription = new { defaultValue = new { language = "es", value = value.DisplayName } } },
             heroImage = string.IsNullOrWhiteSpace(value.HeroImageUri) ? null : new { sourceUri = new { uri = value.HeroImageUri }, contentDescription = new { defaultValue = new { language = "es", value = value.DisplayName } } },
-            textModulesData = new[] { new { id = "balance", header = "Saldo disponible", body = $"{value.Balance:N2} {value.Currency}" }, new { id = "status", header = "Estado", body = value.Status }, new { id = "expiry", header = "Vigencia", body = value.ExpiresAtUtc?.ToString("yyyy-MM-dd") ?? "Sin expiración" } }
+            textModulesData = BuildGiftCardTextModules(value)
         };
         var existing = await SendAsync(HttpMethod.Get, $"genericObject/{Uri.EscapeDataString(value.Id)}", null, ct);
         if (existing.StatusCode == HttpStatusCode.NotFound)
@@ -154,6 +154,26 @@ internal sealed class GoogleWalletClient : IGoogleWalletClient
         if (updated.StatusCode != HttpStatusCode.OK) throw await CreateExceptionAsync("actualizar GenericObject Gift Card", updated, ct);
     }
 
+    private static object[] BuildGiftCardTextModules(GoogleGiftCardObjectData value)
+    {
+        var modules = new List<object>
+        {
+            new { id = "balance", header = "Saldo disponible", body = $"{value.Balance:N2} {value.Currency}" },
+            new { id = "status", header = "Estado", body = value.Status },
+            new { id = "expiry", header = "Vigencia", body = value.ExpiresAtUtc?.ToString("yyyy-MM-dd") ?? "Sin expiración" }
+        };
+
+        if (!string.IsNullOrWhiteSpace(value.RecipientName))
+            modules.Add(new { id = "recipient", header = "Para", body = value.RecipientName.Trim() });
+
+        if (!string.IsNullOrWhiteSpace(value.SenderName))
+            modules.Add(new { id = "sender", header = "De", body = value.SenderName.Trim() });
+
+        if (!string.IsNullOrWhiteSpace(value.PersonalMessage))
+            modules.Add(new { id = "message", header = "Mensaje", body = value.PersonalMessage.Trim() });
+
+        return modules.ToArray();
+    }
     public async Task AddMessageAsync(
         string objectId,
         string header,

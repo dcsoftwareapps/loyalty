@@ -48,6 +48,8 @@
     private decimal? issueAmount;
     private string issueRecipientName = string.Empty;
     private string? issueRecipientEmail;
+    private string? issueSenderName;
+    private string? issuePersonalMessage;
     private DateTime? issueExpiresAtUtc;
     private bool confirmingIssue;
     private bool busy;
@@ -130,7 +132,15 @@
         {
             <section class="customer-panel">
                 <h2>Emisión pendiente de confirmación</h2>
-                <div><span>Destinatario</span><strong>@pendingIssue.Request.RecipientName</strong></div>
+                <div><span>Para</span><strong>@pendingIssue.Request.RecipientName</strong></div>
+                @if (!string.IsNullOrWhiteSpace(pendingIssue.Request.SenderName))
+                {
+                    <div><span>De</span><strong>@pendingIssue.Request.SenderName</strong></div>
+                }
+                @if (!string.IsNullOrWhiteSpace(pendingIssue.Request.PersonalMessage))
+                {
+                    <div><span>Mensaje</span><strong>@pendingIssue.Request.PersonalMessage</strong></div>
+                }
                 <div><span>Monto</span><strong>@Money(pendingIssue.Request.Amount, issueOptions?.Currency ?? "MXN")</strong></div>
                 <p class="muted">Comprueba el resultado antes de iniciar otra venta. Se reenviará la misma operación.</p>
                 <button class="primary-button" disabled="@busy" @onclick="RetryIssueAsync">@(busy ? "Confirmando..." : "Reintentar confirmación")</button>
@@ -144,7 +154,15 @@
                 <div class="points-balance"><span>Saldo</span><strong>@Money(issued.Card.RemainingBalance, issued.Card.Currency)</strong></div>
                 @if (!string.IsNullOrWhiteSpace(issued.Card.RecipientName))
                 {
-                    <div><span>Destinatario</span><strong>@issued.Card.RecipientName</strong></div>
+                    <div><span>Para</span><strong>@issued.Card.RecipientName</strong></div>
+                }
+                @if (!string.IsNullOrWhiteSpace(issued.Card.SenderName))
+                {
+                    <div><span>De</span><strong>@issued.Card.SenderName</strong></div>
+                }
+                @if (!string.IsNullOrWhiteSpace(issued.Card.PersonalMessage))
+                {
+                    <div><span>Mensaje</span><strong>@issued.Card.PersonalMessage</strong></div>
                 }
                 <div><span>Estado</span><strong>@StatusLabel(issued.Card.Status)</strong></div>
                 <div><span>Vigencia</span><strong>@(issued.Card.ExpiresAtUtc?.ToLocalTime().ToString("g") ?? "Sin expiración")</strong></div>
@@ -169,7 +187,18 @@
         {
             <section class="redemption-confirm">
                 <h2>Confirmar emisión</h2>
-                <p>Se emitirá una Gift Card por <strong>@Money(issueAmount!.Value, issueOptions.Currency)</strong> para <strong>@issueRecipientName.Trim()</strong>.</p>
+                <dl class="gift-confirmation-list">
+                    <div><dt>Monto</dt><dd>@Money(issueAmount!.Value, issueOptions.Currency)</dd></div>
+                    <div><dt>Para</dt><dd>@issueRecipientName.Trim()</dd></div>
+                    @if (!string.IsNullOrWhiteSpace(issueSenderName))
+                    {
+                        <div><dt>De</dt><dd>@issueSenderName.Trim()</dd></div>
+                    }
+                    @if (!string.IsNullOrWhiteSpace(issuePersonalMessage))
+                    {
+                        <div><dt>Mensaje</dt><dd>@issuePersonalMessage.Trim()</dd></div>
+                    }
+                </dl>
                 @if (issueExpiresAtUtc is not null)
                 {
                     <p>Vigencia: @issueExpiresAtUtc.Value.ToString("g")</p>
@@ -202,8 +231,12 @@
                     <input id="gift-issue-amount" type="number" class="input" min="0.01" step="0.01"
                            @bind="issueAmount" disabled="@busy" />
                 }
-                <label for="gift-recipient">Destinatario</label>
+                <label for="gift-recipient">Para</label>
                 <input id="gift-recipient" class="input" autocomplete="name" @bind="issueRecipientName" disabled="@busy" />
+                <label for="gift-sender">De</label>
+                <input id="gift-sender" class="input" autocomplete="name" @bind="issueSenderName" maxlength="150" disabled="@busy" />
+                <label for="gift-message">Mensaje</label>
+                <textarea id="gift-message" class="input gift-message-input" rows="3" maxlength="500" @bind="issuePersonalMessage" disabled="@busy"></textarea>
                 <label for="gift-recipient-email">Email opcional</label>
                 <input id="gift-recipient-email" type="email" class="input" autocomplete="email" @bind="issueRecipientEmail" disabled="@busy" />
                 @if (issueOptions.ExpirationMode == "SelectAtIssue")
@@ -378,7 +411,7 @@
     {
         if (busy || storageBlocked || pendingIssue is not null || issueAmount is null || string.IsNullOrWhiteSpace(issueRecipientName)) return;
         await SubmitIssueAsync(() => Issuances.BeginAsync(new GiftCardIssueDraft(issueAmount.Value, issueRecipientName,
-            issueRecipientEmail, null, null, issueExpiresAtUtc)));
+            issueRecipientEmail, issueSenderName, issuePersonalMessage, issueExpiresAtUtc)));
     }
 
     private async Task RetryIssueAsync()
@@ -419,8 +452,20 @@
             new Microsoft.Maui.ApplicationModel.DataTransfer.ShareTextRequest
             {
                 Uri = issued.ClaimUrl,
+                Text = GiftCardShareText(),
                 Title = "Tarjeta de regalo"
             });
+    }
+
+    private string GiftCardShareText()
+    {
+        if (!string.IsNullOrWhiteSpace(issued?.Card.SenderName))
+            return $"{issued.Card.SenderName.Trim()} te envió una tarjeta de regalo.";
+
+        if (!string.IsNullOrWhiteSpace(issued?.Card.RecipientName))
+            return $"Tarjeta de regalo para {issued.Card.RecipientName.Trim()}.";
+
+        return "Tarjeta de regalo.";
     }
 
     private void Reset()
@@ -437,6 +482,8 @@
         issueAmount = null;
         issueRecipientName = string.Empty;
         issueRecipientEmail = null;
+        issueSenderName = null;
+        issuePersonalMessage = null;
         issueExpiresAtUtc = null;
         error = success = null;
     }
