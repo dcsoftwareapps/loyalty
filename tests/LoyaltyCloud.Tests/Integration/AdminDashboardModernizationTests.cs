@@ -42,8 +42,10 @@ public sealed class AdminDashboardModernizationTests
 
         Assert.Contains("aria-label=\"Navegación principal\"", layout);
         Assert.Contains("aria-label=\"Abrir navegación\"", layout);
-        Assert.Contains("aria-expanded=\"@menuOpen\"", layout);
+        Assert.Contains("aria-expanded=\"false\" data-admin-menu-toggle", layout);
         Assert.Contains("kb-sidebar-backdrop", layout);
+        Assert.Contains("data-admin-menu-close", layout);
+        Assert.Contains("data-admin-menu-nav", layout);
         Assert.Contains("<NavIcon", layout);
         Assert.Contains("branding?.LogoUrl", layout);
         Assert.Contains("<strong>LoyaltyCloud</strong>", layout);

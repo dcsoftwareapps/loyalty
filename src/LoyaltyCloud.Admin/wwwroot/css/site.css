@@ -1589,9 +1589,11 @@ button:focus-visible, a:focus-visible { outline: 3px solid color-mix(in srgb, va
         transition: transform 170ms ease;
         box-shadow: var(--lc-shadow-md);
     }
+    .kb-app--menu-open .kb-sidebar { transform: translateX(0); }
     .kb-sidebar--open { transform: translateX(0); }
     .kb-sidebar-close { display: grid; }
-    .kb-sidebar-backdrop { position: fixed; z-index: 1050; inset: 0; display: block; padding: 0; border: 0; background: rgba(28, 27, 24, .32); }
+    .kb-sidebar-backdrop { position: fixed; z-index: 1050; inset: 0; display: none; padding: 0; border: 0; background: rgba(28, 27, 24, .32); }
+    .kb-app--menu-open .kb-sidebar-backdrop { display: block; }
     .kb-sidebar-section { width: auto; margin: var(--lc-space-5) 12px var(--lc-space-2); }
     .kb-sidebar a { padding: 10px 12px; font-size: var(--lc-font-nav); }
     .kb-sidebar .kb-signout { margin-top: 0; }

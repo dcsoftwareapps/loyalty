@@ -1227,16 +1227,21 @@ public sealed class AdminRoutingTests : IClassFixture<AdminRoutingTests.AdminWeb
     public void Admin_layout_supports_mobile_navigation_and_wallet_config_responsive_stack()
     {
         var root = GetRepositoryRoot();
+        var app = File.ReadAllText(Path.Combine(root, "src", "LoyaltyCloud.Admin", "App.razor"));
         var layout = File.ReadAllText(Path.Combine(root, "src", "LoyaltyCloud.Admin", "Components", "Layout", "MainLayout.razor"));
         var config = File.ReadAllText(Path.Combine(root, "src", "LoyaltyCloud.Admin", "Pages", "Config.razor"));
         var css = File.ReadAllText(Path.Combine(root, "src", "LoyaltyCloud.Admin", "wwwroot", "css", "site.css"));
+        var navigation = File.ReadAllText(Path.Combine(root, "src", "LoyaltyCloud.Admin", "wwwroot", "js", "admin-navigation.js"));
 
         Assert.Contains("class=\"kb-mobile-header\"", layout);
         Assert.Contains("aria-label=\"Abrir navegación\"", layout);
-        Assert.Contains("aria-expanded=\"@menuOpen\"", layout);
-        Assert.Contains("kb-sidebar--open", layout);
+        Assert.Contains("aria-expanded=\"false\" data-admin-menu-toggle", layout);
         Assert.Contains("class=\"kb-sidebar-backdrop\"", layout);
-        Assert.Contains("<nav class=\"kb-sidebar-nav\" @onclick=\"CloseMenu\">", layout);
+        Assert.Contains("data-admin-menu-close", layout);
+        Assert.Contains("<nav class=\"kb-sidebar-nav\" data-admin-menu-nav>", layout);
+        Assert.DoesNotContain("@onclick=\"ToggleMenu\"", layout);
+        Assert.DoesNotContain("@onclick=\"CloseMenu\"", layout);
+        Assert.Contains("js/admin-navigation.js", app);
 
         Assert.Contains("class=\"kb-wallet-config\"", config);
         Assert.Contains("class=\"kb-wallet-preview-shell\"", config);
@@ -1244,12 +1249,20 @@ public sealed class AdminRoutingTests : IClassFixture<AdminRoutingTests.AdminWeb
 
         Assert.Contains("@media (max-width: 1023px)", css);
         Assert.Contains("width: min(304px, 88vw)", css);
+        Assert.Contains(".kb-app--menu-open .kb-sidebar { transform: translateX(0); }", css);
+        Assert.Contains(".kb-app--menu-open .kb-sidebar-backdrop { display: block; }", css);
         Assert.Contains(".kb-sidebar--open { transform: translateX(0); }", css);
         Assert.Contains("@media (max-width: 1180px)", css);
         Assert.Contains(".kb-wallet-config", css);
         Assert.Contains("grid-template-columns: 1fr", css);
         Assert.Contains("justify-self: center", css);
         Assert.Contains("@media (max-width: 520px)", css);
+
+        Assert.Contains("data-admin-menu-toggle", navigation);
+        Assert.Contains("data-admin-menu-close", navigation);
+        Assert.Contains("data-admin-menu-nav", navigation);
+        Assert.Contains("aria-expanded", navigation);
+        Assert.Contains("enhancedload", navigation);
     }
 
     [Fact]
