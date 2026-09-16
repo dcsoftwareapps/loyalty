@@ -7,6 +7,8 @@ public sealed record GoogleGiftCardObjectData(
     string ClassId,
     string DisplayName,
     string RecipientName,
+    string? SenderName,
+    string? PersonalMessage,
     string Code,
     decimal Balance,
     string Currency,

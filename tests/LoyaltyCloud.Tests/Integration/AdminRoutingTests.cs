@@ -388,10 +388,18 @@ public sealed class AdminRoutingTests : IClassFixture<AdminRoutingTests.AdminWeb
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         Assert.Null(response.Headers.Location);
-        Assert.Contains("Acceso de caja", html);
-        Assert.Contains("Escanear cliente", html);
-        Assert.Contains("Escribir código", html);
+        Assert.Contains("Cliente", html);
+        Assert.Contains("Escanear", html);
+        Assert.DoesNotContain("Escribir código", html);
         Assert.Contains("ID del cliente", html);
+        Assert.Contains("Buscar", html);
+        Assert.Contains("Puntos", html);
+        Assert.Contains("Tarjeta de regalo", html);
+        Assert.DoesNotContain("Acceso de caja", html);
+        Assert.DoesNotContain("Escanear cliente", html);
+        Assert.DoesNotContain("Buscar cliente", html);
+        Assert.DoesNotContain("Escanear Gift Card", html);
+        Assert.DoesNotContain("Buscar Gift Card", html);
     }
 
     [Fact]
@@ -404,9 +412,25 @@ public sealed class AdminRoutingTests : IClassFixture<AdminRoutingTests.AdminWeb
         Assert.Contains("@page \"/cashier\"", source);
         Assert.Contains("TenantAuthorizationPolicies.TenantUser", source);
         Assert.Contains("@layout EmptyLayout", source);
-        Assert.Contains("Escanear cliente", source);
-        Assert.Contains("Escribir código", source);
-        Assert.Contains("Buscar cliente", source);
+        Assert.Contains("CashierSurface.Points", source);
+        Assert.Contains("private CashierSurface surface = CashierSurface.Points", source);
+        Assert.Contains("class=\"kb-cashier-segmented\"", source);
+        Assert.Contains("SwitchSurfaceAsync(CashierSurface.Points)", source);
+        Assert.Contains("SwitchSurfaceAsync(CashierSurface.GiftCard)", source);
+        Assert.Contains("Tarjeta de regalo", source);
+        Assert.Contains("<h1>Cliente</h1>", source);
+        Assert.Contains("Escanear", source);
+        Assert.DoesNotContain("Escribir código", source);
+        Assert.Contains("Buscar", source);
+        Assert.DoesNotContain("Acceso de caja", source);
+        Assert.DoesNotContain("Escanear cliente", source);
+        Assert.DoesNotContain("Buscar cliente", source);
+        Assert.DoesNotContain("Escanear Gift Card", source);
+        Assert.Contains("Código", source);
+        Assert.DoesNotContain("Buscar Gift Card", source);
+        Assert.Contains("Otra Gift Card", source);
+        Assert.Contains("@if (giftCardDetail is not null || giftCardSuccessMessage is not null)", source);
+        Assert.DoesNotContain("Volver a caja", source);
         Assert.Contains("+ Sumar puntos", source);
         Assert.Contains("Canjear recompensa", source);
         Assert.Contains("Escanear otro cliente", source);
@@ -429,11 +453,74 @@ public sealed class AdminRoutingTests : IClassFixture<AdminRoutingTests.AdminWeb
         Assert.Contains("PointsApi.AddPointsAsync(serial, PurchaseAmount)", source);
         Assert.Contains("Api.GetAsync<IReadOnlyList<RewardCatalogItemDto>>", source);
         Assert.Contains("api/redemptions/catalog/{Uri.EscapeDataString(customer.SerialNumber)}", source);
+        Assert.Contains("Api.GetAsync<IReadOnlyList<ConfigDto>>(\"api/config\")", source);
+        Assert.Contains("LoyaltyConstants.ConfigKeys.PointsPerPesoUnit", source);
         Assert.Contains("Api.PostAsJsonAsync<RedeemRedemptionRequest, RedemptionResponse>", source);
         Assert.Contains("\"api/redemptions\"", source);
         Assert.Contains("new RedeemRedemptionRequest(serial, selectedReward.Id)", source);
+        Assert.Contains("new RedeemRedemptionRequest(serial, null, \"MonetaryDiscount\", monetaryPoints)", source);
         Assert.DoesNotContain("new AddPointsCommand", source, StringComparison.Ordinal);
         Assert.DoesNotContain("new RedeemRewardCommand", source, StringComparison.Ordinal);
+        Assert.DoesNotContain("new RedeemMonetaryDiscountCommand", source, StringComparison.Ordinal);
+        Assert.DoesNotContain("api/redemptions/monetary", source, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    [Trait("Category", "AdminRouting")]
+    [Trait("Category", "CashierAuth")]
+    [Trait("Category", "GiftCards")]
+    public void Cashier_page_reuses_existing_gift_card_service_without_new_endpoints_or_public_claim_context()
+    {
+        var source = File.ReadAllText(Path.Combine(GetRepositoryRoot(), "src", "LoyaltyCloud.Admin", "Pages", "CashierLanding.razor"));
+        var scanner = File.ReadAllText(Path.Combine(GetRepositoryRoot(), "src", "LoyaltyCloud.Admin", "wwwroot", "js", "qr-scanner.js"));
+
+        Assert.Contains("@inject IGiftCardService GiftCards", source);
+        Assert.Contains("GiftCards.GetByCodeAsync(code)", source);
+        Assert.Contains("GiftCards.GetByClaimTokenAsync(token)", source);
+        Assert.Contains("GiftCards.RedeemAsync(", source);
+        Assert.Contains("Guid.NewGuid().ToString(\"N\")", source);
+        Assert.Contains("GiftCardValidationError", source);
+        Assert.Contains("GiftCardStatus.Active", source);
+        Assert.Contains("DecimalScale(GiftCardAmount)", source);
+        Assert.Contains("giftCardDetail.Card.CurrentBalance", source);
+        Assert.Contains("ScannerPurpose.GiftCard", source);
+        Assert.Contains("GiftCardCodeRegex", source);
+        Assert.Contains("ResetGiftCardFlow()", source);
+        Assert.Contains("ResetPointsFlow()", source);
+        Assert.Contains("giftCardSuccessMessage = result.Detail is null", source);
+        Assert.Contains("surface = CashierSurface.Points", source);
+        Assert.DoesNotContain("IGiftCardClaimService GiftCardClaims", source);
+        Assert.DoesNotContain("GiftCardClaims.GetAsync", source);
+        Assert.DoesNotContain("giftCardReference", source);
+        Assert.DoesNotContain("cashier-gift-card-reference", source);
+        Assert.DoesNotContain("Referencia", source);
+        Assert.DoesNotContain("api/giftcards", source, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("KB-", scanner, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("GC-", scanner, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    [Trait("Category", "AdminRouting")]
+    [Trait("Category", "CashierAuth")]
+    public void Cashier_redemption_includes_existing_monetary_discount_option()
+    {
+        var source = File.ReadAllText(Path.Combine(GetRepositoryRoot(), "src", "LoyaltyCloud.Admin", "Pages", "CashierLanding.razor"));
+
+        Assert.Contains("Descuento en dinero", source);
+        Assert.Contains("CanRedeemMoney", source);
+        Assert.Contains("UsablePoints", source);
+        Assert.Contains("PointUnit", source);
+        Assert.Contains("pointsPerPesoUnit", source);
+        Assert.Contains("Disponible aprox. @FormatMoney(AvailableMonetaryAmount)", source);
+        Assert.Contains("Puntos a canjear", source);
+        Assert.Contains("Usar todos", source);
+        Assert.Contains("Confirmar {FormatMoney(MonetaryDiscountAmount)}", source);
+        Assert.Contains("MonetaryValidationError", source);
+        Assert.Contains("Los puntos deben canjearse en múltiplos de {PointUnit:N0}.", source);
+        Assert.Contains("Cashier monetary redemption failed.", source);
+        Assert.Contains("api/config", source);
+        Assert.Contains("api/redemptions/catalog/{Uri.EscapeDataString(customer.SerialNumber)}", source);
+        Assert.Contains("\"MonetaryDiscount\"", source);
     }
 
     [Fact]
@@ -455,6 +542,14 @@ public sealed class AdminRoutingTests : IClassFixture<AdminRoutingTests.AdminWeb
         Assert.Contains("await StopScannerAsync();", source);
         Assert.Contains("[JSInvokable]", source);
         Assert.Contains("public async Task OnQrDetected(string rawValue)", source);
+        Assert.Contains("StartScannerAsync(ScannerPurpose.Customer)", source);
+        Assert.Contains("StartScannerAsync(ScannerPurpose.GiftCard)", source);
+        Assert.Contains("await StopScannerAsync();", source);
+        Assert.Contains("serialInput = serial;", source);
+        Assert.Contains("await LoadCustomerAsync();", source);
+        Assert.Contains("giftCardCodeInput = code;", source);
+        Assert.Contains("await LookupGiftCardAsync();", source);
+        Assert.Contains("qrHandled = false;", source);
     }
 
     [Fact]
@@ -471,6 +566,9 @@ public sealed class AdminRoutingTests : IClassFixture<AdminRoutingTests.AdminWeb
         Assert.Contains("Cashier customer lookup failed.", source);
         Assert.Contains("Cashier add points failed.", source);
         Assert.Contains("Cashier reward redemption failed.", source);
+        Assert.Contains("Cashier monetary redemption failed.", source);
+        Assert.Contains("Cashier Gift Card lookup failed.", source);
+        Assert.Contains("Cashier Gift Card redemption failed.", source);
     }
 
     [Theory]
@@ -628,6 +726,7 @@ public sealed class AdminRoutingTests : IClassFixture<AdminRoutingTests.AdminWeb
     [InlineData("/levels")]
     [InlineData("/marketing-notifications")]
     [InlineData("/giftcards/redeem")]
+    [InlineData("/giftcards/settings")]
     [InlineData("/staff")]
     public async Task Cashier_authenticated_user_cannot_access_current_admin_portal(string path)
     {
@@ -1121,6 +1220,55 @@ public sealed class AdminRoutingTests : IClassFixture<AdminRoutingTests.AdminWeb
         var css = File.ReadAllText(Path.Combine(GetRepositoryRoot(), "src", "LoyaltyCloud.Admin", "wwwroot", "css", "site.css"));
         Assert.Contains(".kb-checkbox-row", css);
         Assert.Contains("input.kb-checkbox", css);
+    }
+
+    [Fact]
+    [Trait("Category", "AdminRouting")]
+    public void Admin_layout_supports_mobile_navigation_and_wallet_config_responsive_stack()
+    {
+        var root = GetRepositoryRoot();
+        var app = File.ReadAllText(Path.Combine(root, "src", "LoyaltyCloud.Admin", "App.razor"));
+        var layout = File.ReadAllText(Path.Combine(root, "src", "LoyaltyCloud.Admin", "Components", "Layout", "MainLayout.razor"));
+        var config = File.ReadAllText(Path.Combine(root, "src", "LoyaltyCloud.Admin", "Pages", "Config.razor"));
+        var css = File.ReadAllText(Path.Combine(root, "src", "LoyaltyCloud.Admin", "wwwroot", "css", "site.css"));
+        var navigation = File.ReadAllText(Path.Combine(root, "src", "LoyaltyCloud.Admin", "wwwroot", "js", "admin-navigation.js"));
+
+        Assert.Contains("class=\"kb-mobile-header\"", layout);
+        Assert.Contains("aria-label=\"Abrir navegación\"", layout);
+        Assert.Contains("aria-expanded=\"false\" data-admin-menu-toggle", layout);
+        Assert.Contains("class=\"kb-sidebar-backdrop\"", layout);
+        Assert.Contains("data-admin-menu-close", layout);
+        Assert.Contains("<nav class=\"kb-sidebar-nav\" data-admin-menu-nav>", layout);
+        Assert.DoesNotContain("@onclick=\"ToggleMenu\"", layout);
+        Assert.DoesNotContain("@onclick=\"CloseMenu\"", layout);
+        Assert.Contains("js/admin-navigation.js", app);
+
+        Assert.Contains("class=\"kb-wallet-config\"", config);
+        Assert.Contains("class=\"kb-wallet-preview-shell\"", config);
+        Assert.Contains("class=\"kb-report-nav\"", config);
+
+        Assert.Contains("@media (max-width: 1023px)", css);
+        Assert.Contains("width: min(304px, 88vw)", css);
+        Assert.Contains(".kb-app--menu-open .kb-sidebar { transform: translateX(0); }", css);
+        Assert.Contains(".kb-app--menu-open .kb-sidebar-backdrop", css);
+        Assert.Contains(".kb-sidebar-backdrop--open { display: block; }", css);
+        Assert.Contains(".kb-sidebar--open { transform: translateX(0); }", css);
+        Assert.Contains("z-index: 1200", css);
+        Assert.Contains("z-index: 1100", css);
+        Assert.Contains("transform: translate3d(0, 0, 0)", css);
+        Assert.Contains("@media (max-width: 1180px)", css);
+        Assert.Contains(".kb-wallet-config", css);
+        Assert.Contains("grid-template-columns: 1fr", css);
+        Assert.Contains("justify-self: center", css);
+        Assert.Contains("@media (max-width: 520px)", css);
+
+        Assert.Contains("data-admin-menu-toggle", navigation);
+        Assert.Contains("data-admin-menu-close", navigation);
+        Assert.Contains("data-admin-menu-nav", navigation);
+        Assert.Contains("aria-expanded", navigation);
+        Assert.Contains("kb-sidebar--open", navigation);
+        Assert.Contains("kb-sidebar-backdrop--open", navigation);
+        Assert.Contains("enhancedload", navigation);
     }
 
     [Fact]

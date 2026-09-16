@@ -15,5 +15,9 @@ public sealed class RedeemRewardValidator : AbstractValidator<RedeemRewardComman
 
         RuleFor(x => x.OperatorId)
             .NotEmpty().WithMessage("Id de operador requerido para auditoría.");
+
+        RuleFor(x => x.IdempotencyKey)
+            .MaximumLength(100)
+            .When(x => !string.IsNullOrWhiteSpace(x.IdempotencyKey));
     }
 }

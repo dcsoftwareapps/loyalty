@@ -56,6 +56,22 @@ public sealed class GiftCardPersistenceTests
     }
 
     [Fact]
+    public async Task ConcurrentSameKeyRedemptions_BothSucceedWithOneDebit()
+    {
+        await using var database = await TestDatabase.CreateAsync(300m);
+        await using var dbA = database.Context();
+        await using var dbB = database.Context();
+        var results = await Task.WhenAll(
+            Service(dbA).RedeemAsync("GC-TEST-IDEMPOTENT", 200m, "same-key", null, null),
+            Service(dbB).RedeemAsync("GC-TEST-IDEMPOTENT", 200m, "same-key", null, null));
+        Assert.All(results, result => Assert.True(result.Success));
+        Assert.Single(results, result => result.WasIdempotent);
+        await using var verify = database.Context();
+        Assert.Equal(100m, (await verify.GiftCards.SingleAsync()).CurrentBalance);
+        Assert.Single(await verify.GiftCardTransactions.Where(x => x.Type == GiftCardTransactionType.Redeemed).ToListAsync());
+    }
+
+    [Fact]
     public async Task RotateClaimToken_ReplacesHashAndPreservesBalanceAndHistory()
     {
         await using var database = await TestDatabase.CreateAsync(300m, "recipient@example.test");

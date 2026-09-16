@@ -2,9 +2,152 @@
 
 Last updated: 2026-09-08
 
-Branch: `feature/cashier-pwa`
+Branch: `feature/cashier-mobile-points`
 
-Last task worked: Cashier mobile-first UI / PWA Phase 2.
+Last task worked: Cashier mobile app Phase 4B customer lookup and points.
+
+## 2026-09-08 - Cashier mobile app Phase 4B customer + points
+
+Current branch for this work: `feature/cashier-mobile-points`.
+
+Scope:
+
+- Continues `LoyaltyCloud.Cashier`, the .NET MAUI Blazor Hybrid native cashier app.
+- Adds native QR scanning with `ZXing.Net.Maui.Controls` version `0.5.2`, chosen because it supports .NET 9 mobile targets. Newer 0.10.x packages target .NET 10 and are not compatible with this RC1 app.
+- Registers ZXing through `.UseBarcodeReader()` in `MauiProgram`.
+- Adds Android `CAMERA` permission and iOS `NSCameraUsageDescription`.
+- Keeps Windows scanner behavior as a friendly unsupported path; manual customer lookup remains available.
+- Uses raw Apple Wallet customer QR payloads as serial numbers. The parser trims payload text only; it does not parse tenant IDs, accept browser-supplied TenantId or infer tenant context from URLs.
+- Adds manual `ID del cliente` lookup using existing `GET /api/customers/{serialNumber}`.
+- Displays customer name, serial/ID, current points and level.
+- Adds points from purchase amount using existing `POST /api/points` with `serialNumber` and `purchaseAmount`.
+- Refreshes customer detail after successful add-points so the displayed balance/level is current.
+- Handles 401 by clearing the local MAUI SecureStorage-backed session through the existing auth handler/session flow.
+- Keeps `Tarjeta de regalo` visible but disabled in the native app; redemptions and Gift Cards are future phases.
+
+Security:
+
+- The native app consumes `LoyaltyCloud.API` directly with the cashier bearer token.
+- It does not embed `AdminApi:SharedSecret`, SQL connection strings, Key Vault credentials, `CashierAuth:SigningKey` or server-only signing material.
+- API continues to derive tenant/user/operator from the authenticated bearer token and server-side revalidation. The app never submits TenantId.
+
+Validation:
+
+- `dotnet workload list` confirmed installed workloads: `android`, `ios`, `maccatalyst`, `maui-windows`.
+- `dotnet build .\src\LoyaltyCloud.Cashier\LoyaltyCloud.Cashier.csproj -c Release -f net9.0-android` passed with 0 warnings and 0 errors.
+- Focused regression target: `Category=CashierMobile|Category=CashierAuth|Category=TenantAdminAuth|Category=AdminRouting|Category=StaffManagement|Category=AdminCustomerPoints|Category=SuperAdmin`.
+
+Out of scope:
+
+- Rewards/catalog redemption, monetary redemption, Gift Cards, offline mode, push, biometrics, refresh tokens, token revocation, trusted devices, store packaging and real-device iOS/Android validation.
+
+## 2026-09-08 - Cashier mobile app foundation Phase 4A
+
+Current branch for this work: `feature/cashier-mobile-app`.
+
+Scope:
+
+- Adds `LoyaltyCloud.Cashier`, a .NET MAUI Blazor Hybrid mobile app foundation separate from `LoyaltyCloud.Admin`.
+- This is not a PWA and does not wrap or navigate to Admin `/cashier`.
+- The app consumes `LoyaltyCloud.API` over HTTPS through the existing `POST /api/auth/cashier/login` endpoint.
+- Login uses the real cashier auth contract: `tenantSlug`, `username`, `password` and response fields `accessToken`, `tokenType`, `expiresAtUtc`, `expiresInSeconds`, `tenantSlug`, `userId`, `username`, `role`.
+- Access token/session data are stored with MAUI `SecureStorage`; no token is stored in `localStorage`, `Preferences` or plaintext files.
+- Session restore checks local expiration and clears expired/corrupt sessions.
+- Authenticated HTTP calls are centralized through `AuthenticatedCashierApiClient` and `CashierAuthorizationHandler`, which adds `Authorization: Bearer ...` only for the configured LoyaltyCloud API host and clears local session on 401.
+- The first home screen after login shows `LoyaltyCloud Caja`, a placeholder `Puntos` / `Tarjeta de regalo` segmented control, current username, tenant slug and logout.
+- Logout removes SecureStorage session data and returns to login.
+
+Configuration:
+
+- Default API target is STG: `https://loyaltycloud-api-stg-01.azurewebsites.net`.
+- Build with `-p:CashierEnvironment=Production` to target PROD: `https://api.loyaltycloud.net`.
+- Provisional app id is `com.loyaltycloud.cashier`; confirm final Bundle Identifier / Android Application ID before store submission.
+- Never add `AdminApi:SharedSecret`, SQL connection strings, Key Vault credentials or `CashierAuth:SigningKey` to this app.
+
+Out of scope for Phase 4A:
+
+- QR scanner, customer lookup, points, redemptions, Gift Cards, offline mode, push notifications, biometrics, refresh tokens, trusted devices and store packaging.
+
+Environment:
+
+- `dotnet workload list` showed installed workloads: `android`, `ios`, `maccatalyst`, `maui-windows`.
+- Windows can validate Android/Windows builds. Full iOS signing/device validation still requires the normal Apple/Mac toolchain.
+
+Validation expected:
+
+- `Category=CashierMobile`.
+- Existing cashier/auth regressions if touched.
+- `dotnet ef migrations has-pending-model-changes`.
+- MAUI project build for a locally supported target.
+- `dotnet build .\LoyaltyCloud.sln -c Release` if practical in the installed environment.
+- `git diff --check`.
+- No deploy, database update, migration, commit or push unless explicitly requested.
+
+## 2026-09-08 - Cashier Gift Card actions UX cleanup
+
+Current branch for this work: `fix/cashier-giftcard-actions-ux`.
+
+What changed:
+
+- Keeps `/cashier` on the segmented `Puntos` / `Tarjeta de regalo` surface.
+- Removed the redundant `Volver a caja` button from the Gift Card UI. Cashiers return to Puntos only through the segmented control.
+- `Otra Gift Card` is shown only after a Gift Card has been resolved or after a Gift Card redemption result exists. It is not shown in the initial Gift Card lookup state.
+- `Otra Gift Card` continues to reset the Gift Card code, detail, amount, success/error messages and QR handling while leaving the current mode as `Tarjeta de regalo`.
+- Initial Puntos copy is now compact: `Cliente`, `Escanear`, `ID del cliente`, `Buscar`.
+- Initial Gift Card copy is now compact: `Tarjeta de regalo`, `Escanear`, `Código`, `Buscar`.
+- QR detection already stops the scanner, writes the scanned value into the active input and invokes the same manual lookup method once: `LoadCustomerAsync` for Puntos and `LookupGiftCardAsync` for Gift Cards.
+- No business rules, endpoints, Gift Card services, scanner JavaScript, bearer auth, schema or migrations changed.
+
+Validation:
+
+- Pending at handoff: focused cashier/admin tests, EF pending-model check, Release build and `git diff --check`.
+
+## 2026-09-08 - Cashier UX cleanup after Gift Cards
+
+Current branch for this work: `feature/cashier-ux-cleanup`.
+
+Scope:
+
+- Keeps `/cashier` on the same mobile-first Blazor Server surface.
+- Adds a full-width segmented control with `Puntos` and `Tarjeta de regalo`.
+- `Puntos` is the default mode on every page load. Later cleanup removed the redundant `Volver a caja` button from Gift Card mode; cashiers switch back to Puntos through the segmented control.
+- `Tarjeta de regalo` is secondary and no longer appears as a stacked operation below customer lookup.
+- Switching modes stops the active scanner and clears mode-specific state/messages so customer and Gift Card flows do not leak into each other.
+- The Gift Card detail shown in Cashier is operational only: status, available balance and expiration. It does not show the technical `GC-...` reference.
+- Cashier no longer asks for optional Gift Card transaction reference. `Reference` remains available in Admin Gift Card screens and in the domain/contract; Cashier sends `null` because reference is optional metadata and is not used for security, idempotency or business rules.
+- Scanner remains shared through `wwwroot/js/qr-scanner.js`; the component decides whether the scan is for customer points or Gift Cards.
+
+Validation expected:
+
+- `Category=TenantAdminAuth|Category=CashierAuth|Category=StaffManagement|Category=AdminRouting|Category=SuperAdmin|Category=AdminCustomerPoints|Category=AdminRedemptionFlow|Category=MonetaryRedemption|Category=GiftCards`.
+- `dotnet ef migrations has-pending-model-changes`.
+- `dotnet build .\LoyaltyCloud.sln -c Release`.
+- `git diff --check`.
+- No deploy, database update, commit or push unless explicitly requested.
+
+## 2026-09-08 - Cashier Gift Cards Phase 3
+
+Current branch for this work: `feature/cashier-giftcards`.
+
+Scope:
+
+- Extends `/cashier` with a dedicated Gift Card flow separate from loyalty reward/monetary redemption.
+- The initial cashier screen showed customer scan/manual lookup plus a separate `Gift Cards` section with `Canjear Gift Card`; this was later cleaned up into a segmented `Puntos` / `Tarjeta de regalo` control.
+- Removed the redundant `Escribir código` button because the manual customer ID field is already visible.
+- Gift Card lookup accepts direct `GC-....` codes and public claim URLs/QRs.
+- Direct code lookup uses `IGiftCardService.GetByCodeAsync(...)`.
+- Claim URL lookup uses `IGiftCardService.GetByClaimTokenAsync(...)`, a tenant-scoped service method that preserves the authenticated cashier tenant. Do not use the public `IGiftCardClaimService` from `/cashier` because it is designed for public claim pages and can resolve tenant from token.
+- Gift Card redemption uses `IGiftCardService.RedeemAsync(...)`, preserving existing balance, status, partial-redemption, idempotency, operator audit, tenant isolation and Wallet sync behavior.
+- No new Cashier API endpoints, schema changes or migrations are expected for this slice.
+
+Validation expected:
+
+- `Category=TenantAdminAuth|Category=CashierAuth|Category=StaffManagement|Category=AdminRouting|Category=SuperAdmin|Category=AdminCustomerPoints|Category=AdminRedemptionFlow|Category=GiftCards`.
+- Existing Gift Card domain/persistence/isolation regressions where practical.
+- `dotnet ef migrations has-pending-model-changes`.
+- `dotnet build .\LoyaltyCloud.sln -c Release`.
+- `git diff --check`.
+- No deploy, database update, commit or push unless explicitly requested.
 
 ## 2026-09-08 - Cashier mobile-first UI Phase 2
 
@@ -19,7 +162,7 @@ Scope:
 - QR scanning reuses `wwwroot/js/qr-scanner.js` / `window.kbeautyQrScanner` and includes a `scannerStarted` guard so disposal does not call JS before the component is interactive.
 - The customer lookup path reuses `GET /api/customers/{serialNumber}`.
 - Add-points reuses `POST /api/points` through the existing purchase-amount contract; the UI labels the input as purchase amount, not raw points.
-- Reward redemption reuses `GET /api/redemptions/catalog/{serialNumber}` and `POST /api/redemptions`, matching the existing Admin redemption flow.
+- Redemption reuses the existing Admin flow: catalog rewards come from `GET /api/redemptions/catalog/{serialNumber}`, monetary discount availability comes from `GET /api/config` / `points_per_peso_unit`, and both redemption types use `POST /api/redemptions`.
 - Gift Cards, refresh tokens, trusted-device management, offline transactions, MAUI/native shell and new API endpoints are intentionally out of scope.
 
 Auth/security:

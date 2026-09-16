@@ -91,7 +91,7 @@ public sealed class GoogleWalletNotificationClientTests
     {
         var (client, handler) = CreateClient();
         await client.CreateOrUpdateGiftCardObjectAsync(new(
-            "issuer.object_stable", "issuer.class_stable", "Regalos Tamalitos", "Ana", "GC-AAAA-BBBB-CCCC",
+            "issuer.object_stable", "issuer.class_stable", "Regalos Tamalitos", "Ana", "Luis", "Disfrútala", "GC-AAAA-BBBB-CCCC",
             250m, "MXN", "Active", "#123456", "https://assets.test/logo.png", "https://assets.test/hero.png", null));
         var patch = Assert.Single(handler.ApiRequests, x => x.Method.Method == "PATCH");
         using var json = JsonDocument.Parse(patch.Body);
@@ -100,6 +100,12 @@ public sealed class GoogleWalletNotificationClientTests
         Assert.Equal("#123456", json.RootElement.GetProperty("hexBackgroundColor").GetString());
         Assert.Equal("https://assets.test/logo.png", json.RootElement.GetProperty("logo").GetProperty("sourceUri").GetProperty("uri").GetString());
         Assert.Equal("https://assets.test/hero.png", json.RootElement.GetProperty("heroImage").GetProperty("sourceUri").GetProperty("uri").GetString());
+        var modules = json.RootElement.GetProperty("textModulesData").EnumerateArray().ToDictionary(
+            x => x.GetProperty("id").GetString()!,
+            x => x.GetProperty("body").GetString());
+        Assert.Equal("Ana", modules["recipient"]);
+        Assert.Equal("Luis", modules["sender"]);
+        Assert.Equal("Disfrútala", modules["message"]);
     }
 
     private static (GoogleWalletClient Client, CaptureHandler Handler) CreateClient()

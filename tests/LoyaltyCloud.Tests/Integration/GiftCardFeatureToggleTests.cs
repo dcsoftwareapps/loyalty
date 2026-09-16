@@ -55,7 +55,8 @@ public sealed class GiftCardFeatureToggleTests
         var redirect = Read("src", "LoyaltyCloud.Admin", "Components", "RedirectUnauthorized.razor");
         Assert.Contains("RedirectUnauthorized", routes);
         Assert.Contains("IsAuthenticated == true", redirect);
-        Assert.Contains("NavigateTo(\"/dashboard\")", redirect);
+        Assert.Contains("principal.IsInRole(TenantUserRoles.Cashier) ? \"/cashier\" : \"/dashboard\"", redirect);
+        Assert.Contains("Nav.NavigateTo(destination)", redirect);
     }
 
     [Fact]
@@ -81,6 +82,43 @@ public sealed class GiftCardFeatureToggleTests
         Assert.Contains("/wallet/google", claim);
         Assert.Contains("application/vnd.apple.pkpass", program);
         Assert.Contains("Results.Redirect(link.Url)", program);
+    }
+
+    [Fact]
+    public void ClaimPageShowsGiftingDetailsSafelyAndGracefully()
+    {
+        var claim = Read("src", "LoyaltyCloud.Admin", "Pages", "GiftCardClaim.razor");
+
+        Assert.Contains("ClaimTitle", claim);
+        Assert.Contains("te regaló una tarjeta de regalo", claim);
+        Assert.Contains("<p>Para <strong>@claim.Card.RecipientName</strong></p>", claim);
+        Assert.Contains("<p>De <strong>@claim.Card.SenderName</strong></p>", claim);
+        Assert.Contains("<blockquote>“@claim.Card.PersonalMessage”</blockquote>", claim);
+        Assert.Contains("!string.IsNullOrWhiteSpace(claim.Card.SenderName)", claim);
+        Assert.Contains("!string.IsNullOrWhiteSpace(claim.Card.PersonalMessage)", claim);
+        Assert.DoesNotContain("MarkupString", claim);
+    }
+
+    [Fact]
+    public void GiftCardWalletsIncludeGiftingDetailsAsOptionalFields()
+    {
+        var apple = Read("src", "LoyaltyCloud.Infrastructure", "Services", "GiftCardAppleWalletService.cs");
+        var google = Read("src", "LoyaltyCloud.Infrastructure", "Services", "GoogleWallet", "GoogleWalletClient.cs");
+        var googleData = Read("src", "LoyaltyCloud.Infrastructure", "Services", "GoogleWallet", "GoogleGiftCardData.cs");
+
+        Assert.Contains("BuildBackFields(card,config)", apple);
+        Assert.Contains("key=\"recipient\",label=\"Para\"", apple);
+        Assert.Contains("key=\"sender_back\",label=\"De\"", apple);
+        Assert.Contains("key=\"message\",label=\"Mensaje\"", apple);
+        Assert.Contains("!string.IsNullOrWhiteSpace(card.PersonalMessage)", apple);
+
+        Assert.Contains("string? SenderName", googleData);
+        Assert.Contains("string? PersonalMessage", googleData);
+        Assert.Contains("BuildGiftCardTextModules(value)", google);
+        Assert.Contains("id = \"recipient\", header = \"Para\"", google);
+        Assert.Contains("id = \"sender\", header = \"De\"", google);
+        Assert.Contains("id = \"message\", header = \"Mensaje\"", google);
+        Assert.Contains("!string.IsNullOrWhiteSpace(value.PersonalMessage)", google);
     }
     [Fact]
     public void CircuitLayoutReads_CreateIndependentDbContexts()
@@ -265,6 +303,11 @@ public sealed class GiftCardFeatureToggleTests
         var pages = new[] { "GiftCards.razor", "GiftCardIssue.razor", "GiftCardRedeem.razor", "GiftCardList.razor", "GiftCardDetail.razor", "GiftCardReports.razor" };
         foreach (var page in pages)
             Assert.Contains("Authorize(Policy = LoyaltyCloud.Admin.Auth.GiftCardsAuthorization.Policy)", Read("src", "LoyaltyCloud.Admin", "Pages", page));
+
+        var settings = Read("src", "LoyaltyCloud.Admin", "Pages", "GiftCardSettings.razor");
+        Assert.Contains("@attribute [Authorize]", settings);
+        Assert.Contains("Navigation.NavigateTo(\"/config?section=giftcards\", replace: true)", settings);
+        Assert.Contains("@attribute [Authorize]", Read("src", "LoyaltyCloud.Admin", "Pages", "Config.razor"));
     }
 
     [Fact]
@@ -304,6 +347,7 @@ public sealed class GiftCardFeatureToggleTests
         Assert.Contains("catch(ObjectDisposedException)", source);
     }
     [Fact]
+    [Trait("Category", "GiftCards")]
     public async Task EnablingTenantA_DoesNotEnableTenantB_AndDisablingPreservesData()
     {
         var tenantA = Guid.NewGuid(); var tenantB = Guid.NewGuid(); var now = DateTime.UtcNow; var user = Guid.NewGuid();
@@ -327,6 +371,49 @@ public sealed class GiftCardFeatureToggleTests
         Assert.Single(await tenantAContext.GiftCards.ToListAsync());
         Assert.Single(await tenantAContext.GiftCardTransactions.ToListAsync());
         Assert.Empty(await tenantBContext.GiftCards.ToListAsync());
+    }
+
+    [Fact]
+    [Trait("Category", "GiftCards")]
+    public async Task TenantScopedClaimTokenLookup_DoesNotResolveGiftCardFromAnotherTenant()
+    {
+        var tenantA = Guid.NewGuid();
+        var tenantB = Guid.NewGuid();
+        var now = DateTime.UtcNow;
+        var user = Guid.NewGuid();
+        const string claimToken = "gift-card-claim-token";
+        var options = new DbContextOptionsBuilder<AppDbContext>().UseInMemoryDatabase(Guid.NewGuid().ToString()).Options;
+
+        await using (var setupA = Context(options, tenantA))
+        {
+            var configA = new GiftCardConfiguration(Guid.NewGuid(), tenantA, now);
+            configA.SetEnabled(true, now);
+            var card = new GiftCard(Guid.NewGuid(), tenantA, "GC-AAAA-BBBB-CCCC", GiftCard.HashClaimToken(claimToken), 500m, "MXN", null, "Owner", null, null, null, null, GiftCardSource.Manual, user, now, null);
+
+            setupA.AddRange(
+                configA,
+                card,
+                new GiftCardTransaction(Guid.NewGuid(), tenantA, card.Id, GiftCardTransactionType.Issued, 500m, 0, 500m, user, now));
+            await setupA.SaveChangesAsync();
+        }
+
+        await using (var setupB = Context(options, tenantB))
+        {
+            var configB = new GiftCardConfiguration(Guid.NewGuid(), tenantB, now);
+            configB.SetEnabled(true, now);
+            setupB.Add(configB);
+            await setupB.SaveChangesAsync();
+        }
+
+        await using var tenantAContext = Context(options, tenantA);
+        var serviceA = Service(tenantAContext, options, tenantA, user, now);
+        var tenantACard = await serviceA.GetByClaimTokenAsync(claimToken);
+        Assert.NotNull(tenantACard);
+        Assert.Equal("GC-AAAA-BBBB-CCCC", tenantACard.Card.Code);
+
+        await using var tenantBContext = Context(options, tenantB);
+        var serviceB = Service(tenantBContext, options, tenantB, user, now);
+        Assert.Null(await serviceB.GetByClaimTokenAsync(claimToken));
     }
 
     private static GiftCardService Service(AppDbContext db, DbContextOptions<AppDbContext> options, Guid tenantId, Guid userId, DateTime now)

@@ -71,8 +71,6 @@ public sealed class RedeemRewardHandler : IRequestHandler<RedeemRewardCommand, R
             return Result.Fail<RedemptionResponse>($"No se encontró tarjeta '{command.SerialNumber}'.");
         if (card.TenantId != _tenantContext.RequireTenantId())
             return Result.Fail<RedemptionResponse>("La tarjeta no pertenece al tenant actual.");
-        if (!card.IsActive)
-            return Result.Fail<RedemptionResponse>("La tarjeta está inactiva.");
 
         var reward = await _rewards.GetByIdAsync(command.RewardCatalogItemId, ct);
         if (reward is null)
@@ -80,6 +78,29 @@ public sealed class RedeemRewardHandler : IRequestHandler<RedeemRewardCommand, R
 
         if (reward.TenantId != card.TenantId)
             return Result.Fail<RedemptionResponse>("El beneficio no pertenece al mismo tenant de la tarjeta.");
+
+        var idempotencyKey = string.IsNullOrWhiteSpace(command.IdempotencyKey)
+            ? null
+            : command.IdempotencyKey.Trim();
+        if (idempotencyKey is not null)
+        {
+            var existing = await _redemptions.GetByIdempotencyKeyAsync(idempotencyKey, ct);
+            if (existing is not null)
+            {
+                if (existing.Type != RedemptionType.CatalogReward
+                    || existing.LoyaltyCardId != card.Id
+                    || existing.RewardCatalogItemId != reward.Id)
+                {
+                    return Result.Fail<RedemptionResponse>(
+                        "La clave de idempotencia corresponde a otro canje. Revisa el canje pendiente antes de intentar de nuevo.");
+                }
+
+                return Result.Ok(ToResponse(existing, reward.Name, card.CurrentPoints));
+            }
+        }
+
+        if (!card.IsActive)
+            return Result.Fail<RedemptionResponse>("La tarjeta está inactiva.");
 
         var now = _dt.UtcNow;
         if (!reward.IsAvailableOn(now))
@@ -115,7 +136,8 @@ public sealed class RedeemRewardHandler : IRequestHandler<RedeemRewardCommand, R
             loyaltyCardId: card.Id,
             rewardCatalogItemId: reward.Id,
             pointsSpent: reward.PointsCost,
-            redeemedAtUtc: now);
+            redeemedAtUtc: now,
+            idempotencyKey: idempotencyKey);
         await _redemptions.AddAsync(redemption, ct);
 
         // Diario contable
@@ -142,14 +164,20 @@ public sealed class RedeemRewardHandler : IRequestHandler<RedeemRewardCommand, R
 
         await TryPushWalletUpdateAsync(card.SerialNumber, ct);
 
-        return Result.Ok(new RedemptionResponse(
-            RedemptionId: redemption.Id,
-            RewardName: reward.Name,
-            PointsSpent: reward.PointsCost,
-            RemainingPoints: card.CurrentPoints,
-            Status: redemption.Status,
-            RedeemedAt: redemption.RedeemedAt));
+        return Result.Ok(ToResponse(redemption, reward.Name, card.CurrentPoints));
     }
+
+    private static RedemptionResponse ToResponse(Redemption redemption, string rewardName, int remainingPoints) =>
+        new(
+            RedemptionId: redemption.Id,
+            RewardName: rewardName,
+            PointsSpent: redemption.PointsSpent,
+            RemainingPoints: remainingPoints,
+            Status: redemption.Status,
+            RedeemedAt: redemption.RedeemedAt,
+            MonetaryAmount: redemption.MonetaryAmount,
+            MonetaryCurrency: redemption.MonetaryCurrency,
+            MonetaryPointsPerPesoUnit: redemption.MonetaryPointsPerPesoUnit);
 
     private async Task TryPushWalletUpdateAsync(string serial, CancellationToken ct)
     {

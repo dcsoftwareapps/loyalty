@@ -71,7 +71,12 @@ La base activa de produccion/UAT es `LoyaltyCloudFree`.
 - Phase 0 de autenticacion Cashier: roles tenant `Admin`/`Cashier`, policies base y Admin portal actual restringido a `Admin`.
 - Phase 1 de autenticacion Cashier: login API movil seguro, bearer token de corta vida y autorizacion para operaciones de caja existentes.
 - Administracion de Personal para crear Admin/Cashier, resetear password, activar/desactivar usuarios y proteger el ultimo Admin activo.
-- Phase 2 de Cashier: UI mobile-first en `/cashier` para buscar cliente por QR/manual, sumar puntos por monto de compra, canjear recompensas de catalogo y cerrar sesion.
+- Phase 2 de Cashier: UI mobile-first en `/cashier` para buscar cliente por QR/manual, sumar puntos por monto de compra, canjear descuento en dinero/recompensas de catalogo y cerrar sesion.
+- Phase 3 de Cashier: canje de Gift Cards desde `/cashier` reutilizando reglas/servicios existentes y aislamiento tenant-aware.
+- Cleanup UX de Cashier: selector segmentado con `Puntos` como modo default y `Tarjeta de regalo` como modo secundario.
+- Cleanup UX de Gift Cards en Cashier: se elimino `Volver a caja` y `Otra Gift Card` aparece solo despues de resolver o canjear una tarjeta.
+- Phase 4A de Cashier Mobile: fundacion .NET MAUI Blazor Hybrid con login real, token en SecureStorage, restauracion de sesion, logout y BaseUrl STG/PROD.
+- Phase 4B de Cashier Mobile: scanner QR nativo, busqueda manual por ID del cliente, consulta de cliente y suma de puntos por monto de compra usando la API con bearer auth.
 
 ### Estado de Reportes
 
@@ -103,8 +108,8 @@ La base activa de produccion/UAT es `LoyaltyCloudFree`.
 - Restaurar cliente
 - Hard delete permanente de cliente
 - PWA/offline formal para caja
+- Cashier Mobile siguientes fases: canjes, Gift Cards, validacion iOS/Android en dispositivo real y publicacion.
 - Refresh/revocacion/dispositivos confiables para sesiones de caja
-- Endpoints Cashier para Gift Cards
 
 ## DEFERRED
 

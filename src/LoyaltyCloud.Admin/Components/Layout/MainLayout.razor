@@ -13,14 +13,11 @@
     <div class="kb-app" style="@TenantStyle">
         <header class="kb-mobile-header">
             <div class="kb-mobile-brand"><span class="kb-brand-mark">L</span><strong>LoyaltyCloud</strong></div>
-            <button type="button" class="kb-icon-button" aria-label="Abrir navegación" aria-expanded="@menuOpen" @onclick="ToggleMenu"><NavIcon Name="@(menuOpen ? "close" : "menu")" /></button>
+            <button type="button" class="kb-icon-button" aria-label="Abrir navegación" aria-expanded="false" data-admin-menu-toggle><NavIcon Name="menu" /></button>
         </header>
-        @if (menuOpen)
-        {
-            <button type="button" class="kb-sidebar-backdrop" aria-label="Cerrar navegación" @onclick="CloseMenu"></button>
-        }
+        <button type="button" class="kb-sidebar-backdrop" aria-label="Cerrar navegación" data-admin-menu-close></button>
 
-        <aside class="kb-sidebar @(menuOpen ? "kb-sidebar--open" : null)" aria-label="Navegación principal">
+        <aside class="kb-sidebar" aria-label="Navegación principal">
             <div class="kb-sidebar-brand">
                 <div class="kb-brand-identity">
                     @if (!string.IsNullOrWhiteSpace(branding?.LogoUrl))
@@ -33,10 +30,10 @@
                     }
                     <strong>LoyaltyCloud</strong>
                 </div>
-                <button type="button" class="kb-icon-button kb-sidebar-close" aria-label="Cerrar navegación" @onclick="CloseMenu"><NavIcon Name="close" /></button>
+                <button type="button" class="kb-icon-button kb-sidebar-close" aria-label="Cerrar navegación" data-admin-menu-close><NavIcon Name="close" /></button>
             </div>
 
-            <nav class="kb-sidebar-nav" @onclick="CloseMenu">
+            <nav class="kb-sidebar-nav" data-admin-menu-nav>
                 <span class="kb-sidebar-section">Principal</span>
                 <NavLink href="/dashboard" Match="NavLinkMatch.All"><NavIcon Name="dashboard" /><span>Dashboard</span></NavLink>
                 <NavLink href="/scan"><NavIcon Name="plus" /><span>Escanear QR</span></NavLink>
@@ -91,15 +88,11 @@
 @code {
     private LoyaltyCloud.Application.Common.Interfaces.TenantBrandingInfo? branding;
     private bool canRender;
-    private bool menuOpen;
     private bool giftCardsEnabled;
 
     private string TenantName => branding?.DisplayName ?? "LoyaltyCloud";
     private string TenantInitial => TenantName.Trim()[..1].ToUpperInvariant();
     private string TenantStyle => branding is null ? string.Empty : $"--kb-blush:{branding.PrimaryColor};--kb-sand-100:{branding.SecondaryColor};";
-
-    private void ToggleMenu() => menuOpen = !menuOpen;
-    private void CloseMenu() => menuOpen = false;
 
     protected override void OnInitialized() => GiftCardFeatureState.Changed += OnGiftCardsChangedAsync;
     private Task OnGiftCardsChangedAsync(bool enabled) { giftCardsEnabled = enabled; return InvokeAsync(StateHasChanged); }

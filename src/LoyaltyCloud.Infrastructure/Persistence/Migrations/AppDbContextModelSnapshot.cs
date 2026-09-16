@@ -1474,6 +1474,10 @@ namespace LoyaltyCloud.Infrastructure.Persistence.Migrations
                         .HasMaxLength(100)
                         .HasColumnType("nvarchar(100)");
 
+                    b.Property<string>("IdempotencyKey")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
                     b.Property<Guid>("LoyaltyCardId")
                         .HasColumnType("uniqueidentifier");
 
@@ -1514,6 +1518,10 @@ namespace LoyaltyCloud.Infrastructure.Persistence.Migrations
                         .HasColumnType("nvarchar(30)");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("TenantId", "IdempotencyKey")
+                        .IsUnique()
+                        .HasFilter("[IdempotencyKey] IS NOT NULL");
 
                     b.HasIndex("TenantId", "RewardCatalogItemId")
                         .HasFilter("[RewardCatalogItemId] IS NOT NULL");

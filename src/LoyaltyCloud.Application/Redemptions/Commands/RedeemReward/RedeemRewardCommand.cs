@@ -11,4 +11,5 @@ namespace LoyaltyCloud.Application.Redemptions.Commands.RedeemReward;
 public sealed record RedeemRewardCommand(
     string SerialNumber,
     Guid RewardCatalogItemId,
-    string OperatorId) : IRequest<Result<RedemptionResponse>>;
+    string OperatorId,
+    string? IdempotencyKey = null) : IRequest<Result<RedemptionResponse>>;

@@ -43,6 +43,7 @@ Projects:
 | `LoyaltyCloud.Infrastructure` | EF Core, repositories, read services, tenant services, Blob Storage, Key Vault, Apple Wallet, APNs, Google Wallet and cross-cutting adapters. |
 | `LoyaltyCloud.API` | REST API, Admin API HMAC middleware, public join API, Apple PassKit web service, Wallet endpoints and hosted workers. |
 | `LoyaltyCloud.Admin` | Blazor Server / Interactive Server tenant admin and platform admin. |
+| `LoyaltyCloud.Cashier` | .NET MAUI Blazor Hybrid mobile app foundation for iOS/Android cashier users. Consumes `LoyaltyCloud.API` directly with cashier bearer auth. |
 | `LoyaltyCloud.Tools` | Internal operational CLI commands and wallet diagnostics. |
 | `LoyaltyCloud.Tests` | xUnit integration, application, infrastructure and guardrail tests. |
 
@@ -52,6 +53,7 @@ Main technologies:
 - C#.
 - ASP.NET Core.
 - Blazor Server / Interactive Server.
+- .NET MAUI Blazor Hybrid for the native Cashier app foundation.
 - MediatR.
 - EF Core 9 with SQL Server provider and retrying execution strategy.
 - Azure SQL.
@@ -114,12 +116,13 @@ Current architecture:
 - Tenant user roles currently support `Admin` and `Cashier`. Existing Admin portal pages remain Admin-only.
 - Staff Management exists at `/staff` for tenant `Admin` users to create Admin/Cashier users, reset passwords and activate/deactivate staff without accepting TenantId from the UI.
 - Staff Management reuses `TenantAdminUser.Role`, `TenantAdminUser.IsActive`, `TenantAdminUser.NormalizeUsername(...)` and `IPasswordHashingService`; it blocks deactivating the last active tenant Admin.
-- Cashier web UI exists at `/cashier` as a mobile-first Blazor Server surface for tenant `Admin`/`Cashier` users. It supports QR/manual customer lookup, add-points from purchase amount, catalog reward redemption and logout.
+- Cashier web UI exists at `/cashier` as a mobile-first Blazor Server surface for tenant `Admin`/`Cashier` users. It opens in the `Puntos` mode by default through a two-option segmented control: `Puntos` and `Tarjeta de regalo`. It supports QR/manual customer lookup, add-points from purchase amount, monetary discount redemption, catalog reward redemption, tenant-scoped Gift Card lookup/redemption and logout. Gift Card mode uses the segmented control to return to Puntos; `Otra Gift Card` appears only after a Gift Card is resolved or redeemed. QR scans fill the active input and immediately run the same lookup used by the manual `Buscar` button.
 - `/cashier` uses the tenant auth cookie and server-side API clients. It does not store a bearer token in browser storage and does not expose `AdminApi:SharedSecret`, `CashierAuth:SigningKey` or API signing material to browser JavaScript.
 - Cashier API Phase 1 exists for future mobile/PWA cashier clients: `POST /api/auth/cashier/login` issues a short-lived bearer token signed by `CashierAuth:SigningKey`.
 - Cashier bearer tokens derive tenant/user/role from authenticated token claims and DB revalidation, not from browser-supplied TenantId or operator headers.
 - Cashier bearer tokens are limited to existing operational endpoints for customer lookup, transactions, points and redemptions. Configuration, billing, reports, campaigns, rewards, levels, Wallet branding, staff and platform APIs remain blocked.
 - `AdminApi:SharedSecret` is server-to-server only and must never be embedded in browser JavaScript, PWA, MAUI, iOS or Android clients.
+- Native mobile Cashier exists in `LoyaltyCloud.Cashier` as a .NET MAUI Blazor Hybrid app, not a PWA and not a wrapper around Admin `/cashier`. It uses `POST /api/auth/cashier/login`, stores the access token through MAUI `SecureStorage`, restores non-expired sessions locally, clears session on logout/401, and centralizes authenticated API calls without embedding server-side secrets. Phase 4B adds native QR scan, manual customer lookup and add-points from purchase amount through the existing cashier bearer-auth API.
 
 Guardrails:
 
@@ -163,7 +166,7 @@ Blazor Admin pages:
 | `/notifications` | `Notifications.razor` | Historical/admin notification page. Exists but is hidden from main menu. |
 | `/config` | `Config.razor` | Program configuration. Some legacy settings are visually hidden. |
 | `/quick-help` | `QuickHelp.razor` | Quick cashier/admin help, registration QR and printable poster. |
-| `/cashier` | `CashierLanding.razor` | Mobile-first cashier surface for customer lookup, add points and catalog reward redemption. |
+| `/cashier` | `CashierLanding.razor` | Mobile-first cashier surface with segmented `Puntos` default mode and secondary `Tarjeta de regalo` mode. |
 | `/giftcards` | `GiftCards.razor` | Tenant Gift Card dashboard/landing. Requires Gift Cards feature authorization. |
 | `/giftcards/issue` | `GiftCardIssue.razor` | Issue a Gift Card. Optional recipient email triggers SMTP delivery after successful issuance. |
 | `/giftcards/cards` | `GiftCardList.razor` | Gift Card list/search by tenant. |
@@ -331,6 +334,20 @@ Cashier/mobile API Phase 1 adds a separate bearer-token path for future cashier 
 - Tokens are server-issued, HMAC-signed and short-lived. They include user/operator id, tenant id, tenant slug, username and role claims.
 - Each bearer request revalidates the tenant and tenant admin user against SQL before setting `TenantContext`.
 - Operational endpoints accept either existing Admin HMAC or cashier bearer auth: `GET /api/customers/{serialNumber}`, `GET /api/customers/{serialNumber}/transactions`, `POST /api/points`, `GET /api/redemptions/catalog/{serialNumber}`, `POST /api/redemptions`, `PUT /api/redemptions/{id}/confirm` and `PUT /api/redemptions/{id}/cancel`.
+
+Native Cashier app Phase 4A/4B:
+
+- Project: `src/LoyaltyCloud.Cashier`.
+- UI technology: .NET MAUI Blazor Hybrid.
+- Visible app name: `LoyaltyCloud Caja`.
+- Current provisional application id: `com.loyaltycloud.cashier`; confirm before App Store / Play Store submission.
+- Default API environment is STG: `https://loyaltycloud-api-stg-01.azurewebsites.net`.
+- Build with `-p:CashierEnvironment=Production` to use PROD API: `https://api.loyaltycloud.net`.
+- No server-side secrets belong in the app. Do not add `AdminApi:SharedSecret`, SQL connection strings, Key Vault credentials or `CashierAuth:SigningKey`.
+- Phase 4A includes app shell, login, SecureStorage-backed session restore, authenticated HTTP foundation, logout and STG/PROD API base URL selection.
+- Phase 4B adds native QR scanning with `ZXing.Net.Maui.Controls`, Android/iOS camera permission declarations, manual `ID del cliente` lookup, `GET /api/customers/{serialNumber}`, add-points from purchase amount through `POST /api/points`, and customer refresh after successful points operations.
+- Customer QR payloads are currently the raw loyalty card serial number generated by Apple Wallet (`BarcodeValue = card.SerialNumber`); trim the payload but do not invent tenant IDs or URL-derived tenant context in the mobile app.
+- Redemptions, Gift Cards, offline mode, push, biometrics, refresh tokens, token revocation, trusted devices and store packaging remain future phases.
 - API overwrites `X-Operator-Id` from the authenticated bearer user, so browser-supplied operator ids are not authoritative.
 
 Do not pass TenantId from browser/UI. Do not replace this with plain relative requests against Admin. Do not reuse `AdminApi:SharedSecret` for mobile/PWA/native clients.
@@ -460,6 +477,17 @@ Admin flow:
 4. Admin builds the public claim URL `/giftcards/claim/{token}` through `IGiftCardDeliveryService.GetClaimUrlAsync`.
 5. If `RecipientEmail` exists, Admin attempts email delivery after issuance. Email failure must not roll back issuance.
 6. The public claim page resolves the hashed token, sets tenant context from the owning active tenant and lets the recipient add the Gift Card to Apple Wallet or Google Wallet.
+
+Cashier flow:
+
+1. Tenant Admin or Cashier opens `/cashier`.
+2. The `Puntos` mode is selected by default. `Tarjeta de regalo` is a secondary segmented-control mode, not a stacked operation on the customer lookup home.
+3. Switching modes stops any active scanner and clears mode-specific state/messages.
+4. The Gift Card mode accepts a direct Gift Card code or QR/public claim URL.
+5. Direct codes use `IGiftCardService.GetByCodeAsync(...)`.
+6. Claim URLs use `IGiftCardService.GetByClaimTokenAsync(...)`, which stays inside the currently authenticated tenant. Do not use the public `IGiftCardClaimService` from `/cashier` because it is designed for public claim pages and can resolve tenant from token.
+7. Redemption uses `IGiftCardService.RedeemAsync(...)`, preserving existing balance, status, partial-redemption, idempotency, tenant filters, operator audit and Wallet sync behavior. The Cashier UI does not ask for optional Gift Card transaction reference; Admin Gift Card screens still can.
+8. `Otra Gift Card` resets only the Gift Card workflow and remains in `Tarjeta de regalo`; returning to Puntos is done through the segmented control.
 
 Email delivery:
 
@@ -867,7 +895,8 @@ Done:
 - Gift Card email delivery through provider-neutral SMTP, including safe Admin feedback and claim-token rotation on resend.
 - Cashier API authentication Phase 1: server-issued short-lived bearer tokens for existing operational endpoints.
 - Staff Management for tenant Admin users: `/staff`, create Admin/Cashier, reset password, activate/deactivate and last-active-Admin protection.
-- Cashier UI Phase 2: `/cashier` mobile-first web surface for QR/manual customer lookup, add points, catalog reward redemption and logout. It is not an offline PWA and does not include Gift Cards or refresh tokens.
+- Cashier UI Phase 2/3: `/cashier` mobile-first web surface with `Puntos` as the default segmented mode and `Tarjeta de regalo` as a secondary mode. It supports QR/manual customer lookup, add points, monetary discount redemption, catalog reward redemption, Gift Card redemption and logout. It is not an offline PWA and does not include refresh tokens.
+- Cashier mobile app Phase 4A/4B: `LoyaltyCloud.Cashier` .NET MAUI Blazor Hybrid foundation with login, SecureStorage session restore, logout, STG/PROD API base URL selection, native QR scanner, manual customer lookup and add-points from purchase amount.
 - STG infrastructure scripts and STG setup documentation.
 
 Active/UAT focus:
@@ -885,7 +914,7 @@ Known current/pending:
 - Google Wallet does not yet have a robust outbox/retry model.
 - Google Wallet sync is currently limited mainly to add-points sync once a member is linked.
 - Gift Card email delivery does not yet have persistent delivery history, background retry or provider webhooks.
-- Cashier auth/UI does not yet include refresh tokens, token revocation, trusted-device management, offline/PWA caching, native shell/MAUI or Cashier endpoints for Gift Cards.
+- Cashier mobile app does not yet include redemptions, Gift Cards, offline mode, refresh tokens, token revocation, trusted-device management, biometrics, push notifications, store packaging or real-device App Store/Play Store validation.
 - Review whether Google Wallet has URLs/base URLs that should move to the new custom domains.
 - Analyze safe migration strategy before changing `Apple__WebServiceURL` to `https://api.loyaltycloud.net`.
 - Determine impact of changing `Apple__WebServiceURL` on already installed Apple Wallet passes, device registrations and `/v1/*` update flow.

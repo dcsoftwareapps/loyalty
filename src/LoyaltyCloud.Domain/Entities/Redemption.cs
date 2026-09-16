@@ -30,6 +30,9 @@ public class Redemption : Entity, ITenantOwned
 
     public decimal? MonetaryPointsPerPesoUnit { get; private set; }
 
+    /// <summary>Clave opcional para hacer idempotente la creación del canje desde clientes móviles.</summary>
+    public string? IdempotencyKey { get; private set; }
+
     /// <summary>Estado actual del canje.</summary>
     public RedemptionStatus Status { get; private set; }
 
@@ -53,7 +56,8 @@ public class Redemption : Entity, ITenantOwned
         Guid loyaltyCardId,
         Guid rewardCatalogItemId,
         int pointsSpent,
-        DateTime redeemedAtUtc) : base(id)
+        DateTime redeemedAtUtc,
+        string? idempotencyKey = null) : base(id)
     {
         if (tenantId == Guid.Empty)
             throw new ArgumentException("TenantId requerido.", nameof(tenantId));
@@ -69,6 +73,7 @@ public class Redemption : Entity, ITenantOwned
         Type = RedemptionType.CatalogReward;
         RewardCatalogItemId = rewardCatalogItemId;
         PointsSpent = pointsSpent;
+        IdempotencyKey = NormalizeIdempotencyKey(idempotencyKey);
         Status = RedemptionStatus.Pending;
         RedeemedAt = redeemedAtUtc;
     }
@@ -81,7 +86,8 @@ public class Redemption : Entity, ITenantOwned
         decimal monetaryAmount,
         string monetaryCurrency,
         decimal pointsPerPesoUnit,
-        DateTime redeemedAtUtc) : base(id)
+        DateTime redeemedAtUtc,
+        string? idempotencyKey = null) : base(id)
     {
         if (tenantId == Guid.Empty)
             throw new ArgumentException("TenantId requerido.", nameof(tenantId));
@@ -104,6 +110,7 @@ public class Redemption : Entity, ITenantOwned
         MonetaryAmount = decimal.Round(monetaryAmount, 2, MidpointRounding.AwayFromZero);
         MonetaryCurrency = monetaryCurrency.Trim().ToUpperInvariant();
         MonetaryPointsPerPesoUnit = pointsPerPesoUnit;
+        IdempotencyKey = NormalizeIdempotencyKey(idempotencyKey);
         Status = RedemptionStatus.Pending;
         RedeemedAt = redeemedAtUtc;
     }
@@ -136,5 +143,17 @@ public class Redemption : Entity, ITenantOwned
         ConfirmedAt = nowUtc;
         ConfirmedBy = cancelledBy?.Trim();
         Notes = reason?.Trim();
+    }
+
+    private static string? NormalizeIdempotencyKey(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+            return null;
+
+        var key = value.Trim();
+        if (key.Length > 100)
+            throw new ArgumentOutOfRangeException(nameof(value), "La clave de idempotencia no puede superar 100 caracteres.");
+
+        return key;
     }
 }

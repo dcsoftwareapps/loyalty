@@ -1,0 +1,1089 @@
+@using LoyaltyCloud.Cashier.Components.Cashier
+@page "/"
+@implements IDisposable
+@inject CashierApiClient Api
+@inject CashierCustomerService Customers
+@inject IQrScannerService Scanner
+@inject CashierRedemptionService Redemptions
+@inject RewardRedemptionCoordinator RewardRedemptions
+@inject MonetaryRedemptionCoordinator MonetaryRedemptions
+@inject CashierSessionService Sessions
+@inject CashierLoginPreferences LoginPreferences
+
+<PageTitle>LoyaltyCloud Caja</PageTitle>
+
+<main class="cashier-shell @(!restoring && session is not null ? "cashier-shell--authenticated" : null)">
+    @if (restoring)
+    {
+        <section class="cashier-card cashier-card--center">
+            <p class="eyebrow">LoyaltyCloud</p>
+            <h1>Preparando caja</h1>
+            <p class="muted">Revisando tu sesión...</p>
+        </section>
+    }
+    else if (session is null)
+    {
+        <section class="cashier-card">
+            <p class="eyebrow">LoyaltyCloud</p>
+            <h1>Iniciar sesión</h1>
+
+            @if (!string.IsNullOrWhiteSpace(errorMessage))
+            {
+                <div class="alert alert-error">@errorMessage</div>
+            }
+
+            <EditForm Model="login" OnValidSubmit="SignInAsync" FormName="cashier-login" class="login-form">
+                <DataAnnotationsValidator />
+
+                <label for="tenantSlug">Negocio</label>
+                <InputText id="tenantSlug"
+                           class="input"
+                           autocomplete="organization"
+                           disabled="@busy"
+                           @bind-Value="login.TenantSlug" />
+
+                <label for="username">Usuario</label>
+                <InputText id="username"
+                           class="input"
+                           autocomplete="username"
+                           disabled="@busy"
+                           @bind-Value="login.Username" />
+
+                <label for="password">Contraseña</label>
+                <InputText id="password"
+                           type="password"
+                           class="input"
+                           autocomplete="current-password"
+                           disabled="@busy"
+                           @bind-Value="login.Password" />
+
+                <label class="remember-me" for="rememberMe">
+                    <InputCheckbox id="rememberMe" disabled="@busy" @bind-Value="rememberMe" />
+                    <span>Recordarme</span>
+                </label>
+
+                <ValidationSummary />
+
+                <button type="submit" class="primary-button" disabled="@IsLoginDisabled">
+                    @(busy ? "Iniciando..." : "Iniciar sesión")
+                </button>
+            </EditForm>
+        </section>
+    }
+    else
+    {
+        <section class="cashier-card">
+            <div class="cashier-header">
+                <div>
+                    <p class="eyebrow">LoyaltyCloud Caja</p>
+                    <h1>@(giftMode ? "Tarjeta de regalo" : "Puntos")</h1>
+                </div>
+                <button type="button" class="link-button" @onclick="LogoutAsync" disabled="@(busy || giftBusy)">
+                    Salir
+                </button>
+            </div>
+
+            <div class="segmented" role="group" aria-label="Modo de caja">
+                <button type="button" class="segment @(!giftMode ? "active" : null)" disabled="@(busy || giftBusy || giftPending)" @onclick="ShowPoints">Puntos</button>
+                <button type="button" class="segment @(giftMode ? "active" : null)" disabled="@(busy || giftBusy || HasRedemptionPending)" @onclick="ShowGiftCards">Tarjeta de regalo</button>
+            </div>
+
+            <div hidden="@(!giftMode)">
+                <GiftCardPanel @key="session" Session="session" BusyChanged="GiftBusyChanged" PendingChanged="GiftPendingChanged" />
+            </div>
+            @if (!giftMode)
+            {
+                @if (!string.IsNullOrWhiteSpace(errorMessage))
+                {
+                    <div class="alert alert-error">@errorMessage</div>
+                }
+                @if (!string.IsNullOrWhiteSpace(successMessage))
+                {
+                    <div class="alert alert-success">@successMessage</div>
+                }
+
+                @if (customer is null)
+                {
+                    <section class="operation-section">
+                        <h2>Cliente</h2>
+                        <button type="button" class="scanner-button" @onclick="ScanCustomerAsync" disabled="@busy">
+                            @(busy ? "Procesando..." : "Escanear")
+                        </button>
+
+                        <EditForm Model="lookup" OnValidSubmit="SearchCustomerAsync" FormName="cashier-customer-lookup" class="login-form">
+                            <DataAnnotationsValidator />
+
+                            <label for="customerSerial">ID del cliente</label>
+                            <InputText id="customerSerial"
+                                       class="input input--mono"
+                                       autocomplete="off"
+                                       autocapitalize="characters"
+                                       disabled="@busy"
+                                       @bind-Value="lookup.SerialNumber" />
+                            <ValidationSummary />
+
+                            <button type="submit" class="secondary-button" disabled="@IsLookupDisabled">
+                                @(busy ? "Buscando..." : "Buscar")
+                            </button>
+                        </EditForm>
+                    </section>
+                }
+                else
+                {
+                    <section class="customer-panel">
+                        <div>
+                            <span>Cliente</span>
+                            <strong>@customer.FullName</strong>
+                            <small>@customer.SerialNumber</small>
+                        </div>
+                        <div class="points-balance">
+                            <span>Puntos</span>
+                            <strong>@customer.CurrentPoints.ToString("N0")</strong>
+                        </div>
+                        <div class="customer-meta">
+                            <span>Nivel</span>
+                            <strong>@customer.Level</strong>
+                        </div>
+                    </section>
+
+                    <section class="cashier-actions" aria-label="Operación">
+                        <button type="button"
+                                class="primary-button"
+                                @onclick="ShowAddPoints"
+                                disabled="@(busy || HasRedemptionPending)">
+                            Sumar puntos
+                        </button>
+                        <button type="button"
+                                class="secondary-button"
+                                @onclick="ShowRedemptionsAsync"
+                                disabled="@busy">
+                            Canjear recompensa
+                        </button>
+                    </section>
+
+                    @if (pointsOperation == PointsOperation.AddPoints)
+                    {
+                        <section class="operation-section">
+                            <h2>Sumar puntos</h2>
+                            <EditForm Model="points" OnValidSubmit="AddPointsAsync" FormName="cashier-add-points" class="login-form">
+                                <DataAnnotationsValidator />
+
+                                <label for="purchaseAmount">Monto de compra</label>
+                                <div class="money-input">
+                                    <span>$</span>
+                                    <InputNumber id="purchaseAmount"
+                                                 class="input"
+                                                 min="0"
+                                                 step="0.01"
+                                                 disabled="@busy"
+                                                 @bind-Value="points.PurchaseAmount" />
+                                </div>
+                                <ValidationSummary />
+
+                                <button type="submit" class="primary-button" disabled="@IsAddPointsDisabled">
+                                    @(busy ? "Agregando..." : "Agregar puntos")
+                                </button>
+                            </EditForm>
+                        </section>
+                    }
+
+                    @if (pointsOperation == PointsOperation.RedeemReward)
+                    {
+                        <section class="operation-section">
+                            <h2>Canjear recompensa</h2>
+                            @if (catalogLoading)
+                            {
+                                <p class="muted">Cargando recompensas...</p>
+                            }
+                            else if (pendingMonetaryOperation is not null && pendingRedemption is null)
+                            {
+                                <section class="redemption-confirm">
+                                    <h3>Descuento por resolver</h3>
+                                    <p>No pudimos confirmar si el descuento de <strong>@FormatMoney(pendingMonetaryOperation.MonetaryAmount, pendingMonetaryOperation.MonetaryCurrency)</strong> se registró. Reintenta con la misma cuenta para evitar duplicados.</p>
+                                    <div class="redemption-summary">
+                                        <span>Puntos</span>
+                                        <strong>@pendingMonetaryOperation.PointsToRedeem.ToString("N0") pts</strong>
+                                    </div>
+                                    <button type="button" class="primary-button" @onclick="RetryPendingMonetaryRedemptionAsync" disabled="@busy">
+                                        @(busy ? "Reintentando..." : "Reintentar descuento pendiente")
+                                    </button>
+                                </section>
+                            }
+                            else if (pendingRewardOperation is not null && pendingRedemption is null)
+                            {
+                                <section class="redemption-confirm">
+                                    <h3>Canje por resolver</h3>
+                                    <p>No pudimos confirmar si <strong>@pendingRewardOperation.RewardName</strong> se registró. Reintenta con la misma cuenta para evitar duplicados.</p>
+                                    <div class="redemption-summary">
+                                        <span>Costo</span>
+                                        <strong>@pendingRewardOperation.PointsCost.ToString("N0") pts</strong>
+                                    </div>
+                                    <button type="button" class="primary-button" @onclick="RetryPendingRedemptionAsync" disabled="@busy">
+                                        @(busy ? "Reintentando..." : "Reintentar canje pendiente")
+                                    </button>
+                                </section>
+                            }
+                            else if (pendingRedemption is not null)
+                            {
+                                <section class="redemption-confirm">
+                                    <h3>Canje pendiente</h3>
+                                    <p>@PendingRedemptionInstruction</p>
+                                    <div class="redemption-summary">
+                                        <span>Costo</span>
+                                        <strong>@pendingRedemption.PointsSpent.ToString("N0") pts</strong>
+                                    </div>
+                                    @if (pendingRedemption.MonetaryAmount is not null)
+                                    {
+                                        <div class="redemption-summary">
+                                            <span>Descuento</span>
+                                            <strong>@FormatMoney(pendingRedemption.MonetaryAmount.Value, pendingRedemption.MonetaryCurrency)</strong>
+                                        </div>
+                                    }
+                                    <div class="redemption-summary">
+                                        <span>Saldo después</span>
+                                        <strong>@pendingRedemption.RemainingPoints.ToString("N0") pts</strong>
+                                    </div>
+                                    <button type="button" class="primary-button" @onclick="ConfirmPendingRedemptionAsync" disabled="@busy">
+                                        @(busy ? "Confirmando..." : "Confirmar entrega")
+                                    </button>
+                                    <button type="button" class="secondary-button" @onclick="CancelPendingRedemptionAsync" disabled="@busy">
+                                        Cancelar canje
+                                    </button>
+                                </section>
+                            }
+                            else if (selectedReward is not null)
+                            {
+                                <section class="redemption-confirm">
+                                    <h3>Confirmar canje</h3>
+                                    <p>Canjear <strong>@selectedReward.Name</strong>.</p>
+                                    <div class="redemption-summary">
+                                        <span>Costo</span>
+                                        <strong>@selectedReward.PointsCost.ToString("N0") pts</strong>
+                                    </div>
+                                    <div class="redemption-summary">
+                                        <span>Saldo actual</span>
+                                        <strong>@customer.CurrentPoints.ToString("N0") pts</strong>
+                                    </div>
+                                    <div class="redemption-summary">
+                                        <span>Saldo después</span>
+                                        <strong>@Math.Max(0, customer.CurrentPoints - selectedReward.PointsCost).ToString("N0") pts</strong>
+                                    </div>
+                                    <button type="button" class="primary-button" @onclick="RedeemSelectedRewardAsync" disabled="@busy">
+                                        @(busy ? "Procesando..." : "Confirmar canje")
+                                    </button>
+                                    <button type="button" class="secondary-button" @onclick="CancelRewardSelection" disabled="@busy">
+                                        Cancelar
+                                    </button>
+                                </section>
+                            }
+                            else
+                            {
+                                <div class="segmented segmented--compact" role="group" aria-label="Tipo de canje">
+                                    <button type="button" class="segment @(redemptionMode == RedemptionMode.CatalogRewards ? "active" : null)" disabled="@busy" @onclick="ShowCatalogRewards">Recompensas</button>
+                                    <button type="button" class="segment @(redemptionMode == RedemptionMode.MonetaryDiscount ? "active" : null)" disabled="@busy" @onclick="ShowMonetaryDiscount">Descuento con puntos</button>
+                                </div>
+
+                                @if (redemptionMode == RedemptionMode.CatalogRewards)
+                                {
+                                    @if (AvailableRewards.Count > 0)
+                                    {
+                                        <div class="reward-list">
+                                            @foreach (var reward in AvailableRewards)
+                                            {
+                                                <article class="reward-card">
+                                                    <div>
+                                                        <strong>@reward.Name</strong>
+                                                        @if (!string.IsNullOrWhiteSpace(reward.Description))
+                                                        {
+                                                            <small>@reward.Description</small>
+                                                        }
+                                                        <span>@reward.PointsCost.ToString("N0") pts</span>
+                                                    </div>
+                                                    <button type="button" class="primary-button" @onclick="@(() => SelectReward(reward))" disabled="@busy">
+                                                        Elegir
+                                                    </button>
+                                                </article>
+                                            }
+                                        </div>
+                                    }
+
+                                    @if (UnavailableRewards.Count > 0)
+                                    {
+                                        <div class="reward-list">
+                                            @foreach (var reward in UnavailableRewards)
+                                            {
+                                                <article class="reward-card reward-card--unavailable">
+                                                    <div>
+                                                        <strong>@reward.Name</strong>
+                                                        @if (!string.IsNullOrWhiteSpace(reward.Description))
+                                                        {
+                                                            <small>@reward.Description</small>
+                                                        }
+                                                        <span>@reward.PointsCost.ToString("N0") pts</span>
+                                                        <small>Faltan @Math.Max(0, reward.PointsCost - customer.CurrentPoints).ToString("N0") pts</small>
+                                                    </div>
+                                                </article>
+                                            }
+                                        </div>
+                                    }
+
+                                    @if (catalog is not null && catalog.Count == 0)
+                                    {
+                                        <p class="muted">No hay recompensas disponibles para este cliente.</p>
+                                    }
+                                }
+                                else if (monetaryPreview is not null)
+                                {
+                                    <section class="redemption-confirm">
+                                        <h3>Confirmar descuento</h3>
+                                        <p>Aplicar descuento de <strong>@FormatMoney(monetaryPreview.MonetaryAmount, monetaryPreview.MonetaryCurrency)</strong>.</p>
+                                        <div class="redemption-summary">
+                                            <span>Puntos</span>
+                                            <strong>@monetaryPreview.PointsToRedeem.ToString("N0") pts</strong>
+                                        </div>
+                                        <div class="redemption-summary">
+                                            <span>Saldo actual</span>
+                                            <strong>@monetaryPreview.CurrentPoints.ToString("N0") pts</strong>
+                                        </div>
+                                        <div class="redemption-summary">
+                                            <span>Saldo después</span>
+                                            <strong>@monetaryPreview.RemainingPoints.ToString("N0") pts</strong>
+                                        </div>
+                                        <button type="button" class="primary-button" @onclick="RedeemMonetaryDiscountAsync" disabled="@busy">
+                                            @(busy ? "Procesando..." : "Confirmar canje")
+                                        </button>
+                                        <button type="button" class="secondary-button" @onclick="CancelMonetaryPreview" disabled="@busy">
+                                            Cancelar
+                                        </button>
+                                    </section>
+                                }
+                                else
+                                {
+                                    <div class="login-form">
+                                        <p class="muted">Convierte puntos disponibles en descuento para la compra actual.</p>
+                                        <label for="monetaryPoints">Puntos a utilizar</label>
+                                        <input id="monetaryPoints"
+                                               class="input"
+                                               inputmode="numeric"
+                                               autocomplete="off"
+                                               disabled="@busy"
+                                               @bind="monetaryPointsInput"
+                                               @bind:event="oninput" />
+                                        <button type="button" class="primary-button" @onclick="PreviewMonetaryDiscountAsync" disabled="@IsPreviewMonetaryDisabled">
+                                            @(busy ? "Calculando..." : "Continuar")
+                                        </button>
+                                    </div>
+                                }
+                            }
+                        </section>
+                    }
+
+                    <button type="button" class="secondary-button" @onclick="ClearCustomer" disabled="@(busy || HasRedemptionPending)">
+                        Otro cliente
+                    </button>
+                }
+            }
+        </section>
+    }
+</main>
+
+@code {
+    private readonly LoginModel login = new();
+    private readonly CustomerLookupModel lookup = new();
+    private readonly AddPointsModel points = new();
+    private CashierSession? session;
+    private CashierCustomerDetail? customer;
+    private IReadOnlyList<CashierRewardCatalogItem>? catalog;
+    private CashierRewardCatalogItem? selectedReward;
+    private PendingRewardRedemption? pendingRewardOperation;
+    private PendingMonetaryRedemption? pendingMonetaryOperation;
+    private CashierRedemptionResponse? pendingRedemption;
+    private CashierMonetaryRedemptionPreview? monetaryPreview;
+    private PointsOperation pointsOperation = PointsOperation.AddPoints;
+    private RedemptionMode redemptionMode = RedemptionMode.CatalogRewards;
+    private string monetaryPointsInput = string.Empty;
+    private bool restoring = true;
+    private bool busy;
+    private bool catalogLoading;
+    private bool rememberMe;
+    private bool giftMode;
+    private bool giftBusy;
+    private bool giftPending;
+
+    private void ShowPoints() { if (!busy && !giftBusy && !giftPending) giftMode = false; }
+    private void ShowGiftCards() { if (!busy && !giftBusy) giftMode = true; }
+    private void GiftBusyChanged(bool value) => giftBusy = value;
+    private void GiftPendingChanged(bool value)
+    {
+        giftPending = value;
+        if (value) giftMode = true;
+    }
+    private string? errorMessage;
+    private string? successMessage;
+
+    private bool IsLoginDisabled =>
+        busy
+        || string.IsNullOrWhiteSpace(login.TenantSlug)
+        || string.IsNullOrWhiteSpace(login.Username)
+        || string.IsNullOrWhiteSpace(login.Password);
+
+    private bool IsLookupDisabled =>
+        busy || string.IsNullOrWhiteSpace(lookup.SerialNumber);
+
+    private bool IsAddPointsDisabled =>
+        busy || customer is null || points.PurchaseAmount is null || points.PurchaseAmount <= 0m;
+
+    private bool HasRedemptionPending => pendingRewardOperation is not null || pendingMonetaryOperation is not null || pendingRedemption is not null;
+
+    private bool IsPreviewMonetaryDisabled =>
+        busy || customer is null || !TryParsePositivePoints(monetaryPointsInput, out _);
+
+    private string PendingRedemptionInstruction =>
+        pendingRedemption?.MonetaryAmount is not null
+            ? $"Aplica el descuento de {FormatMoney(pendingRedemption.MonetaryAmount.Value, pendingRedemption.MonetaryCurrency)} y confirma el canje."
+            : $"Entrega {pendingRedemption?.RewardName} y confirma el canje.";
+
+    private IReadOnlyList<CashierRewardCatalogItem> AvailableRewards =>
+        catalog?.Where(reward => reward.CanAfford).ToList() ?? [];
+
+    private IReadOnlyList<CashierRewardCatalogItem> UnavailableRewards =>
+        catalog?.Where(reward => !reward.CanAfford).ToList() ?? [];
+
+    protected override async Task OnInitializedAsync()
+    {
+        Sessions.SessionChanged += OnSessionChanged;
+        session = await Sessions.RestoreAsync();
+        if (session is null)
+            RestoreLoginIdentifiers();
+        else
+            await RestorePendingRewardRedemptionAsync();
+        restoring = false;
+    }
+
+    public void Dispose()
+    {
+        Sessions.SessionChanged -= OnSessionChanged;
+    }
+
+    private async Task SignInAsync()
+    {
+        if (IsLoginDisabled)
+            return;
+
+        busy = true;
+        errorMessage = null;
+        successMessage = null;
+        try
+        {
+            var result = await Api.LoginAsync(login.TenantSlug, login.Username, login.Password);
+            if (!result.Succeeded || result.Session is null)
+            {
+                errorMessage = result.ErrorMessage ?? "No fue posible iniciar sesión.";
+                return;
+            }
+
+            await Sessions.SignInAsync(result.Session);
+            LoginPreferences.Save(rememberMe, login.TenantSlug, login.Username);
+            session = result.Session;
+            login.Password = string.Empty;
+            await RestorePendingRewardRedemptionAsync();
+        }
+        finally
+        {
+            busy = false;
+        }
+    }
+
+    private async Task LogoutAsync()
+    {
+        await Sessions.LogoutAsync();
+        session = null;
+        ClearCustomer();
+        errorMessage = null;
+        login.Password = string.Empty;
+    }
+
+    private async Task ScanCustomerAsync()
+    {
+        if (busy)
+            return;
+
+        errorMessage = null;
+        successMessage = null;
+        busy = true;
+        QrScanResult result;
+        try { result = await Scanner.ScanAsync(); }
+        finally { busy = false; }
+        if (!result.Succeeded)
+        {
+            if (!string.IsNullOrWhiteSpace(result.ErrorMessage))
+                errorMessage = result.ErrorMessage;
+            return;
+        }
+
+        var serial = CashierQrPayloadParser.ExtractCustomerSerial(result.Value);
+        if (string.IsNullOrWhiteSpace(serial))
+        {
+            errorMessage = "El QR no contiene un ID de cliente válido.";
+            return;
+        }
+
+        lookup.SerialNumber = serial;
+        await LoadCustomerAsync(serial);
+    }
+
+    private Task SearchCustomerAsync() => LoadCustomerAsync(lookup.SerialNumber);
+
+    private async Task LoadCustomerAsync(string serialNumber)
+    {
+        if (busy)
+            return;
+
+        var serial = CashierQrPayloadParser.ExtractCustomerSerial(serialNumber);
+        if (string.IsNullOrWhiteSpace(serial))
+        {
+            errorMessage = "Ingresa el ID del cliente.";
+            return;
+        }
+
+        busy = true;
+        errorMessage = null;
+        successMessage = null;
+        try
+        {
+            var result = await Customers.GetCustomerAsync(serial);
+            if (!result.Succeeded || result.Value is null)
+            {
+                errorMessage = result.ErrorMessage ?? "No fue posible buscar el cliente.";
+                if (result.Unauthorized)
+                    session = null;
+                return;
+            }
+
+            customer = result.Value;
+            lookup.SerialNumber = result.Value.SerialNumber;
+            ClearRedemptionState();
+        }
+        finally
+        {
+            busy = false;
+        }
+    }
+
+    private async Task AddPointsAsync()
+    {
+        if (IsAddPointsDisabled || customer is null)
+            return;
+
+        var serial = customer.SerialNumber;
+        busy = true;
+        errorMessage = null;
+        successMessage = null;
+        try
+        {
+            var addResult = await Customers.AddPointsAsync(serial, points.PurchaseAmount.GetValueOrDefault());
+            if (!addResult.Succeeded || addResult.Value is null)
+            {
+                errorMessage = addResult.ErrorMessage ?? "No fue posible agregar puntos.";
+                if (addResult.Unauthorized)
+                    session = null;
+                return;
+            }
+
+            points.PurchaseAmount = null;
+            var refresh = await Customers.GetCustomerAsync(serial);
+            if (!refresh.Succeeded || refresh.Value is null)
+            {
+                errorMessage = refresh.ErrorMessage ?? "Los puntos se agregaron, pero no fue posible refrescar el cliente.";
+                if (refresh.Unauthorized)
+                    session = null;
+                return;
+            }
+
+            customer = refresh.Value;
+            successMessage = $"Se agregaron {addResult.Value.PointsAdded:N0} puntos.";
+            await ReloadCatalogIfVisibleAsync(serial);
+        }
+        finally
+        {
+            busy = false;
+        }
+    }
+
+    private void ShowAddPoints()
+    {
+        if (busy || HasRedemptionPending)
+            return;
+
+        pointsOperation = PointsOperation.AddPoints;
+        ClearRedemptionSelection();
+        errorMessage = null;
+        successMessage = null;
+    }
+
+    private async Task ShowRedemptionsAsync()
+    {
+        if (customer is null || busy)
+            return;
+
+        pointsOperation = PointsOperation.RedeemReward;
+        ClearRedemptionSelection();
+        errorMessage = null;
+        successMessage = null;
+
+        if (catalog is null)
+            await LoadCatalogAsync(customer.SerialNumber);
+    }
+
+    private async Task LoadCatalogAsync(string serial)
+    {
+        catalogLoading = true;
+        try
+        {
+            var result = await Redemptions.GetCatalogAsync(serial);
+            if (!result.Succeeded || result.Value is null)
+            {
+                errorMessage = result.ErrorMessage ?? "No fue posible cargar recompensas.";
+                if (result.Unauthorized)
+                    session = null;
+                return;
+            }
+
+            catalog = result.Value;
+        }
+        finally
+        {
+            catalogLoading = false;
+        }
+    }
+
+    private void SelectReward(CashierRewardCatalogItem reward)
+    {
+        if (busy || !reward.CanAfford)
+            return;
+
+        selectedReward = reward;
+        monetaryPreview = null;
+        errorMessage = null;
+        successMessage = null;
+    }
+
+    private void CancelRewardSelection()
+    {
+        selectedReward = null;
+        errorMessage = null;
+    }
+
+    private void ShowCatalogRewards()
+    {
+        if (busy)
+            return;
+
+        redemptionMode = RedemptionMode.CatalogRewards;
+        ClearRedemptionSelection();
+    }
+
+    private void ShowMonetaryDiscount()
+    {
+        if (busy)
+            return;
+
+        redemptionMode = RedemptionMode.MonetaryDiscount;
+        ClearRedemptionSelection();
+    }
+
+    private void CancelMonetaryPreview()
+    {
+        monetaryPreview = null;
+        errorMessage = null;
+    }
+
+    private async Task PreviewMonetaryDiscountAsync()
+    {
+        if (busy || customer is null || !TryParsePositivePoints(monetaryPointsInput, out var pointsToRedeem))
+            return;
+
+        busy = true;
+        errorMessage = null;
+        successMessage = null;
+        try
+        {
+            var result = await Redemptions.PreviewMonetaryAsync(customer.SerialNumber, pointsToRedeem);
+            if (!result.Succeeded || result.Value is null)
+            {
+                errorMessage = result.ErrorMessage ?? "No fue posible calcular el descuento.";
+                if (result.Unauthorized)
+                    session = null;
+                return;
+            }
+
+            monetaryPreview = result.Value;
+        }
+        finally
+        {
+            busy = false;
+        }
+    }
+
+    private async Task RedeemMonetaryDiscountAsync()
+    {
+        if (busy || customer is null || monetaryPreview is null)
+            return;
+
+        busy = true;
+        errorMessage = null;
+        successMessage = null;
+        var serial = customer.SerialNumber;
+        try
+        {
+            var result = await MonetaryRedemptions.BeginAsync(monetaryPreview);
+            pendingMonetaryOperation = await MonetaryRedemptions.LoadAsync();
+            if (!result.Succeeded || result.Value is null)
+            {
+                errorMessage = result.ErrorMessage ?? "No fue posible iniciar el descuento.";
+                if (result.Unauthorized)
+                    session = null;
+                return;
+            }
+
+            pendingRedemption = result.Value;
+            pendingMonetaryOperation ??= await MonetaryRedemptions.LoadAsync();
+            monetaryPreview = null;
+            monetaryPointsInput = string.Empty;
+            successMessage = "Descuento iniciado. Confirma la entrega o cancela para restaurar puntos.";
+            await RefreshCustomerAndCatalogAsync(serial);
+        }
+        finally
+        {
+            busy = false;
+        }
+    }
+
+    private async Task RedeemSelectedRewardAsync()
+    {
+        if (busy || customer is null || selectedReward is null || !selectedReward.CanAfford)
+            return;
+
+        busy = true;
+        errorMessage = null;
+        successMessage = null;
+        var serial = customer.SerialNumber;
+        try
+        {
+            var result = await RewardRedemptions.BeginAsync(serial, selectedReward);
+            pendingRewardOperation = await RewardRedemptions.LoadAsync();
+            if (!result.Succeeded || result.Value is null)
+            {
+                errorMessage = result.ErrorMessage ?? "No fue posible iniciar el canje.";
+                if (result.Unauthorized)
+                    session = null;
+                return;
+            }
+
+            pendingRedemption = result.Value;
+            pendingRewardOperation ??= await RewardRedemptions.LoadAsync();
+            selectedReward = null;
+            successMessage = "Canje iniciado. Confirma la entrega o cancela para restaurar puntos.";
+            await RefreshCustomerAndCatalogAsync(serial);
+        }
+        finally
+        {
+            busy = false;
+        }
+    }
+
+    private async Task RetryPendingRedemptionAsync()
+    {
+        if (busy || customer is null || pendingRewardOperation is null)
+            return;
+
+        busy = true;
+        errorMessage = null;
+        successMessage = null;
+        var serial = customer.SerialNumber;
+        try
+        {
+            var result = await RewardRedemptions.RetryAsync();
+            pendingRewardOperation = await RewardRedemptions.LoadAsync();
+            if (!result.Succeeded || result.Value is null)
+            {
+                errorMessage = result.ErrorMessage ?? "No fue posible resolver el canje pendiente.";
+                if (result.Unauthorized)
+                    session = null;
+                return;
+            }
+
+            pendingRedemption = result.Value;
+            pendingRewardOperation ??= await RewardRedemptions.LoadAsync();
+            successMessage = "Canje iniciado. Confirma la entrega o cancela para restaurar puntos.";
+            await RefreshCustomerAndCatalogAsync(serial);
+        }
+        finally
+        {
+            busy = false;
+        }
+    }
+
+    private async Task RetryPendingMonetaryRedemptionAsync()
+    {
+        if (busy || customer is null || pendingMonetaryOperation is null)
+            return;
+
+        busy = true;
+        errorMessage = null;
+        successMessage = null;
+        var serial = customer.SerialNumber;
+        try
+        {
+            var result = await MonetaryRedemptions.RetryAsync();
+            pendingMonetaryOperation = await MonetaryRedemptions.LoadAsync();
+            if (!result.Succeeded || result.Value is null)
+            {
+                errorMessage = result.ErrorMessage ?? "No fue posible resolver el descuento pendiente.";
+                if (result.Unauthorized)
+                    session = null;
+                return;
+            }
+
+            pendingRedemption = result.Value;
+            pendingMonetaryOperation ??= await MonetaryRedemptions.LoadAsync();
+            successMessage = "Descuento iniciado. Confirma la entrega o cancela para restaurar puntos.";
+            await RefreshCustomerAndCatalogAsync(serial);
+        }
+        finally
+        {
+            busy = false;
+        }
+    }
+
+    private async Task ConfirmPendingRedemptionAsync()
+    {
+        if (busy || customer is null || pendingRedemption is null)
+            return;
+
+        busy = true;
+        errorMessage = null;
+        successMessage = null;
+        var serial = customer.SerialNumber;
+        var rewardName = pendingRedemption.RewardName;
+        try
+        {
+            var result = await Redemptions.ConfirmAsync(pendingRedemption.RedemptionId);
+            if (!result.Succeeded)
+            {
+                errorMessage = result.ErrorMessage ?? "No fue posible confirmar el canje.";
+                if (result.Unauthorized)
+                    session = null;
+                return;
+            }
+
+            await ClearPendingRedemptionAsync();
+            successMessage = $"Canje confirmado: {rewardName}.";
+            await RefreshCustomerAndCatalogAsync(serial);
+        }
+        finally
+        {
+            busy = false;
+        }
+    }
+
+    private async Task CancelPendingRedemptionAsync()
+    {
+        if (busy || customer is null || pendingRedemption is null)
+            return;
+
+        busy = true;
+        errorMessage = null;
+        successMessage = null;
+        var serial = customer.SerialNumber;
+        try
+        {
+            var result = await Redemptions.CancelAsync(pendingRedemption.RedemptionId);
+            if (!result.Succeeded || result.Value is null)
+            {
+                errorMessage = result.ErrorMessage ?? "No fue posible cancelar el canje.";
+                if (result.Unauthorized)
+                    session = null;
+                return;
+            }
+
+            await ClearPendingRedemptionAsync();
+            successMessage = $"Canje cancelado. Se restauraron {result.Value.PointsRestored:N0} puntos.";
+            await RefreshCustomerAndCatalogAsync(serial);
+        }
+        finally
+        {
+            busy = false;
+        }
+    }
+
+    private async Task RefreshCustomerAndCatalogAsync(string serial)
+    {
+        var refresh = await Customers.GetCustomerAsync(serial);
+        if (refresh.Succeeded && refresh.Value is not null)
+            customer = refresh.Value;
+        else if (refresh.Unauthorized)
+            session = null;
+
+        await LoadCatalogAsync(serial);
+    }
+
+    private Task ReloadCatalogIfVisibleAsync(string serial) =>
+        pointsOperation == PointsOperation.RedeemReward && catalog is not null
+            ? LoadCatalogAsync(serial)
+            : Task.CompletedTask;
+
+    private void ClearCustomer()
+    {
+        customer = null;
+        lookup.SerialNumber = string.Empty;
+        points.PurchaseAmount = null;
+        errorMessage = null;
+        successMessage = null;
+        ClearRedemptionState();
+    }
+
+    private void ClearRedemptionState()
+    {
+        catalog = null;
+        selectedReward = null;
+        pendingRewardOperation = null;
+        pendingMonetaryOperation = null;
+        pendingRedemption = null;
+        monetaryPreview = null;
+        monetaryPointsInput = string.Empty;
+        redemptionMode = RedemptionMode.CatalogRewards;
+        pointsOperation = PointsOperation.AddPoints;
+        catalogLoading = false;
+    }
+
+    private void ClearRedemptionSelection()
+    {
+        selectedReward = null;
+        monetaryPreview = null;
+        monetaryPointsInput = string.Empty;
+    }
+
+    private async Task RestorePendingRewardRedemptionAsync()
+    {
+        try
+        {
+            pendingMonetaryOperation = await MonetaryRedemptions.LoadAsync();
+        }
+        catch (InvalidOperationException)
+        {
+            errorMessage = "Hay un descuento pendiente que no se pudo verificar. Inicia sesión con la misma cuenta y contacta al administrador.";
+            return;
+        }
+
+        try
+        {
+            pendingRewardOperation = await RewardRedemptions.LoadAsync();
+        }
+        catch (InvalidOperationException)
+        {
+            errorMessage = "Hay un canje pendiente que no se pudo verificar. Inicia sesión con la misma cuenta y contacta al administrador.";
+            return;
+        }
+
+        if (pendingMonetaryOperation is null && pendingRewardOperation is null)
+            return;
+
+        giftMode = false;
+        pointsOperation = PointsOperation.RedeemReward;
+        selectedReward = null;
+        monetaryPreview = null;
+        redemptionMode = pendingMonetaryOperation is not null ? RedemptionMode.MonetaryDiscount : RedemptionMode.CatalogRewards;
+        pendingRedemption = pendingMonetaryOperation?.CreatedRedemption ?? pendingRewardOperation?.CreatedRedemption;
+        var serial = pendingMonetaryOperation?.SerialNumber ?? pendingRewardOperation!.SerialNumber;
+        lookup.SerialNumber = serial;
+
+        var result = await Customers.GetCustomerAsync(serial);
+        if (result.Succeeded && result.Value is not null)
+            customer = result.Value;
+        else if (result.Unauthorized)
+            session = null;
+
+        successMessage = pendingRedemption is null
+            ? "Hay un canje pendiente por resolver. Reintenta antes de iniciar otro."
+            : "Hay un canje pendiente. Confirma la entrega o cancela para restaurar puntos.";
+    }
+
+    private async Task ClearPendingRedemptionAsync()
+    {
+        var wasMonetary = pendingMonetaryOperation is not null
+            || pendingRedemption?.MonetaryAmount is not null;
+        pendingRedemption = null;
+        pendingRewardOperation = null;
+        pendingMonetaryOperation = null;
+        if (wasMonetary)
+            await MonetaryRedemptions.ClearAsync();
+        else
+            await RewardRedemptions.ClearAsync();
+    }
+
+    private static bool TryParsePositivePoints(string value, out int pointsToRedeem) =>
+        int.TryParse(value, System.Globalization.NumberStyles.Integer, System.Globalization.CultureInfo.InvariantCulture, out pointsToRedeem)
+        && pointsToRedeem > 0;
+
+    private static string FormatMoney(decimal amount, string? currency) =>
+        string.Equals(currency, "MXN", StringComparison.OrdinalIgnoreCase)
+            ? $"${amount:N2}"
+            : $"{amount:N2} {currency}";
+
+    private void OnSessionChanged()
+    {
+        _ = InvokeAsync(() =>
+        {
+            session = Sessions.Current;
+            if (session is null)
+            {
+                giftMode = giftBusy = giftPending = false;
+                RestoreLoginIdentifiers();
+            }
+            StateHasChanged();
+        });
+    }
+
+    private void RestoreLoginIdentifiers()
+    {
+        (rememberMe, login.TenantSlug, login.Username) = LoginPreferences.Load();
+        login.Password = string.Empty;
+    }
+
+    private sealed class LoginModel
+    {
+        [Required(ErrorMessage = "Ingresa el negocio.")]
+        public string TenantSlug { get; set; } = string.Empty;
+
+        [Required(ErrorMessage = "Ingresa el usuario.")]
+        public string Username { get; set; } = string.Empty;
+
+        [Required(ErrorMessage = "Ingresa la contraseña.")]
+        public string Password { get; set; } = string.Empty;
+    }
+
+    private sealed class CustomerLookupModel
+    {
+        [Required(ErrorMessage = "Ingresa el ID del cliente.")]
+        public string SerialNumber { get; set; } = string.Empty;
+    }
+
+    private sealed class AddPointsModel
+    {
+        [Range(typeof(decimal), "0.01", "999999999", ErrorMessage = "Ingresa un monto mayor a cero.")]
+        public decimal? PurchaseAmount { get; set; }
+    }
+
+    private enum PointsOperation
+    {
+        AddPoints,
+        RedeemReward
+    }
+
+    private enum RedemptionMode
+    {
+        CatalogRewards,
+        MonetaryDiscount
+    }
+}
