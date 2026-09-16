@@ -1223,6 +1223,36 @@ public sealed class AdminRoutingTests : IClassFixture<AdminRoutingTests.AdminWeb
     }
 
     [Fact]
+    [Trait("Category", "AdminRouting")]
+    public void Admin_layout_supports_mobile_navigation_and_wallet_config_responsive_stack()
+    {
+        var root = GetRepositoryRoot();
+        var layout = File.ReadAllText(Path.Combine(root, "src", "LoyaltyCloud.Admin", "Components", "Layout", "MainLayout.razor"));
+        var config = File.ReadAllText(Path.Combine(root, "src", "LoyaltyCloud.Admin", "Pages", "Config.razor"));
+        var css = File.ReadAllText(Path.Combine(root, "src", "LoyaltyCloud.Admin", "wwwroot", "css", "site.css"));
+
+        Assert.Contains("class=\"kb-mobile-header\"", layout);
+        Assert.Contains("aria-label=\"Abrir navegación\"", layout);
+        Assert.Contains("aria-expanded=\"@menuOpen\"", layout);
+        Assert.Contains("kb-sidebar--open", layout);
+        Assert.Contains("class=\"kb-sidebar-backdrop\"", layout);
+        Assert.Contains("<nav class=\"kb-sidebar-nav\" @onclick=\"CloseMenu\">", layout);
+
+        Assert.Contains("class=\"kb-wallet-config\"", config);
+        Assert.Contains("class=\"kb-wallet-preview-shell\"", config);
+        Assert.Contains("class=\"kb-report-nav\"", config);
+
+        Assert.Contains("@media (max-width: 1023px)", css);
+        Assert.Contains("width: min(304px, 88vw)", css);
+        Assert.Contains(".kb-sidebar--open { transform: translateX(0); }", css);
+        Assert.Contains("@media (max-width: 1180px)", css);
+        Assert.Contains(".kb-wallet-config", css);
+        Assert.Contains("grid-template-columns: 1fr", css);
+        Assert.Contains("justify-self: center", css);
+        Assert.Contains("@media (max-width: 520px)", css);
+    }
+
+    [Fact]
     [Trait("Category", "AdminNotificationsCleanup")]
     public void Notifications_is_hidden_from_tenant_admin_navigation_but_messages_remains_visible()
     {
