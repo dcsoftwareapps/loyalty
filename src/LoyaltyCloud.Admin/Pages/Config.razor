@@ -11,6 +11,8 @@
 @using LoyaltyCloud.Admin.Services
 @inject ISender Sender
 @inject ITenantBrandingReadService BrandingRead
+@inject ITenantLoyaltyLevelReadService TenantLevels
+@inject ILevelProgressService LevelProgress
 @inject AdminApiClient Api
 
 <PageTitle>Configuración · LoyaltyCloud</PageTitle>
@@ -168,7 +170,7 @@ else
 
                     @if (IsCustomerNameMode)
                     {
-                        <div class="kb-wallet-preview-name">Daniel</div>
+                        <div class="kb-wallet-preview-name">Sofía García</div>
                     }
                     else
                     {
@@ -191,10 +193,10 @@ else
                         <span>FALTAN</span>
                     </div>
                     <div class="kb-wallet-preview-field-values">
-                        <strong>50 pts</strong>
-                        <strong>Mist ✨</strong>
-                        <strong>Glow</strong>
-                        <strong>950 pts</strong>
+                        <strong>@WalletPreview.PointsText</strong>
+                        <strong>@WalletPreview.LevelText</strong>
+                        <strong>@WalletPreview.NextLevelText</strong>
+                        <strong>@WalletPreview.RemainingPointsText</strong>
                     </div>
 
                     <div class="kb-wallet-preview-qr">
@@ -274,6 +276,7 @@ else
     private string? errorMsg;
     private bool busy;
     private TenantBrandingInfo? branding;
+    private IReadOnlyList<TenantLoyaltyLevelDto> loyaltyLevels = [];
     private string? walletBackgroundColor;
     private int walletLogoScalePercent = 100;
     private string appleWalletPrimaryContentMode = PrimaryContentCustomerName;
@@ -283,6 +286,7 @@ else
     private const long MaxLogoBytes = 2 * 1024 * 1024;
     private const string PrimaryContentCustomerName = "CustomerName";
     private const string PrimaryContentImage = "Image";
+    private const int PreviewPoints = 50;
     private const string PreviewQrUrl = "https://www.instagram.com/loyaltycloud.app/";
     private static readonly string PreviewQrDataUri = QrCodeSvgGenerator.GenerateDataUri(PreviewQrUrl, scale: 7);
 
@@ -297,6 +301,7 @@ else
     private string WalletLogoPreviewStyle => $"width:{Math.Round(180 * (walletLogoScalePercent / 100d)):0}px;";
     private bool IsCustomerNameMode => !string.Equals(appleWalletPrimaryContentMode, PrimaryContentImage, StringComparison.OrdinalIgnoreCase);
     private bool IsImageMode => string.Equals(appleWalletPrimaryContentMode, PrimaryContentImage, StringComparison.OrdinalIgnoreCase);
+    private WalletPreviewData WalletPreview => BuildWalletPreview();
 
     protected override async Task OnInitializedAsync() => await LoadAsync();
 
@@ -312,6 +317,14 @@ else
         }
 
         branding = await BrandingRead.GetCurrentAsync();
+        try
+        {
+            loyaltyLevels = await TenantLevels.GetActiveLevelsAsync();
+        }
+        catch (InvalidOperationException)
+        {
+            loyaltyLevels = [];
+        }
         walletBackgroundColor = branding.WalletBackgroundColor ?? string.Empty;
         walletLogoScalePercent = branding.WalletLogoScalePercent;
         appleWalletPrimaryContentMode = NormalizePrimaryContentMode(branding.AppleWalletPrimaryContentMode);
@@ -544,6 +557,36 @@ else
         _ => key
     };
 
+    private WalletPreviewData BuildWalletPreview()
+    {
+        if (loyaltyLevels.Count == 0)
+        {
+            return new WalletPreviewData(
+                PointsText: $"{PreviewPoints} pts",
+                LevelText: "—",
+                NextLevelText: "—",
+                RemainingPointsText: "—");
+        }
+
+        try
+        {
+            var progress = LevelProgress.Calculate(PreviewPoints, loyaltyLevels);
+            return new WalletPreviewData(
+                PointsText: $"{progress.RollingPoints} pts",
+                LevelText: $"{progress.CurrentLevel.Name} ✨",
+                NextLevelText: progress.IsMaxLevel ? "Máximo ✨" : progress.NextLevel!.Name,
+                RemainingPointsText: progress.IsMaxLevel ? "—" : $"{progress.PointsToNextLevel} pts");
+        }
+        catch (InvalidOperationException)
+        {
+            return new WalletPreviewData(
+                PointsText: $"{PreviewPoints} pts",
+                LevelText: "—",
+                NextLevelText: "—",
+                RemainingPointsText: "—");
+        }
+    }
+
     private sealed record WalletBrandingRequest(
         string? WalletBackgroundColor,
         int WalletLogoScalePercent,
@@ -554,6 +597,12 @@ else
         string ContentType,
         string ContentBase64,
         long ContentLength);
+
+    private sealed record WalletPreviewData(
+        string PointsText,
+        string LevelText,
+        string NextLevelText,
+        string RemainingPointsText);
 
     private static string NormalizePrimaryContentMode(string? value) =>
         string.Equals(value, PrimaryContentImage, StringComparison.OrdinalIgnoreCase)
