@@ -10,9 +10,13 @@
 
         app.classList.toggle(openClass, open);
         const toggle = app.querySelector("[data-admin-menu-toggle]");
+        const sidebar = app.querySelector(".kb-sidebar");
+        const backdrop = app.querySelector(".kb-sidebar-backdrop");
         if (toggle) {
             toggle.setAttribute("aria-expanded", open ? "true" : "false");
         }
+        sidebar?.classList.toggle("kb-sidebar--open", open);
+        backdrop?.classList.toggle("kb-sidebar-backdrop--open", open);
     }
 
     function closeAllMenus() {

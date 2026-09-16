@@ -1250,8 +1250,12 @@ public sealed class AdminRoutingTests : IClassFixture<AdminRoutingTests.AdminWeb
         Assert.Contains("@media (max-width: 1023px)", css);
         Assert.Contains("width: min(304px, 88vw)", css);
         Assert.Contains(".kb-app--menu-open .kb-sidebar { transform: translateX(0); }", css);
-        Assert.Contains(".kb-app--menu-open .kb-sidebar-backdrop { display: block; }", css);
+        Assert.Contains(".kb-app--menu-open .kb-sidebar-backdrop", css);
+        Assert.Contains(".kb-sidebar-backdrop--open { display: block; }", css);
         Assert.Contains(".kb-sidebar--open { transform: translateX(0); }", css);
+        Assert.Contains("z-index: 1200", css);
+        Assert.Contains("z-index: 1100", css);
+        Assert.Contains("transform: translate3d(0, 0, 0)", css);
         Assert.Contains("@media (max-width: 1180px)", css);
         Assert.Contains(".kb-wallet-config", css);
         Assert.Contains("grid-template-columns: 1fr", css);
@@ -1262,6 +1266,8 @@ public sealed class AdminRoutingTests : IClassFixture<AdminRoutingTests.AdminWeb
         Assert.Contains("data-admin-menu-close", navigation);
         Assert.Contains("data-admin-menu-nav", navigation);
         Assert.Contains("aria-expanded", navigation);
+        Assert.Contains("kb-sidebar--open", navigation);
+        Assert.Contains("kb-sidebar-backdrop--open", navigation);
         Assert.Contains("enhancedload", navigation);
     }
 

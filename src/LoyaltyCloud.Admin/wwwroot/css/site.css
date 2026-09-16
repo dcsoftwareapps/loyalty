@@ -1593,7 +1593,8 @@ button:focus-visible, a:focus-visible { outline: 3px solid color-mix(in srgb, va
     .kb-sidebar--open { transform: translateX(0); }
     .kb-sidebar-close { display: grid; }
     .kb-sidebar-backdrop { position: fixed; z-index: 1050; inset: 0; display: none; padding: 0; border: 0; background: rgba(28, 27, 24, .32); }
-    .kb-app--menu-open .kb-sidebar-backdrop { display: block; }
+    .kb-app--menu-open .kb-sidebar-backdrop,
+    .kb-sidebar-backdrop--open { display: block; }
     .kb-sidebar-section { width: auto; margin: var(--lc-space-5) 12px var(--lc-space-2); }
     .kb-sidebar a { padding: 10px 12px; font-size: var(--lc-font-nav); }
     .kb-sidebar .kb-signout { margin-top: 0; }
@@ -1694,6 +1695,19 @@ input[type="checkbox"], input[type="radio"] { width: 18px; height: 18px; accent-
     .kb-platform .kb-sidebar { position: static; width: 100%; height: auto; transform: none; box-shadow: none; }
     .kb-platform .kb-sidebar-nav { display: flex; }
     .kb-platform .kb-main { padding-top: var(--lc-space-6); }
+    .kb-app:not(.kb-platform) .kb-sidebar {
+        position: fixed;
+        z-index: 1200;
+        transform: translate3d(-102%, 0, 0);
+        visibility: visible;
+    }
+    .kb-app:not(.kb-platform).kb-app--menu-open .kb-sidebar,
+    .kb-app:not(.kb-platform) .kb-sidebar.kb-sidebar--open {
+        transform: translate3d(0, 0, 0);
+    }
+    .kb-app:not(.kb-platform) .kb-sidebar-backdrop {
+        z-index: 1100;
+    }
 }
 
 @media (max-width: 390px) {
