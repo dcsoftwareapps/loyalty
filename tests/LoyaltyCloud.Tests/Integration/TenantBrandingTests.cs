@@ -248,13 +248,24 @@ public sealed class TenantBrandingTests
         Assert.DoesNotContain("Opcional.", page);
         Assert.DoesNotContain("Eliminar logo de tarjeta", page);
         Assert.Contains("PUNTOS", page);
-        Assert.Contains("50 pts", page);
+        Assert.Contains("private const int PreviewPoints = 50;", page);
+        Assert.Contains("PointsText: $\"{progress.RollingPoints} pts\"", page);
         Assert.Contains("NIVEL", page);
-        Assert.Contains("Mist ✨", page);
         Assert.Contains("PRÓXIMO", page);
-        Assert.Contains("Glow", page);
         Assert.Contains("FALTAN", page);
-        Assert.Contains("950 pts", page);
+        Assert.Contains("Sofía García", page);
+        Assert.Contains("@WalletPreview.PointsText", page);
+        Assert.Contains("@WalletPreview.LevelText", page);
+        Assert.Contains("@WalletPreview.NextLevelText", page);
+        Assert.Contains("@WalletPreview.RemainingPointsText", page);
+        Assert.Contains("@inject ITenantLoyaltyLevelReadService TenantLevels", page);
+        Assert.Contains("@inject ILevelProgressService LevelProgress", page);
+        Assert.Contains("TenantLevels.GetActiveLevelsAsync()", page);
+        Assert.Contains("LevelProgress.Calculate(PreviewPoints, loyaltyLevels)", page);
+        Assert.DoesNotContain("<strong>Mist ✨</strong>", page);
+        Assert.DoesNotContain("<strong>Glow</strong>", page);
+        Assert.DoesNotContain("<strong>950 pts</strong>", page);
+        Assert.DoesNotContain(">Daniel<", page);
         Assert.Contains("kb-wallet-preview-field-labels", page);
         Assert.Contains("kb-wallet-preview-field-values", page);
         Assert.Contains("QrCodeSvgGenerator.GenerateDataUri(PreviewQrUrl", page);
@@ -277,6 +288,34 @@ public sealed class TenantBrandingTests
         Assert.Contains(".kb-wallet-preview-strip", css);
         Assert.Contains(".kb-strip-preview", css);
         Assert.Contains(".kb-range", css);
+    }
+
+    [Fact]
+    [Trait("Category", "TenantBranding")]
+    public void Digital_card_preview_level_progress_uses_configured_level_names_and_thresholds()
+    {
+        var services = new ServiceCollection();
+        services.AddApplication();
+        using var provider = services.BuildServiceProvider();
+        var progress = provider.GetRequiredService<ILevelProgressService>();
+        var levels = new[]
+        {
+            new TenantLoyaltyLevelDto(Guid.NewGuid(), "Bronce", 0, 1),
+            new TenantLoyaltyLevelDto(Guid.NewGuid(), "Plata", 500, 2),
+            new TenantLoyaltyLevelDto(Guid.NewGuid(), "Oro", 1500, 3)
+        };
+
+        var preview = progress.Calculate(50, levels);
+        Assert.Equal("Bronce", preview.CurrentLevel.Name);
+        Assert.Equal("Plata", preview.NextLevel?.Name);
+        Assert.Equal(450, preview.PointsToNextLevel);
+        Assert.False(preview.IsMaxLevel);
+
+        var highest = progress.Calculate(1600, levels);
+        Assert.Equal("Oro", highest.CurrentLevel.Name);
+        Assert.Null(highest.NextLevel);
+        Assert.Equal(0, highest.PointsToNextLevel);
+        Assert.True(highest.IsMaxLevel);
     }
 
     [Fact]
