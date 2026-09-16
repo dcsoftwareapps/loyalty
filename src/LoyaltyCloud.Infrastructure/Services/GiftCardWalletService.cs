@@ -100,7 +100,7 @@ internal sealed class GiftCardWalletService(
     }
 
     private static GoogleGiftCardObjectData ToGoogleObject(GiftCard card, GiftCardConfiguration config, string classId, string objectId) =>
-        new(objectId, classId, config.DisplayName, card.RecipientName, card.PublicCode, card.CurrentBalance, card.Currency, card.Status.ToString(), config.PrimaryColor, config.LogoUrl, config.LogoUrl, card.ExpiresAtUtc);
+        new(objectId, classId, config.DisplayName, card.RecipientName, card.SenderName, card.PersonalMessage, card.PublicCode, card.CurrentBalance, card.Currency, card.Status.ToString(), config.PrimaryColor, config.LogoUrl, config.LogoUrl, card.ExpiresAtUtc);
 
     private Guid TenantId() => tenant.TenantId is { } id && id != Guid.Empty ? id : throw new InvalidOperationException("Tenant requerido.");
 }

@@ -63,7 +63,7 @@ public sealed class CashierGiftCardApiTests(CustomWebApplicationFactory factory)
         Assert.True(parsedOptions!.AllowCustomAmount);
 
         var key = Guid.NewGuid().ToString("N");
-        var payload = new { amount = 150m, recipientName = "Comprador STG", recipientEmail = "buyer@example.test", idempotencyKey = key };
+        var payload = new { amount = 150m, recipientName = "Comprador STG", recipientEmail = "buyer@example.test", senderName = "Daniel", personalMessage = "¡Feliz cumpleaños!", idempotencyKey = key };
         var first = await client.PostAsJsonAsync("/api/giftcards/issue", payload);
         Assert.Equal(HttpStatusCode.OK, first.StatusCode);
         var issued = await first.Content.ReadFromJsonAsync<GiftCardsController.IssueResponse>();
@@ -71,6 +71,9 @@ public sealed class CashierGiftCardApiTests(CustomWebApplicationFactory factory)
         Assert.StartsWith("GC-", issued!.Card.Code);
         Assert.Equal(150m, issued.Card.InitialBalance);
         Assert.Equal(150m, issued.Card.RemainingBalance);
+        Assert.Equal("Comprador STG", issued.Card.RecipientName);
+        Assert.Equal("Daniel", issued.Card.SenderName);
+        Assert.Equal("¡Feliz cumpleaños!", issued.Card.PersonalMessage);
 
         var replay = await client.PostAsJsonAsync("/api/giftcards/issue", payload);
         Assert.Equal(HttpStatusCode.OK, replay.StatusCode);
@@ -85,19 +88,33 @@ public sealed class CashierGiftCardApiTests(CustomWebApplicationFactory factory)
         var transaction = Assert.Single(issuedTransactions);
         Assert.Equal(key, transaction.IdempotencyKey);
         Assert.Equal(actor.UserId, transaction.PerformedByUserId);
+        var card = await db.GiftCards.SingleAsync(x => x.PublicCode == issued.Card.Code);
+        Assert.Equal("Comprador STG", card.RecipientName);
+        Assert.Equal("Daniel", card.SenderName);
+        Assert.Equal("¡Feliz cumpleaños!", card.PersonalMessage);
     }
 
-    [Fact]
-    public async Task Issue_same_key_with_different_payload_is_conflict_without_second_card()
+    [Theory]
+    [InlineData("amount")]
+    [InlineData("recipient")]
+    [InlineData("sender")]
+    [InlineData("message")]
+    public async Task Issue_same_key_with_different_payload_is_conflict_without_second_card(string changedField)
     {
         var actor = await SeedAsync();
         using var client = Client(actor.Token);
         var key = Guid.NewGuid().ToString("N");
+        var original = new { amount = 150m, recipientName = "Cliente", senderName = "Daniel", personalMessage = "Abrazo", idempotencyKey = key };
 
-        Assert.Equal(HttpStatusCode.OK, (await client.PostAsJsonAsync("/api/giftcards/issue",
-            new { amount = 150m, recipientName = "Cliente", idempotencyKey = key })).StatusCode);
-        var conflict = await client.PostAsJsonAsync("/api/giftcards/issue",
-            new { amount = 151m, recipientName = "Cliente", idempotencyKey = key });
+        Assert.Equal(HttpStatusCode.OK, (await client.PostAsJsonAsync("/api/giftcards/issue", original)).StatusCode);
+        var conflictPayload = changedField switch
+        {
+            "amount" => new { amount = 151m, recipientName = "Cliente", senderName = "Daniel", personalMessage = "Abrazo", idempotencyKey = key },
+            "recipient" => new { amount = 150m, recipientName = "Otra persona", senderName = "Daniel", personalMessage = "Abrazo", idempotencyKey = key },
+            "sender" => new { amount = 150m, recipientName = "Cliente", senderName = "Ana", personalMessage = "Abrazo", idempotencyKey = key },
+            _ => new { amount = 150m, recipientName = "Cliente", senderName = "Daniel", personalMessage = "Otro mensaje", idempotencyKey = key }
+        };
+        var conflict = await client.PostAsJsonAsync("/api/giftcards/issue", conflictPayload);
 
         Assert.Equal(HttpStatusCode.Conflict, conflict.StatusCode);
         Assert.Contains("IdempotencyConflict", await conflict.Content.ReadAsStringAsync());

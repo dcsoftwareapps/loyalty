@@ -400,3 +400,31 @@ h1 {
 .redemption-summary span {
     color: var(--cashier-muted);
 }
+
+.gift-message-input {
+    min-height: 5.75rem;
+    resize: vertical;
+}
+
+.gift-confirmation-list {
+    display: grid;
+    gap: 0.55rem;
+    margin: 0;
+}
+
+.gift-confirmation-list > div {
+    display: flex;
+    justify-content: space-between;
+    gap: 1rem;
+}
+
+.gift-confirmation-list dt {
+    color: var(--cashier-muted);
+    font-weight: 700;
+}
+
+.gift-confirmation-list dd {
+    margin: 0;
+    overflow-wrap: anywhere;
+    text-align: right;
+}

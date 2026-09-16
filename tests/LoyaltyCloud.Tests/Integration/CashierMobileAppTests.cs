@@ -188,6 +188,13 @@ public sealed class CashierMobileAppTests
         Assert.Contains("<h2>Tarjeta de regalo</h2>", giftCardPanel);
         Assert.Contains("@(busy ? \"Procesando...\" : \"Escanear\")", giftCardPanel);
         Assert.Contains(">Buscar</button>", giftCardPanel);
+        Assert.Contains("<label for=\"gift-recipient\">Para</label>", giftCardPanel);
+        Assert.Contains("<label for=\"gift-sender\">De</label>", giftCardPanel);
+        Assert.Contains("<label for=\"gift-message\">Mensaje</label>", giftCardPanel);
+        Assert.Contains("class=\"input gift-message-input\"", giftCardPanel);
+        Assert.Contains("gift-confirmation-list", giftCardPanel);
+        Assert.Contains("issueSenderName", giftCardPanel);
+        Assert.Contains("issuePersonalMessage", giftCardPanel);
         Assert.DoesNotContain("Consultar tarjeta de regalo", giftCardPanel);
         Assert.DoesNotContain("Escanear Gift Card", giftCardPanel);
         Assert.DoesNotContain("Buscar Gift Card", giftCardPanel);

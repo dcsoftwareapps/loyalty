@@ -15,7 +15,7 @@ else{
 <main class="kb-public-page kb-gift-claim" style="@($"--gift-primary:{claim.PrimaryColor}")">
  <section class="kb-gift-claim__shell">
   <GiftCardVisual DisplayName="@claim.DisplayName" BackgroundColor="@claim.PrimaryColor" TextColor="@claim.TextColor" LogoUrl="@claim.LogoUrl" SenderName="@claim.Card.SenderName" Balance="@Money(claim.Card.CurrentBalance, claim.Card.Currency)" Currency="" Code="@claim.Card.Code" Expiration="@ExpirationText" ShowCategoryLabel="false" ShowSecondaryText="false" ShowRecipient="false" ShowBalanceLabel="false" ShowCurrency="false" />
-  <div class="kb-gift-claim__content"><p class="kb-eyebrow">Un regalo para ti</p><h1>@claim.Card.RecipientName</h1>@if(!string.IsNullOrWhiteSpace(claim.Card.SenderName)){<p>De <strong>@claim.Card.SenderName</strong></p>}@if(!string.IsNullOrWhiteSpace(claim.Card.PersonalMessage)){<blockquote>“@claim.Card.PersonalMessage”</blockquote>}
+  <div class="kb-gift-claim__content"><p class="kb-eyebrow">Un regalo para ti</p><h1>@ClaimTitle</h1><p>Para <strong>@claim.Card.RecipientName</strong></p>@if(!string.IsNullOrWhiteSpace(claim.Card.SenderName)){<p>De <strong>@claim.Card.SenderName</strong></p>}@if(!string.IsNullOrWhiteSpace(claim.Card.PersonalMessage)){<blockquote>“@claim.Card.PersonalMessage”</blockquote>}
    <dl><div><dt>Saldo disponible</dt><dd>@claim.Card.CurrentBalance.ToString("N2") @claim.Card.Currency</dd></div><div><dt>Estado</dt><dd>@StatusLabel</dd></div><div><dt>Vigencia</dt><dd>@Dates.DateNumeric(claim.Card.ExpiresAtUtc, "Sin expiración")</dd></div></dl>
    <div class="kb-gift-wallet-actions">@if(platform==GiftCardWalletPlatform.Unknown){<p class="kb-muted">Abre esta página desde tu iPhone o Android para agregar la tarjeta de regalo a Wallet.</p>}else{<a class="kb-btn kb-btn--primary" href="@WalletUrl">@WalletLabel</a>}</div>
     @if(!string.IsNullOrWhiteSpace(claim.Terms)){<details><summary>Términos y condiciones</summary><p>@claim.Terms</p></details>}@if(!string.IsNullOrWhiteSpace(claim.FooterMessage)){<footer>@claim.FooterMessage</footer>}
@@ -29,6 +29,7 @@ else{
  string WalletLabel=>"Agregar a Wallet";
  string StatusLabel=>claim?.Card.Status switch{LoyaltyCloud.Domain.Enums.GiftCardStatus.Active=>"Activa",LoyaltyCloud.Domain.Enums.GiftCardStatus.FullyRedeemed=>"Canjeada",LoyaltyCloud.Domain.Enums.GiftCardStatus.Expired=>"Expirada",_=>"Cancelada"};
  string? ExpirationText=>claim?.Card.ExpiresAtUtc is null?null:Dates.DateNumeric(claim.Card.ExpiresAtUtc);
+ string ClaimTitle=>!string.IsNullOrWhiteSpace(claim?.Card.SenderName)?$"{claim.Card.SenderName} te regaló una tarjeta de regalo":"Tienes una tarjeta de regalo";
  protected override async Task OnParametersSetAsync(){loading=true;var userAgent=HttpContextAccessor.HttpContext?.Request.Headers.UserAgent.ToString();platform=GiftCardWalletPlatformResolver.Resolve(userAgent);claim=await Claims.GetAsync(Token);loading=false;}
  static string Money(decimal value,string currency){var normalized=string.IsNullOrWhiteSpace(currency)?"":currency.Trim().ToUpperInvariant();if(normalized!="MXN")return $"{value:N2} {normalized}".Trim();var format=decimal.Truncate(value)==value?"#,0":"#,0.00";return "$"+value.ToString(format,CultureInfo.InvariantCulture);}
 }

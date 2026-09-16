@@ -12,7 +12,9 @@ public sealed record CashierGiftCard(
     [property: JsonRequired] string Status,
     DateTimeOffset? ExpiresAtUtc,
     [property: JsonRequired] bool AllowPartialRedemption,
-    string? RecipientName);
+    string? RecipientName,
+    string? SenderName,
+    string? PersonalMessage);
 public sealed record GiftCardReceipt(
     [property: JsonRequired] decimal RedeemedAmount,
     [property: JsonRequired] CashierGiftCard Card,

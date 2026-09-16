@@ -83,6 +83,43 @@ public sealed class GiftCardFeatureToggleTests
         Assert.Contains("application/vnd.apple.pkpass", program);
         Assert.Contains("Results.Redirect(link.Url)", program);
     }
+
+    [Fact]
+    public void ClaimPageShowsGiftingDetailsSafelyAndGracefully()
+    {
+        var claim = Read("src", "LoyaltyCloud.Admin", "Pages", "GiftCardClaim.razor");
+
+        Assert.Contains("ClaimTitle", claim);
+        Assert.Contains("te regaló una tarjeta de regalo", claim);
+        Assert.Contains("<p>Para <strong>@claim.Card.RecipientName</strong></p>", claim);
+        Assert.Contains("<p>De <strong>@claim.Card.SenderName</strong></p>", claim);
+        Assert.Contains("<blockquote>“@claim.Card.PersonalMessage”</blockquote>", claim);
+        Assert.Contains("!string.IsNullOrWhiteSpace(claim.Card.SenderName)", claim);
+        Assert.Contains("!string.IsNullOrWhiteSpace(claim.Card.PersonalMessage)", claim);
+        Assert.DoesNotContain("MarkupString", claim);
+    }
+
+    [Fact]
+    public void GiftCardWalletsIncludeGiftingDetailsAsOptionalFields()
+    {
+        var apple = Read("src", "LoyaltyCloud.Infrastructure", "Services", "GiftCardAppleWalletService.cs");
+        var google = Read("src", "LoyaltyCloud.Infrastructure", "Services", "GoogleWallet", "GoogleWalletClient.cs");
+        var googleData = Read("src", "LoyaltyCloud.Infrastructure", "Services", "GoogleWallet", "GoogleGiftCardData.cs");
+
+        Assert.Contains("BuildBackFields(card,config)", apple);
+        Assert.Contains("key=\"recipient\",label=\"Para\"", apple);
+        Assert.Contains("key=\"sender_back\",label=\"De\"", apple);
+        Assert.Contains("key=\"message\",label=\"Mensaje\"", apple);
+        Assert.Contains("!string.IsNullOrWhiteSpace(card.PersonalMessage)", apple);
+
+        Assert.Contains("string? SenderName", googleData);
+        Assert.Contains("string? PersonalMessage", googleData);
+        Assert.Contains("BuildGiftCardTextModules(value)", google);
+        Assert.Contains("id = \"recipient\", header = \"Para\"", google);
+        Assert.Contains("id = \"sender\", header = \"De\"", google);
+        Assert.Contains("id = \"message\", header = \"Mensaje\"", google);
+        Assert.Contains("!string.IsNullOrWhiteSpace(value.PersonalMessage)", google);
+    }
     [Fact]
     public void CircuitLayoutReads_CreateIndependentDbContexts()
     {
