@@ -335,6 +335,18 @@ h1 {
     overflow-wrap: anywhere;
 }
 
+.gift-denominations {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+}
+
+.gift-denominations .is-selected {
+    border-color: var(--cashier-secondary);
+    background: var(--cashier-secondary);
+    color: var(--cashier-ink);
+}
+
 .reward-list {
     display: grid;
     gap: 10px;

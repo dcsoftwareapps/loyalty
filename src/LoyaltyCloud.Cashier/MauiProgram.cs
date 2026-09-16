@@ -49,6 +49,12 @@ public static class MauiProgram
             services.GetRequiredService<IGiftCardPendingStore>(),
             () => services.GetRequiredService<CashierSessionService>().Current,
             services.GetRequiredService<CashierApiOptions>().BaseUri.AbsoluteUri));
+        builder.Services.AddSingleton<IGiftCardIssuancePendingStore, MauiGiftCardIssuancePendingStore>();
+        builder.Services.AddSingleton(services => new GiftCardIssuanceCoordinator(
+            services.GetRequiredService<ICashierGiftCardApi>(),
+            services.GetRequiredService<IGiftCardIssuancePendingStore>(),
+            () => services.GetRequiredService<CashierSessionService>().Current,
+            services.GetRequiredService<CashierApiOptions>().BaseUri.AbsoluteUri));
         builder.Services.AddHttpClient<CashierApiClient>((services, client) =>
         {
             var options = services.GetRequiredService<CashierApiOptions>();
