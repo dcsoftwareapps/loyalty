@@ -8,9 +8,9 @@
 <div class="operation-section gift-card-panel">
     <div class="segmented segmented--compact" role="group" aria-label="Modo de tarjeta de regalo">
         <button type="button" class="segment @(surface == GiftCardSurface.LookupRedeem ? "active" : null)"
-                disabled="@busy" @onclick="ShowLookupRedeem">Consultar / Canjear</button>
+                disabled="@busy" @onclick="ShowLookupRedeem">Canjear</button>
         <button type="button" class="segment @(surface == GiftCardSurface.Issue ? "active" : null)"
-                disabled="@busy" @onclick="ShowIssueAsync">Emitir</button>
+                disabled="@busy" @onclick="ShowIssueAsync">Crear</button>
     </div>
 
     @if (error is not null)
@@ -179,7 +179,6 @@
         }
         else if (issueOptions is null)
         {
-            <h2>Emitir Gift Card</h2>
             <p class="muted">No fue posible cargar las opciones de emisión.</p>
             <button class="secondary-button" disabled="@busy" @onclick="LoadIssueOptionsAsync">Reintentar</button>
         }
@@ -211,7 +210,6 @@
         }
         else
         {
-            <h2>Emitir Gift Card</h2>
             <form class="login-form" @onsubmit="RequestIssueConfirmation" @onsubmit:preventDefault>
                 @if (issueOptions.Denominations.Count > 0)
                 {
@@ -244,7 +242,7 @@
                     <label for="gift-expiration">Expira</label>
                     <input id="gift-expiration" type="datetime-local" class="input" @bind="issueExpiresAtUtc" disabled="@busy" />
                 }
-                <button type="submit" class="primary-button" disabled="@(busy || issueAmount is null || issueAmount <= 0 || string.IsNullOrWhiteSpace(issueRecipientName))">Emitir tarjeta</button>
+                <button type="submit" class="primary-button" disabled="@(busy || issueAmount is null || issueAmount <= 0 || string.IsNullOrWhiteSpace(issueRecipientName))">Crear</button>
             </form>
         }
     </text>;

@@ -81,6 +81,7 @@ public sealed class AdminRoutingTests : IClassFixture<AdminRoutingTests.AdminWeb
         Assert.Contains("Convierte clientes ocasionales en clientes", html);
         Assert.Contains("css/landing.css", html);
         Assert.Contains("href=\"/platform/login\"", html);
+        Assert.Contains("href=\"/privacy\">Aviso de privacidad</a>", html);
         foreach (var section in new[] { "producto", "como-funciona", "wallet", "precios", "preguntas", "comenzar" })
             Assert.Contains($"id=\"{section}\"", html);
         foreach (var removedSection in new[] { "demo", "para-quien", "nosotros", "seguridad" })
@@ -92,6 +93,29 @@ public sealed class AdminRoutingTests : IClassFixture<AdminRoutingTests.AdminWeb
         Assert.Contains("<details class=\"lp-mobile-nav\"", html);
         foreach (Match link in Regex.Matches(html, "href=\"#([^\"]+)\""))
             Assert.Contains($"id=\"{link.Groups[1].Value}\"", html);
+    }
+
+    [Fact]
+    [Trait("Category", "AdminRouting")]
+    public async Task Privacy_serves_public_policy_without_admin_layout_or_redirect()
+    {
+        using var client = _factory.CreateClient(new WebApplicationFactoryClientOptions
+        {
+            AllowAutoRedirect = false
+        });
+
+        using var response = await client.GetAsync("/privacy");
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.Null(response.Headers.Location);
+        var html = WebUtility.HtmlDecode(await response.Content.ReadAsStringAsync());
+        Assert.Contains("<h1>Aviso de privacidad</h1>", html);
+        Assert.Contains("Privacidad de niñas y niños", html);
+        Assert.Contains("lang=\"es-MX\"", html);
+        Assert.Contains("class=\"lc-public\"", html);
+        Assert.Contains("css/landing.css", html);
+        Assert.DoesNotContain("class=\"kb-sidebar", html);
+        Assert.DoesNotContain("/platform/login", html);
     }
 
     [Fact]
