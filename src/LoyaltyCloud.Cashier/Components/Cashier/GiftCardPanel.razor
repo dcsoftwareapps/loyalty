@@ -8,9 +8,9 @@
 <div class="operation-section gift-card-panel">
     <div class="segmented segmented--compact" role="group" aria-label="Modo de tarjeta de regalo">
         <button type="button" class="segment @(surface == GiftCardSurface.LookupRedeem ? "active" : null)"
-                disabled="@busy" @onclick="ShowLookupRedeem">Consultar / Canjear</button>
+                disabled="@busy" @onclick="ShowLookupRedeem">Canjear</button>
         <button type="button" class="segment @(surface == GiftCardSurface.Issue ? "active" : null)"
-                disabled="@busy" @onclick="ShowIssueAsync">Emitir</button>
+                disabled="@busy" @onclick="ShowIssueAsync">Crear</button>
     </div>
 
     @if (error is not null)
