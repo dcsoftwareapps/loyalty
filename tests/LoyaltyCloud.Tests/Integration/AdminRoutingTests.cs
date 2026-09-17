@@ -82,6 +82,7 @@ public sealed class AdminRoutingTests : IClassFixture<AdminRoutingTests.AdminWeb
         Assert.Contains("css/landing.css", html);
         Assert.Contains("href=\"/platform/login\"", html);
         Assert.Contains("href=\"/privacy\">Aviso de privacidad</a>", html);
+        Assert.Contains("href=\"/support\">Soporte</a>", html);
         foreach (var section in new[] { "producto", "como-funciona", "wallet", "precios", "preguntas", "comenzar" })
             Assert.Contains($"id=\"{section}\"", html);
         foreach (var removedSection in new[] { "demo", "para-quien", "nosotros", "seguridad" })
@@ -115,6 +116,32 @@ public sealed class AdminRoutingTests : IClassFixture<AdminRoutingTests.AdminWeb
         Assert.Contains("class=\"lc-public\"", html);
         Assert.Contains("css/landing.css", html);
         Assert.DoesNotContain("class=\"kb-sidebar", html);
+        Assert.DoesNotContain("/platform/login", html);
+    }
+
+    [Fact]
+    [Trait("Category", "AdminRouting")]
+    public async Task Support_serves_public_support_without_admin_layout_or_redirect()
+    {
+        using var client = _factory.CreateClient(new WebApplicationFactoryClientOptions
+        {
+            AllowAutoRedirect = false
+        });
+
+        using var response = await client.GetAsync("/support");
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.Null(response.Headers.Location);
+        var html = WebUtility.HtmlDecode(await response.Content.ReadAsStringAsync());
+        Assert.Contains("<h1>Soporte de LoyaltyCloud</h1>", html);
+        Assert.Contains("href=\"mailto:loyaltycloud.mx@gmail.com\">loyaltycloud.mx@gmail.com</a>", html);
+        Assert.Contains("href=\"/privacy\">Aviso de privacidad</a>", html);
+        Assert.Contains("href=\"/\">Volver a LoyaltyCloud</a>", html);
+        Assert.Contains("lang=\"es-MX\"", html);
+        Assert.Contains("class=\"lc-public\"", html);
+        Assert.Contains("css/landing.css", html);
+        Assert.DoesNotContain("class=\"kb-sidebar", html);
+        Assert.DoesNotContain("data-admin-menu", html);
         Assert.DoesNotContain("/platform/login", html);
     }
 
