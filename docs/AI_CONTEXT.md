@@ -341,8 +341,8 @@ Native Cashier app Phase 4A/4B:
 
 - Project: `src/LoyaltyCloud.Cashier`.
 - UI technology: .NET MAUI Blazor Hybrid.
-- Visible app name: `LoyaltyCloud Caja`.
-- Current provisional application id: `com.loyaltycloud.cashier`; confirm before App Store / Play Store submission.
+- Public app name: `LoyaltyCloud`.
+- Canonical production application id / iOS bundle identifier: `com.dcsoftware.loyaltycloud`. Public app name: `LoyaltyCloud`. The App Store provisioning profile must match this identifier.
 - Default API environment is STG: `https://loyaltycloud-api-stg-01.azurewebsites.net`.
 - Build with `-p:CashierEnvironment=Production` to use PROD API: `https://api.loyaltycloud.net`.
 - No server-side secrets belong in the app. Do not add `AdminApi:SharedSecret`, SQL connection strings, Key Vault credentials or `CashierAuth:SigningKey`.
