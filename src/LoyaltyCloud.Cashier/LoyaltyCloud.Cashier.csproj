@@ -19,7 +19,7 @@
         <ApplicationTitle>LoyaltyCloud</ApplicationTitle>
 
         <!-- App Identifier -->
-        <ApplicationId>com.loyaltycloud.cashier</ApplicationId>
+        <ApplicationId>com.dcsoftware.loyaltycloud</ApplicationId>
 
         <!-- Release builds default to PROD for store packages. Override with -p:CashierEnvironment=Staging for STG validation builds. -->
         <CashierEnvironment Condition="'$(CashierEnvironment)' == '' and '$(Configuration)' == 'Release'">Production</CashierEnvironment>

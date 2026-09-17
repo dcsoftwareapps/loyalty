@@ -61,7 +61,7 @@ Configuration:
 
 - Default API target is STG: `https://loyaltycloud-api-stg-01.azurewebsites.net`.
 - Build with `-p:CashierEnvironment=Production` to target PROD: `https://api.loyaltycloud.net`.
-- Provisional app id is `com.loyaltycloud.cashier`; confirm final Bundle Identifier / Android Application ID before store submission.
+- Historical Phase 4A provisional app id: `com.loyaltycloud.cashier`. Superseded by the canonical production ApplicationId / iOS bundle identifier `com.dcsoftware.loyaltycloud`; public app name remains `LoyaltyCloud`.
 - Never add `AdminApi:SharedSecret`, SQL connection strings, Key Vault credentials or `CashierAuth:SigningKey` to this app.
 
 Out of scope for Phase 4A:
