@@ -49,6 +49,24 @@ public sealed class CashierMobileAppTests
 
     [Fact]
     [Trait("Category", "CashierMobile")]
+    public void Cashier_mobile_login_exposes_privacy_policy_in_external_browser()
+    {
+        var page = Read("src", "LoyaltyCloud.Cashier", "Components", "Pages", "Home.razor");
+        var loginStart = page.IndexOf("else if (session is null)", StringComparison.Ordinal);
+        var loginEnd = page.IndexOf("</section>", loginStart, StringComparison.Ordinal);
+        var loginSection = page[loginStart..loginEnd];
+
+        Assert.Contains("href=\"https://loyaltycloud.net/privacy\"", loginSection);
+        Assert.Contains("Aviso de privacidad", loginSection);
+        Assert.Contains("@onclick=\"OpenPrivacyPolicyAsync\" @onclick:preventDefault=\"true\"", loginSection);
+        Assert.True(loginSection.IndexOf("login-privacy-link", StringComparison.Ordinal)
+            > loginSection.IndexOf("</EditForm>", StringComparison.Ordinal));
+        Assert.Contains("Browser.Default.OpenAsync(\n                \"https://loyaltycloud.net/privacy\",\n                Microsoft.Maui.ApplicationModel.BrowserLaunchMode.External)",
+            page.Replace("\r\n", "\n"));
+    }
+
+    [Fact]
+    [Trait("Category", "CashierMobile")]
     public void Cashier_mobile_uses_secure_storage_and_restores_or_clears_expired_session()
     {
         var session = Read("src", "LoyaltyCloud.Cashier", "Services", "CashierSessionService.cs");

@@ -68,6 +68,10 @@
                     @(busy ? "Iniciando..." : "Iniciar sesión")
                 </button>
             </EditForm>
+            <a class="login-privacy-link" href="https://loyaltycloud.net/privacy"
+               @onclick="OpenPrivacyPolicyAsync" @onclick:preventDefault="true">
+                Aviso de privacidad
+            </a>
         </section>
     }
     else
@@ -388,6 +392,21 @@
 </main>
 
 @code {
+    private async Task OpenPrivacyPolicyAsync()
+    {
+        try
+        {
+            if (!await Microsoft.Maui.ApplicationModel.Browser.Default.OpenAsync(
+                "https://loyaltycloud.net/privacy",
+                Microsoft.Maui.ApplicationModel.BrowserLaunchMode.External))
+                errorMessage = "No fue posible abrir el aviso de privacidad. Intenta de nuevo.";
+        }
+        catch (Exception)
+        {
+            errorMessage = "No fue posible abrir el aviso de privacidad. Intenta de nuevo.";
+        }
+    }
+
     private readonly LoginModel login = new();
     private readonly CustomerLookupModel lookup = new();
     private readonly AddPointsModel points = new();
