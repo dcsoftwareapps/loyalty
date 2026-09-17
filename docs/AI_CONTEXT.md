@@ -143,6 +143,7 @@ Blazor Admin pages:
 | Route | Page | Purpose |
 | --- | --- | --- |
 | `/` | mapped endpoint | Redirects to `/platform/login`. |
+| `/privacy` | `Privacy.razor` | Public Spanish (Mexico) Privacy Policy for LoyaltyCloud web/mobile privacy disclosure and App Store Connect. Uses `PublicLayout` and allows anonymous access. |
 | `/platform/login` | `PlatformLogin.razor` | Super Admin login. Public. |
 | `/platform` | `PlatformTenants.razor` | Platform tenant list. Super Admin only. |
 | `/platform/tenants` | `PlatformTenants.razor` | Platform tenant list/create. Super Admin only. |

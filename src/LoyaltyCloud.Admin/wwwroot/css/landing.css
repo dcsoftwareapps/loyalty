@@ -84,3 +84,6 @@
  .lp-conversion{padding-block:48px}.lp-ending-card{max-width:280px;margin:20px auto 0;transform:rotate(4deg)}.lp-ending-card strong{font-size:36px}.lp-get-started{padding-block:35px}.lp-footer-new{grid-template-columns:1fr 1fr;gap:25px}.lp-footer-new nav a{min-height:44px}
 }
 @media(prefers-reduced-motion:reduce){.lc-public *{animation:none!important;transition:none!important;scroll-behavior:auto!important}.lc-public .lp-button:hover,.lp-price-option:hover{transform:none}}
+
+/* Public privacy notice: readable measure and document spacing. */
+.lp-privacy{max-width:800px}.lc-public .lp-privacy h1{font-size:clamp(32px,5vw,48px)}.lc-public .lp-privacy h2{font-size:24px;margin-top:32px}.lp-privacy p,.lp-privacy ul{margin-top:16px}.lp-privacy li+li{margin-top:12px}
