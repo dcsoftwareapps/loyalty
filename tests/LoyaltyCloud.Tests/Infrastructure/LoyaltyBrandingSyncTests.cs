@@ -44,7 +44,7 @@ public sealed class LoyaltyBrandingSyncTests
         Assert.Equal(!providerFails, await service.RefreshAsync(a, default));
         client.Verify(x => x.EnsureLoyaltyClassAsync(It.Is<GoogleWalletClassData>(c =>
             c.Id == "issuer." + a.ToString("N") && c.HexBackgroundColor == "#123456"), It.IsAny<CancellationToken>()), Times.Exactly(2));
-        client.Verify(x => x.CreateOrUpdateObjectAsync(It.IsAny<GoogleWalletObjectData>(), It.IsAny<CancellationToken>()), Times.Never);
+        client.Verify(x => x.CreateOrUpdateObjectAsync(It.IsAny<GoogleWalletObjectData>(), It.IsAny<bool>(), It.IsAny<CancellationToken>()), Times.Never);
         reader.Verify(x => x.GetForTenantAsync(b, It.IsAny<CancellationToken>()), Times.Never);
         await using var verify = Context(options, a);
         var mapping = await verify.MemberDigitalWallets.SingleAsync();

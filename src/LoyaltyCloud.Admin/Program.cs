@@ -178,14 +178,24 @@ app.MapGet("/giftcards/claim/{token}/wallet/apple", async (string token, Loyalty
     catch (Exception) { return Results.NotFound(); }
 }).AllowAnonymous();
 
-app.MapGet("/giftcards/claim/{token}/wallet/google", async (string token, LoyaltyCloud.Application.GiftCards.IGiftCardClaimService claims, CancellationToken ct) =>
+app.MapGet("/giftcards/claim/{token}/wallet/google", async (string token, LoyaltyCloud.Application.GiftCards.IGiftCardClaimService claims, ILogger<Program> logger, CancellationToken ct) =>
 {
     try
     {
         var link = await claims.GetGoogleWalletLinkAsync(token, ct);
         return Results.Redirect(link.Url);
     }
-    catch (Exception) { return Results.NotFound(); }
+    catch (KeyNotFoundException) { return Results.NotFound(); }
+    catch (InvalidOperationException ex)
+    {
+        logger.LogWarning(ex, "Google Wallet Gift Card link is unavailable. FailureType={FailureType}", ex.GetType().Name);
+        return Results.Problem("Google Wallet no está disponible temporalmente.", statusCode: StatusCodes.Status503ServiceUnavailable);
+    }
+    catch (Exception ex)
+    {
+        logger.LogError(ex, "Google Wallet Gift Card link generation failed. FailureType={FailureType}", ex.GetType().Name);
+        return Results.Problem("No fue posible generar el enlace de Google Wallet.", statusCode: StatusCodes.Status502BadGateway);
+    }
 }).AllowAnonymous();
 app.MapPost("/logout", async (HttpContext ctx, AdminAuthService auth) =>
 {

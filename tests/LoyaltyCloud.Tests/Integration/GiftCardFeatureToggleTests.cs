@@ -316,6 +316,7 @@ public sealed class GiftCardFeatureToggleTests
         var detail = Read("src", "LoyaltyCloud.Admin", "Pages", "GiftCardDetail.razor");
         var issue = Read("src", "LoyaltyCloud.Admin", "Pages", "GiftCardIssue.razor");
         var claim = Read("src", "LoyaltyCloud.Admin", "Pages", "GiftCardClaim.razor");
+        var program = Read("src", "LoyaltyCloud.Admin", "Program.cs");
         Assert.DoesNotContain("AdjustAsync", detail);
         Assert.DoesNotContain("Agregar a Apple Wallet", detail);
         Assert.DoesNotContain("Agregar a Google Wallet", detail);
@@ -332,6 +333,9 @@ public sealed class GiftCardFeatureToggleTests
         Assert.Contains("Agregar a Wallet", claim);
         Assert.Contains("/wallet/apple", claim);
         Assert.Contains("/wallet/google", claim);
+        Assert.Contains("GetGoogleWalletLinkAsync(token, ct)", program);
+        Assert.Contains("Status503ServiceUnavailable", program);
+        Assert.Contains("Status502BadGateway", program);
         Assert.DoesNotContain("loyaltyGiftCardWallet.getUserAgent", claim);
         Assert.DoesNotContain("@onclick=\"ShowPhoneGuidance\"", claim);
         Assert.Contains("kb-gift-message-field", issue);

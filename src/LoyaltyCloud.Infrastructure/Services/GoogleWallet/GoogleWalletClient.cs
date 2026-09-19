@@ -80,7 +80,7 @@ internal sealed class GoogleWalletClient : IGoogleWalletClient
         throw await CreateExceptionAsync("consultar LoyaltyClass", existing, ct);
     }
 
-    public async Task CreateOrUpdateObjectAsync(GoogleWalletObjectData walletObject, CancellationToken ct = default)
+    public async Task CreateOrUpdateObjectAsync(GoogleWalletObjectData walletObject, bool notifyOnUpdate = false, CancellationToken ct = default)
     {
         var existing = await SendAsync(HttpMethod.Get, $"loyaltyObject/{Uri.EscapeDataString(walletObject.Id)}", null, ct);
         if (existing.StatusCode == HttpStatusCode.NotFound)
@@ -97,10 +97,14 @@ internal sealed class GoogleWalletClient : IGoogleWalletClient
             throw await CreateExceptionAsync("consultar LoyaltyObject", existing, ct);
         }
 
+        var payload = _mapper.ToObjectPayload(walletObject);
+        if (notifyOnUpdate)
+            payload["notifyPreference"] = "NOTIFY";
+
         var updated = await SendAsync(
             new HttpMethod("PATCH"),
             $"loyaltyObject/{Uri.EscapeDataString(walletObject.Id)}",
-            _mapper.ToObjectPayload(walletObject),
+            payload,
             ct);
         if (updated.StatusCode is HttpStatusCode.OK)
             return;

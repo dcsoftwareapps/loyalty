@@ -76,6 +76,32 @@ public sealed class GoogleWalletNotificationClientTests
     }
 
     [Fact]
+    [Trait("Category", "GoogleWalletNotifications")]
+    public async Task ExistingLoyaltyObject_RequestsNotificationOnlyWhenExplicitlyEnabled()
+    {
+        var (client, handler) = CreateClient();
+        var data = ObjectData();
+
+        await client.CreateOrUpdateObjectAsync(data, notifyOnUpdate: true);
+
+        var patch = Assert.Single(handler.ApiRequests, x => x.Method.Method == "PATCH");
+        using var json = JsonDocument.Parse(patch.Body);
+        Assert.Equal("NOTIFY", json.RootElement.GetProperty("notifyPreference").GetString());
+    }
+
+    [Fact]
+    public async Task ExistingLoyaltyObject_DoesNotRequestNotificationByDefault()
+    {
+        var (client, handler) = CreateClient();
+
+        await client.CreateOrUpdateObjectAsync(ObjectData());
+
+        var patch = Assert.Single(handler.ApiRequests, x => x.Method.Method == "PATCH");
+        using var json = JsonDocument.Parse(patch.Body);
+        Assert.False(json.RootElement.TryGetProperty("notifyPreference", out _));
+    }
+
+    [Fact]
     public async Task ExistingGiftCardClass_IsPatchedWithoutCreatingDuplicate()
     {
         var (client, handler) = CreateClient();
@@ -118,6 +144,10 @@ public sealed class GoogleWalletNotificationClientTests
         var handler = new CaptureHandler();
         return (new GoogleWalletClient(new HttpClient(handler), provider.Object, new GoogleWalletJwtFactory(options), new GoogleWalletObjectMapper(), options, clock.Object, NullLogger<GoogleWalletClient>.Instance), handler);
     }
+
+    private static GoogleWalletObjectData ObjectData() => new(
+        "issuer.object-a", "issuer.class-a", "Alex", "SERIAL-1", 250, "Gold", "SERIAL-1", true,
+        new DateTime(2026, 9, 1, 12, 0, 0, DateTimeKind.Utc), "250 puntos", "Gold", null, null, "SERIAL-1");
     private sealed class CaptureHandler : HttpMessageHandler
     {
         public List<CapturedRequest> ApiRequests { get; } = [];

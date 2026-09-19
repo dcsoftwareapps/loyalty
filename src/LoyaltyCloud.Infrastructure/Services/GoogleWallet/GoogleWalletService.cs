@@ -194,7 +194,9 @@ internal sealed class GoogleWalletService : IGoogleWalletService
         try
         {
             await _client.EnsureLoyaltyClassAsync(classData, ct);
-            await _client.CreateOrUpdateObjectAsync(objectData, ct);
+            // notifyPreference is ephemeral in Google Wallet and must be included
+            // on each update that should notify the card holder.
+            await _client.CreateOrUpdateObjectAsync(objectData, notifyOnUpdate: !createIfMissing, ct);
             wallet.MarkSynchronized(now);
         }
         catch (Exception ex)
