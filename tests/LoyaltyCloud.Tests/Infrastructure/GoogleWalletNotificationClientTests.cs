@@ -86,7 +86,8 @@ public sealed class GoogleWalletNotificationClientTests
 
         var patch = Assert.Single(handler.ApiRequests, x => x.Method.Method == "PATCH");
         using var json = JsonDocument.Parse(patch.Body);
-        Assert.Equal("NOTIFY", json.RootElement.GetProperty("notifyPreference").GetString());
+        Assert.Equal("notifyOnUpdate", json.RootElement.GetProperty("notifyPreference").GetString());
+        Assert.Equal(250, json.RootElement.GetProperty("loyaltyPoints").GetProperty("balance").GetProperty("int").GetInt32());
     }
 
     [Fact]
@@ -102,14 +103,29 @@ public sealed class GoogleWalletNotificationClientTests
     }
 
     [Fact]
-    public async Task ExistingGiftCardClass_IsPatchedWithoutCreatingDuplicate()
+    public async Task ExistingGiftCardClass_IsReusedWithoutSendingUnsupportedFields()
     {
         var (client, handler) = CreateClient();
         await client.EnsureGiftCardClassAsync(new("issuer.giftcard_tenant", "Nuevo nombre"));
-        Assert.Collection(handler.ApiRequests,
-            get => Assert.Equal(HttpMethod.Get, get.Method),
-            patch => { Assert.Equal("PATCH", patch.Method.Method); Assert.Contains("Nuevo nombre", patch.Body); });
-        Assert.DoesNotContain(handler.ApiRequests, x => x.Method == HttpMethod.Post && x.Uri.EndsWith("/genericClass", StringComparison.Ordinal));
+        var get = Assert.Single(handler.ApiRequests);
+        Assert.Equal(HttpMethod.Get, get.Method);
+        Assert.EndsWith("/genericClass/issuer.giftcard_tenant", get.Uri, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    [Trait("Category", "GiftCards")]
+    public async Task MissingGiftCardClass_CreatesOfficialMinimalGenericClassPayload()
+    {
+        var (client, handler) = CreateClient(genericClassExists: false);
+
+        await client.EnsureGiftCardClassAsync(new("issuer.giftcard_tenant", "Nuevo nombre"));
+
+        var post = Assert.Single(handler.ApiRequests, x => x.Method == HttpMethod.Post);
+        Assert.EndsWith("/genericClass", post.Uri, StringComparison.Ordinal);
+        using var json = JsonDocument.Parse(post.Body);
+        Assert.Equal("issuer.giftcard_tenant", json.RootElement.GetProperty("id").GetString());
+        Assert.False(json.RootElement.TryGetProperty("issuerName", out _));
+        Assert.Single(json.RootElement.EnumerateObject());
     }
 
     [Fact]
@@ -134,14 +150,14 @@ public sealed class GoogleWalletNotificationClientTests
         Assert.Equal("Disfrútala", modules["message"]);
     }
 
-    private static (GoogleWalletClient Client, CaptureHandler Handler) CreateClient()
+    private static (GoogleWalletClient Client, CaptureHandler Handler) CreateClient(bool genericClassExists = true)
     {
         using var rsa = RSA.Create(2048);
         var credentials = new GoogleWalletCredentials("wallet@example.test", rsa.ExportPkcs8PrivateKeyPem(), "https://oauth.example.test/token");
         var provider = new Mock<IGoogleWalletCredentialsProvider>(); provider.Setup(x => x.GetAsync(It.IsAny<CancellationToken>())).ReturnsAsync(credentials);
         var clock = new Mock<IDateTimeProvider>(); clock.SetupGet(x => x.UtcNow).Returns(new DateTime(2026, 9, 1, 12, 0, 0, DateTimeKind.Utc));
         var options = Options.Create(new GoogleWalletOptions { Enabled = true, IssuerId = "issuer-test", ApiBaseUrl = "https://walletobjects.example.test/walletobjects/v1" });
-        var handler = new CaptureHandler();
+        var handler = new CaptureHandler(genericClassExists);
         return (new GoogleWalletClient(new HttpClient(handler), provider.Object, new GoogleWalletJwtFactory(options), new GoogleWalletObjectMapper(), options, clock.Object, NullLogger<GoogleWalletClient>.Instance), handler);
     }
 
@@ -150,6 +166,10 @@ public sealed class GoogleWalletNotificationClientTests
         new DateTime(2026, 9, 1, 12, 0, 0, DateTimeKind.Utc), "250 puntos", "Gold", null, null, "SERIAL-1");
     private sealed class CaptureHandler : HttpMessageHandler
     {
+        private readonly bool _genericClassExists;
+
+        public CaptureHandler(bool genericClassExists = true) => _genericClassExists = genericClassExists;
+
         public List<CapturedRequest> ApiRequests { get; } = [];
 
         protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken ct)
@@ -166,6 +186,15 @@ public sealed class GoogleWalletNotificationClientTests
                 request.Method,
                 request.RequestUri.ToString(),
                 request.Content is null ? string.Empty : await request.Content.ReadAsStringAsync(ct)));
+            if (!_genericClassExists
+                && request.Method == HttpMethod.Get
+                && request.RequestUri.AbsolutePath.Contains("/genericClass/", StringComparison.Ordinal))
+            {
+                return new HttpResponseMessage(HttpStatusCode.NotFound)
+                {
+                    Content = new StringContent("{}", Encoding.UTF8, "application/json")
+                };
+            }
             return new HttpResponseMessage(HttpStatusCode.OK)
             {
                 Content = new StringContent("{}", Encoding.UTF8, "application/json")

@@ -11,6 +11,7 @@ namespace LoyaltyCloud.Infrastructure.Services.GoogleWallet;
 
 internal sealed class GoogleWalletClient : IGoogleWalletClient
 {
+    private const string NotifyOnUpdate = "notifyOnUpdate";
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web)
     {
         DefaultIgnoreCondition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull
@@ -99,7 +100,14 @@ internal sealed class GoogleWalletClient : IGoogleWalletClient
 
         var payload = _mapper.ToObjectPayload(walletObject);
         if (notifyOnUpdate)
-            payload["notifyPreference"] = "NOTIFY";
+            payload["notifyPreference"] = NotifyOnUpdate;
+
+        _logger.LogInformation(
+            "Google Wallet LoyaltyObject PATCH prepared. ObjectId={ObjectId}, ClassId={ClassId}, PointsBalance={PointsBalance}, NotifyPreference={NotifyPreference}.",
+            walletObject.Id,
+            walletObject.ClassId,
+            walletObject.PointsBalance,
+            notifyOnUpdate ? NotifyOnUpdate : "<omitted>");
 
         var updated = await SendAsync(
             new HttpMethod("PATCH"),
@@ -107,7 +115,13 @@ internal sealed class GoogleWalletClient : IGoogleWalletClient
             payload,
             ct);
         if (updated.StatusCode is HttpStatusCode.OK)
+        {
+            _logger.LogInformation(
+                "Google Wallet LoyaltyObject PATCH accepted. ObjectId={ObjectId}, StatusCode={StatusCode}.",
+                walletObject.Id,
+                (int)updated.StatusCode);
             return;
+        }
 
         throw await CreateExceptionAsync("actualizar LoyaltyObject", updated, ct);
     }
@@ -116,17 +130,12 @@ internal sealed class GoogleWalletClient : IGoogleWalletClient
     {
         var existing = await SendAsync(HttpMethod.Get, $"genericClass/{Uri.EscapeDataString(walletClass.Id)}", null, ct);
         if (existing.StatusCode == HttpStatusCode.OK)
-        {
-            var patched = await SendAsync(
-                new HttpMethod("PATCH"),
-                $"genericClass/{Uri.EscapeDataString(walletClass.Id)}",
-                new { issuerName = walletClass.IssuerName },
-                ct);
-            if (patched.StatusCode == HttpStatusCode.OK) return;
-            throw await CreateExceptionAsync("actualizar GenericClass Gift Card", patched, ct);
-        }
+            return;
         if (existing.StatusCode != HttpStatusCode.NotFound) throw await CreateExceptionAsync("consultar GenericClass Gift Card", existing, ct);
-        var payload = new { id = walletClass.Id, issuerName = walletClass.IssuerName };
+        // GenericClass only requires/supports its id here. Display name and
+        // branding belong to GenericObject (cardTitle/logo/colors), unlike
+        // LoyaltyClass where issuerName/programName are valid class fields.
+        var payload = new { id = walletClass.Id };
         var created = await SendAsync(HttpMethod.Post, "genericClass", payload, ct);
         if (created.StatusCode is not (HttpStatusCode.OK or HttpStatusCode.Created or HttpStatusCode.Conflict))
             throw await CreateExceptionAsync("crear GenericClass Gift Card", created, ct);
