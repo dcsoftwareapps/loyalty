@@ -59,7 +59,7 @@ public sealed class GoogleWalletJwtFactoryTests
     }
 
     [Fact]
-    public void CreateGiftCardSaveUrl_ShouldUseGenericObjects()
+    public void CreateGiftCardSaveUrl_ShouldUseGiftCardObjects()
     {
         using var rsa = RSA.Create(2048);
         var credentials = new GoogleWalletCredentials("wallet@example.iam.gserviceaccount.com", rsa.ExportPkcs8PrivateKeyPem(), "https://oauth2.googleapis.com/token");
@@ -67,10 +67,12 @@ public sealed class GoogleWalletJwtFactoryTests
         var url = factory.CreateGiftCardSaveUrl(credentials, "issuer.giftcard_tenant_gc_1", "issuer.giftcard_tenant", new DateTime(2026, 8, 30, 0, 0, 0, DateTimeKind.Utc));
         var jwt = url.Split('/').Last();
         using var payload = JsonDocument.Parse(DecodeBase64Url(jwt.Split('.')[1]));
-        var reference = payload.RootElement.GetProperty("payload").GetProperty("genericObjects")[0];
+        var walletPayload = payload.RootElement.GetProperty("payload");
+        var reference = walletPayload.GetProperty("giftCardObjects")[0];
         Assert.Equal("issuer.giftcard_tenant_gc_1", reference.GetProperty("id").GetString());
         Assert.Equal("issuer.giftcard_tenant", reference.GetProperty("classId").GetString());
         Assert.False(payload.RootElement.GetProperty("payload").TryGetProperty("loyaltyObjects", out _));
+        Assert.False(walletPayload.TryGetProperty("genericObjects", out _));
     }
 
     private static string DecodeBase64Url(string value)

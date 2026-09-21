@@ -60,7 +60,7 @@ public sealed class GoogleWalletJwtFactory
             ["iat"] = ToUnixSeconds(nowUtc), ["origins"] = _options.Origins,
             ["payload"] = new Dictionary<string, object?>
             {
-                ["genericObjects"] = new[] { new Dictionary<string, object?> { ["id"] = objectId, ["classId"] = classId } }
+                ["giftCardObjects"] = new[] { new Dictionary<string, object?> { ["id"] = objectId, ["classId"] = classId } }
             }
         };
         return $"{_options.SaveUrlBase.TrimEnd('/')}/{SignJwt(payload, credentials.PrivateKeyPem)}";

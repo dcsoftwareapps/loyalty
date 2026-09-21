@@ -32,10 +32,25 @@ internal sealed class GiftCardWalletService(
         var card = await db.GiftCards.SingleOrDefaultAsync(x => x.Id == giftCardId && x.TenantId == tenantId, ct) ?? throw new KeyNotFoundException("Tarjeta de regalo no encontrada.");
         var config = await db.GiftCardConfigurations.SingleOrDefaultAsync(x => x.TenantId == tenantId && x.IsEnabled, ct) ?? throw new InvalidOperationException("El módulo de tarjetas de regalo está deshabilitado para este tenant.");
         var issuerId = string.IsNullOrWhiteSpace(_options.IssuerId) ? throw new InvalidOperationException("Google Wallet no está disponible.") : _options.IssuerId.Trim();
-        var classId = $"{issuerId}.giftcard_{tenantId:N}";
-        var objectId = $"{issuerId}.giftcard_{tenantId:N}_{card.PublicCode.Replace('-', '_').ToLowerInvariant()}";
+        var classId = $"{issuerId}.giftcard_v2_{tenantId:N}";
+        var objectId = $"{issuerId}.giftcard_v2_{tenantId:N}_{card.PublicCode.Replace('-', '_').ToLowerInvariant()}";
         var record = await db.GiftCardWallets.SingleOrDefaultAsync(x => x.TenantId == tenantId && x.GiftCardId == card.Id && x.Provider == GiftCardWalletProvider.Google, ct);
-        if (record is null) { record = new GiftCardWallet(Guid.NewGuid(), tenantId, card.Id, GiftCardWalletProvider.Google, classId, objectId, clock.UtcNow); db.GiftCardWallets.Add(record); }
+        if (record is null)
+        {
+            record = new GiftCardWallet(Guid.NewGuid(), tenantId, card.Id, GiftCardWalletProvider.Google, classId, objectId, clock.UtcNow);
+            db.GiftCardWallets.Add(record);
+            try { await db.SaveChangesAsync(ct); }
+            catch (DbUpdateException)
+            {
+                db.Entry(record).State = EntityState.Detached;
+                record = await db.GiftCardWallets.SingleAsync(x => x.TenantId == tenantId && x.GiftCardId == card.Id && x.Provider == GiftCardWalletProvider.Google, ct);
+            }
+        }
+        if (record.ExternalClassId != classId || record.ExternalObjectId != objectId)
+        {
+            record.UpdateExternalIds(classId, objectId, clock.UtcNow);
+            await db.SaveChangesAsync(ct);
+        }
         try
         {
             await google.EnsureGiftCardClassAsync(new GoogleGiftCardClassData(classId, config.DisplayName), ct);
@@ -100,7 +115,7 @@ internal sealed class GiftCardWalletService(
     }
 
     private static GoogleGiftCardObjectData ToGoogleObject(GiftCard card, GiftCardConfiguration config, string classId, string objectId) =>
-        new(objectId, classId, config.DisplayName, card.RecipientName, card.SenderName, card.PersonalMessage, card.PublicCode, card.CurrentBalance, card.Currency, card.Status.ToString(), config.PrimaryColor, config.LogoUrl, config.LogoUrl, card.ExpiresAtUtc);
+        new(objectId, classId, config.DisplayName, card.RecipientName, card.SenderName, card.PersonalMessage, card.PublicCode, card.CurrentBalance, card.Currency, card.Status.ToString(), config.PrimaryColor, config.LogoUrl, config.LogoUrl, card.ExpiresAtUtc, card.UpdatedAtUtc);
 
     private Guid TenantId() => tenant.TenantId is { } id && id != Guid.Empty ? id : throw new InvalidOperationException("Tenant requerido.");
 }

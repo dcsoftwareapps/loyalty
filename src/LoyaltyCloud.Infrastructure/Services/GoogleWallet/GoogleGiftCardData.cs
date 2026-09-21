@@ -16,4 +16,5 @@ public sealed record GoogleGiftCardObjectData(
     string HexBackgroundColor,
     string? LogoUri,
     string? HeroImageUri,
-    DateTime? ExpiresAtUtc);
+    DateTime? ExpiresAtUtc,
+    DateTime BalanceUpdatedAtUtc);

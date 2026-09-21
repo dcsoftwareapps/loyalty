@@ -101,7 +101,7 @@ public sealed class GiftCardFeatureToggleTests
     }
 
     [Fact]
-    public void GiftCardWalletsIncludeGiftingDetailsAsOptionalFields()
+    public void GiftCardWalletsPreserveAppleGiftingDetailsAndUseOfficialGoogleFields()
     {
         var apple = Read("src", "LoyaltyCloud.Infrastructure", "Services", "GiftCardAppleWalletService.cs");
         var google = Read("src", "LoyaltyCloud.Infrastructure", "Services", "GoogleWallet", "GoogleWalletClient.cs");
@@ -115,11 +115,11 @@ public sealed class GiftCardFeatureToggleTests
 
         Assert.Contains("string? SenderName", googleData);
         Assert.Contains("string? PersonalMessage", googleData);
-        Assert.Contains("BuildGiftCardTextModules(value)", google);
-        Assert.Contains("id = \"recipient\", header = \"Para\"", google);
-        Assert.Contains("id = \"sender\", header = \"De\"", google);
-        Assert.Contains("id = \"message\", header = \"Mensaje\"", google);
-        Assert.Contains("!string.IsNullOrWhiteSpace(value.PersonalMessage)", google);
+        Assert.Contains("giftCardClass/", google);
+        Assert.Contains("giftCardObject/", google);
+        Assert.Contains("cardNumber = value.Code", google);
+        Assert.Contains("currencyCode = value.Currency", google);
+        Assert.DoesNotContain("genericObject/", google);
     }
     [Fact]
     public void CircuitLayoutReads_CreateIndependentDbContexts()
