@@ -178,14 +178,10 @@ app.MapGet("/giftcards/claim/{token}/wallet/apple", async (string token, Loyalty
     catch (Exception) { return Results.NotFound(); }
 }).AllowAnonymous();
 
-app.MapGet("/giftcards/claim/{token}/wallet/google", async (string token, LoyaltyCloud.Application.GiftCards.IGiftCardClaimService claims, CancellationToken ct) =>
+app.MapGet("/giftcards/claim/{token}/wallet/google", (string token) =>
 {
-    try
-    {
-        var link = await claims.GetGoogleWalletLinkAsync(token, ct);
-        return Results.Redirect(link.Url);
-    }
-    catch (Exception) { return Results.NotFound(); }
+    var path = $"api/public/giftcards/claim/{Uri.EscapeDataString(token)}/wallet/google";
+    return Results.Redirect(new Uri(new Uri(apiBaseUrl.TrimEnd('/') + "/"), path).ToString());
 }).AllowAnonymous();
 app.MapPost("/logout", async (HttpContext ctx, AdminAuthService auth) =>
 {

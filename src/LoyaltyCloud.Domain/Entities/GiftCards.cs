@@ -116,5 +116,6 @@ public sealed class GiftCardWallet : Entity, ITenantOwned
     public DateTime? LastSynchronizedAtUtc { get; private set; } public string? LastError { get; private set; } public DateTime UpdatedAtUtc { get; private set; }
     private GiftCardWallet() { }
     public GiftCardWallet(Guid id, Guid tenantId, Guid cardId, GiftCardWalletProvider provider, string classId, string objectId, DateTime now, string? authenticationToken = null) : base(id) { TenantId=tenantId;GiftCardId=cardId;Provider=provider;ExternalClassId=classId;ExternalObjectId=objectId;AuthenticationToken=authenticationToken;Status=GiftCardWalletStatus.Pending;UpdatedAtUtc=now; }
+    public void UpdateExternalIds(string classId,string objectId,DateTime now){ExternalClassId=classId;ExternalObjectId=objectId;Status=GiftCardWalletStatus.Pending;UpdatedAtUtc=now;}
     public void Synced(DateTime now){Status=GiftCardWalletStatus.Active;LastSynchronizedAtUtc=now;LastError=null;UpdatedAtUtc=now;} public void Failed(string error,DateTime now){Status=GiftCardWalletStatus.Error;LastError=error[..Math.Min(error.Length,1000)];UpdatedAtUtc=now;} public void Pending(DateTime now){Status=GiftCardWalletStatus.SyncPending;UpdatedAtUtc=now;}
 }

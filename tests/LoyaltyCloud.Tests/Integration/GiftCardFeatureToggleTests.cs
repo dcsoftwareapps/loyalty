@@ -81,7 +81,8 @@ public sealed class GiftCardFeatureToggleTests
         Assert.Contains("/wallet/apple", claim);
         Assert.Contains("/wallet/google", claim);
         Assert.Contains("application/vnd.apple.pkpass", program);
-        Assert.Contains("Results.Redirect(link.Url)", program);
+        Assert.Contains("api/public/giftcards/claim/", program);
+        Assert.Contains("Results.Redirect(new Uri", program);
     }
 
     [Fact]
@@ -100,7 +101,7 @@ public sealed class GiftCardFeatureToggleTests
     }
 
     [Fact]
-    public void GiftCardWalletsIncludeGiftingDetailsAsOptionalFields()
+    public void GiftCardWalletsPreserveAppleGiftingDetailsAndUseValidGenericGoogleFields()
     {
         var apple = Read("src", "LoyaltyCloud.Infrastructure", "Services", "GiftCardAppleWalletService.cs");
         var google = Read("src", "LoyaltyCloud.Infrastructure", "Services", "GoogleWallet", "GoogleWalletClient.cs");
@@ -114,11 +115,11 @@ public sealed class GiftCardFeatureToggleTests
 
         Assert.Contains("string? SenderName", googleData);
         Assert.Contains("string? PersonalMessage", googleData);
-        Assert.Contains("BuildGiftCardTextModules(value)", google);
-        Assert.Contains("id = \"recipient\", header = \"Para\"", google);
-        Assert.Contains("id = \"sender\", header = \"De\"", google);
-        Assert.Contains("id = \"message\", header = \"Mensaje\"", google);
-        Assert.Contains("!string.IsNullOrWhiteSpace(value.PersonalMessage)", google);
+        Assert.Contains("genericClass/", google);
+        Assert.Contains("genericObject/", google);
+        Assert.Contains("cardTitle = Localized", google);
+        Assert.Contains("logo = ValidImage", google);
+        Assert.DoesNotContain("giftCardObject/", google);
     }
     [Fact]
     public void CircuitLayoutReads_CreateIndependentDbContexts()
@@ -316,6 +317,7 @@ public sealed class GiftCardFeatureToggleTests
         var detail = Read("src", "LoyaltyCloud.Admin", "Pages", "GiftCardDetail.razor");
         var issue = Read("src", "LoyaltyCloud.Admin", "Pages", "GiftCardIssue.razor");
         var claim = Read("src", "LoyaltyCloud.Admin", "Pages", "GiftCardClaim.razor");
+        var program = Read("src", "LoyaltyCloud.Admin", "Program.cs");
         Assert.DoesNotContain("AdjustAsync", detail);
         Assert.DoesNotContain("Agregar a Apple Wallet", detail);
         Assert.DoesNotContain("Agregar a Google Wallet", detail);
@@ -332,6 +334,8 @@ public sealed class GiftCardFeatureToggleTests
         Assert.Contains("Agregar a Wallet", claim);
         Assert.Contains("/wallet/apple", claim);
         Assert.Contains("/wallet/google", claim);
+        Assert.Contains("api/public/giftcards/claim/", program);
+        Assert.DoesNotContain("GetGoogleWalletLinkAsync(token, ct)", program);
         Assert.DoesNotContain("loyaltyGiftCardWallet.getUserAgent", claim);
         Assert.DoesNotContain("@onclick=\"ShowPhoneGuidance\"", claim);
         Assert.Contains("kb-gift-message-field", issue);

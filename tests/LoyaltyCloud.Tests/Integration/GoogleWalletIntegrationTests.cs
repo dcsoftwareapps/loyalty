@@ -92,6 +92,7 @@ public sealed class GoogleWalletIntegrationTests : IntegrationTestBase
             o.PointsText == "70 pts" &&
             o.NextLevelText == "Glow" &&
             o.RemainingPointsText == "930 pts");
+        Assert.True(Factory.GoogleWallet.ObjectUpdateNotifications.Last());
     }
 
     private static HttpRequestMessage CreateSignedRequest(

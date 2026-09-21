@@ -6,6 +6,7 @@ public sealed class FakeGoogleWalletClient : IGoogleWalletClient
 {
     public List<GoogleWalletClassData> Classes { get; } = new();
     public List<GoogleWalletObjectData> Objects { get; } = new();
+    public List<bool> ObjectUpdateNotifications { get; } = new();
     public List<GoogleGiftCardClassData> GiftCardClasses { get; } = new();
     public List<GoogleGiftCardObjectData> GiftCardObjects { get; } = new();
     public List<GoogleWalletMessageCall> Messages { get; } = new();
@@ -17,9 +18,10 @@ public sealed class FakeGoogleWalletClient : IGoogleWalletClient
         return Task.CompletedTask;
     }
 
-    public Task CreateOrUpdateObjectAsync(GoogleWalletObjectData walletObject, CancellationToken ct = default)
+    public Task CreateOrUpdateObjectAsync(GoogleWalletObjectData walletObject, bool notifyOnUpdate = false, CancellationToken ct = default)
     {
         Objects.Add(walletObject);
+        ObjectUpdateNotifications.Add(notifyOnUpdate);
         return Task.CompletedTask;
     }
 
