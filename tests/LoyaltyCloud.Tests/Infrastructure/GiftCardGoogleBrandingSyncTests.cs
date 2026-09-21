@@ -32,7 +32,7 @@ public sealed class GiftCardGoogleBrandingSyncTests
         var cardB = Card(tenantB, userId, "GC-DDDD-EEEE-FFFF", 400m, now);
         await using (var seedA = Context(options, tenantA))
         {
-            var configA = Configuration(tenantA, "Tamalitos", "#123456", "https://assets.test/tamalitos.png", now);
+            var configA = Configuration(tenantA, "Tamalitos", "#123456", "gift-cards/tamalitos.png", now);
             seedA.AddRange(configA, cardA,
                 new GiftCardWallet(Guid.NewGuid(), tenantA, cardA.Id, GiftCardWalletProvider.Google, "issuer.giftcard_a", "issuer.object_a", now),
                 new GiftCardWallet(Guid.NewGuid(), tenantA, cardA.Id, GiftCardWalletProvider.Apple, "apple.class_a", "apple.object_a", now),
@@ -62,7 +62,7 @@ public sealed class GiftCardGoogleBrandingSyncTests
                 o.Id == "issuer.object_a" && o.ClassId == "issuer.giftcard_a" &&
                 o.HexBackgroundColor == "#123456" &&
                 o.LogoUri == "https://assets.test/tamalitos.png" &&
-                o.HeroImageUri == "https://assets.test/tamalitos.png"),
+                o.HeroImageUri == null),
             It.IsAny<CancellationToken>()), Times.Once);
         google.Verify(x => x.CreateOrUpdateGiftCardObjectAsync(
             It.Is<GoogleGiftCardObjectData>(o => o.Id == "issuer.object_b"),
@@ -106,9 +106,11 @@ public sealed class GiftCardGoogleBrandingSyncTests
     {
         var tenant = Tenant(tenantId);
         var clock = new Mock<IDateTimeProvider>(); clock.SetupGet(x => x.UtcNow).Returns(now);
+        var logoUrls = new Mock<ITenantBrandingLogoUrlProvider>();
+        logoUrls.Setup(x => x.GetDisplayUrl("gift-cards/tamalitos.png")).Returns("https://assets.test/tamalitos.png");
         var walletOptions = Options.Create(new GoogleWalletOptions { Enabled = true, IssuerId = "issuer" });
         return new(db, new TestDbContextFactory(() => Context(options, tenantId)), tenant.Object, google,
-            new Mock<IGoogleWalletCredentialsProvider>().Object, new GoogleWalletJwtFactory(walletOptions), walletOptions,
+            new Mock<IGoogleWalletCredentialsProvider>().Object, new GoogleWalletJwtFactory(walletOptions), logoUrls.Object, walletOptions,
             clock.Object, NullLogger<GiftCardWalletService>.Instance);
     }
 

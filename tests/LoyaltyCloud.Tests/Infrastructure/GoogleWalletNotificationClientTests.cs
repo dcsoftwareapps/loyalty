@@ -103,34 +103,32 @@ public sealed class GoogleWalletNotificationClientTests
     }
 
     [Fact]
-    public async Task ExistingGiftCardClass_IsReadFromOfficialEndpoint()
+    public async Task ExistingGiftCardClass_IsReadFromGenericEndpoint()
     {
         var (client, handler) = CreateClient();
         await client.EnsureGiftCardClassAsync(new("issuer.giftcard_tenant", "Nuevo nombre"));
         var get = Assert.Single(handler.ApiRequests);
         Assert.Equal(HttpMethod.Get, get.Method);
-        Assert.EndsWith("/giftCardClass/issuer.giftcard_tenant", get.Uri, StringComparison.Ordinal);
+        Assert.EndsWith("/genericClass/issuer.giftcard_tenant", get.Uri, StringComparison.Ordinal);
     }
 
     [Fact]
     [Trait("Category", "GiftCards")]
-    public async Task MissingGiftCardClass_CreatesOfficialGiftCardClassPayload()
+    public async Task MissingGiftCardClass_CreatesMinimalGenericClassPayload()
     {
         var (client, handler) = CreateClient(giftCardResourcesExist: false);
 
         await client.EnsureGiftCardClassAsync(new("issuer.giftcard_tenant", "Nuevo nombre"));
 
         var post = Assert.Single(handler.ApiRequests, x => x.Method == HttpMethod.Post);
-        Assert.EndsWith("/giftCardClass", post.Uri, StringComparison.Ordinal);
+        Assert.EndsWith("/genericClass", post.Uri, StringComparison.Ordinal);
         using var json = JsonDocument.Parse(post.Body);
         Assert.Equal("issuer.giftcard_tenant", json.RootElement.GetProperty("id").GetString());
-        Assert.Equal("Nuevo nombre", json.RootElement.GetProperty("issuerName").GetString());
-        Assert.Equal("UNDER_REVIEW", json.RootElement.GetProperty("reviewStatus").GetString());
-        Assert.Equal(3, json.RootElement.EnumerateObject().Count());
+        Assert.Single(json.RootElement.EnumerateObject());
     }
 
     [Fact]
-    public async Task ExistingGiftCardObject_PatchesOfficialMoneyAndBarcodePayload()
+    public async Task ExistingGiftCardObject_PatchesValidLocalizedGenericPayload()
     {
         var (client, handler) = CreateClient();
         await client.CreateOrUpdateGiftCardObjectAsync(new(
@@ -138,35 +136,38 @@ public sealed class GoogleWalletNotificationClientTests
             250m, "MXN", "Active", "#123456", "https://assets.test/logo.png", "https://assets.test/hero.png", null,
             new DateTime(2026, 9, 21, 12, 34, 56, DateTimeKind.Utc)));
         var patch = Assert.Single(handler.ApiRequests, x => x.Method.Method == "PATCH");
-        Assert.EndsWith("/giftCardObject/issuer.object_stable", patch.Uri, StringComparison.Ordinal);
+        Assert.EndsWith("/genericObject/issuer.object_stable", patch.Uri, StringComparison.Ordinal);
         using var json = JsonDocument.Parse(patch.Body);
         Assert.Equal("issuer.object_stable", json.RootElement.GetProperty("id").GetString());
         Assert.Equal("issuer.class_stable", json.RootElement.GetProperty("classId").GetString());
-        Assert.Equal("GC-AAAA-BBBB-CCCC", json.RootElement.GetProperty("cardNumber").GetString());
-        Assert.Equal("250000000", json.RootElement.GetProperty("balance").GetProperty("micros").GetString());
-        Assert.Equal("MXN", json.RootElement.GetProperty("balance").GetProperty("currencyCode").GetString());
+        Assert.Equal("es-MX", json.RootElement.GetProperty("cardTitle").GetProperty("defaultValue").GetProperty("language").GetString());
+        Assert.Equal("Regalos Tamalitos", json.RootElement.GetProperty("cardTitle").GetProperty("defaultValue").GetProperty("value").GetString());
+        Assert.Equal("250.00 MXN", json.RootElement.GetProperty("header").GetProperty("defaultValue").GetProperty("value").GetString());
+        Assert.Equal("Ana", json.RootElement.GetProperty("subheader").GetProperty("defaultValue").GetProperty("value").GetString());
         Assert.Equal("QR_CODE", json.RootElement.GetProperty("barcode").GetProperty("type").GetString());
         Assert.Equal("GC-AAAA-BBBB-CCCC", json.RootElement.GetProperty("barcode").GetProperty("value").GetString());
-        Assert.Equal("0s", json.RootElement.GetProperty("balanceUpdateTime").GetProperty("utcOffset").GetString());
-        Assert.False(json.RootElement.TryGetProperty("cardTitle", out _));
-        Assert.False(json.RootElement.TryGetProperty("textModulesData", out _));
+        Assert.Equal("ACTIVE", json.RootElement.GetProperty("state").GetString());
+        Assert.Equal("https://assets.test/logo.png", json.RootElement.GetProperty("logo").GetProperty("sourceUri").GetProperty("uri").GetString());
+        Assert.Equal("https://assets.test/hero.png", json.RootElement.GetProperty("heroImage").GetProperty("sourceUri").GetProperty("uri").GetString());
     }
 
     [Fact]
     [Trait("Category", "GiftCards")]
-    public async Task MissingGiftCardObject_PostsToOfficialEndpointAndAcceptsCreateConflict()
+    public async Task MissingGiftCardObject_PostsGenericPayloadAndOmitsInvalidOptionalImages()
     {
         var (client, handler) = CreateClient(giftCardResourcesExist: false);
         await client.CreateOrUpdateGiftCardObjectAsync(new(
             "issuer.object_stable", "issuer.class_stable", "Regalos", "Ana", null, null,
-            "GC-AAAA-BBBB-CCCC", 1.25m, "mxn", "Active", "#123456", null, null, null,
+            "GC-AAAA-BBBB-CCCC", 1.25m, "mxn", "Active", "#123456", "gift-cards/logo.png", "not-a-uri", null,
             new DateTime(2026, 9, 21, 12, 0, 0, DateTimeKind.Utc)));
 
         var post = Assert.Single(handler.ApiRequests, x => x.Method == HttpMethod.Post);
-        Assert.EndsWith("/giftCardObject", post.Uri, StringComparison.Ordinal);
+        Assert.EndsWith("/genericObject", post.Uri, StringComparison.Ordinal);
         using var json = JsonDocument.Parse(post.Body);
-        Assert.Equal("1250000", json.RootElement.GetProperty("balance").GetProperty("micros").GetString());
-        Assert.Equal("MXN", json.RootElement.GetProperty("balance").GetProperty("currencyCode").GetString());
+        Assert.False(json.RootElement.TryGetProperty("logo", out _));
+        Assert.False(json.RootElement.TryGetProperty("heroImage", out _));
+        Assert.Equal("issuer.object_stable", json.RootElement.GetProperty("id").GetString());
+        Assert.Equal("issuer.class_stable", json.RootElement.GetProperty("classId").GetString());
     }
 
     private static (GoogleWalletClient Client, CaptureHandler Handler) CreateClient(bool giftCardResourcesExist = true)
@@ -207,8 +208,8 @@ public sealed class GoogleWalletNotificationClientTests
                 request.Content is null ? string.Empty : await request.Content.ReadAsStringAsync(ct)));
             if (!_giftCardResourcesExist
                 && request.Method == HttpMethod.Get
-                && (request.RequestUri.AbsolutePath.Contains("/giftCardClass/", StringComparison.Ordinal)
-                    || request.RequestUri.AbsolutePath.Contains("/giftCardObject/", StringComparison.Ordinal)))
+                && (request.RequestUri.AbsolutePath.Contains("/genericClass/", StringComparison.Ordinal)
+                    || request.RequestUri.AbsolutePath.Contains("/genericObject/", StringComparison.Ordinal)))
             {
                 return new HttpResponseMessage(HttpStatusCode.NotFound)
                 {

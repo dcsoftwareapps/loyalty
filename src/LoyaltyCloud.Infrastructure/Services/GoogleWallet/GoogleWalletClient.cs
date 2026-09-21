@@ -128,42 +128,68 @@ internal sealed class GoogleWalletClient : IGoogleWalletClient
 
     public async Task EnsureGiftCardClassAsync(GoogleGiftCardClassData walletClass, CancellationToken ct = default)
     {
-        var existing = await SendAsync(HttpMethod.Get, $"giftCardClass/{Uri.EscapeDataString(walletClass.Id)}", null, ct);
+        var existing = await SendAsync(HttpMethod.Get, $"genericClass/{Uri.EscapeDataString(walletClass.Id)}", null, ct);
         if (existing.StatusCode == HttpStatusCode.OK)
             return;
         if (existing.StatusCode != HttpStatusCode.NotFound)
-            throw await CreateGiftCardExceptionAsync("consultar", "GiftCardClass", walletClass.Id, null, existing, ct);
-        var payload = new { id = walletClass.Id, issuerName = walletClass.IssuerName, reviewStatus = "UNDER_REVIEW" };
-        var created = await SendAsync(HttpMethod.Post, "giftCardClass", payload, ct);
+            throw await CreateGiftCardExceptionAsync("consultar", "GenericClass", walletClass.Id, null, null, existing, ct);
+        var payload = new { id = walletClass.Id };
+        var created = await SendAsync(HttpMethod.Post, "genericClass", payload, ct);
         if (created.StatusCode is not (HttpStatusCode.OK or HttpStatusCode.Created or HttpStatusCode.Conflict))
-            throw await CreateGiftCardExceptionAsync("crear", "GiftCardClass", walletClass.Id, null, created, ct);
+            throw await CreateGiftCardExceptionAsync("crear", "GenericClass", walletClass.Id, null, payload, created, ct);
     }
 
     public async Task CreateOrUpdateGiftCardObjectAsync(GoogleGiftCardObjectData value, CancellationToken ct = default)
     {
-        var updatedAt = DateTime.SpecifyKind(value.BalanceUpdatedAtUtc, DateTimeKind.Utc);
-        var micros = checked((long)decimal.Round(value.Balance * 1_000_000m, 0, MidpointRounding.AwayFromZero));
         var payload = new
         {
             id = value.Id, classId = value.ClassId, state = value.Status == "Active" ? "ACTIVE" : "INACTIVE",
-            cardNumber = value.Code,
-            balance = new { micros = micros.ToString(System.Globalization.CultureInfo.InvariantCulture), currencyCode = value.Currency.Trim().ToUpperInvariant() },
-            balanceUpdateTime = new { year = updatedAt.Year, month = updatedAt.Month, day = updatedAt.Day, hours = updatedAt.Hour, minutes = updatedAt.Minute, seconds = updatedAt.Second, utcOffset = "0s" },
-            barcode = new { type = "QR_CODE", value = value.Code, alternateText = value.Code }
+            cardTitle = Localized(value.DisplayName),
+            header = Localized($"{value.Balance:N2} {value.Currency}"),
+            subheader = string.IsNullOrWhiteSpace(value.RecipientName) ? null : Localized(value.RecipientName.Trim()),
+            barcode = new { type = "QR_CODE", value = value.Code, alternateText = value.Code },
+            hexBackgroundColor = value.HexBackgroundColor,
+            logo = ValidImage(value.LogoUri, value.DisplayName),
+            heroImage = ValidImage(value.HeroImageUri, value.DisplayName),
+            textModulesData = BuildGiftCardTextModules(value)
         };
-        var existing = await SendAsync(HttpMethod.Get, $"giftCardObject/{Uri.EscapeDataString(value.Id)}", null, ct);
+        var diagnosticPayload = new
+        {
+            value.Id,
+            value.ClassId,
+            State = value.Status == "Active" ? "ACTIVE" : "INACTIVE",
+            CardTitleLanguage = "es-MX",
+            BarcodeType = "QR_CODE",
+            HasBarcodeValue = !string.IsNullOrWhiteSpace(value.Code),
+            HasLogo = payload.logo is not null,
+            LogoScheme = Uri.TryCreate(value.LogoUri, UriKind.Absolute, out var logoUri) ? logoUri.Scheme : "invalid-or-relative",
+            HasHeroImage = payload.heroImage is not null,
+            HeroImageScheme = Uri.TryCreate(value.HeroImageUri, UriKind.Absolute, out var heroUri) ? heroUri.Scheme : "invalid-or-relative",
+            TextModuleCount = payload.textModulesData.Length
+        };
+        var existing = await SendAsync(HttpMethod.Get, $"genericObject/{Uri.EscapeDataString(value.Id)}", null, ct);
         if (existing.StatusCode == HttpStatusCode.NotFound)
         {
-            var created = await SendAsync(HttpMethod.Post, "giftCardObject", payload, ct);
+            var created = await SendAsync(HttpMethod.Post, "genericObject", payload, ct);
             if (created.StatusCode is HttpStatusCode.OK or HttpStatusCode.Created) return;
             if (created.StatusCode != HttpStatusCode.Conflict)
-                throw await CreateGiftCardExceptionAsync("crear", "GiftCardObject", value.ClassId, value.Id, created, ct);
+                throw await CreateGiftCardExceptionAsync("crear", "GenericObject", value.ClassId, value.Id, diagnosticPayload, created, ct);
         }
         else if (existing.StatusCode != HttpStatusCode.OK)
-            throw await CreateGiftCardExceptionAsync("consultar", "GiftCardObject", value.ClassId, value.Id, existing, ct);
-        var updated = await SendAsync(new HttpMethod("PATCH"), $"giftCardObject/{Uri.EscapeDataString(value.Id)}", payload, ct);
+            throw await CreateGiftCardExceptionAsync("consultar", "GenericObject", value.ClassId, value.Id, null, existing, ct);
+        var updated = await SendAsync(new HttpMethod("PATCH"), $"genericObject/{Uri.EscapeDataString(value.Id)}", payload, ct);
         if (updated.StatusCode != HttpStatusCode.OK)
-            throw await CreateGiftCardExceptionAsync("actualizar", "GiftCardObject", value.ClassId, value.Id, updated, ct);
+            throw await CreateGiftCardExceptionAsync("actualizar", "GenericObject", value.ClassId, value.Id, diagnosticPayload, updated, ct);
+    }
+
+    private static object Localized(string value) => new { defaultValue = new { language = "es-MX", value } };
+
+    private static object? ValidImage(string? value, string description)
+    {
+        if (!Uri.TryCreate(value, UriKind.Absolute, out var uri)
+            || (uri.Scheme != Uri.UriSchemeHttps && uri.Scheme != Uri.UriSchemeHttp))
+            return null;
+        return new { sourceUri = new { uri = uri.AbsoluteUri }, contentDescription = Localized(description) };
     }
 
     private static object[] BuildGiftCardTextModules(GoogleGiftCardObjectData value)
@@ -279,13 +305,14 @@ internal sealed class GoogleWalletClient : IGoogleWalletClient
     }
 
     private async Task<InvalidOperationException> CreateGiftCardExceptionAsync(
-        string operation, string resourceType, string classId, string? objectId,
+        string operation, string resourceType, string classId, string? objectId, object? payload,
         HttpResponseMessage response, CancellationToken ct)
     {
         var body = await response.Content.ReadAsStringAsync(ct);
         _logger.LogWarning(
-            "Google Wallet Gift Card request rejected. Operation={Operation}, ResourceType={ResourceType}, StatusCode={StatusCode}, ClassId={ClassId}, ObjectId={ObjectId}, GoogleErrorBody={GoogleErrorBody}.",
-            operation, resourceType, (int)response.StatusCode, classId, objectId ?? "<none>", body);
+            "Google Wallet Gift Card request rejected. Operation={Operation}, ResourceType={ResourceType}, StatusCode={StatusCode}, ClassId={ClassId}, ObjectId={ObjectId}, Payload={Payload}, GoogleErrorBody={GoogleErrorBody}.",
+            operation, resourceType, (int)response.StatusCode, classId, objectId ?? "<none>",
+            payload is null ? "<none>" : JsonSerializer.Serialize(payload, JsonOptions), body);
         return new InvalidOperationException(
             $"Error al {operation} {resourceType}. Status={(int)response.StatusCode} {response.ReasonPhrase}. Body={body}");
     }
