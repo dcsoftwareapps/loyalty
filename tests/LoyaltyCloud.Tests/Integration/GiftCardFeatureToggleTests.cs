@@ -81,7 +81,8 @@ public sealed class GiftCardFeatureToggleTests
         Assert.Contains("/wallet/apple", claim);
         Assert.Contains("/wallet/google", claim);
         Assert.Contains("application/vnd.apple.pkpass", program);
-        Assert.Contains("Results.Redirect(link.Url)", program);
+        Assert.Contains("api/public/giftcards/claim/", program);
+        Assert.Contains("Results.Redirect(new Uri", program);
     }
 
     [Fact]
@@ -333,9 +334,8 @@ public sealed class GiftCardFeatureToggleTests
         Assert.Contains("Agregar a Wallet", claim);
         Assert.Contains("/wallet/apple", claim);
         Assert.Contains("/wallet/google", claim);
-        Assert.Contains("GetGoogleWalletLinkAsync(token, ct)", program);
-        Assert.Contains("Status503ServiceUnavailable", program);
-        Assert.Contains("Status502BadGateway", program);
+        Assert.Contains("api/public/giftcards/claim/", program);
+        Assert.DoesNotContain("GetGoogleWalletLinkAsync(token, ct)", program);
         Assert.DoesNotContain("loyaltyGiftCardWallet.getUserAgent", claim);
         Assert.DoesNotContain("@onclick=\"ShowPhoneGuidance\"", claim);
         Assert.Contains("kb-gift-message-field", issue);

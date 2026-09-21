@@ -98,6 +98,24 @@ public sealed class AdminRoutingTests : IClassFixture<AdminRoutingTests.AdminWeb
 
     [Fact]
     [Trait("Category", "AdminRouting")]
+    [Trait("Category", "GiftCards")]
+    public async Task Public_gift_card_google_wallet_route_redirects_to_configured_api()
+    {
+        using var client = _factory.CreateClient(new WebApplicationFactoryClientOptions
+        {
+            AllowAutoRedirect = false
+        });
+
+        using var response = await client.GetAsync("/giftcards/claim/token-123/wallet/google");
+
+        Assert.Equal(HttpStatusCode.Redirect, response.StatusCode);
+        Assert.Equal(Uri.UriSchemeHttps, response.Headers.Location?.Scheme);
+        Assert.Equal("/api/public/giftcards/claim/token-123/wallet/google",
+            response.Headers.Location?.AbsolutePath);
+    }
+
+    [Fact]
+    [Trait("Category", "AdminRouting")]
     public async Task Privacy_serves_public_policy_without_admin_layout_or_redirect()
     {
         using var client = _factory.CreateClient(new WebApplicationFactoryClientOptions
