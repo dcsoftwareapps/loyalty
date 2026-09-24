@@ -122,6 +122,7 @@ public static class DependencyInjection
         services.AddScoped<ITenantLoyaltyLevelManagementService, TenantLoyaltyLevelManagementService>();
         services.AddScoped<ITenantWalletAssetProvider, TenantWalletAssetProvider>();
         services.AddScoped<ITenantProvisioningService, TenantProvisioningService>();
+        services.AddScoped<ISelfServiceSignupService, SelfServiceSignupService>();
         services.AddScoped<ISuperAdminTenantReadService, SuperAdminTenantReadService>();
         services.AddScoped<ISuperAdminTenantManagementService, SuperAdminTenantManagementService>();
         services.AddScoped<ISubscriptionMaintenanceService, SubscriptionMaintenanceService>();

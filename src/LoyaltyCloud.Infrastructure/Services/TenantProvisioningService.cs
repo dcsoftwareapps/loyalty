@@ -57,10 +57,11 @@ internal sealed class TenantProvisioningService : ITenantProvisioningService
 
         _logger.LogInformation("Tenant provisioning started. TenantSlug={TenantSlug}", slug);
 
-        var strategy = _db.Database.CreateExecutionStrategy();
-        return await strategy.ExecuteAsync(async () =>
+        async Task<Result<ProvisionTenantResult>> ExecuteAsync(bool ownsTransaction)
         {
-            await using var tx = await _db.Database.BeginTransactionAsync(cancellationToken);
+            await using var tx = ownsTransaction
+                ? await _db.Database.BeginTransactionAsync(cancellationToken)
+                : null;
             try
             {
                 if (await _db.Tenants.AnyAsync(t => t.Slug == slug, cancellationToken))
@@ -171,7 +172,8 @@ internal sealed class TenantProvisioningService : ITenantProvisioningService
                 }
 
                 await _db.SaveChangesAsync(cancellationToken);
-                await tx.CommitAsync(cancellationToken);
+                if (tx is not null)
+                    await tx.CommitAsync(cancellationToken);
 
                 _logger.LogInformation(
                     "Tenant provisioning completed. TenantId={TenantId}, TenantSlug={TenantSlug}",
@@ -187,7 +189,8 @@ internal sealed class TenantProvisioningService : ITenantProvisioningService
             }
             catch (DbUpdateException ex) when (IsUniqueConstraintViolation(ex))
             {
-                await tx.RollbackAsync(cancellationToken);
+                if (tx is not null)
+                    await tx.RollbackAsync(cancellationToken);
                 _logger.LogWarning(
                     ex,
                     "Tenant provisioning failed. TenantSlug={TenantSlug}, Reason={Reason}",
@@ -197,7 +200,8 @@ internal sealed class TenantProvisioningService : ITenantProvisioningService
             }
             catch (Exception ex)
             {
-                await tx.RollbackAsync(cancellationToken);
+                if (tx is not null)
+                    await tx.RollbackAsync(cancellationToken);
                 _logger.LogError(
                     ex,
                     "Tenant provisioning failed. TenantSlug={TenantSlug}, Reason={Reason}",
@@ -205,7 +209,13 @@ internal sealed class TenantProvisioningService : ITenantProvisioningService
                     "unexpected_error");
                 throw;
             }
-        });
+        }
+
+        if (_db.Database.CurrentTransaction is not null)
+            return await ExecuteAsync(ownsTransaction: false);
+
+        var strategy = _db.Database.CreateExecutionStrategy();
+        return await strategy.ExecuteAsync(() => ExecuteAsync(ownsTransaction: true));
     }
 
     private static bool IsUniqueConstraintViolation(DbUpdateException ex)

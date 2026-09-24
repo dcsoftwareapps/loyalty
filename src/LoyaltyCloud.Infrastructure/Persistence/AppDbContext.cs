@@ -52,6 +52,7 @@ public class AppDbContext : DbContext, IUnitOfWork
     public DbSet<GiftCardTransaction> GiftCardTransactions => Set<GiftCardTransaction>();
     public DbSet<GiftCardWallet> GiftCardWallets => Set<GiftCardWallet>();
     public DbSet<GiftCardDeviceRegistration> GiftCardDeviceRegistrations => Set<GiftCardDeviceRegistration>();
+    public DbSet<SelfServiceSignupAttempt> SelfServiceSignupAttempts => Set<SelfServiceSignupAttempt>();
 
     public AppDbContext(DbContextOptions<AppDbContext> options) : base(options) { }
 
