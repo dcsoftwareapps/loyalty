@@ -20,6 +20,12 @@ internal sealed class TenantAdminUserConfiguration : IEntityTypeConfiguration<Te
             .HasMaxLength(150)
             .IsRequired();
 
+        builder.Property(u => u.Email)
+            .HasMaxLength(254);
+
+        builder.Property(u => u.NormalizedEmail)
+            .HasMaxLength(254);
+
         builder.Property(u => u.PasswordHash)
             .HasMaxLength(1000)
             .IsRequired();
@@ -34,6 +40,9 @@ internal sealed class TenantAdminUserConfiguration : IEntityTypeConfiguration<Te
         builder.Property(u => u.LastLoginAt).HasColumnType("datetime2(3)");
 
         builder.HasIndex(u => new { u.TenantId, u.NormalizedUsername }).IsUnique();
+        builder.HasIndex(u => new { u.TenantId, u.NormalizedEmail })
+            .IsUnique()
+            .HasFilter("[NormalizedEmail] IS NOT NULL");
         builder.HasIndex(u => u.IsActive);
     }
 }

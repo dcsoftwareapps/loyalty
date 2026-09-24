@@ -75,7 +75,12 @@ internal sealed class TenantProvisioningService : ITenantProvisioningService
                 var now = _clock.UtcNow;
                 var tenantId = Guid.NewGuid();
                 var adminUserId = Guid.NewGuid();
-                var trialDays = Math.Max(1, _options.TrialDays);
+                var trialEndsAt = request.TrialPolicy switch
+                {
+                    ProvisioningTrialPolicy.ConfiguredDays => now.AddDays(Math.Max(1, _options.TrialDays)),
+                    ProvisioningTrialPolicy.OneCalendarMonth => now.AddMonths(1),
+                    _ => throw new InvalidOperationException("Politica de trial no soportada.")
+                };
 
                 var tenant = new Tenant(
                     tenantId,
@@ -125,7 +130,7 @@ internal sealed class TenantProvisioningService : ITenantProvisioningService
                     TenantSubscriptionStatus.Trial,
                     "trial",
                     currentPeriodStart: now,
-                    currentPeriodEnd: now.AddDays(trialDays));
+                    currentPeriodEnd: trialEndsAt);
 
                 _db.Tenants.Add(tenant);
                 _db.TenantBrandings.Add(branding);
@@ -139,7 +144,8 @@ internal sealed class TenantProvisioningService : ITenantProvisioningService
                     tenantId,
                     request.AdminUsername,
                     passwordHash,
-                    now));
+                    now,
+                    email: request.AdminEmail));
 
                 foreach (var row in TenantProvisioningDefaults.ProgramConfigRows)
                 {
@@ -176,7 +182,8 @@ internal sealed class TenantProvisioningService : ITenantProvisioningService
                     tenantId,
                     slug,
                     adminUserId,
-                    TenantSubscriptionStatus.Trial.ToString()));
+                    TenantSubscriptionStatus.Trial.ToString(),
+                    trialEndsAt));
             }
             catch (DbUpdateException ex) when (IsUniqueConstraintViolation(ex))
             {

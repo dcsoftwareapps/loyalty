@@ -21,4 +21,6 @@ public sealed record ProvisionTenantRequest(
     string? SupportPhone,
     string? WhatsAppUrl,
     string? InstagramUrl,
-    string? TermsUrl);
+    string? TermsUrl,
+    string? AdminEmail,
+    ProvisioningTrialPolicy TrialPolicy);

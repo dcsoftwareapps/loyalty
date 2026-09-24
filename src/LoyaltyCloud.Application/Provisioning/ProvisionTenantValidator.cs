@@ -36,6 +36,17 @@ internal sealed partial class ProvisionTenantValidator : AbstractValidator<Provi
             .NotEmpty()
             .MinimumLength(8);
 
+        RuleFor(c => c.AdminEmail)
+            .Cascade(CascadeMode.Stop)
+            .Must(value => value!.Trim().Length <= 254)
+            .WithMessage("AdminEmail no puede exceder 254 caracteres.")
+            .EmailAddress()
+            .WithMessage("AdminEmail debe ser un email valido.")
+            .When(c => !string.IsNullOrWhiteSpace(c.AdminEmail));
+
+        RuleFor(c => c.TrialPolicy)
+            .IsInEnum();
+
         RuleFor(c => c.WhatsAppUrl)
             .Must(BeSafeOptionalUrl)
             .When(c => !string.IsNullOrWhiteSpace(c.WhatsAppUrl))
