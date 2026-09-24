@@ -45,6 +45,17 @@ public sealed class TenantSubscription
     public bool IsOperational(DateTime nowUtc) =>
         IsOperational(Status, CurrentPeriodEnd, PaidThroughUtc, GracePeriodEndsAt, nowUtc);
 
+    public bool IsBillingEligible(DateTime nowUtc)
+    {
+        var normalizedNow = NormalizeUtc(nowUtc);
+        return Status == TenantSubscriptionStatus.PastDue
+            || Status == TenantSubscriptionStatus.Trial
+                && CurrentPeriodEnd.HasValue
+                && CurrentPeriodEnd.Value <= normalizedNow
+            || Status == TenantSubscriptionStatus.Suspended
+                && SuspensionReason is TenantSuspensionReason.PaymentPastDue or TenantSuspensionReason.TrialExpired;
+    }
+
     public void SuspendAdministratively()
     {
         Status = TenantSubscriptionStatus.Suspended;

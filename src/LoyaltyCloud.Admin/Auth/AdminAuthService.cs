@@ -315,9 +315,10 @@ public sealed class AdminAuthService
         && tenant.Subscription is not null
         && tenant.Subscription.IsOperational(_clock.UtcNow);
 
-    private static bool CanAccessBilling(Tenant tenant) => tenant.IsActive && tenant.Subscription is not null &&
-        (tenant.Subscription.Status == TenantSubscriptionStatus.PastDue ||
-         tenant.Subscription.Status == TenantSubscriptionStatus.Suspended && tenant.Subscription.SuspensionReason is TenantSuspensionReason.PaymentPastDue or TenantSuspensionReason.TrialExpired);
+    private bool CanAccessBilling(Tenant tenant) =>
+        tenant.IsActive
+        && tenant.Subscription is not null
+        && tenant.Subscription.IsBillingEligible(_clock.UtcNow);
 
     private void Reject(CookieValidatePrincipalContext context, object? tenantId, object? adminUserId, string reason)
     {

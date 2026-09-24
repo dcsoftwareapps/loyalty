@@ -718,6 +718,55 @@ public sealed class AdminRoutingTests : IClassFixture<AdminRoutingTests.AdminWeb
     [Fact]
     [Trait("Category", "AdminRouting")]
     [Trait("Category", "TenantAdminAuth")]
+    public async Task Expired_trial_before_maintenance_can_login_to_billing_but_not_operational_routes()
+    {
+        await _factory.SetKBeautySubscriptionAsync(
+            TenantSubscriptionStatus.Trial,
+            suspensionReason: null,
+            currentPeriodEnd: DateTime.UtcNow.AddMinutes(-1));
+
+        try
+        {
+            using var client = _factory.CreateClient(new WebApplicationFactoryClientOptions
+            {
+                AllowAutoRedirect = false
+            });
+            using var getLogin = await client.GetAsync("/kbeauty/login");
+            var loginHtml = await getLogin.Content.ReadAsStringAsync();
+            using var post = new HttpRequestMessage(HttpMethod.Post, "/kbeauty/login")
+            {
+                Content = new FormUrlEncodedContent(BuildLoginForm(
+                    loginHtml,
+                    TenantAdminUsername,
+                    TenantAdminPassword))
+            };
+            post.Headers.Add("Cookie", ExtractCookies(getLogin));
+
+            using var loginResponse = await client.SendAsync(post);
+            Assert.Equal(HttpStatusCode.Redirect, loginResponse.StatusCode);
+            Assert.Equal("/kbeauty/billing", loginResponse.Headers.Location?.OriginalString);
+            var cookie = ExtractCookie(loginResponse, "loyaltycloud.admin.auth");
+
+            using var billing = new HttpRequestMessage(HttpMethod.Get, "/kbeauty/billing");
+            billing.Headers.Add("Cookie", cookie);
+            using var billingResponse = await client.SendAsync(billing);
+            Assert.Equal(HttpStatusCode.OK, billingResponse.StatusCode);
+
+            using var dashboard = new HttpRequestMessage(HttpMethod.Get, "/dashboard");
+            dashboard.Headers.Add("Cookie", cookie);
+            using var dashboardResponse = await client.SendAsync(dashboard);
+            Assert.Equal(HttpStatusCode.Redirect, dashboardResponse.StatusCode);
+            Assert.Equal("/kbeauty/billing", dashboardResponse.Headers.Location?.OriginalString);
+        }
+        finally
+        {
+            await _factory.SetKBeautySubscriptionAsync(TenantSubscriptionStatus.Active, null);
+        }
+    }
+
+    [Fact]
+    [Trait("Category", "AdminRouting")]
+    [Trait("Category", "TenantAdminAuth")]
     public async Task Payment_suspended_tenant_still_rejects_invalid_credentials()
     {
         await _factory.SetKBeautySubscriptionAsync(
@@ -1857,7 +1906,8 @@ public sealed class AdminRoutingTests : IClassFixture<AdminRoutingTests.AdminWeb
 
         public async Task SetKBeautySubscriptionAsync(
             TenantSubscriptionStatus status,
-            TenantSuspensionReason? suspensionReason)
+            TenantSuspensionReason? suspensionReason,
+            DateTime? currentPeriodEnd = null)
         {
             using var scope = Services.CreateScope();
             var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
@@ -1865,6 +1915,11 @@ public sealed class AdminRoutingTests : IClassFixture<AdminRoutingTests.AdminWeb
                 .SingleAsync(row => row.TenantId == TenantSeed.KBeautyTenantId);
             db.Entry(subscription).Property(nameof(TenantSubscription.Status)).CurrentValue = status;
             db.Entry(subscription).Property(nameof(TenantSubscription.SuspensionReason)).CurrentValue = suspensionReason;
+            if (currentPeriodEnd.HasValue)
+            {
+                db.Entry(subscription).Property(nameof(TenantSubscription.CurrentPeriodEnd)).CurrentValue =
+                    currentPeriodEnd;
+            }
             if (status == TenantSubscriptionStatus.Active)
             {
                 db.Entry(subscription).Property(nameof(TenantSubscription.PaidThroughUtc)).CurrentValue =
