@@ -17,6 +17,7 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.AspNetCore.TestHost;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
@@ -94,6 +95,143 @@ public sealed class AdminRoutingTests : IClassFixture<AdminRoutingTests.AdminWeb
         Assert.Contains("<details class=\"lp-mobile-nav\"", html);
         foreach (Match link in Regex.Matches(html, "href=\"#([^\"]+)\""))
             Assert.Contains($"id=\"{link.Groups[1].Value}\"", html);
+    }
+
+    [Fact]
+    [Trait("Category", "PublicSignup")]
+    public async Task Landing_and_signup_render_the_real_self_service_flow()
+    {
+        using var client = _factory.CreateClient(new WebApplicationFactoryClientOptions { AllowAutoRedirect = false });
+        using var landingResponse = await client.GetAsync("/");
+        var landingHtml = WebUtility.HtmlDecode(await landingResponse.Content.ReadAsStringAsync());
+        Assert.Equal(HttpStatusCode.OK, landingResponse.StatusCode);
+        Assert.Contains("href=\"/signup\"", landingHtml);
+        Assert.DoesNotContain("registro en línea todavía no está disponible", landingHtml, StringComparison.OrdinalIgnoreCase);
+
+        using var signupResponse = await client.GetAsync("/signup");
+        var signupHtml = WebUtility.HtmlDecode(await signupResponse.Content.ReadAsStringAsync());
+        Assert.Equal(HttpStatusCode.OK, signupResponse.StatusCode);
+        Assert.Contains("action=\"/signup\"", signupHtml);
+        foreach (var field in new[] { "Email", "Password", "ConfirmPassword", "BusinessDisplayName", "Slug", "TimeZoneId", "SignupAttemptId" })
+            Assert.Contains($"name=\"{field}\"", signupHtml);
+        Assert.Contains("Primer mes gratis", signupHtml);
+        Assert.Contains("No requiere tarjeta", signupHtml);
+        Assert.DoesNotContain("name=\"PlanCode\"", signupHtml);
+        Assert.DoesNotContain("name=\"StripeCustomerId\"", signupHtml);
+    }
+
+    [Fact]
+    [Trait("Category", "PublicSignup")]
+    public async Task Signup_without_antiforgery_token_is_rejected()
+    {
+        using var client = _factory.CreateClient(new WebApplicationFactoryClientOptions { AllowAutoRedirect = false });
+        using var response = await client.PostAsync("/signup", new FormUrlEncodedContent(new Dictionary<string, string>
+        {
+            ["Email"] = "missing-token@example.test", ["Password"] = "Password123!",
+            ["ConfirmPassword"] = "Password123!", ["BusinessDisplayName"] = "Missing Token",
+            ["Slug"] = "missing-token", ["TimeZoneId"] = "America/Tijuana",
+            ["SignupAttemptId"] = Guid.NewGuid().ToString("N")
+        }));
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+    }
+
+    [Fact]
+    [Trait("Category", "PublicSignup")]
+    public async Task Valid_signup_creates_one_month_trial_authenticates_and_is_idempotent()
+    {
+        var slug = "signup-" + Guid.NewGuid().ToString("N")[..10];
+        var email = $"{slug}@example.test";
+        using var client = _factory.CreateClient(new WebApplicationFactoryClientOptions { AllowAutoRedirect = false, HandleCookies = false });
+        var (form, cookies) = await LoadSignupFormAsync(client);
+        PopulateValidSignup(form, slug, email);
+        form["TenantId"] = Guid.NewGuid().ToString();
+        form["Role"] = "SuperAdmin";
+        form["Status"] = "Active";
+        form["PlanCode"] = "enterprise";
+        form["PaidThroughUtc"] = DateTime.UtcNow.AddYears(10).ToString("O");
+        form["StripeCustomerId"] = "cus_attacker_controlled";
+
+        using var firstRequest = CreateSignupRequest(form, cookies);
+        using var firstResponse = await client.SendAsync(firstRequest);
+        using var retryRequest = CreateSignupRequest(form, cookies);
+        using var retryResponse = await client.SendAsync(retryRequest);
+
+        Assert.Equal(HttpStatusCode.Redirect, firstResponse.StatusCode);
+        Assert.Equal("/dashboard", firstResponse.Headers.Location?.OriginalString);
+        Assert.Equal(firstResponse.Headers.Location, retryResponse.Headers.Location);
+        var authCookie = ExtractCookie(firstResponse, "loyaltycloud.admin.auth");
+
+        using var dashboardRequest = new HttpRequestMessage(HttpMethod.Get, firstResponse.Headers.Location);
+        dashboardRequest.Headers.Add("Cookie", authCookie);
+        using var dashboardResponse = await client.SendAsync(dashboardRequest);
+        Assert.Equal(HttpStatusCode.OK, dashboardResponse.StatusCode);
+
+        var snapshot = await _factory.ReadSignupSnapshotAsync(slug);
+        Assert.Equal(1, snapshot.TenantCount);
+        Assert.Equal(1, snapshot.AdminCount);
+        Assert.Equal(1, snapshot.SubscriptionCount);
+        Assert.Equal(1, snapshot.AttemptCount);
+        Assert.Equal(0, snapshot.BillingOrderCount);
+        Assert.Equal(0, snapshot.PaymentTransactionCount);
+        Assert.Equal(TenantSubscriptionStatus.Trial, snapshot.SubscriptionStatus);
+        Assert.Equal("trial", snapshot.PlanCode);
+        Assert.Equal(TenantUserRole.Admin, snapshot.AdminRole);
+        Assert.True(snapshot.AdminIsActive);
+        Assert.Equal(email.ToUpperInvariant(), snapshot.NormalizedEmail);
+        Assert.NotNull(snapshot.CurrentPeriodStart);
+        Assert.Equal(snapshot.CurrentPeriodStart!.Value.AddMonths(1), snapshot.CurrentPeriodEnd);
+        Assert.Null(snapshot.PaidThroughUtc);
+    }
+
+    [Fact]
+    [Trait("Category", "PublicSignup")]
+    public async Task Duplicate_slug_and_invalid_input_are_controlled_without_extra_tenants()
+    {
+        var slug = "duplicate-" + Guid.NewGuid().ToString("N")[..8];
+        using var client = _factory.CreateClient(new WebApplicationFactoryClientOptions { AllowAutoRedirect = false, HandleCookies = false });
+        var (first, firstCookies) = await LoadSignupFormAsync(client);
+        PopulateValidSignup(first, slug, $"first-{slug}@example.test");
+        using var firstRequest = CreateSignupRequest(first, firstCookies);
+        using var firstResponse = await client.SendAsync(firstRequest);
+        Assert.Equal(HttpStatusCode.Redirect, firstResponse.StatusCode);
+
+        var (duplicate, duplicateCookies) = await LoadSignupFormAsync(client);
+        PopulateValidSignup(duplicate, slug, $"second-{slug}@example.test");
+        using var duplicateRequest = CreateSignupRequest(duplicate, duplicateCookies);
+        using var duplicateResponse = await client.SendAsync(duplicateRequest);
+        Assert.Equal("/signup?error=slug-conflict", duplicateResponse.Headers.Location?.OriginalString);
+
+        var (invalid, invalidCookies) = await LoadSignupFormAsync(client);
+        PopulateValidSignup(invalid, "invalid slug", "not-an-email");
+        using var invalidRequest = CreateSignupRequest(invalid, invalidCookies);
+        using var invalidResponse = await client.SendAsync(invalidRequest);
+        Assert.Equal("/signup?error=invalid", invalidResponse.Headers.Location?.OriginalString);
+
+        Assert.Equal(1, (await _factory.ReadSignupSnapshotAsync(slug)).TenantCount);
+        Assert.Equal(0, await _factory.CountTenantsBySlugAsync("invalid slug"));
+    }
+
+    [Fact]
+    [Trait("Category", "PublicSignup")]
+    public async Task Signup_rate_limit_rejects_excessive_posts()
+    {
+        using var limitedFactory = _factory.WithWebHostBuilder(_ => { });
+        using var client = limitedFactory.CreateClient(new WebApplicationFactoryClientOptions { AllowAutoRedirect = false, HandleCookies = false });
+        var (form, cookies) = await LoadSignupFormAsync(client);
+        PopulateValidSignup(form, "rate-limit-test", "rate-limit@example.test");
+        form["ConfirmPassword"] = "DifferentPassword123!";
+
+        for (var attempt = 0; attempt < 10; attempt++)
+        {
+            using var allowedRequest = CreateSignupRequest(form, cookies);
+            using var allowedResponse = await client.SendAsync(allowedRequest);
+            Assert.Equal(HttpStatusCode.Redirect, allowedResponse.StatusCode);
+        }
+
+        using var rejectedRequest = CreateSignupRequest(form, cookies);
+        using var rejectedResponse = await client.SendAsync(rejectedRequest);
+        Assert.Equal(HttpStatusCode.TooManyRequests, rejectedResponse.StatusCode);
+        Assert.Contains("Demasiados intentos", await rejectedResponse.Content.ReadAsStringAsync());
     }
 
     [Fact]
@@ -1722,6 +1860,33 @@ public sealed class AdminRoutingTests : IClassFixture<AdminRoutingTests.AdminWeb
             StringComparison.OrdinalIgnoreCase);
     }
 
+    private static async Task<(Dictionary<string, string> Form, string Cookies)> LoadSignupFormAsync(HttpClient client)
+    {
+        using var response = await client.GetAsync("/signup");
+        response.EnsureSuccessStatusCode();
+        return (ExtractHiddenInputs(await response.Content.ReadAsStringAsync()), ExtractCookies(response));
+    }
+
+    private static void PopulateValidSignup(Dictionary<string, string> form, string slug, string email)
+    {
+        form["Email"] = email;
+        form["Password"] = "Password123!";
+        form["ConfirmPassword"] = "Password123!";
+        form["BusinessDisplayName"] = "Negocio de prueba";
+        form["Slug"] = slug;
+        form["TimeZoneId"] = "America/Tijuana";
+    }
+
+    private static HttpRequestMessage CreateSignupRequest(Dictionary<string, string> form, string cookies)
+    {
+        var request = new HttpRequestMessage(HttpMethod.Post, "/signup")
+        {
+            Content = new FormUrlEncodedContent(form)
+        };
+        request.Headers.Add("Cookie", cookies);
+        return request;
+    }
+
     private static string GetRepositoryRoot()
     {
         var current = new DirectoryInfo(AppContext.BaseDirectory);
@@ -1794,6 +1959,22 @@ public sealed class AdminRoutingTests : IClassFixture<AdminRoutingTests.AdminWeb
         return cookie!;
     }
 
+    public sealed record SignupSnapshot(
+        int TenantCount,
+        int AdminCount,
+        int SubscriptionCount,
+        int AttemptCount,
+        int BillingOrderCount,
+        int PaymentTransactionCount,
+        TenantSubscriptionStatus SubscriptionStatus,
+        string PlanCode,
+        DateTime? CurrentPeriodStart,
+        DateTime? CurrentPeriodEnd,
+        DateTime? PaidThroughUtc,
+        TenantUserRole AdminRole,
+        bool AdminIsActive,
+        string? NormalizedEmail);
+
     public sealed class AdminWebApplicationFactory : WebApplicationFactory<AdminApp::Program>
     {
         private readonly string _dbName = "LoyaltyCloudAdminRouting-" + Guid.NewGuid().ToString("N");
@@ -1830,7 +2011,9 @@ public sealed class AdminRoutingTests : IClassFixture<AdminRoutingTests.AdminWeb
             {
                 services.RemoveAll<DbContextOptions<AppDbContext>>();
                 services.RemoveAll<Microsoft.EntityFrameworkCore.Infrastructure.IDbContextOptionsConfiguration<AppDbContext>>();
-                services.AddDbContext<AppDbContext>(opts => opts.UseInMemoryDatabase(_dbName));
+                services.AddDbContext<AppDbContext>(opts => opts
+                    .UseInMemoryDatabase(_dbName)
+                    .ConfigureWarnings(warnings => warnings.Ignore(InMemoryEventId.TransactionIgnoredWarning)));
 
                 services.RemoveAll<IPassGeneratorService>();
                 services.RemoveAll<IApnService>();
@@ -1865,6 +2048,37 @@ public sealed class AdminRoutingTests : IClassFixture<AdminRoutingTests.AdminWeb
             }
 
             await db.SaveChangesAsync();
+        }
+
+        public async Task<SignupSnapshot> ReadSignupSnapshotAsync(string slug)
+        {
+            using var scope = Services.CreateScope();
+            var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+            var tenant = await db.Tenants.IgnoreQueryFilters().SingleAsync(row => row.Slug == slug);
+            var admin = await db.TenantAdminUsers.IgnoreQueryFilters().SingleAsync(row => row.TenantId == tenant.Id);
+            var subscription = await db.TenantSubscriptions.IgnoreQueryFilters().SingleAsync(row => row.TenantId == tenant.Id);
+            return new SignupSnapshot(
+                await db.Tenants.IgnoreQueryFilters().CountAsync(row => row.Slug == slug),
+                await db.TenantAdminUsers.IgnoreQueryFilters().CountAsync(row => row.TenantId == tenant.Id),
+                await db.TenantSubscriptions.IgnoreQueryFilters().CountAsync(row => row.TenantId == tenant.Id),
+                await db.SelfServiceSignupAttempts.CountAsync(row => row.TenantId == tenant.Id),
+                await db.BillingOrders.IgnoreQueryFilters().CountAsync(row => row.TenantId == tenant.Id),
+                await db.PaymentTransactions.IgnoreQueryFilters().CountAsync(row => row.TenantId == tenant.Id),
+                subscription.Status,
+                subscription.PlanCode,
+                subscription.CurrentPeriodStart,
+                subscription.CurrentPeriodEnd,
+                subscription.PaidThroughUtc,
+                admin.Role,
+                admin.IsActive,
+                admin.NormalizedEmail);
+        }
+
+        public async Task<int> CountTenantsBySlugAsync(string slug)
+        {
+            using var scope = Services.CreateScope();
+            var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+            return await db.Tenants.IgnoreQueryFilters().CountAsync(row => row.Slug == slug);
         }
 
         private static async Task SeedKBeautyPlatformRowsAsync(AppDbContext db)

@@ -10,6 +10,10 @@ using MediatR;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Components.Server.Circuits;
+using Microsoft.AspNetCore.Antiforgery;
+using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.RateLimiting;
+using System.Threading.RateLimiting;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -125,6 +129,31 @@ builder.Services.AddAuthorization(TenantAuthorization.Configure);
 builder.Services.AddScoped<IAuthorizationHandler, GiftCardsEnabledHandler>();
 builder.Services.AddCascadingAuthenticationState();
 
+const string PublicSignupRateLimitPolicy = "PublicSignup";
+var signupPermitLimit = Math.Max(1, builder.Configuration.GetValue<int?>("RateLimiting:Signup:PermitLimit") ?? 10);
+var signupWindowMinutes = Math.Max(1, builder.Configuration.GetValue<int?>("RateLimiting:Signup:WindowMinutes") ?? 10);
+builder.Services.AddRateLimiter(options =>
+{
+    options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
+    options.OnRejected = async (context, cancellationToken) =>
+    {
+        context.HttpContext.Response.ContentType = "text/plain; charset=utf-8";
+        await context.HttpContext.Response.WriteAsync(
+            "Demasiados intentos. Espera unos minutos e inténtalo nuevamente.",
+            cancellationToken);
+    };
+    options.AddPolicy(PublicSignupRateLimitPolicy, context =>
+        RateLimitPartition.GetFixedWindowLimiter(
+            context.Connection.RemoteIpAddress?.ToString() ?? "unknown",
+            _ => new FixedWindowRateLimiterOptions
+            {
+                PermitLimit = signupPermitLimit,
+                Window = TimeSpan.FromMinutes(signupWindowMinutes),
+                QueueLimit = 0,
+                AutoReplenishment = true
+            }));
+});
+
 // =============================================================================
 // Pipeline
 // =============================================================================
@@ -154,6 +183,7 @@ app.UseStaticFiles();
 app.MapStaticAssets()
     .AllowAnonymous();
 app.UseRouting();
+app.UseRateLimiter();
 
 app.UseAuthentication();
 app.UseMiddleware<SuperAdminAuthenticationMiddleware>();
@@ -165,6 +195,60 @@ app.UseAntiforgery();
 app.MapRazorComponents<LoyaltyCloud.Admin.App>()
     .AddInteractiveServerRenderMode()
     .AllowAnonymous();
+
+app.MapPost("/signup", async (
+    [FromForm] PublicSignupForm form,
+    HttpContext context,
+    IAntiforgery antiforgery,
+    ISender sender,
+    AdminAuthService auth,
+    ILogger<Program> logger,
+    CancellationToken ct) =>
+{
+    await antiforgery.ValidateRequestAsync(context);
+
+    if (!string.Equals(form.Password, form.ConfirmPassword, StringComparison.Ordinal))
+        return Results.Redirect("/signup?error=password-mismatch");
+
+    try
+    {
+        var result = await sender.Send(
+            new LoyaltyCloud.Application.SelfServiceSignup.SelfServiceSignupCommand(
+                form.Email,
+                form.Password,
+                form.BusinessDisplayName,
+                form.Slug,
+                form.TimeZoneId,
+                form.SignupAttemptId),
+            ct);
+
+        if (result.IsFailure)
+        {
+            var code = result.Error.Contains("identificador del negocio", StringComparison.OrdinalIgnoreCase)
+                ? "slug-conflict"
+                : "invalid";
+            return Results.Redirect($"/signup?error={code}");
+        }
+
+        var login = await auth.TrySignInAsync(
+            context,
+            result.Value.TenantSlug,
+            $"{result.Value.TenantSlug}-owner",
+            form.Password,
+            ct);
+
+        return login == AdminLoginResult.Success
+            ? Results.Redirect(auth.GetAuthenticatedLandingPath(context.User))
+            : Results.Redirect($"/{Uri.EscapeDataString(result.Value.TenantSlug)}/login");
+    }
+    catch (Exception exception)
+    {
+        logger.LogError(exception, "Public self-service signup failed unexpectedly.");
+        return Results.Redirect("/signup?error=unexpected");
+    }
+})
+    .AllowAnonymous()
+    .RequireRateLimiting(PublicSignupRateLimitPolicy);
 
 // Endpoint POST para sign-out — Blazor no puede invocar SignOutAsync interactivo
 // (necesita el HttpContext durante el ciclo de response), así que va por MVC mínimo.

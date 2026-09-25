@@ -1,0 +1,103 @@
+@page "/signup"
+@layout PublicLayout
+@attribute [AllowAnonymous]
+@using LoyaltyCloud.Admin.Services
+@inject NavigationManager Navigation
+
+<PageTitle>Comienza gratis | LoyaltyCloud</PageTitle>
+<HeadContent>
+    <link rel="stylesheet" href="css/landing.css?v=20260925-wordmark-scale" />
+    <script src="js/signup.js" defer></script>
+    <meta name="description" content="Crea tu cuenta de LoyaltyCloud y comienza un mes gratis, sin tarjeta." />
+</HeadContent>
+
+<main class="lp-signup-page">
+    <section class="lp-signup-intro">
+        <LoyaltyCloudBrand Href="/" CssClass="lp-signup-brand" AriaLabel="LoyaltyCloud, inicio" />
+        <p class="lp-eyebrow">COMIENZA TU PROGRAMA</p>
+        <h1>Tu primer mes,<br /><em>por nuestra cuenta.</em></h1>
+        <p>Crea tu espacio de LoyaltyCloud y comienza a configurar tu programa de lealtad.</p>
+        <ul>
+            <li>Primer mes gratis</li>
+            <li>No requiere tarjeta</li>
+            <li>Después del periodo gratuito necesitarás contratar un plan para continuar.</li>
+        </ul>
+    </section>
+
+    <section class="lp-signup-card" aria-labelledby="signup-title">
+        <div class="lp-signup-heading">
+            <p class="lp-eyebrow">CREAR CUENTA</p>
+            <h2 id="signup-title">Datos de tu negocio</h2>
+            <p>Podrás personalizar marca, beneficios y Wallet desde el panel.</p>
+        </div>
+
+        @if (ErrorMessage is not null)
+        {
+            <div class="lp-signup-error" role="alert">@ErrorMessage</div>
+        }
+
+        <form method="post" action="/signup" class="lp-signup-form" data-signup-form>
+            <AntiforgeryToken />
+            <input type="hidden" name="SignupAttemptId" value="@attemptId" />
+
+            <label for="signup-email">Correo electrónico</label>
+            <input id="signup-email" name="Email" type="email" maxlength="254"
+                   autocomplete="email" required />
+
+            <div class="lp-signup-fields">
+                <div>
+                    <label for="signup-password">Contraseña</label>
+                    <input id="signup-password" name="Password" type="password" minlength="8"
+                           autocomplete="new-password" required />
+                </div>
+                <div>
+                    <label for="signup-confirm-password">Confirmar contraseña</label>
+                    <input id="signup-confirm-password" name="ConfirmPassword" type="password" minlength="8"
+                           autocomplete="new-password" required />
+                </div>
+            </div>
+
+            <label for="signup-business">Nombre del negocio</label>
+            <input id="signup-business" name="BusinessDisplayName" maxlength="200"
+                   autocomplete="organization" required data-business-name />
+
+            <label for="signup-slug">Dirección de tu negocio</label>
+            <div class="lp-signup-slug">
+                <span>@PublicOrigin/</span>
+                <input id="signup-slug" name="Slug" maxlength="50" minlength="3"
+                       pattern="[a-z0-9]+(?:-[a-z0-9]+)*" required
+                       aria-describedby="signup-slug-help" data-business-slug />
+            </div>
+            <small id="signup-slug-help">Puedes editarla. Usa letras minúsculas, números y guiones.</small>
+
+            <label for="signup-timezone">Zona horaria</label>
+            <select id="signup-timezone" name="TimeZoneId" required>
+                <option value="America/Tijuana" selected>America/Tijuana</option>
+                <option value="America/Hermosillo">America/Hermosillo</option>
+                <option value="America/Chihuahua">America/Chihuahua</option>
+                <option value="America/Mexico_City">America/Mexico_City</option>
+                <option value="America/Cancun">America/Cancun</option>
+            </select>
+
+            <button type="submit" class="lp-button lp-button-dark lp-signup-submit" data-signup-submit>
+                Comenzar mi mes gratis ↗
+            </button>
+            <p class="lp-small">Al continuar aceptas crear una cuenta para administrar tu programa.</p>
+        </form>
+    </section>
+</main>
+
+@code {
+    [SupplyParameterFromQuery(Name = "error")] public string? Error { get; set; }
+    private readonly string attemptId = Guid.NewGuid().ToString("N");
+    private string PublicOrigin => new Uri(Navigation.BaseUri).GetLeftPart(UriPartial.Authority);
+    private string? ErrorMessage => Error switch
+    {
+        "password-mismatch" => "Las contraseñas no coinciden.",
+        "slug-conflict" => "Esta dirección ya está en uso. Elige otra.",
+        "invalid" => "Revisa los datos e inténtalo nuevamente.",
+        "unexpected" => "No fue posible crear la cuenta. Inténtalo nuevamente.",
+        "rate-limited" => "Demasiados intentos. Espera unos minutos e inténtalo nuevamente.",
+        _ => null
+    };
+}
