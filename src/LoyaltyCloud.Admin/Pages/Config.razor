@@ -14,6 +14,7 @@
 @inject ITenantLoyaltyLevelReadService TenantLevels
 @inject ILevelProgressService LevelProgress
 @inject AdminApiClient Api
+@inject ITenantProgramReadService Programs
 
 <PageTitle>Configuración · LoyaltyCloud</PageTitle>
 
@@ -21,7 +22,10 @@
 <nav class="kb-report-nav" aria-label="Secciones de diseño y configuración">
     <a class="@(IsDigitalCardTab ? "active" : null)" href="/config">Tarjeta digital</a>
     <a class="@(IsGiftCardsTab ? "active" : null)" href="/config?section=giftcards">Tarjetas de regalo</a>
-    <a class="@(IsPointsBenefitsTab ? "active" : null)" href="/config?section=points">Puntos y beneficios</a>
+    @if (isPoints)
+    {
+        <a class="@(IsPointsBenefitsTab ? "active" : null)" href="/config?section=points">Puntos y beneficios</a>
+    }
 </nav>
 @if (IsGiftCardsTab) { <GiftCardSettingsPanel /> } else {
 
@@ -154,6 +158,8 @@ else
                 @if (errorMsg is not null) { <div class="kb-form-error" role="alert">@errorMsg</div> }
             </div>
 
+            @if (isPoints)
+            {
             <div class="kb-wallet-preview-shell">
                 <div class="kb-wallet-preview"
                      style="background:@ResolvedWalletBackground; color:@ResolvedWalletText;">
@@ -208,6 +214,7 @@ else
                     Vista previa aproximada.
                 </p>
             </div>
+            }
         </div>
     </section>
     }
@@ -271,6 +278,7 @@ else
     private bool IsPointsBenefitsTab => string.Equals(Section, "points", StringComparison.OrdinalIgnoreCase);
     private bool IsDigitalCardTab => !IsGiftCardsTab && !IsPointsBenefitsTab;
     private List<ConfigDto>? entries;
+    private bool isPoints;
     private Dictionary<string, string> edited = new();
     private string? successMsg;
     private string? errorMsg;
@@ -307,7 +315,8 @@ else
 
     private async Task LoadAsync()
     {
-        var result = await Sender.Send(new GetProgramConfigQuery());
+        isPoints = await Programs.GetCurrentAsync() == LoyaltyCloud.Domain.Enums.LoyaltyProgramType.Points;
+        var result = isPoints ? await Sender.Send(new GetProgramConfigQuery()) : LoyaltyCloud.Common.Results.Result.Ok<IReadOnlyList<ConfigDto>>([]);
         if (result.IsSuccess)
         {
             entries = result.Value
@@ -319,7 +328,7 @@ else
         branding = await BrandingRead.GetCurrentAsync();
         try
         {
-            loyaltyLevels = await TenantLevels.GetActiveLevelsAsync();
+            loyaltyLevels = isPoints ? await TenantLevels.GetActiveLevelsAsync() : [];
         }
         catch (InvalidOperationException)
         {

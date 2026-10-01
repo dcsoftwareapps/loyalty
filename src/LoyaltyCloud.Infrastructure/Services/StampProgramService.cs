@@ -48,6 +48,20 @@ internal sealed class StampProgramService(AppDbContext db, ITenantContext tenant
             // Serialize writers per tenant, including when no version exists yet.
             await db.Database.ExecuteSqlInterpolatedAsync($"SELECT Id FROM Tenants WITH (UPDLOCK, HOLDLOCK) WHERE Id = {tenantId}", ct);
             var versions = await db.Set<StampProgramVersion>().ToListAsync(ct);
+            var active = versions.SingleOrDefault(x => x.IsActive);
+            if (active is not null)
+            {
+                var current = await ToDtoAsync(active, ct);
+                var rewards = command.Rewards.OrderBy(x => x.RequiredStamps)
+                    .Select(x => new StampRewardInput(x.RequiredStamps, x.Name.Trim(), NormalizeDescription(x.Description)));
+                if (current.MaxStamps == command.MaxStamps && current.WelcomeStamps == command.WelcomeStamps
+                    && current.ReversalPolicy == command.ReversalPolicy
+                    && current.Rewards.Select(x => x with { Description = NormalizeDescription(x.Description) }).SequenceEqual(rewards))
+                {
+                    await transaction.CommitAsync(ct);
+                    return Result.Ok(current);
+                }
+            }
             var now = clock.UtcNow;
             foreach (var previous in versions.Where(x => x.IsActive)) previous.Supersede(now);
             await db.SaveChangesAsync(ct);
@@ -56,7 +70,7 @@ internal sealed class StampProgramService(AppDbContext db, ITenantContext tenant
                 command.MaxStamps, command.WelcomeStamps, command.ReversalPolicy, userId, now);
             db.Add(next);
             foreach (var reward in command.Rewards)
-                db.Add(new StampRewardDefinition(Guid.NewGuid(), next, reward.RequiredStamps, reward.Name, reward.Description));
+                db.Add(new StampRewardDefinition(Guid.NewGuid(), next, reward.RequiredStamps, reward.Name, NormalizeDescription(reward.Description)));
             await db.SaveChangesAsync(ct);
             await transaction.CommitAsync(ct);
             return Result.Ok(await ToDtoAsync(next, ct));
@@ -77,4 +91,6 @@ internal sealed class StampProgramService(AppDbContext db, ITenantContext tenant
             .OrderBy(x => x.RequiredStamps).Select(x => new StampRewardInput(x.RequiredStamps, x.Name, x.Description)).ToListAsync(ct);
         return new(version.Id, version.Version, version.MaxStamps, version.WelcomeStamps, version.ReversalPolicy, rewards);
     }
+
+    private static string? NormalizeDescription(string? description) => string.IsNullOrWhiteSpace(description) ? null : description.Trim();
 }

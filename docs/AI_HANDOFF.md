@@ -4,7 +4,23 @@ Last updated: 2026-10-01
 
 Branch: `feature/stamps-wallet-prototype`
 
-Last task worked: Stamps operational engine (earn, rewards, redemption, reversal, rollover).
+Last task worked: Stamps Admin configuration and program-aware navigation.
+
+## 2026-10-01 - Stamps Admin configuration
+
+- `/stamps` uses TenantAdmin authorization and existing Application commands/services.
+  Supports initial configuration and versioned edits, MaxStamps 2..12, welcome below
+  maximum, final reward and Spanish reversal options. No assets or Wallet integration.
+- Service compares normalized rules/rewards under the existing tenant transaction
+  lock. Unchanged or reordered equivalent rewards do not create another version.
+- MainLayout prevents rendering incompatible program pages. Stamps retains Customers,
+  Messages, enabled Gift Cards, general configuration, billing and staff; Points keeps
+  its navigation. Anonymous layout rendering must not query unresolved tenant rules.
+- Points dashboard/operations/reports are unavailable for Stamps; no Stamps reports
+  were introduced. Config hides Points benefits and Points preview only for Stamps.
+- No model/migration, deployment or database update in this phase. Cashier, visual
+  assets, Wallet and Stamps reports remain pending. Validation results are reported
+  in the task close-out; no production/mobile validation is implied here.
 
 ## 2026-10-01 - Stamps operational engine
 

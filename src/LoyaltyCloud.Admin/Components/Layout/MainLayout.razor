@@ -6,6 +6,8 @@
 @inject NavigationManager Navigation
 @inject LoyaltyCloud.Application.GiftCards.IGiftCardService GiftCards
 @inject LoyaltyCloud.Admin.Services.GiftCardFeatureState GiftCardFeatureState
+@inject LoyaltyCloud.Application.Common.Interfaces.ITenantProgramReadService Programs
+@inject LoyaltyCloud.Admin.Auth.AdminTenantContextInitializer TenantInitializer
 @implements IDisposable
 
 @if (canRender)
@@ -34,15 +36,25 @@
             </div>
 
             <nav class="kb-sidebar-nav" data-admin-menu-nav>
+                @if (isPoints)
+                {
                 <span class="kb-sidebar-section">Principal</span>
                 <NavLink href="/dashboard" Match="NavLinkMatch.All"><NavIcon Name="dashboard" /><span>Dashboard</span></NavLink>
                 <NavLink href="/scan"><NavIcon Name="plus" /><span>Escanear QR</span></NavLink>
                 <NavLink href="/redeem"><NavIcon Name="scan" /><span>Canjear puntos</span></NavLink>
+                }
 
                 <span class="kb-sidebar-section">Programa</span>
+                @if (isPoints)
+                {
                 <NavLink href="/redemptions"><NavIcon Name="history" /><span>Canjes</span></NavLink>
                 <NavLink href="/rewards"><NavIcon Name="gift" /><span>Recompensas</span></NavLink>
                 <NavLink href="/campaigns"><NavIcon Name="spark" /><span>Campañas</span></NavLink>
+                }
+                else
+                {
+                    <NavLink href="/stamps"><NavIcon Name="levels" /><span>Sellos</span></NavLink>
+                }
                 <NavLink href="/marketing-notifications"><NavIcon Name="message" /><span>Mensajes</span></NavLink>
 
                 @if (giftCardsEnabled)
@@ -56,14 +68,20 @@
 
                 <span class="kb-sidebar-section">Reportes</span>
                 <NavLink href="/customers"><NavIcon Name="users" /><span>Clientes</span></NavLink>
-                <NavLink href="/reports/activity-trends"><NavIcon Name="history" /><span>Actividad y tendencias</span></NavLink>
+                @if (isPoints)
+                {
+                    <NavLink href="/reports/activity-trends"><NavIcon Name="history" /><span>Actividad y tendencias</span></NavLink>
+                }
                 @if (giftCardsEnabled)
                 {
                     <NavLink href="/giftcards/reports"><NavIcon Name="gift" /><span>Tarjetas de regalo</span></NavLink>
                 }
 
                 <span class="kb-sidebar-section">Gestión</span>
-                <NavLink href="/levels"><NavIcon Name="levels" /><span>Niveles</span></NavLink>
+                @if (isPoints)
+                {
+                    <NavLink href="/levels"><NavIcon Name="levels" /><span>Niveles</span></NavLink>
+                }
                 <NavLink href="/config"><NavIcon Name="settings" /><span>Diseño y configuración</span></NavLink>
                 <NavLink href="@($"/{TenantContext.TenantSlug}/billing")"><NavIcon Name="card" /><span>Suscripción y pagos</span></NavLink>
                 <NavLink href="/staff"><NavIcon Name="users" /><span>Personal</span></NavLink>
@@ -81,7 +99,15 @@
             </div>
         </aside>
 
-        <main class="kb-main"><div class="kb-content">@Body</div></main>
+        <main class="kb-main"><div class="kb-content">
+            @if (pageAllowed) { @Body }
+            else
+            {
+                <h1>Programa no disponible</h1>
+                <p>Esta página no corresponde al programa de tu negocio.</p>
+                <a class="kb-btn kb-btn--primary" href="@(isPoints ? "/dashboard" : "/stamps")">Volver al programa</a>
+            }
+        </div></main>
     </div>
 }
 
@@ -89,6 +115,8 @@
     private LoyaltyCloud.Application.Common.Interfaces.TenantBrandingInfo? branding;
     private bool canRender;
     private bool giftCardsEnabled;
+    private bool isPoints;
+    private bool pageAllowed;
 
     private string TenantName => branding?.DisplayName ?? "LoyaltyCloud";
     private string TenantInitial => TenantName.Trim()[..1].ToUpperInvariant();
@@ -102,12 +130,23 @@
     {
         canRender = false;
         var principal = (await AuthenticationStateProvider.GetAuthenticationStateAsync()).User;
+        if (principal.Identity?.IsAuthenticated != true)
+        {
+            pageAllowed = true;
+            canRender = true;
+            return;
+        }
         if (await Auth.IsBillingOnlyAsync(principal))
         {
             var tenantSlug = principal.FindFirst(LoyaltyCloud.Admin.Auth.AdminClaimTypes.TenantSlug)?.Value;
             Navigation.NavigateTo($"/{tenantSlug}/billing", forceLoad: true);
             return;
         }
+
+        await TenantInitializer.EnsureTenantContextAsync();
+        var program = await Programs.GetCurrentAsync();
+        isPoints = program == LoyaltyCloud.Domain.Enums.LoyaltyProgramType.Points;
+        pageAllowed = AdminProgramNavigation.IsAllowed(program, Navigation.ToBaseRelativePath(Navigation.Uri));
 
         if (branding is null)
         {

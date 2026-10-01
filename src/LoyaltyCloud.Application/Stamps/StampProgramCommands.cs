@@ -17,20 +17,23 @@ public sealed class SetStampProgramValidator : AbstractValidator<SetStampProgram
 {
     public SetStampProgramValidator()
     {
-        RuleFor(x => x.MaxStamps).InclusiveBetween(2, 12);
-        RuleFor(x => x.WelcomeStamps).GreaterThanOrEqualTo(0).LessThan(x => x.MaxStamps);
-        RuleFor(x => x.ReversalPolicy).IsInEnum();
+        RuleFor(x => x.MaxStamps).InclusiveBetween(2, 12).WithMessage("La tarjeta debe tener entre 2 y 12 sellos.");
+        RuleFor(x => x.WelcomeStamps).GreaterThanOrEqualTo(0).WithMessage("Los sellos de bienvenida no pueden ser negativos.")
+            .LessThan(x => x.MaxStamps).WithMessage("Los sellos de bienvenida deben ser menos que el total de la tarjeta.");
+        RuleFor(x => x.ReversalPolicy).IsInEnum().WithMessage("Selecciona una opción válida de reversión.");
         RuleFor(x => x.Rewards).NotNull().Must((x, rewards) => rewards is not null
             && rewards.Any(r => r.RequiredStamps == x.MaxStamps)
             && rewards.Select(r => r.RequiredStamps).Distinct().Count() == rewards.Count)
-            .WithMessage("Se requiere recompensa final y metas distintas.");
+            .WithMessage("Agrega una recompensa para el último sello de la tarjeta y usa un sello distinto para cada recompensa.");
         RuleForEach(x => x.Rewards).ChildRules(reward =>
         {
-            reward.RuleFor(x => x.RequiredStamps).GreaterThan(0);
-            reward.RuleFor(x => x.Name).NotEmpty().MaximumLength(150);
-            reward.RuleFor(x => x.Description).MaximumLength(1000);
+            reward.RuleFor(x => x.RequiredStamps).GreaterThan(0).WithMessage("El sello de la recompensa debe ser mayor que cero.");
+            reward.RuleFor(x => x.Name).NotEmpty().WithMessage("Escribe el nombre de cada recompensa.")
+                .MaximumLength(150).WithMessage("El nombre debe tener como máximo 150 caracteres.");
+            reward.RuleFor(x => x.Description).MaximumLength(1000).WithMessage("La descripción debe tener como máximo 1000 caracteres.");
         });
-        RuleFor(x => x.Rewards).Must((x, rewards) => rewards is not null && rewards.All(r => r.RequiredStamps <= x.MaxStamps));
+        RuleFor(x => x.Rewards).Must((x, rewards) => rewards is not null && rewards.All(r => r.RequiredStamps <= x.MaxStamps))
+            .WithMessage("Las recompensas no pueden superar el total de sellos de la tarjeta.");
     }
 }
 

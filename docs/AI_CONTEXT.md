@@ -133,6 +133,13 @@ Main technologies:
 - Migration `20261001192907_AddStampOperations` adds earned rewards, operation receipts
   and Stamps ledger sequence/unique indexes. No STG/PROD migration was applied.
 - Stamps Cashier UX, Wallet integration, visual assets and reports are pending.
+  Admin configuration is available at `/stamps` for TenantAdmin only, using existing
+  Application commands. Initial save creates rules; edits create new versions.
+  Equivalent rules/rewards, including reordered rewards, return the current version
+  without writes. Navigation and direct-page rendering are program-aware: Stamps
+  excludes Points operations, levels, campaigns, dashboard and Points-based reports.
+  Customers, Messages, enabled Gift Cards, billing, staff and general branding remain
+  available. `/config` omits Points benefits and its Points preview for Stamps.
   Continue on `feature/stamps-wallet-prototype`; no PR/merge to staging until the
   complete Stamps feature is implemented and validated. Visual decisions live in
   `docs/STAMPS_WALLET_PROTOTYPE.md`.

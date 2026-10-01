@@ -102,7 +102,7 @@ La base activa de produccion/UAT es `LoyaltyCloudFree`.
 
 ## TODO
 
-- Stamps: completar Cashier UX, Wallet, assets y reportes. ProgramType/provisioning, configuracion versionada/ciclo inicial/welcome y motor operativo earn/reversal/rollover/recompensas ganadas/canje con API e idempotencia estan implementados en feature/stamps-wallet-prototype, pendientes de integracion y validacion completa. Sin UI/API de configuracion todavia; Gift Cards sigue independiente.
+- Stamps: completar Cashier UX, Wallet, assets y reportes. ProgramType/provisioning, configuracion versionada/ciclo inicial/welcome y motor operativo earn/reversal/rollover/recompensas ganadas/canje con API e idempotencia estan implementados en feature/stamps-wallet-prototype, pendientes de integracion y validacion completa. UI Admin de configuracion en /stamps y navegacion por tipo implementadas; sin API de configuracion nueva. Guardar reglas equivalentes no crea version. Gift Cards sigue independiente.
 - Terminar pagos recurrentes
 - Dashboard de valor
 - Vista de clientes eliminados

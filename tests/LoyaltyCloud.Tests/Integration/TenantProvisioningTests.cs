@@ -644,6 +644,28 @@ public sealed class TenantProvisioningTests
         });
     }
 
+    [Fact]
+    [Trait("Category", "StampAdmin")]
+    public async Task Saving_equivalent_stamp_rules_in_any_reward_order_does_not_create_a_version()
+    {
+        await using var env = await ProvisioningTestEnvironment.CreateAsync();
+        var tenant = await env.ProvisionAsync("stamp-noop", "Stamps", "owner", AdminPassword, programType: LoyaltyProgramType.Stamps);
+        var first = await env.ConfigureStampsAsync(tenant.Value.TenantId, "stamp-noop");
+        Assert.True(first.IsSuccess, first.Error);
+        var same = await env.ConfigureStampsAsync(tenant.Value.TenantId, "stamp-noop");
+        Assert.Equal(first.Value.Id, same.Value.Id);
+        var reordered = await env.SendAsOperatorAsync(tenant.Value.TenantId, "stamp-noop", new LoyaltyCloud.Application.Stamps.SetStampProgramCommand(
+            10, 2, StampReversalPolicy.AdminOnly, first.Value.Rewards.Reverse().ToList()));
+        Assert.Equal(first.Value.Id, reordered.Value.Id);
+        await env.TenantReadAsync(tenant.Value.TenantId, "stamp-noop", async db =>
+        {
+            Assert.Equal(1, await db.StampProgramVersions.CountAsync()); return true;
+        });
+        var edited = await env.SendAsOperatorAsync(tenant.Value.TenantId, "stamp-noop", new LoyaltyCloud.Application.Stamps.SetStampProgramCommand(
+            10, 2, StampReversalPolicy.AdminOnly, [new(5, "Nueva recompensa"), new(10, "Producto")]));
+        Assert.Equal(2, edited.Value.Version);
+    }
+
     internal sealed class ProvisioningTestEnvironment : IAsyncDisposable
     {
         private readonly ServiceProvider _services;
