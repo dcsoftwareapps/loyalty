@@ -14,6 +14,23 @@ public sealed class StampCycle : Entity, ITenantOwned
     public byte[] RowVersion { get; private set; } = [];
     private StampCycle() { }
 
+    public void Earn(StampProgramVersion program, DateTime nowUtc)
+    {
+        if (program.Id != StampProgramVersionId || program.TenantId != TenantId)
+            throw new ArgumentException("Invalid cycle rules.");
+        if (CompletedAt.HasValue || CurrentStamps >= program.MaxStamps)
+            throw new InvalidOperationException("El ciclo ya esta completo.");
+        CurrentStamps++;
+        if (CurrentStamps == program.MaxStamps) CompletedAt = nowUtc;
+    }
+
+    public void ReverseEarn()
+    {
+        if (CurrentStamps <= 0) throw new InvalidOperationException("No hay sellos para revertir.");
+        CurrentStamps--;
+        CompletedAt = null;
+    }
+
     public StampCycle(Guid id, LoyaltyCard card, StampProgramVersion program, DateTime nowUtc, int sequence = 1) : base(id)
     {
         if (card.TenantId != program.TenantId) throw new ArgumentException("Cross-tenant cycle.");

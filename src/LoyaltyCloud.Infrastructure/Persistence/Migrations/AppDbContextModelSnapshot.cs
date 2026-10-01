@@ -416,6 +416,72 @@ namespace LoyaltyCloud.Infrastructure.Persistence.Migrations
                     b.ToTable("DeviceRegistrations", (string)null);
                 });
 
+            modelBuilder.Entity("LoyaltyCloud.Domain.Entities.EarnedStampReward", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("Description")
+                        .HasMaxLength(1000)
+                        .HasColumnType("nvarchar(1000)");
+
+                    b.Property<DateTime>("EarnedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(150)
+                        .HasColumnType("nvarchar(150)");
+
+                    b.Property<DateTime?>("RedeemedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<Guid?>("RedeemedByUserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<int>("RequiredStamps")
+                        .HasColumnType("int");
+
+                    b.Property<byte[]>("RowVersion")
+                        .IsConcurrencyToken()
+                        .IsRequired()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("rowversion");
+
+                    b.Property<Guid>("SourceEarnTransactionId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("StampCycleId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("StampRewardDefinitionId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .HasColumnType("nvarchar(30)");
+
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime?>("VoidedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<Guid?>("VoidedByUserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("TenantId", "SourceEarnTransactionId", "RequiredStamps")
+                        .IsUnique();
+
+                    b.HasIndex("TenantId", "StampCycleId", "Status");
+
+                    b.ToTable("EarnedStampRewards", (string)null);
+                });
+
             modelBuilder.Entity("LoyaltyCloud.Domain.Entities.GiftCard", b =>
                 {
                     b.Property<Guid>("Id")
@@ -1639,6 +1705,54 @@ namespace LoyaltyCloud.Infrastructure.Persistence.Migrations
                         });
                 });
 
+            modelBuilder.Entity("LoyaltyCloud.Domain.Entities.StampOperationReceipt", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("IdempotencyKey")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)")
+                        .UseCollation("Latin1_General_100_BIN2");
+
+                    b.Property<string>("Operation")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
+
+                    b.Property<Guid>("OperatorUserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("ResponseJson")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<Guid?>("RewardId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("SerialNumber")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
+
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("TenantId", "IdempotencyKey")
+                        .IsUnique();
+
+                    b.HasIndex("TenantId", "SerialNumber");
+
+                    b.ToTable("StampOperationReceipts", (string)null);
+                });
+
             modelBuilder.Entity("LoyaltyCloud.Domain.Entities.StampProgramVersion", b =>
                 {
                     b.Property<Guid>("Id")
@@ -1754,6 +1868,9 @@ namespace LoyaltyCloud.Infrastructure.Persistence.Migrations
                     b.Property<Guid?>("ReversesTransactionId")
                         .HasColumnType("uniqueidentifier");
 
+                    b.Property<long>("Sequence")
+                        .HasColumnType("bigint");
+
                     b.Property<Guid>("StampCycleId")
                         .HasColumnType("uniqueidentifier");
 
@@ -1767,11 +1884,16 @@ namespace LoyaltyCloud.Infrastructure.Persistence.Migrations
 
                     b.HasKey("Id");
 
-                    b.HasIndex("TenantId", "ReversesTransactionId");
+                    b.HasIndex("TenantId", "ReversesTransactionId")
+                        .IsUnique()
+                        .HasFilter("[ReversesTransactionId] IS NOT NULL");
 
                     b.HasIndex("TenantId", "StampCycleId", "IdempotencyKey")
                         .IsUnique()
                         .HasFilter("[IdempotencyKey] IS NOT NULL");
+
+                    b.HasIndex("TenantId", "StampCycleId", "Sequence")
+                        .IsUnique();
 
                     b.ToTable("StampTransactions", null, t =>
                         {
@@ -2219,6 +2341,23 @@ namespace LoyaltyCloud.Infrastructure.Persistence.Migrations
                         .IsRequired();
                 });
 
+            modelBuilder.Entity("LoyaltyCloud.Domain.Entities.EarnedStampReward", b =>
+                {
+                    b.HasOne("LoyaltyCloud.Domain.Entities.StampTransaction", null)
+                        .WithMany()
+                        .HasForeignKey("TenantId", "SourceEarnTransactionId")
+                        .HasPrincipalKey("TenantId", "Id")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("LoyaltyCloud.Domain.Entities.StampCycle", null)
+                        .WithMany()
+                        .HasForeignKey("TenantId", "StampCycleId")
+                        .HasPrincipalKey("TenantId", "Id")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
             modelBuilder.Entity("LoyaltyCloud.Domain.Entities.GiftCard", b =>
                 {
                     b.HasOne("LoyaltyCloud.Domain.Entities.Customer", null)
@@ -2520,6 +2659,16 @@ namespace LoyaltyCloud.Infrastructure.Persistence.Migrations
                         .WithMany()
                         .HasForeignKey("TenantId", "StampProgramVersionId")
                         .HasPrincipalKey("TenantId", "Id")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("LoyaltyCloud.Domain.Entities.StampOperationReceipt", b =>
+                {
+                    b.HasOne("LoyaltyCloud.Domain.Entities.LoyaltyCard", null)
+                        .WithMany()
+                        .HasForeignKey("TenantId", "SerialNumber")
+                        .HasPrincipalKey("TenantId", "SerialNumber")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
                 });

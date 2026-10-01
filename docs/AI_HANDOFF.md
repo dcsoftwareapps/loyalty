@@ -4,7 +4,56 @@ Last updated: 2026-10-01
 
 Branch: `feature/stamps-wallet-prototype`
 
-Last task worked: Stamps domain/version configuration, initial cycle and welcome.
+Last task worked: Stamps operational engine (earn, rewards, redemption, reversal, rollover).
+
+## 2026-10-01 - Stamps operational engine
+
+- Foundation phase was committed before this phase. Continued the same branch from
+  a clean tree; no checkout/new branch, commit/push/merge/PR/deploy.
+- Added EarnedStampReward with economic snapshot and Available/Redeemed/Voided audit.
+  Redemption lives on this entity (specific reward ID, operator and timestamp), not
+  in Points Redemption or Gift Cards and not a separate StampRewardRedemption table.
+- Added StampOperationReceipt for tenant-wide key uniqueness and stored original
+  result. Cycle-scoped ledger uniqueness alone cannot protect a retry after rollover.
+  Fingerprint includes operation, normalized serial, reward ID and authenticated
+  operator; changed fingerprint is a conflict. Operational ledger keys hash the key
+  so they cannot collide with the system Welcome key. Client must persist its key
+  before sending and reuse it after timeouts; future Cashier UI is not implemented.
+- Earn always +1, unlocks threshold snapshots and completes at N/N in one SQL unit.
+  Next earn alone creates the next cycle with active rules, no welcome, then 1/N.
+- Reversal selects latest unreversed Earn in the latest cycle, never Welcome/old cycle;
+  applies that cycle's reversal policy, rejects redeemed source rewards atomically,
+  voids available source rewards and writes -1 referencing the original Earn. Final
+  reversal clears CompletedAt. No physical deletion of ledger/earned rewards.
+- SQL execution strategy + transaction + common tenant UPDLOCK/HOLDLOCK serializes
+  Earn/Reversal/Redemption/configuration across instances. This deliberately coarse
+  tenant lock favors correctness for V1; no in-memory concurrency locks.
+- New API routes use existing bearer/CashierOperations pattern like GiftCardsController:
+  GET /api/stamps/{serialNumber}; POST suffixes /earn, /reverse-last and
+  /rewards/{rewardId}/redeem. No client-supplied quantity/user/tenant is accepted.
+  Current operator is rechecked against tenant-owned active staff. Points rejected.
+- Migration `20261001192907_AddStampOperations` creates two Stamps tables and ledger
+  sequence/unique reversal indexes. Only disposable SQL LocalDB test DBs migrated;
+  no STG/PROD database changes.
+- No Admin/Cashier UI, scanner, assets, productive Wallet, reports or notifications.
+  Next phase is Cashier Stamps UX consuming these operations with persistent retry keys.
+
+Validation for this phase:
+
+- Final combined run: 184/184 passed. Categories: StampOperations, StampFoundation,
+  TenantProgramType, TenantProvisioning, RegisterCustomerHandlerTests,
+  AdminCustomerPoints, AdminRedemptionFlow, MonetaryRedemption,
+  WalletProductionUpdate, GiftCards and CashierAuth.
+- Operational concurrency/rollover/redemption/reversal/receipt tests use real SQL
+  Server LocalDB disposable databases. HTTP authentication and unknown-field tests
+  use the existing TestServer fixture; they do not substitute for SQL transaction tests.
+- One intermediate run exhausted the fixture's shared login rate limiter after an
+  extra login. New HTTP test now uses the real token service plus bearer validation
+  without consuming a login; product authentication/rate-limit configuration unchanged.
+- Release API/Admin builds: zero warnings/errors; no MAUI build.
+- EF pending check: no changes since last migration. Git diff check passed with
+  normal CRLF normalization warnings. No STG/PROD migration or deployment.
+
 
 ## 2026-10-01 - Stamps domain foundation
 
@@ -30,7 +79,7 @@ Last task worked: Stamps domain/version configuration, initial cycle and welcome
   automatic next cycle, visual assets, Wallet integration or Cashier Stamps implemented.
 - Migration: `20261001180152_AddStampProgramFoundation`. Only new Stamps structures;
   migration execution is limited to disposable SQL LocalDB tests, not STG/PROD.
-- Next phase: implement earn/cycle transition under the approved rules. Completed
+- Next phase at foundation completion was earn/cycle transition (now implemented above). Completed
   cycles must stay N/N until the next earn creates a cycle with current rules.
 - No commit/push/merge/PR/deploy. This phase remains in the working tree.
 

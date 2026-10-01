@@ -106,7 +106,33 @@ Main technologies:
 - Migration `20261001180152_AddStampProgramFoundation` creates only four Stamps tables.
   It has not been applied to STG/PROD. Completed cycles will remain full; next-cycle
   creation belongs to the future earn implementation, not registration/configuration.
-- Stamps earn/reversal, earned rewards/redemption, Cashier, Wallet integration and reports are pending.
+- Stamps operational engine is implemented on this branch: exactly +1 Earn, threshold
+  reward snapshots, final completion, next-Earn rollover using active rules without
+  welcome, audited redemption without consuming stamps and last-effective-Earn reversal.
+  Reversal uses the current cycle's original policy; available rewards become Voided,
+  any redeemed reward blocks the entire reversal. Older cycles cannot be reopened
+  once another cycle exists, even after undoing all earns in that newer cycle.
+- `EarnedStampReward` stores Available/Redeemed/Voided and redemption/void audit.
+  Definition ID is provenance without a deletion-blocking FK; immutable snapshots
+  survive definition removal. Available rewards are returned individually with IDs,
+  including rewards accumulated across cycles, for later UI grouping.
+- `StampOperationReceipt` has a tenant-wide, case-sensitive unique idempotency key,
+  operation/serial/reward/operator fingerprint and original response JSON. Same-key
+  retry replays the committed result; incompatible use returns conflict. Operational
+  ledger keys are SHA256 of the client key, separate from system Welcome's key.
+- SQL tenant UPDLOCK/HOLDLOCK inside the execution strategy serializes operational
+  writes and configuration across instances. Progress/ledger/reward/receipt commit
+  together; RowVersion, unique ledger sequence and unique reversed transaction add
+  DB protection. No Wallet, notifications or external side effects are executed.
+- API uses existing cashier bearer scheme and CashierOperations policy (Admin/Cashier),
+  revalidates an active same-tenant operator and rejects Points. Routes: GET
+  `/api/stamps/{serialNumber}`, POST `/api/stamps/{serialNumber}/earn`, POST
+  `/api/stamps/{serialNumber}/reverse-last`, POST
+  `/api/stamps/{serialNumber}/rewards/{rewardId}/redeem`. Write body contains only
+  `idempotencyKey`; unknown fields such as quantity/operator are rejected.
+- Migration `20261001192907_AddStampOperations` adds earned rewards, operation receipts
+  and Stamps ledger sequence/unique indexes. No STG/PROD migration was applied.
+- Stamps Cashier UX, Wallet integration, visual assets and reports are pending.
   Continue on `feature/stamps-wallet-prototype`; no PR/merge to staging until the
   complete Stamps feature is implemented and validated. Visual decisions live in
   `docs/STAMPS_WALLET_PROTOTYPE.md`.

@@ -26,6 +26,8 @@ public class AppDbContext : DbContext, IUnitOfWork
     public DbSet<StampRewardDefinition> StampRewardDefinitions => Set<StampRewardDefinition>();
     public DbSet<StampCycle> StampCycles => Set<StampCycle>();
     public DbSet<StampTransaction> StampTransactions => Set<StampTransaction>();
+    public DbSet<EarnedStampReward> EarnedStampRewards => Set<EarnedStampReward>();
+    public DbSet<StampOperationReceipt> StampOperationReceipts => Set<StampOperationReceipt>();
     public DbSet<LoyaltyCard> LoyaltyCards => Set<LoyaltyCard>();
     public DbSet<PointTransaction> PointTransactions => Set<PointTransaction>();
     public DbSet<PointLot> PointLots => Set<PointLot>();
@@ -227,6 +229,8 @@ public class AppDbContext : DbContext, IUnitOfWork
         ApplyTenantQueryFilter<StampRewardDefinition>(modelBuilder);
         ApplyTenantQueryFilter<StampCycle>(modelBuilder);
         ApplyTenantQueryFilter<StampTransaction>(modelBuilder);
+        ApplyTenantQueryFilter<EarnedStampReward>(modelBuilder);
+        ApplyTenantQueryFilter<StampOperationReceipt>(modelBuilder);
         ApplyTenantQueryFilter<Customer>(modelBuilder);
         ApplyTenantQueryFilter<LoyaltyCard>(modelBuilder);
         ApplyTenantQueryFilter<RewardCatalogItem>(modelBuilder);

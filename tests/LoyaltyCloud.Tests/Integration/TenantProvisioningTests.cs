@@ -644,7 +644,7 @@ public sealed class TenantProvisioningTests
         });
     }
 
-    private sealed class ProvisioningTestEnvironment : IAsyncDisposable
+    internal sealed class ProvisioningTestEnvironment : IAsyncDisposable
     {
         private readonly ServiceProvider _services;
 
@@ -733,7 +733,8 @@ public sealed class TenantProvisioningTests
             return await scope.ServiceProvider.GetRequiredService<ISender>().Send(command);
         }
 
-        public async Task<Result<LoyaltyCloud.Application.Stamps.StampProgramDto>> ConfigureStampsAsync(Guid tenantId, string slug, int welcome = 2)
+        public async Task<Result<LoyaltyCloud.Application.Stamps.StampProgramDto>> ConfigureStampsAsync(Guid tenantId, string slug, int welcome = 2,
+            int max = 10, StampReversalPolicy policy = StampReversalPolicy.AdminOnly)
         {
             using var scope = _services.CreateScope();
             scope.ServiceProvider.GetRequiredService<IMutableTenantContext>().SetTenant(tenantId, slug);
@@ -743,7 +744,19 @@ public sealed class TenantProvisioningTests
             context.User = new ClaimsPrincipal(new ClaimsIdentity([new Claim(ClaimTypes.NameIdentifier, adminId.ToString())], "Test"));
             scope.ServiceProvider.GetRequiredService<IHttpContextAccessor>().HttpContext = context;
             return await scope.ServiceProvider.GetRequiredService<ISender>().Send(new LoyaltyCloud.Application.Stamps.SetStampProgramCommand(
-                10, welcome, StampReversalPolicy.AdminOnly, [new(5, "Mascarilla"), new(10, "Producto")]));
+                max, welcome, policy, [new(max / 2, "Mascarilla"), new(max, "Producto")]));
+        }
+
+        public async Task<T> SendAsOperatorAsync<T>(Guid tenantId, string slug, IRequest<T> command)
+        {
+            using var scope = _services.CreateScope();
+            scope.ServiceProvider.GetRequiredService<IMutableTenantContext>().SetTenant(tenantId, slug);
+            var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+            var userId = await db.TenantAdminUsers.Select(x => x.Id).SingleAsync();
+            var context = CreateHttpContext(scope.ServiceProvider);
+            context.User = new ClaimsPrincipal(new ClaimsIdentity([new Claim(ClaimTypes.NameIdentifier, userId.ToString())], "Test"));
+            scope.ServiceProvider.GetRequiredService<IHttpContextAccessor>().HttpContext = context;
+            return await scope.ServiceProvider.GetRequiredService<ISender>().Send(command);
         }
 
         public async Task<object?> SendObjectAsync(Guid tenantId, string slug, object command)

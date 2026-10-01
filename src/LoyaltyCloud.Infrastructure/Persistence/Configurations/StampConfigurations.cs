@@ -69,6 +69,8 @@ internal sealed class StampTransactionConfiguration : IEntityTypeConfiguration<S
         b.HasAlternateKey(x => new { x.TenantId, x.Id });
         b.Property(x => x.Type).HasConversion<string>().HasMaxLength(30);
         b.Property(x => x.IdempotencyKey).HasMaxLength(100);
+        b.HasIndex(x => new { x.TenantId, x.StampCycleId, x.Sequence }).IsUnique();
+        b.HasIndex(x => new { x.TenantId, x.ReversesTransactionId }).IsUnique().HasFilter("[ReversesTransactionId] IS NOT NULL");
         b.HasIndex(x => new { x.TenantId, x.StampCycleId, x.IdempotencyKey }).IsUnique().HasFilter("[IdempotencyKey] IS NOT NULL");
         b.HasOne<StampCycle>().WithMany().HasForeignKey(x => new { x.TenantId, x.StampCycleId })
             .HasPrincipalKey(x => new { x.TenantId, x.Id }).OnDelete(DeleteBehavior.Restrict);
