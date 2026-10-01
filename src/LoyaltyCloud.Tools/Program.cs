@@ -11,6 +11,14 @@ using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 
 var command = args.FirstOrDefault();
+if (string.Equals(command, "stamps-wallet-prototype", StringComparison.OrdinalIgnoreCase))
+{
+    var prototypeArgs = ParseArgs(args.Skip(1));
+    StampWalletPrototype.Generate(prototypeArgs.GetValueOrDefault("output")
+        ?? Path.Combine(FindRepositoryRoot(), "artifacts", "stamps-wallet-prototype"));
+    return 0;
+}
+
 if (string.Equals(command, "hash-password", StringComparison.OrdinalIgnoreCase))
 {
     var passwordToHash = Environment.GetEnvironmentVariable("LOYALTYCLOUD_PASSWORD");
@@ -195,6 +203,8 @@ static void PrintUsage()
 {
     Console.WriteLine("""
     Uso:
+      dotnet run --project src/LoyaltyCloud.Tools -- stamps-wallet-prototype
+
       set LOYALTYCLOUD_PROVISION_ADMIN_PASSWORD=<password>
       dotnet run --project src/LoyaltyCloud.Tools -- provision-tenant --slug beauty-room --display-name "Beauty Room" --admin-username owner
 
