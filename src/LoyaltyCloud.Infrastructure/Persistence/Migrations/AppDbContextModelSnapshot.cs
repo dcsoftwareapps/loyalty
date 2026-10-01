@@ -1674,6 +1674,13 @@ namespace LoyaltyCloud.Infrastructure.Persistence.Migrations
                     b.Property<bool>("IsActive")
                         .HasColumnType("bit");
 
+                    b.Property<string>("ProgramType")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(30)
+                        .HasColumnType("nvarchar(30)")
+                        .HasDefaultValue("Points");
+
                     b.Property<string>("Slug")
                         .IsRequired()
                         .HasMaxLength(100)

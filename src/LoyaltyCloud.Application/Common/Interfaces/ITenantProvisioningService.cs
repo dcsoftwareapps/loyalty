@@ -1,5 +1,6 @@
 using LoyaltyCloud.Common.Results;
 using LoyaltyCloud.Application.Provisioning;
+using LoyaltyCloud.Domain.Enums;
 
 namespace LoyaltyCloud.Application.Common.Interfaces;
 
@@ -21,4 +22,5 @@ public sealed record ProvisionTenantRequest(
     string? SupportPhone,
     string? WhatsAppUrl,
     string? InstagramUrl,
-    string? TermsUrl);
+    string? TermsUrl,
+    LoyaltyProgramType ProgramType = LoyaltyProgramType.Points);

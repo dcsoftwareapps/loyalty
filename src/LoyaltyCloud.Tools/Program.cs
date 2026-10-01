@@ -4,6 +4,7 @@ using LoyaltyCloud.Infrastructure;
 using LoyaltyCloud.Infrastructure.KeyVault;
 using LoyaltyCloud.Infrastructure.Services;
 using LoyaltyCloud.Tools;
+using LoyaltyCloud.Domain.Enums;
 using MediatR;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -159,6 +160,14 @@ static bool IsKnownServiceCommand(string? command) =>
 
 static async Task<int> ProvisionTenantAsync(IServiceProvider services, Dictionary<string, string?> values)
 {
+    var programType = LoyaltyProgramType.Points;
+    if (values.TryGetValue("program-type", out var programTypeValue)
+        && (!Enum.TryParse(programTypeValue, ignoreCase: true, out programType) || !Enum.IsDefined(programType)))
+    {
+        Console.Error.WriteLine("--program-type debe ser Points o Stamps.");
+        return 2;
+    }
+
     var password = Environment.GetEnvironmentVariable("LOYALTYCLOUD_PROVISION_ADMIN_PASSWORD");
     if (string.IsNullOrWhiteSpace(password))
     {
@@ -178,7 +187,8 @@ static async Task<int> ProvisionTenantAsync(IServiceProvider services, Dictionar
         SupportPhone: values.GetValueOrDefault("support-phone"),
         WhatsAppUrl: values.GetValueOrDefault("whatsapp-url"),
         InstagramUrl: values.GetValueOrDefault("instagram-url"),
-        TermsUrl: values.GetValueOrDefault("terms-url")));
+        TermsUrl: values.GetValueOrDefault("terms-url"),
+        ProgramType: programType));
 
     if (result.IsFailure)
     {
@@ -207,6 +217,7 @@ static void PrintUsage()
 
       set LOYALTYCLOUD_PROVISION_ADMIN_PASSWORD=<password>
       dotnet run --project src/LoyaltyCloud.Tools -- provision-tenant --slug beauty-room --display-name "Beauty Room" --admin-username owner
+      Optional: --program-type Points|Stamps (default: Points)
 
       set LOYALTYCLOUD_ADMIN_PASSWORD=<new-password>
       dotnet run --project src/LoyaltyCloud.Tools -- reset-tenant-admin-password --tenant-slug kbeauty --admin-username owner

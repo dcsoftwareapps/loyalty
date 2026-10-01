@@ -2,6 +2,7 @@ using LoyaltyCloud.Application.Common.Interfaces;
 using LoyaltyCloud.Application.Customers.Commands.RegisterCustomer;
 using LoyaltyCloud.Common.Services;
 using LoyaltyCloud.Domain.Entities;
+using LoyaltyCloud.Domain.Enums;
 using LoyaltyCloud.Domain.Repositories;
 using Microsoft.Extensions.Logging.Abstractions;
 using Moq;
@@ -36,6 +37,8 @@ public class RegisterCustomerHandlerTests
 
         var currentUser = new Mock<ICurrentUserService>();
         currentUser.Setup(c => c.UserName).Returns("admin");
+        var programs = new Mock<ITenantProgramReadService>();
+        programs.Setup(p => p.GetCurrentAsync(It.IsAny<CancellationToken>())).ReturnsAsync(LoyaltyProgramType.Points);
 
         return new RegisterCustomerHandler(
             customers.Object,
@@ -51,7 +54,8 @@ public class RegisterCustomerHandlerTests
             Clock().Object,
             currentUser.Object,
             (uow ?? NoOpUnitOfWork()).Object,
-            NullLogger<RegisterCustomerHandler>.Instance);
+            NullLogger<RegisterCustomerHandler>.Instance,
+            programs.Object);
     }
 
     // =========================================================================

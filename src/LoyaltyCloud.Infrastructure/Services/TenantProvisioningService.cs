@@ -45,6 +45,9 @@ internal sealed class TenantProvisioningService : ITenantProvisioningService
         if (_tenantContext.HasTenant)
             return Result.Fail<ProvisionTenantResult>("Provisioning debe ejecutarse sin TenantContext previo.");
 
+        if (!Enum.IsDefined(request.ProgramType))
+            return Result.Fail<ProvisionTenantResult>("Tipo de programa no valido.");
+
         string slug;
         try
         {
@@ -82,7 +85,8 @@ internal sealed class TenantProvisioningService : ITenantProvisioningService
                     slug,
                     request.DisplayName,
                     request.TimeZoneId,
-                    now);
+                    now,
+                    programType: request.ProgramType);
                 var branding = new TenantBranding(
                     tenantId,
                     primaryColor: TenantBrandingSanitizer.ColorOrDefault(
@@ -141,7 +145,9 @@ internal sealed class TenantProvisioningService : ITenantProvisioningService
                     passwordHash,
                     now));
 
-                foreach (var row in TenantProvisioningDefaults.ProgramConfigRows)
+                foreach (var row in request.ProgramType == LoyaltyProgramType.Points
+                    ? TenantProvisioningDefaults.ProgramConfigRows
+                    : [])
                 {
                     _db.ProgramConfigs.Add(new ProgramConfig(
                         Guid.NewGuid(),
@@ -153,7 +159,9 @@ internal sealed class TenantProvisioningService : ITenantProvisioningService
                         TenantProvisioningDefaults.UpdatedBy));
                 }
 
-                foreach (var level in TenantProvisioningDefaults.LoyaltyLevels)
+                foreach (var level in request.ProgramType == LoyaltyProgramType.Points
+                    ? TenantProvisioningDefaults.LoyaltyLevels
+                    : [])
                 {
                     _db.TenantLoyaltyLevels.Add(new TenantLoyaltyLevel(
                         Guid.NewGuid(),

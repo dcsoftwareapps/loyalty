@@ -30,7 +30,8 @@ public sealed class ProvisionTenantHandler
             SupportPhone: command.SupportPhone,
             WhatsAppUrl: command.WhatsAppUrl,
             InstagramUrl: command.InstagramUrl,
-            TermsUrl: command.TermsUrl);
+            TermsUrl: command.TermsUrl,
+            ProgramType: command.ProgramType);
 
         return await _provisioning.ProvisionAsync(request, ct);
     }

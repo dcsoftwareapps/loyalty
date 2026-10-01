@@ -37,6 +37,7 @@ public sealed class RegisterCustomerHandler
     private readonly ILevelCalculationService _levels;
     private readonly ITenantLoyaltyLevelReadService _tenantLevels;
     private readonly ITenantContext _tenantContext;
+    private readonly ITenantProgramReadService _programs;
     private readonly IDateTimeProvider _dt;
     private readonly ICurrentUserService _currentUser;
     private readonly IUnitOfWork _uow;
@@ -56,7 +57,8 @@ public sealed class RegisterCustomerHandler
         IDateTimeProvider dt,
         ICurrentUserService currentUser,
         IUnitOfWork uow,
-        ILogger<RegisterCustomerHandler> logger)
+        ILogger<RegisterCustomerHandler> logger,
+        ITenantProgramReadService programs)
     {
         _customers = customers;
         _cards = cards;
@@ -72,6 +74,7 @@ public sealed class RegisterCustomerHandler
         _currentUser = currentUser;
         _uow = uow;
         _logger = logger;
+        _programs = programs;
     }
 
     /// <inheritdoc />
@@ -81,6 +84,7 @@ public sealed class RegisterCustomerHandler
     {
         // 1. Email único
         var tenantId = _tenantContext.RequireTenantId();
+        var isPoints = await _programs.GetCurrentAsync(ct) == LoyaltyProgramType.Points;
         var normalizedPhone = string.IsNullOrWhiteSpace(command.Phone)
             ? null
             : CustomerPhoneNormalizer.Normalize(command.Phone);
@@ -139,10 +143,10 @@ public sealed class RegisterCustomerHandler
         await _cards.AddAsync(card, ct);
 
         // 4. Snapshot de config y bono de bienvenida
-        var snapshot = ProgramConfigSnapshot.FromEntries(await _config.GetAllAsync(ct));
-        var tenantLevels = await _tenantLevels.GetActiveLevelsAsync(ct);
+        var snapshot = isPoints ? ProgramConfigSnapshot.FromEntries(await _config.GetAllAsync(ct)) : null;
+        var tenantLevels = isPoints ? await _tenantLevels.GetActiveLevelsAsync(ct) : [];
 
-        if (snapshot.WelcomeBonusPoints > 0)
+        if (snapshot is not null && snapshot.WelcomeBonusPoints > 0)
         {
             card.EarnPoints(snapshot.WelcomeBonusPoints, TransactionType.BonusWelcome, snapshot, _dt);
             var transactionId = Guid.NewGuid();
@@ -171,7 +175,7 @@ public sealed class RegisterCustomerHandler
         }
 
         // 5. Bono al referidor
-        if (referrerCard is not null && snapshot.ReferralBonusPoints > 0)
+        if (referrerCard is not null && snapshot is not null && snapshot.ReferralBonusPoints > 0)
         {
             referrerCard.EarnPoints(snapshot.ReferralBonusPoints, TransactionType.BonusReferral, snapshot, _dt);
             _cards.Update(referrerCard);
@@ -219,6 +223,11 @@ public sealed class RegisterCustomerHandler
         // 7. Generar y subir pase. Si falla, el cliente ya está creado — log y
         //    devolvemos URL vacía; podrá descargarlo después desde /api/customers/{serial}.
         string passUrl;
+        if (!isPoints)
+        {
+            // Stamps Wallet presentation will be implemented in a later phase.
+            return Result.Ok(new RegisterCustomerResponse(serial, string.Empty, card.CurrentPoints, card.Level));
+        }
         try
         {
             var passBytes = await _passes.GeneratePassAsync(card, customer, ct);

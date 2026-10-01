@@ -1,10 +1,46 @@
 # LoyaltyCloud - AI Handoff
 
-Last updated: 2026-09-08
+Last updated: 2026-10-01
 
-Branch: `feature/cashier-mobile-points`
+Branch: `feature/stamps-wallet-prototype`
 
-Last task worked: Cashier mobile app Phase 4B customer lookup and points.
+Last task worked: Stamps foundation - ProgramType and provisioning.
+
+## 2026-10-01 - ProgramType and provisioning
+
+- Wallet prototype was completed and committed before this phase. Keep all Stamps
+  phases on this branch; do not PR/merge into staging until the complete feature is validated.
+- Added immutable `Tenant.ProgramType` (Points/Stamps), default Points; Platform
+  provisioning offers Puntos/Sellos and Tools accepts `--program-type`.
+- EF string conversion follows the tenant Role convention. Migration
+  `20261001134125_AddTenantProgramType` only adds the required Tenants column with
+  default Points; existing rows are backfilled. No STG/PROD database update.
+- Points provisioning remains unchanged. Stamps gets tenant/admin/branding/trial
+  subscription, without point config/levels. Registration creates Customer and
+  LoyaltyCard identity without point bonuses or a Points Wallet pass.
+- MediatR Points writes are guarded; direct level management has its own guard.
+  Auth, lookup, QR identity, branding and Gift Cards remain independent.
+- Regression coverage includes SQL LocalDB migration backfill, provisioning both
+  types, login/registration, immutability including EF update rejection, Points
+  writes rejected for Stamps, Points earn/catalog/monetary redemption retained,
+  and Gift Card issuance/redemption for both types.
+- Stamps business entities, rules, cycles, rewards, earn/reversal, Cashier and
+  Apple/Google Wallet production integration are not implemented in this phase.
+- Next phase should implement the approved Stamps rules/version model. This phase
+  is uncommitted and no push/merge/deploy was performed.
+
+Validation completed:
+
+- Final focused run: `Category=TenantProgramType|Category=TenantProvisioning|FullyQualifiedName~RegisterCustomerHandlerTests`, 35/35 passed.
+- Regression run including WalletProductionUpdate, AdminRedemptionFlow,
+  MonetaryRedemption and MTLevel6: 114/114 passed before the final additional
+  cross-program tenant-isolation test; that test passed in the final focused run.
+- Release builds of API and Admin: 0 warnings, 0 errors. Test compilation also
+  covers Tools and the affected non-MAUI dependencies.
+- EF `has-pending-model-changes`: no changes since the last migration.
+- Backfill/migration tests run only against disposable SQL LocalDB test databases.
+  No Azure database migration, database update or deploy was executed.
+- `git diff --check` passed (Git reports normal LF/CRLF normalization warnings).
 
 ## 2026-09-08 - Cashier mobile app Phase 4B customer + points
 

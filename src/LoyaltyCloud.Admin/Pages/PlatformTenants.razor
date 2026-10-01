@@ -56,6 +56,13 @@
                 <label for="tenant-timezone">Zona horaria</label>
                 <input id="tenant-timezone" type="text" @bind="form.TimeZoneId" />
             </div>
+            <div style="flex:1;min-width:220px;">
+                <label for="tenant-program-type">Tipo de programa</label>
+                <select id="tenant-program-type" @bind="form.ProgramType">
+                    <option value="@LoyaltyProgramType.Points">Puntos</option>
+                    <option value="@LoyaltyProgramType.Stamps">Sellos</option>
+                </select>
+            </div>
         </div>
 
         <div class="kb-form-row kb-form-row--horizontal">
@@ -269,7 +276,8 @@ else
                 form.SupportPhone,
                 form.WhatsAppUrl,
                 form.InstagramUrl,
-                form.TermsUrl));
+                form.TermsUrl,
+                form.ProgramType));
 
             if (result.IsFailure)
             {
@@ -404,6 +412,7 @@ else
         public string Slug { get; set; } = string.Empty;
         public string DisplayName { get; set; } = string.Empty;
         public string TimeZoneId { get; set; } = "America/Tijuana";
+        public LoyaltyProgramType ProgramType { get; set; } = LoyaltyProgramType.Points;
         public string AdminUsername { get; set; } = string.Empty;
         public string AdminPassword { get; set; } = string.Empty;
         public string? PrimaryColor { get; set; }
@@ -418,6 +427,7 @@ else
             Slug = string.Empty;
             DisplayName = string.Empty;
             TimeZoneId = "America/Tijuana";
+            ProgramType = LoyaltyProgramType.Points;
             AdminUsername = string.Empty;
             AdminPassword = string.Empty;
             PrimaryColor = null;

@@ -102,6 +102,7 @@ La base activa de produccion/UAT es `LoyaltyCloudFree`.
 
 ## TODO
 
+- Stamps: completar motor, ciclos, recompensas, Cashier, Wallet y reportes. La base ProgramType/provisioning esta implementada en feature/stamps-wallet-prototype, pendiente de integracion y validacion completa; Gift Cards sigue independiente.
 - Terminar pagos recurrentes
 - Dashboard de valor
 - Vista de clientes eliminados

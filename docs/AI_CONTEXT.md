@@ -1,6 +1,6 @@
 # LoyaltyCloud - AI Context
 
-Last updated: 2026-09-08
+Last updated: 2026-10-01
 
 Purpose: permanent technical context for continuing LoyaltyCloud with ChatGPT/Codex without losing important repository, infrastructure and product memory between chats.
 
@@ -67,6 +67,27 @@ Main technologies:
 - PowerShell/Azure CLI infra scripts.
 
 ## Domain Model
+
+### Loyalty program type (Stamps foundation, not yet released)
+
+- `Tenant.ProgramType` uses `LoyaltyProgramType.Points` or `Stamps` and is selected
+  at provisioning. Existing callers default to Points; Platform Admin explicitly
+  offers Puntos/Sellos. Tools supports optional `--program-type Points|Stamps`.
+- ProgramType is immutable: constructor-only selection, private setter, no change
+  command/API, and EF rejects updates after insert. It is not a ProgramConfig key.
+- Migration `20261001134125_AddTenantProgramType` adds only `Tenants.ProgramType`
+  (`nvarchar(30)`, required, default `Points`), backfilling existing tenants as Points.
+  It has not been applied to STG/PROD during this phase.
+- Stamps provisioning creates identity/auth/branding/subscription but no Points
+  ProgramConfig or levels. Customer registration preserves Customer/LoyaltyCard,
+  serial and auth token, with no welcome/referral points and no generated Points pass.
+- `PointsProgramBehavior` rejects Points write commands through MediatR using the
+  authenticated tenant context and persisted program type. Direct level management
+  also rejects Stamps. Gift Cards remain independent and usable for both types.
+- Stamps engine, cycles, rewards, Cashier, Wallet integration and reports are pending.
+  Continue on `feature/stamps-wallet-prototype`; no PR/merge to staging until the
+  complete Stamps feature is implemented and validated. Visual decisions live in
+  `docs/STAMPS_WALLET_PROTOTYPE.md`.
 
 Main entities:
 
