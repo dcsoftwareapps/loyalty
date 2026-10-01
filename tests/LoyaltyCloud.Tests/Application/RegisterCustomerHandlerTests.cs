@@ -55,7 +55,8 @@ public class RegisterCustomerHandlerTests
             currentUser.Object,
             (uow ?? NoOpUnitOfWork()).Object,
             NullLogger<RegisterCustomerHandler>.Instance,
-            programs.Object);
+            programs.Object,
+            new Mock<IStampProgramService>().Object);
     }
 
     // =========================================================================

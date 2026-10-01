@@ -1587,6 +1587,198 @@ namespace LoyaltyCloud.Infrastructure.Persistence.Migrations
                     b.ToTable("RewardCatalogItems", (string)null);
                 });
 
+            modelBuilder.Entity("LoyaltyCloud.Domain.Entities.StampCycle", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime?>("CompletedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int>("CurrentStamps")
+                        .HasColumnType("int");
+
+                    b.Property<string>("LoyaltyCardSerialNumber")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
+
+                    b.Property<byte[]>("RowVersion")
+                        .IsConcurrencyToken()
+                        .IsRequired()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("rowversion");
+
+                    b.Property<int>("Sequence")
+                        .HasColumnType("int");
+
+                    b.Property<Guid>("StampProgramVersionId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime>("StartedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("TenantId", "LoyaltyCardSerialNumber")
+                        .IsUnique()
+                        .HasFilter("[CompletedAt] IS NULL");
+
+                    b.HasIndex("TenantId", "StampProgramVersionId");
+
+                    b.HasIndex("TenantId", "LoyaltyCardSerialNumber", "Sequence")
+                        .IsUnique();
+
+                    b.ToTable("StampCycles", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_StampCycle_Progress", "[Sequence] > 0 AND [CurrentStamps] >= 0");
+                        });
+                });
+
+            modelBuilder.Entity("LoyaltyCloud.Domain.Entities.StampProgramVersion", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<Guid>("CreatedByUserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("bit");
+
+                    b.Property<int>("MaxStamps")
+                        .HasColumnType("int");
+
+                    b.Property<string>("ReversalPolicy")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .HasColumnType("nvarchar(30)");
+
+                    b.Property<byte[]>("RowVersion")
+                        .IsConcurrencyToken()
+                        .IsRequired()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("rowversion");
+
+                    b.Property<DateTime?>("SupersededAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<int>("Version")
+                        .HasColumnType("int");
+
+                    b.Property<int>("WelcomeStamps")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CreatedByUserId");
+
+                    b.HasIndex("TenantId")
+                        .IsUnique()
+                        .HasFilter("[IsActive] = 1");
+
+                    b.HasIndex("TenantId", "Version")
+                        .IsUnique();
+
+                    b.ToTable("StampProgramVersions", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_StampProgramVersion_Rules", "[Version] > 0 AND [MaxStamps] > 0 AND [WelcomeStamps] >= 0 AND [WelcomeStamps] < [MaxStamps]");
+                        });
+                });
+
+            modelBuilder.Entity("LoyaltyCloud.Domain.Entities.StampRewardDefinition", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("Description")
+                        .HasMaxLength(1000)
+                        .HasColumnType("nvarchar(1000)");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(150)
+                        .HasColumnType("nvarchar(150)");
+
+                    b.Property<int>("RequiredStamps")
+                        .HasColumnType("int");
+
+                    b.Property<Guid>("StampProgramVersionId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("TenantId", "StampProgramVersionId", "RequiredStamps")
+                        .IsUnique();
+
+                    b.ToTable("StampRewardDefinitions", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_StampRewardDefinition_Threshold", "[RequiredStamps] > 0");
+                        });
+                });
+
+            modelBuilder.Entity("LoyaltyCloud.Domain.Entities.StampTransaction", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int>("Delta")
+                        .HasColumnType("int");
+
+                    b.Property<string>("IdempotencyKey")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<Guid?>("OperatorUserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid?>("ReversesTransactionId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("StampCycleId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("Type")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .HasColumnType("nvarchar(30)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("TenantId", "ReversesTransactionId");
+
+                    b.HasIndex("TenantId", "StampCycleId", "IdempotencyKey")
+                        .IsUnique()
+                        .HasFilter("[IdempotencyKey] IS NOT NULL");
+
+                    b.ToTable("StampTransactions", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_StampTransaction_Delta", "[Delta] <> 0");
+                        });
+                });
+
             modelBuilder.Entity("LoyaltyCloud.Domain.Entities.SubscriptionPlan", b =>
                 {
                     b.Property<Guid>("Id")
@@ -2311,6 +2503,64 @@ namespace LoyaltyCloud.Infrastructure.Persistence.Migrations
                     b.HasOne("LoyaltyCloud.Domain.Entities.Tenant", null)
                         .WithMany()
                         .HasForeignKey("TenantId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("LoyaltyCloud.Domain.Entities.StampCycle", b =>
+                {
+                    b.HasOne("LoyaltyCloud.Domain.Entities.LoyaltyCard", null)
+                        .WithMany()
+                        .HasForeignKey("TenantId", "LoyaltyCardSerialNumber")
+                        .HasPrincipalKey("TenantId", "SerialNumber")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("LoyaltyCloud.Domain.Entities.StampProgramVersion", null)
+                        .WithMany()
+                        .HasForeignKey("TenantId", "StampProgramVersionId")
+                        .HasPrincipalKey("TenantId", "Id")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("LoyaltyCloud.Domain.Entities.StampProgramVersion", b =>
+                {
+                    b.HasOne("LoyaltyCloud.Domain.Entities.TenantAdminUser", null)
+                        .WithMany()
+                        .HasForeignKey("CreatedByUserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("LoyaltyCloud.Domain.Entities.Tenant", null)
+                        .WithMany()
+                        .HasForeignKey("TenantId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("LoyaltyCloud.Domain.Entities.StampRewardDefinition", b =>
+                {
+                    b.HasOne("LoyaltyCloud.Domain.Entities.StampProgramVersion", null)
+                        .WithMany()
+                        .HasForeignKey("TenantId", "StampProgramVersionId")
+                        .HasPrincipalKey("TenantId", "Id")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("LoyaltyCloud.Domain.Entities.StampTransaction", b =>
+                {
+                    b.HasOne("LoyaltyCloud.Domain.Entities.StampTransaction", null)
+                        .WithMany()
+                        .HasForeignKey("TenantId", "ReversesTransactionId")
+                        .HasPrincipalKey("TenantId", "Id")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("LoyaltyCloud.Domain.Entities.StampCycle", null)
+                        .WithMany()
+                        .HasForeignKey("TenantId", "StampCycleId")
+                        .HasPrincipalKey("TenantId", "Id")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
                 });

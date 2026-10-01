@@ -38,6 +38,7 @@ public sealed class RegisterCustomerHandler
     private readonly ITenantLoyaltyLevelReadService _tenantLevels;
     private readonly ITenantContext _tenantContext;
     private readonly ITenantProgramReadService _programs;
+    private readonly IStampProgramService _stamps;
     private readonly IDateTimeProvider _dt;
     private readonly ICurrentUserService _currentUser;
     private readonly IUnitOfWork _uow;
@@ -58,7 +59,8 @@ public sealed class RegisterCustomerHandler
         ICurrentUserService currentUser,
         IUnitOfWork uow,
         ILogger<RegisterCustomerHandler> logger,
-        ITenantProgramReadService programs)
+        ITenantProgramReadService programs,
+        IStampProgramService stamps)
     {
         _customers = customers;
         _cards = cards;
@@ -75,6 +77,7 @@ public sealed class RegisterCustomerHandler
         _uow = uow;
         _logger = logger;
         _programs = programs;
+        _stamps = stamps;
     }
 
     /// <inheritdoc />
@@ -85,6 +88,9 @@ public sealed class RegisterCustomerHandler
         // 1. Email único
         var tenantId = _tenantContext.RequireTenantId();
         var isPoints = await _programs.GetCurrentAsync(ct) == LoyaltyProgramType.Points;
+        var stampProgram = isPoints ? null : await _stamps.GetActiveAsync(ct);
+        if (!isPoints && stampProgram is null)
+            return Result.Fail<RegisterCustomerResponse>("El programa de Sellos no tiene una configuracion activa.");
         var normalizedPhone = string.IsNullOrWhiteSpace(command.Phone)
             ? null
             : CustomerPhoneNormalizer.Normalize(command.Phone);
@@ -141,6 +147,7 @@ public sealed class RegisterCustomerHandler
 
         await _customers.AddAsync(customer, ct);
         await _cards.AddAsync(card, ct);
+        if (stampProgram is not null) _stamps.AddInitialCycle(card, stampProgram, now);
 
         // 4. Snapshot de config y bono de bienvenida
         var snapshot = isPoints ? ProgramConfigSnapshot.FromEntries(await _config.GetAllAsync(ct)) : null;

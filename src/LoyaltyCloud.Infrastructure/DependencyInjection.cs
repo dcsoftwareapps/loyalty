@@ -58,6 +58,7 @@ public static class DependencyInjection
             }), ServiceLifetime.Scoped);
 
         services.AddScoped<IUnitOfWork>(sp => sp.GetRequiredService<AppDbContext>());
+        services.AddScoped<IStampProgramService, StampProgramService>();
     }
 
     private static void AddOptions(IServiceCollection services, IConfiguration configuration)

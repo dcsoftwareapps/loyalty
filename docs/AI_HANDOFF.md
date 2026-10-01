@@ -4,7 +4,46 @@ Last updated: 2026-10-01
 
 Branch: `feature/stamps-wallet-prototype`
 
-Last task worked: Stamps foundation - ProgramType and provisioning.
+Last task worked: Stamps domain/version configuration, initial cycle and welcome.
+
+## 2026-10-01 - Stamps domain foundation
+
+- Previous ProgramType/provisioning phase was committed before this work; started
+  with a clean tree on the same `feature/stamps-wallet-prototype` branch.
+- Added StampProgramVersion, StampRewardDefinition, StampCycle and StampTransaction.
+  No Points/Gift Card table changes. Card relationship reuses the existing composite
+  tenant/serial key; new Stamps relationships preserve tenant IDs in SQL FKs.
+- V1 configuration uses MaxStamps 2..12 (minimum 2 distinguishes a stamp-collection
+  goal from an immediate one-step reward); domain/DB permit larger values.
+  Welcome must be below max, reward thresholds unique and final reward required.
+- SetStampProgramCommand handles initial setup and edits by creating a new version.
+  Active same-tenant Admin is checked through current identity and SQL; no endpoint
+  or UI added. GetActiveStampProgramQuery provides the tenant-scoped configuration.
+- Serializable SQL transaction inside CreateExecutionStrategy, tenant UPDLOCK/HOLDLOCK,
+  monotonic version number and unique active index protect concurrent writers.
+  Stable version ID and cleared tracking recognize an ambiguously acknowledged commit.
+  No external side effects in this transaction.
+- Customer registration fails before creating entities if Stamps has no active rules.
+  Otherwise Customer/Card/cycle/welcome ledger commit in one SaveChanges. Welcome
+  is system-generated (null operator), cycle #1 only; zero welcome has no ledger row.
+- Existing cycles retain old rules. No earn, reversal, earned reward, redemption,
+  automatic next cycle, visual assets, Wallet integration or Cashier Stamps implemented.
+- Migration: `20261001180152_AddStampProgramFoundation`. Only new Stamps structures;
+  migration execution is limited to disposable SQL LocalDB tests, not STG/PROD.
+- Next phase: implement earn/cycle transition under the approved rules. Completed
+  cycles must stay N/N until the next earn creates a cycle with current rules.
+- No commit/push/merge/PR/deploy. This phase remains in the working tree.
+
+Validation:
+
+- Focused foundation/provisioning/registration run: 48/48 passed before the two
+  additional concurrency/authorization and SQL cross-tenant FK tests.
+- Combined foundation and Points/Wallet regression run: 140/140 passed (SQL LocalDB
+  tests, not just InMemory). Filters include StampFoundation, TenantProgramType,
+  TenantProvisioning, RegisterCustomerHandlerTests, AdminCustomerPoints,
+  AdminRedemptionFlow, MonetaryRedemption, WalletProductionUpdate and MTLevel6.
+- Release API/Admin builds: zero warnings/errors; no MAUI build.
+- EF pending model check: no changes since last migration. Diff check passed.
 
 ## 2026-10-01 - ProgramType and provisioning
 
@@ -27,7 +66,7 @@ Last task worked: Stamps foundation - ProgramType and provisioning.
 - Stamps business entities, rules, cycles, rewards, earn/reversal, Cashier and
   Apple/Google Wallet production integration are not implemented in this phase.
 - Next phase should implement the approved Stamps rules/version model. This phase
-  is uncommitted and no push/merge/deploy was performed.
+  was subsequently committed by the user; no push/merge/deploy was performed during that task.
 
 Validation completed:
 

@@ -361,6 +361,7 @@ public sealed class TenantProvisioningTests
         var id = provisioned.Value.TenantId;
         Assert.Equal(programType, await env.PlatformReadAsync(async db => (await db.Tenants.SingleAsync(t => t.Id == id)).ProgramType));
         Assert.Equal(AdminLoginResult.Success, await env.SignInAsync("program-tenant", "owner", AdminPassword));
+        if (programType == LoyaltyProgramType.Stamps) await env.ConfigureStampsAsync(id, "program-tenant");
         var join = await env.JoinAsync(id, "program-tenant", "Ana", "Tenant", "6465550001");
         Assert.True(join.IsSuccess, join.Error);
         var card = await env.PlatformReadAsync(db => db.LoyaltyCards.IgnoreQueryFilters().SingleAsync(c => c.TenantId == id));
@@ -396,6 +397,7 @@ public sealed class TenantProvisioningTests
         await using var env = await ProvisioningTestEnvironment.CreateAsync();
         var provisioned = await env.ProvisionAsync("stamps-only", "Stamps", "owner", AdminPassword, programType: LoyaltyProgramType.Stamps);
         var id = provisioned.Value.TenantId;
+        await env.ConfigureStampsAsync(id, "stamps-only");
         var join = await env.JoinAsync(id, "stamps-only", "Ana", "Tenant", "6465550001");
         Assert.True(join.IsSuccess, join.Error);
         object[] commands =
@@ -443,6 +445,7 @@ public sealed class TenantProvisioningTests
         var points = await env.ProvisionAsync("points-a", "Points A", "owner", AdminPassword);
         var stamps = await env.ProvisionAsync("stamps-b", "Stamps B", "owner", AdminPassword, programType: LoyaltyProgramType.Stamps);
         var memberA = await env.JoinAsync(points.Value.TenantId, "points-a", "Ana", "A", "6465550001");
+        await env.ConfigureStampsAsync(stamps.Value.TenantId, "stamps-b");
         var memberB = await env.JoinAsync(stamps.Value.TenantId, "stamps-b", "Ana", "B", "6465550002");
         Assert.True(memberA.IsSuccess, memberA.Error);
         Assert.True(memberB.IsSuccess, memberB.Error);
@@ -494,6 +497,149 @@ public sealed class TenantProvisioningTests
             await db.Database.ExecuteSqlInterpolatedAsync($"INSERT INTO Tenants (Id, Slug, DisplayName, TimeZoneId, IsActive, CreatedAt) VALUES ({id}, {"legacy"}, {"Legacy"}, {"America/Tijuana"}, {true}, {DateTime.UtcNow})");
             await db.Database.MigrateAsync();
             Assert.Equal(LoyaltyProgramType.Points, (await db.Tenants.SingleAsync()).ProgramType);
+            return true;
+        });
+    }
+
+    [Theory]
+    [Trait("Category", "StampFoundation")]
+    [InlineData(0)]
+    [InlineData(2)]
+    public async Task Stamp_versions_and_registration_preserve_rules_and_audit_welcome(int welcome)
+    {
+        await using var env = await ProvisioningTestEnvironment.CreateAsync();
+        var tenant = await env.ProvisionAsync("stamp-foundation", "Stamps", "owner", AdminPassword, programType: LoyaltyProgramType.Stamps);
+        var id = tenant.Value.TenantId;
+        var first = await env.ConfigureStampsAsync(id, "stamp-foundation", welcome);
+        Assert.True(first.IsSuccess, first.Error);
+        Assert.Equal(1, first.Value.Version);
+        var joined = await env.JoinAsync(id, "stamp-foundation", "Ana", "Stamp", "6465550001");
+        Assert.True(joined.IsSuccess, joined.Error);
+        var second = await env.ConfigureStampsAsync(id, "stamp-foundation", 3);
+        Assert.True(second.IsSuccess, second.Error);
+        Assert.Equal(2, second.Value.Version);
+        await env.TenantReadAsync(id, "stamp-foundation", async db =>
+        {
+            Assert.Equal(1, await db.StampProgramVersions.CountAsync(x => x.IsActive));
+            var old = await db.StampProgramVersions.SingleAsync(x => x.Id == first.Value.Id);
+            Assert.False(old.IsActive);
+            Assert.Equal(welcome, old.WelcomeStamps);
+            var cycle = await db.StampCycles.SingleAsync();
+            Assert.Equal(first.Value.Id, cycle.StampProgramVersionId);
+            Assert.Equal(joined.Value.SerialNumber, cycle.LoyaltyCardSerialNumber);
+            Assert.Equal(1, cycle.Sequence);
+            Assert.Equal(welcome, cycle.CurrentStamps);
+            Assert.Null(cycle.CompletedAt);
+            Assert.NotEmpty(cycle.RowVersion);
+            var ledger = await db.StampTransactions.ToListAsync();
+            Assert.Equal(welcome == 0 ? 0 : 1, ledger.Count);
+            if (welcome > 0)
+            {
+                Assert.Equal(StampTransactionType.Welcome, ledger[0].Type);
+                Assert.Equal(welcome, ledger[0].Delta);
+                Assert.Null(ledger[0].OperatorUserId);
+                Assert.Equal("welcome", ledger[0].IdempotencyKey);
+            }
+            db.Entry(old).Property(x => x.MaxStamps).CurrentValue = 8;
+            await Assert.ThrowsAsync<InvalidOperationException>(() => db.SaveChangesAsync());
+            return true;
+        });
+        var newMember = await env.JoinAsync(id, "stamp-foundation", "Otra", "Stamp", "6465550002");
+        Assert.True(newMember.IsSuccess, newMember.Error);
+        await env.TenantReadAsync(id, "stamp-foundation", async db =>
+        {
+            Assert.Equal(second.Value.Id, (await db.StampCycles.SingleAsync(x => x.LoyaltyCardSerialNumber == newMember.Value.SerialNumber)).StampProgramVersionId);
+            return true;
+        });
+    }
+
+    [Fact]
+    [Trait("Category", "StampFoundation")]
+    public async Task Stamps_without_configuration_fails_without_partial_registration_and_points_have_no_cycles()
+    {
+        await using var env = await ProvisioningTestEnvironment.CreateAsync();
+        var stamps = await env.ProvisionAsync("unconfigured", "Stamps", "owner", AdminPassword, programType: LoyaltyProgramType.Stamps);
+        var denied = await env.JoinAsync(stamps.Value.TenantId, "unconfigured", "Ana", "Stamp", "6465550001");
+        Assert.True(denied.IsFailure);
+        Assert.Contains("configuracion activa", denied.Error);
+        Assert.Equal(0, await env.PlatformReadAsync(db => db.Customers.IgnoreQueryFilters().CountAsync()));
+        Assert.Equal(0, await env.PlatformReadAsync(db => db.LoyaltyCards.IgnoreQueryFilters().CountAsync()));
+        var points = await env.ProvisionAsync("points-foundation", "Points", "owner", AdminPassword);
+        Assert.True((await env.JoinAsync(points.Value.TenantId, "points-foundation", "Ana", "Points", "6465550001")).IsSuccess);
+        Assert.Equal(0, await env.PlatformReadAsync(db => db.StampCycles.IgnoreQueryFilters().CountAsync()));
+        var unauthenticated = await env.SendAsync(stamps.Value.TenantId, "unconfigured", new LoyaltyCloud.Application.Stamps.SetStampProgramCommand(
+            10, 0, StampReversalPolicy.None, [new(10, "Reward")]));
+        Assert.True(unauthenticated.IsFailure);
+    }
+
+    [Fact]
+    [Trait("Category", "StampFoundation")]
+    public async Task Stamp_sql_constraints_and_tenant_filters_prevent_invalid_links_and_duplicates()
+    {
+        await using var env = await ProvisioningTestEnvironment.CreateAsync();
+        var a = await env.ProvisionAsync("stamp-a", "A", "owner", AdminPassword, programType: LoyaltyProgramType.Stamps);
+        var b = await env.ProvisionAsync("stamp-b", "B", "owner", AdminPassword, programType: LoyaltyProgramType.Stamps);
+        var program = await env.ConfigureStampsAsync(a.Value.TenantId, "stamp-a");
+        Assert.True(program.IsSuccess, program.Error);
+        Assert.Null(await env.SendAsync(b.Value.TenantId, "stamp-b", new LoyaltyCloud.Application.Stamps.GetActiveStampProgramQuery()));
+        Assert.True((await env.JoinAsync(a.Value.TenantId, "stamp-a", "Ana", "A", "6465550001")).IsSuccess);
+        await env.TenantReadAsync(a.Value.TenantId, "stamp-a", async db =>
+        {
+            var active = await db.StampProgramVersions.SingleAsync();
+            var card = await db.LoyaltyCards.SingleAsync();
+            db.Add(new StampCycle(Guid.NewGuid(), card, active, DateTime.UtcNow));
+            await Assert.ThrowsAsync<DbUpdateException>(() => db.SaveChangesAsync());
+            db.ChangeTracker.Clear();
+            db.Add(new StampRewardDefinition(Guid.NewGuid(), active, 10, "Duplicate", null));
+            await Assert.ThrowsAsync<DbUpdateException>(() => db.SaveChangesAsync());
+            db.ChangeTracker.Clear();
+            db.Add(new StampProgramVersion(Guid.NewGuid(), a.Value.TenantId, 2, 10, 0, StampReversalPolicy.None, active.CreatedByUserId, DateTime.UtcNow));
+            await Assert.ThrowsAsync<DbUpdateException>(() => db.SaveChangesAsync());
+            db.ChangeTracker.Clear();
+            var foreign = new StampProgramVersion(Guid.NewGuid(), b.Value.TenantId, 1, 10, 0, StampReversalPolicy.None, active.CreatedByUserId, DateTime.UtcNow);
+            db.Add(foreign);
+            await Assert.ThrowsAsync<InvalidOperationException>(() => db.SaveChangesAsync());
+            return true;
+        });
+    }
+
+    [Fact]
+    [Trait("Category", "StampFoundation")]
+    public async Task Concurrent_stamp_configuration_is_monotonic_and_cashier_cannot_configure()
+    {
+        await using var env = await ProvisioningTestEnvironment.CreateAsync();
+        var tenant = await env.ProvisionAsync("stamp-concurrency", "Stamps", "owner", AdminPassword, programType: LoyaltyProgramType.Stamps);
+        var results = await Task.WhenAll(env.ConfigureStampsAsync(tenant.Value.TenantId, "stamp-concurrency"),
+            env.ConfigureStampsAsync(tenant.Value.TenantId, "stamp-concurrency", 0));
+        Assert.All(results, result => Assert.True(result.IsSuccess, result.Error));
+        Assert.Equal(new[] { 1, 2 }, results.Select(x => x.Value.Version).OrderBy(x => x));
+        await env.TenantReadAsync(tenant.Value.TenantId, "stamp-concurrency", async db =>
+        {
+            Assert.Equal(1, await db.StampProgramVersions.CountAsync(x => x.IsActive));
+            (await db.TenantAdminUsers.SingleAsync()).ChangeRole(TenantUserRole.Cashier);
+            await db.SaveChangesAsync();
+            return true;
+        });
+        var denied = await env.ConfigureStampsAsync(tenant.Value.TenantId, "stamp-concurrency");
+        Assert.True(denied.IsFailure);
+        Assert.Contains("TenantAdmin", denied.Error);
+    }
+
+    [Fact]
+    [Trait("Category", "StampFoundation")]
+    public async Task Stamp_foreign_keys_reject_cross_tenant_program_reference_in_sql()
+    {
+        await using var env = await ProvisioningTestEnvironment.CreateAsync();
+        var a = await env.ProvisionAsync("stamp-fk-a", "A", "owner", AdminPassword, programType: LoyaltyProgramType.Stamps);
+        var b = await env.ProvisionAsync("stamp-fk-b", "B", "owner", AdminPassword, programType: LoyaltyProgramType.Stamps);
+        await env.ConfigureStampsAsync(a.Value.TenantId, "stamp-fk-a");
+        var program = await env.TenantReadAsync(a.Value.TenantId, "stamp-fk-a", db => db.StampProgramVersions.AsNoTracking().SingleAsync());
+        await env.TenantReadAsync(b.Value.TenantId, "stamp-fk-b", async db =>
+        {
+            var reward = new StampRewardDefinition(Guid.NewGuid(), program, 1, "Invalid link", null);
+            db.Add(reward);
+            db.Entry(reward).Property(x => x.TenantId).CurrentValue = b.Value.TenantId;
+            await Assert.ThrowsAsync<DbUpdateException>(() => db.SaveChangesAsync());
             return true;
         });
     }
@@ -587,6 +733,19 @@ public sealed class TenantProvisioningTests
             return await scope.ServiceProvider.GetRequiredService<ISender>().Send(command);
         }
 
+        public async Task<Result<LoyaltyCloud.Application.Stamps.StampProgramDto>> ConfigureStampsAsync(Guid tenantId, string slug, int welcome = 2)
+        {
+            using var scope = _services.CreateScope();
+            scope.ServiceProvider.GetRequiredService<IMutableTenantContext>().SetTenant(tenantId, slug);
+            var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+            var adminId = await db.TenantAdminUsers.Select(x => x.Id).SingleAsync();
+            var context = CreateHttpContext(scope.ServiceProvider);
+            context.User = new ClaimsPrincipal(new ClaimsIdentity([new Claim(ClaimTypes.NameIdentifier, adminId.ToString())], "Test"));
+            scope.ServiceProvider.GetRequiredService<IHttpContextAccessor>().HttpContext = context;
+            return await scope.ServiceProvider.GetRequiredService<ISender>().Send(new LoyaltyCloud.Application.Stamps.SetStampProgramCommand(
+                10, welcome, StampReversalPolicy.AdminOnly, [new(5, "Mascarilla"), new(10, "Producto")]));
+        }
+
         public async Task<object?> SendObjectAsync(Guid tenantId, string slug, object command)
         {
             using var scope = _services.CreateScope();
@@ -650,6 +809,13 @@ public sealed class TenantProvisioningTests
         public async Task<T> PlatformReadAsync<T>(Func<AppDbContext, Task<T>> query)
         {
             using var scope = _services.CreateScope();
+            return await query(scope.ServiceProvider.GetRequiredService<AppDbContext>());
+        }
+
+        public async Task<T> TenantReadAsync<T>(Guid tenantId, string slug, Func<AppDbContext, Task<T>> query)
+        {
+            using var scope = _services.CreateScope();
+            scope.ServiceProvider.GetRequiredService<IMutableTenantContext>().SetTenant(tenantId, slug);
             return await query(scope.ServiceProvider.GetRequiredService<AppDbContext>());
         }
 

@@ -22,6 +22,10 @@ public class AppDbContext : DbContext, IUnitOfWork
     private static readonly Guid MissingTenantId = Guid.Empty;
 
     public DbSet<Customer> Customers => Set<Customer>();
+    public DbSet<StampProgramVersion> StampProgramVersions => Set<StampProgramVersion>();
+    public DbSet<StampRewardDefinition> StampRewardDefinitions => Set<StampRewardDefinition>();
+    public DbSet<StampCycle> StampCycles => Set<StampCycle>();
+    public DbSet<StampTransaction> StampTransactions => Set<StampTransaction>();
     public DbSet<LoyaltyCard> LoyaltyCards => Set<LoyaltyCard>();
     public DbSet<PointTransaction> PointTransactions => Set<PointTransaction>();
     public DbSet<PointLot> PointLots => Set<PointLot>();
@@ -219,6 +223,10 @@ public class AppDbContext : DbContext, IUnitOfWork
     private void ApplyTenantQueryFilters(ModelBuilder modelBuilder)
     {
         ApplyTenantQueryFilter<TenantAdminUser>(modelBuilder);
+        ApplyTenantQueryFilter<StampProgramVersion>(modelBuilder);
+        ApplyTenantQueryFilter<StampRewardDefinition>(modelBuilder);
+        ApplyTenantQueryFilter<StampCycle>(modelBuilder);
+        ApplyTenantQueryFilter<StampTransaction>(modelBuilder);
         ApplyTenantQueryFilter<Customer>(modelBuilder);
         ApplyTenantQueryFilter<LoyaltyCard>(modelBuilder);
         ApplyTenantQueryFilter<RewardCatalogItem>(modelBuilder);

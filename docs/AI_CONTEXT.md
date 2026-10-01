@@ -84,7 +84,29 @@ Main technologies:
 - `PointsProgramBehavior` rejects Points write commands through MediatR using the
   authenticated tenant context and persisted program type. Direct level management
   also rejects Stamps. Gift Cards remain independent and usable for both types.
-- Stamps engine, cycles, rewards, Cashier, Wallet integration and reports are pending.
+- Stamps domain foundation is implemented on this branch: immutable economic
+  `StampProgramVersion`, `StampRewardDefinition`, `StampCycle` and `StampTransaction`.
+  `SetStampProgramCommand` creates the initial configuration or a new version;
+  `GetActiveStampProgramQuery` reads current rules. No configuration UI/API added yet.
+  Configuration writes require an authenticated, active same-tenant Admin verified
+  against SQL; Cashier and anonymous calls are rejected.
+- Application V1 accepts MaxStamps 2..12, WelcomeStamps 0..<MaxStamps, distinct
+  positive reward thresholds up to MaxStamps and a required reward at MaxStamps.
+  Domain/SQL have no structural upper limit of 12. Visual assets remain separate
+  and are not implemented in this phase.
+- Version creation uses the SQL retry execution strategy, a serializable transaction
+  and a per-tenant update lock. A stable version ID recognizes an already committed
+  retry. Filtered unique indexes enforce one active version and one unfinished cycle.
+  Existing cycles retain their version; rule/reward edits create a new version.
+- Stamps registration requires active configuration before creating Customer/Card.
+  The same unit of work inserts cycle #1 and system Welcome ledger when positive;
+  zero welcome still creates a cycle, without a zero transaction. Points is unchanged.
+  Cycles reference the existing `(TenantId, SerialNumber)` card alternate key, avoiding
+  any schema changes to Points tables. Cycle/version and ledger/cycle FKs are composite.
+- Migration `20261001180152_AddStampProgramFoundation` creates only four Stamps tables.
+  It has not been applied to STG/PROD. Completed cycles will remain full; next-cycle
+  creation belongs to the future earn implementation, not registration/configuration.
+- Stamps earn/reversal, earned rewards/redemption, Cashier, Wallet integration and reports are pending.
   Continue on `feature/stamps-wallet-prototype`; no PR/merge to staging until the
   complete Stamps feature is implemented and validated. Visual decisions live in
   `docs/STAMPS_WALLET_PROTOTYPE.md`.
