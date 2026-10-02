@@ -41,6 +41,9 @@
   <!-- Compile the platform-independent mobile logic for executable host tests. -->
   <ItemGroup>
     <Compile Include="../../src/LoyaltyCloud.Cashier/Services/CashierContracts.cs" Link="Cashier/CashierContracts.cs" />
+    <Compile Include="../../src/LoyaltyCloud.Cashier/Services/CashierStampApi.cs" Link="Cashier/CashierStampApi.cs" />
+    <Compile Include="../../src/LoyaltyCloud.Cashier/Services/CashierSessionService.cs" Link="Cashier/CashierSessionService.cs" />
+    <Compile Include="../../src/LoyaltyCloud.Cashier/Services/CashierApiClient.cs" Link="Cashier/CashierApiClient.cs" />
     <Compile Include="../../src/LoyaltyCloud.Cashier/Services/AuthenticatedCashierApiClient.cs" Link="Cashier/AuthenticatedCashierApiClient.cs" />
     <Compile Include="../../src/LoyaltyCloud.Cashier/Services/CashierRedemptionService.cs" Link="Cashier/CashierRedemptionService.cs" />
     <Compile Include="../../src/LoyaltyCloud.Cashier/Services/RewardRedemptionCoordinator.cs" Link="Cashier/RewardRedemptionCoordinator.cs" />

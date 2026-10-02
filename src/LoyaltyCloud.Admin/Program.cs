@@ -23,6 +23,8 @@ builder.Configuration.AddLoyaltyCloudKeyVault(builder.Configuration["Azure:KeyVa
 // Capas de negocio — Admin habla con Application/MediatR in-process, no HTTP.
 builder.Services.AddApplication();
 builder.Services.AddInfrastructure(builder.Configuration, builder.Environment);
+builder.Services.AddScoped<AdminCurrentUserService>();
+builder.Services.AddScoped<LoyaltyCloud.Common.Services.ICurrentUserService>(services => services.GetRequiredService<AdminCurrentUserService>());
 builder.Services.AddScoped<AdminTenantContextInitializer>();
 builder.Services.AddScoped<CircuitHandler, AdminTenantCircuitHandler>();
 builder.Services.AddScoped(typeof(IPipelineBehavior<,>), typeof(AdminTenantContextBehavior<,>));

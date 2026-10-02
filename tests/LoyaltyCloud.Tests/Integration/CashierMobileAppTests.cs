@@ -72,7 +72,7 @@ public sealed class CashierMobileAppTests
         var session = Read("src", "LoyaltyCloud.Cashier", "Services", "CashierSessionService.cs");
         var page = Read("src", "LoyaltyCloud.Cashier", "Components", "Pages", "Home.razor");
 
-        Assert.Contains("SecureStorage.Default", session);
+        Assert.Contains("SecureStorage.Default", Read("src", "LoyaltyCloud.Cashier", "Services", "MauiSecureTokenStore.cs"));
         Assert.Contains("loyaltycloud.cashier.session.v1", session);
         Assert.Contains("RestoreAsync", session);
         Assert.Contains("session.IsExpired(DateTimeOffset.UtcNow)", session);
@@ -268,6 +268,22 @@ public sealed class CashierMobileAppTests
         Assert.Contains("CashierRedemptionResponse", contracts);
         Assert.Contains("CashierCancelRedemptionResponse", contracts);
         Assert.Contains("CashierMonetaryRedemptionPreview", contracts);
+    }
+
+    [Fact]
+    [Trait("Category", "StampCashier")]
+    public void Program_surfaces_keep_points_and_gift_cards_while_linking_one_stamps_panel()
+    {
+        var mobile = Read("src", "LoyaltyCloud.Cashier", "Components", "Pages", "Home.razor");
+        var web = Read("src", "LoyaltyCloud.Admin", "Pages", "CashierLanding.razor");
+        var project = Read("src", "LoyaltyCloud.Cashier", "LoyaltyCloud.Cashier.csproj");
+        Assert.Contains("session?.ProgramType == \"Stamps\"", mobile);
+        Assert.Contains("!giftMode && !IsStamps", mobile);
+        Assert.Contains("StampCashierPanel", mobile);
+        Assert.Contains("<GiftCardPanel", mobile);
+        Assert.Contains("else if (isStamps)", web);
+        Assert.Contains("WebStampCashier", web);
+        Assert.Contains("LoyaltyCloud.Admin\\Shared\\StampCashierPanel.razor", project);
     }
 
     private static string Read(params string[] parts) =>

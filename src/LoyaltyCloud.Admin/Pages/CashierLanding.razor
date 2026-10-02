@@ -23,6 +23,8 @@
 @inject AdminDateTimeFormatter Dates
 @inject IJSRuntime JS
 @inject ILogger<CashierLanding> Logger
+@inject LoyaltyCloud.Application.Common.Interfaces.ITenantProgramReadService Programs
+@inject AdminTenantContextInitializer TenantInitializer
 
 <PageTitle>Caja - LoyaltyCloud</PageTitle>
 
@@ -43,14 +45,14 @@
                 class="@SurfaceButtonClass(CashierSurface.Points)"
                 aria-pressed="@(surface == CashierSurface.Points)"
                 @onclick="@(() => SwitchSurfaceAsync(CashierSurface.Points))"
-                disabled="@busy">
-            Puntos
+                disabled="@(busy || stampLocked)">
+            @(isStamps ? "Sellos" : "Puntos")
         </button>
         <button type="button"
                 class="@SurfaceButtonClass(CashierSurface.GiftCard)"
                 aria-pressed="@(surface == CashierSurface.GiftCard)"
                 @onclick="@(() => SwitchSurfaceAsync(CashierSurface.GiftCard))"
-                disabled="@busy">
+                disabled="@(busy || stampLocked)">
             Tarjeta de regalo
         </button>
     </section>
@@ -160,6 +162,10 @@
                 </button>
             </div>
         }
+    }
+    else if (isStamps)
+    {
+        <LoyaltyCloud.Admin.Shared.WebStampCashier ParseSerial="ExtractSerial" LockedChanged="StampLockedChanged" />
     }
     else if (customer is null)
     {
@@ -488,15 +494,21 @@
 
     protected override async Task OnInitializedAsync()
     {
+        await TenantInitializer.EnsureTenantContextAsync();
+        isStamps = await Programs.GetCurrentAsync() == LoyaltyProgramType.Stamps;
         var principal = (await AuthenticationStateProvider.GetAuthenticationStateAsync()).User;
         currentUsername = principal.FindFirstValue(AdminClaimTypes.Name)
             ?? principal.Identity?.Name
             ?? "Caja";
     }
 
+    private bool isStamps;
+    private bool stampLocked;
+    private void StampLockedChanged(bool value) => stampLocked = value;
+
     private async Task SwitchSurfaceAsync(CashierSurface nextSurface)
     {
-        if (busy || surface == nextSurface)
+        if (busy || stampLocked || surface == nextSurface)
             return;
 
         await StopScannerAsync();

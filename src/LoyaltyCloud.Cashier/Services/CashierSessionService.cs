@@ -9,15 +9,6 @@ public interface ISecureTokenStore
     void Remove(string key);
 }
 
-public sealed class MauiSecureTokenStore : ISecureTokenStore
-{
-    public Task<string?> GetAsync(string key) => SecureStorage.Default.GetAsync(key);
-
-    public Task SetAsync(string key, string value) => SecureStorage.Default.SetAsync(key, value);
-
-    public void Remove(string key) => SecureStorage.Default.Remove(key);
-}
-
 public sealed class CashierSessionService
 {
     private const string SessionKey = "loyaltycloud.cashier.session.v1";
@@ -43,6 +34,12 @@ public sealed class CashierSessionService
         CashierSession? session;
         try
         {
+            using var document = JsonDocument.Parse(raw);
+            if (!document.RootElement.TryGetProperty("programType", out _))
+            {
+                await LogoutAsync();
+                return null;
+            }
             session = JsonSerializer.Deserialize<CashierSession>(raw, JsonOptions);
         }
         catch (JsonException)
@@ -51,7 +48,7 @@ public sealed class CashierSessionService
             return null;
         }
 
-        if (session is null || session.IsExpired(DateTimeOffset.UtcNow))
+        if (session is null || session.ProgramType is not ("Points" or "Stamps") || session.IsExpired(DateTimeOffset.UtcNow))
         {
             await LogoutAsync();
             return null;

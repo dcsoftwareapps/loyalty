@@ -1,0 +1,111 @@
+@namespace LoyaltyCloud.Shared
+@using Microsoft.AspNetCore.Components
+@using LoyaltyCloud.Common.Services
+
+<section class="@PanelClass">
+    <h2>Sellos</h2>
+    @if (scanError is not null) { <div role="alert">@scanError</div> }
+    @if (Flow.Error is not null) { <div role="alert">@Flow.Error</div> }
+    @if (Flow.Message is not null) { <h3 role="status">@Flow.Message</h3> }
+    @foreach (var reward in Flow.Unlocked) { <p><strong>@reward.Name</strong></p> }
+    @if (Flow.Pending is not null)
+    {
+        <button class="@PrimaryClass" disabled="@Flow.Busy" @onclick="RetryAsync">Reintentar</button>
+    }
+    else
+    {
+        <button class="@PrimaryClass" disabled="@(Flow.Busy || scanning)" @onclick="ScanAsync">
+            @(scanning ? "Escaneando..." : Flow.ScanConsumed || Flow.State is not null ? "Escanear otro cliente" : "Escanear cliente")
+        </button>
+        @ScannerContent
+        @if (Flow.State is null)
+        {
+            <label>ID del cliente <input class="@InputClass" @bind="serial" disabled="@(Flow.Busy || scanning)" /></label>
+            <button class="@SecondaryClass" disabled="@(Flow.Busy || scanning || string.IsNullOrWhiteSpace(serial))" @onclick="LookupAsync">Buscar</button>
+        }
+        else
+        {
+            <h3>@Flow.State.CustomerName</h3>
+            <p><strong>@Flow.State.CurrentStamps de @Flow.State.MaxStamps sellos</strong></p>
+            @if (!Flow.ScanConsumed)
+            {
+                <button class="@PrimaryClass" disabled="@(Flow.Busy || scanning || confirmation is not null)" @onclick="EarnAsync">Agregar sello</button>
+            }
+            <h3>Recompensas disponibles</h3>
+            @foreach (var group in Flow.State.AvailableRewards.GroupBy(r => new { r.Name, r.Description, r.RequiredStamps }))
+            {
+                <div>
+                    <span>@group.Key.Name ×@group.Count()</span>
+                    <button class="@SecondaryClass" disabled="@(Flow.Busy || confirmation is not null)" @onclick="@(() => ConfirmReward(group.First().Id))">Canjear</button>
+                </div>
+            }
+            @if (Flow.State.CanReverseLastEarn)
+            {
+                <button class="@SecondaryClass" disabled="@(Flow.Busy || confirmation is not null)" @onclick="ConfirmReverse">Revertir último sello</button>
+            }
+        }
+        @if (confirmation is not null)
+        {
+            <div role="group" aria-label="Confirmación">
+                <p>@(confirmation == "Redeem" ? "¿Canjear esta recompensa?" : "¿Revertir el último sello?")</p>
+                @if (confirmation == "Reversal") { <p>El progreso disminuirá en un sello y las recompensas obtenidas con ese sello dejarán de estar disponibles.</p> }
+                <button class="@SecondaryClass" disabled="@Flow.Busy" @onclick="Cancel">Cancelar</button>
+                <button class="@PrimaryClass" disabled="@Flow.Busy" @onclick="ConfirmAsync">@(confirmation == "Redeem" ? "Canjear" : "Revertir")</button>
+            </div>
+        }
+    }
+</section>
+
+@code {
+    [Parameter, EditorRequired] public StampCashierFlow Flow { get; set; } = default!;
+    [Parameter, EditorRequired] public Func<Task<StampScanResult>> Scan { get; set; } = default!;
+    [Parameter, EditorRequired] public Func<string?, string?> ParseSerial { get; set; } = default!;
+    [Parameter] public RenderFragment? ScannerContent { get; set; }
+    [Parameter] public bool Mobile { get; set; }
+    [Parameter] public EventCallback<bool> LockedChanged { get; set; }
+    private string PanelClass => Mobile ? "operation-section" : "kb-cashier-panel";
+    private string PrimaryClass => Mobile ? "primary-button" : "kb-btn kb-btn--primary kb-btn--large kb-btn--block";
+    private string SecondaryClass => Mobile ? "secondary-button" : "kb-btn kb-btn--ghost kb-btn--large";
+    private string InputClass => Mobile ? "input" : "";
+    private string serial = "";
+    private string? confirmation;
+    private Guid? rewardId;
+    private bool scanning;
+    private string? scanError;
+
+    private async Task ScanAsync()
+    {
+        if (scanning || Flow.Busy || Flow.Pending is not null) return;
+        Flow.PrepareNextScan();
+        Cancel();
+        scanError = null;
+        scanning = true;
+        await LockedChanged.InvokeAsync(true);
+        try
+        {
+            var result = await Scan();
+            scanError = result.Error;
+            if (result.Value is not null) await Flow.AcceptScanAsync(ParseSerial(result.Value));
+        }
+        finally { scanning = false; await LockedChanged.InvokeAsync(Flow.Pending is not null); }
+    }
+    private Task LookupAsync() => RunAsync(() => Flow.LookupAsync(ParseSerial(serial) ?? ""));
+    private Task EarnAsync() => RunAsync(() => Flow.BeginAsync("Earn"));
+    private Task RetryAsync() => RunAsync(Flow.RetryAsync);
+    private async Task RunAsync(Func<Task> action)
+    {
+        await LockedChanged.InvokeAsync(true);
+        try { await action(); }
+        finally { await LockedChanged.InvokeAsync(Flow.Pending is not null); }
+    }
+    private void ConfirmReward(Guid id) { confirmation = "Redeem"; rewardId = id; }
+    private void ConfirmReverse() { confirmation = "Reversal"; rewardId = null; }
+    private void Cancel() { confirmation = null; rewardId = null; }
+    private async Task ConfirmAsync()
+    {
+        var operation = confirmation;
+        if (operation is null) return;
+        await RunAsync(() => Flow.BeginAsync(operation, rewardId));
+        Cancel();
+    }
+}

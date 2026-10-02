@@ -44,6 +44,7 @@ public sealed class StampOperationsTests
         var (id, serial) = await SetupAsync(env, 4);
         var first = await Earn(env, id, serial, "first");
         Assert.True(first.IsSuccess, first.Error);
+        Assert.True(first.Value.State.CanReverseLastEarn);
         Assert.Equal(5, first.Value.State.CurrentStamps);
         Assert.Equal("Mascarilla", Assert.Single(first.Value.UnlockedRewards).Name);
         for (var i = 0; i < 5; i++) Assert.True((await Earn(env, id, serial, "earn-" + i)).IsSuccess);
@@ -111,6 +112,7 @@ public sealed class StampOperationsTests
         var retry = await env.SendAsOperatorAsync(id, Slug, new RedeemStampRewardCommand(serial, reward.Id, winnerKey));
         Assert.True(retry.IsSuccess); Assert.Equal(5, retry.Value.State.CurrentStamps);
         Assert.Empty(retry.Value.State.AvailableRewards);
+        Assert.False(retry.Value.State.CanReverseLastEarn);
         var reversal = await Reverse(env, id, serial, "blocked");
         Assert.True(reversal.IsFailure); Assert.Contains("canjeada", reversal.Error);
         await env.TenantReadAsync(id, Slug, async db =>
@@ -152,7 +154,9 @@ public sealed class StampOperationsTests
     {
         await using var env = await Env.CreateAsync();
         var (id, serial) = await SetupAsync(env, policy: policy, cashier: cashier);
-        Assert.True((await Earn(env, id, serial, "earn")).IsSuccess);
+        var earned = await Earn(env, id, serial, "earn");
+        Assert.True(earned.IsSuccess);
+        Assert.Equal(allowed, earned.Value.State.CanReverseLastEarn);
         if (!cashier) Assert.True((await env.ConfigureStampsAsync(id, Slug, 0, policy: StampReversalPolicy.None)).IsSuccess);
         var reverse = await Reverse(env, id, serial, "reverse");
         Assert.Equal(allowed, reverse.IsSuccess);

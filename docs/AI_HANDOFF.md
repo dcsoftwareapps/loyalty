@@ -4,7 +4,32 @@ Last updated: 2026-10-01
 
 Branch: `feature/stamps-wallet-prototype`
 
-Last task worked: Stamps Admin configuration and program-aware navigation.
+Last task worked: Cashier Stamps UX for Web and MAUI.
+
+## 2026-10-01 - Cashier Stamps UX
+
+- Shared Razor panel (linked into MAUI) and platform-independent StampCashierFlow;
+  Web `/cashier` selects by persisted Tenant.ProgramType; mobile login/session now
+  includes ProgramType. Old mobile sessions without this property require new login.
+- QR pauses/closes through existing scanners before state lookup and automatic +1.
+  Local gate ignores repeated callbacks. Only explicit next-scan action opens camera.
+  Manual lookup is read-only; Agregar sello is explicit. Completion stays N/N.
+- Available rewards group by name/description/threshold while preserving individual
+  IDs. Redeem and reversal require confirmation. Backend CanReverseLastEarn reflects
+  original cycle policy, actual active operator role and non-redeemed last-Earn rewards.
+- Earn/Redeem/Reversal persist one request/key before sending; uncertain responses
+  retain it for retry/restoration. Keys are scoped by environment, tenant and user.
+  MAUI reuses SecureStorage; Web uses sessionStorage (tab lifetime limitation).
+- Web operator identity is refreshed from authenticated circuit state rather than
+  depending on HttpContext during callbacks; SQL operator/tenant checks are unchanged.
+- No schema changes, migration, database update, commit or deployment. Wallet/assets/
+  Stamps notifications/reports are not implemented. Physical Android/iPhone QA remains.
+- Validate with StampCashier plus StampOperations/Foundation/Admin, CashierMobile/Auth,
+  Points and GiftCards regressions; API/Admin Release and MAUI Windows Debug target.
+- Final validation: 332/332 tests passed, including tenant/platform auth, staff and
+  Wallet Points regressions. API and Admin Release: zero warnings/errors. MAUI
+  `net9.0-windows10.0.19041.0`, Debug, Staging: zero warnings/errors. No iOS/store
+  package generated. `git diff --check` passed with only Git LF/CRLF notices.
 
 ## 2026-10-01 - Stamps Admin configuration
 

@@ -87,7 +87,7 @@ Main technologies:
 - Stamps domain foundation is implemented on this branch: immutable economic
   `StampProgramVersion`, `StampRewardDefinition`, `StampCycle` and `StampTransaction`.
   `SetStampProgramCommand` creates the initial configuration or a new version;
-  `GetActiveStampProgramQuery` reads current rules. No configuration UI/API added yet.
+  `GetActiveStampProgramQuery` reads current rules. Admin UI is `/stamps`; no new configuration API.
   Configuration writes require an authenticated, active same-tenant Admin verified
   against SQL; Cashier and anonymous calls are rejected.
 - Application V1 accepts MaxStamps 2..12, WelcomeStamps 0..<MaxStamps, distinct
@@ -104,8 +104,8 @@ Main technologies:
   Cycles reference the existing `(TenantId, SerialNumber)` card alternate key, avoiding
   any schema changes to Points tables. Cycle/version and ledger/cycle FKs are composite.
 - Migration `20261001180152_AddStampProgramFoundation` creates only four Stamps tables.
-  It has not been applied to STG/PROD. Completed cycles will remain full; next-cycle
-  creation belongs to the future earn implementation, not registration/configuration.
+  It has not been applied to STG/PROD. Completed cycles remain full until the next
+  Earn creates the next cycle; registration/configuration do not roll cycles over.
 - Stamps operational engine is implemented on this branch: exactly +1 Earn, threshold
   reward snapshots, final completion, next-Earn rollover using active rules without
   welcome, audited redemption without consuming stamps and last-effective-Earn reversal.
@@ -132,7 +132,19 @@ Main technologies:
   `idempotencyKey`; unknown fields such as quantity/operator are rejected.
 - Migration `20261001192907_AddStampOperations` adds earned rewards, operation receipts
   and Stamps ledger sequence/unique indexes. No STG/PROD migration was applied.
-- Stamps Cashier UX, Wallet integration, visual assets and reports are pending.
+- Stamps Cashier UX is implemented on this branch for Web and MAUI. Login response
+  includes ProgramType; mobile persists it in session and requests a fresh login for
+  older saved sessions without it. Web reads the persisted tenant program.
+  Shared `StampCashierPanel` and `StampCashierFlow` handle manual read-only lookup,
+  automatic +1 after QR, explicit next scan, reward grouping/confirmation and reversal.
+  `CanReverseLastEarn` is calculated by backend using cycle policy, real operator and
+  last effective Earn; backend still revalidates every write. No changes to motor rules.
+  Pending Earn/Redeem/Reversal is saved before sending, scoped by environment/tenant/
+  user. MAUI uses existing SecureStorage adapter; Web uses tab sessionStorage, which
+  survives refresh/reconnect but is not guaranteed after closing the tab. Unknown
+  HTTP outcomes retain the same key. Web calls existing Application service with
+  circuit principal from AuthenticationStateProvider, without mobile signing secrets.
+  Wallet integration, visual assets and Stamps reports remain pending.
   Admin configuration is available at `/stamps` for TenantAdmin only, using existing
   Application commands. Initial save creates rules; edits create new versions.
   Equivalent rules/rewards, including reordered rewards, return the current version

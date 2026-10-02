@@ -15,7 +15,8 @@ public sealed record CashierLoginResponse(
     [property: JsonPropertyName("tenantSlug")] string TenantSlug,
     [property: JsonPropertyName("userId")] Guid UserId,
     [property: JsonPropertyName("username")] string Username,
-    [property: JsonPropertyName("role")] string Role);
+    [property: JsonPropertyName("role")] string Role,
+    [property: JsonPropertyName("programType")] string ProgramType = "Points");
 
 public sealed record CashierSession(
     string AccessToken,
@@ -24,7 +25,8 @@ public sealed record CashierSession(
     string TenantSlug,
     Guid UserId,
     string Username,
-    string Role)
+    string Role,
+    string ProgramType = "Points")
 {
     public bool IsExpired(DateTimeOffset now) => ExpiresAtUtc <= now;
 }

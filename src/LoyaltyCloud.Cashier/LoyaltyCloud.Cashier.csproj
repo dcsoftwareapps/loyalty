@@ -68,5 +68,9 @@
         <PackageReference Include="Microsoft.Extensions.Logging.Debug" Version="9.0.8" />
         <PackageReference Include="ZXing.Net.Maui.Controls" Version="0.5.2" />
     </ItemGroup>
+    <ItemGroup>
+        <ProjectReference Include="..\LoyaltyCloud.Common\LoyaltyCloud.Common.csproj" />
+        <Content Include="..\LoyaltyCloud.Admin\Shared\StampCashierPanel.razor" Link="Components\Cashier\StampCashierPanel.razor" />
+    </ItemGroup>
 
 </Project>

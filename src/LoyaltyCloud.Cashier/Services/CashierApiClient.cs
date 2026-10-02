@@ -32,7 +32,7 @@ public sealed class CashierApiClient
                 return CashierLoginResult.Failure("No fue posible iniciar sesión. Intenta de nuevo.");
 
             var body = await response.Content.ReadFromJsonAsync<CashierLoginResponse>(cancellationToken: ct);
-            if (body is null || string.IsNullOrWhiteSpace(body.AccessToken))
+            if (body is null || string.IsNullOrWhiteSpace(body.AccessToken) || body.ProgramType is not ("Points" or "Stamps"))
                 return CashierLoginResult.Failure("La respuesta del servidor no fue válida.");
 
             var session = new CashierSession(
@@ -42,7 +42,8 @@ public sealed class CashierApiClient
                 body.TenantSlug,
                 body.UserId,
                 body.Username,
-                body.Role);
+                body.Role,
+                body.ProgramType);
 
             return CashierLoginResult.Success(session);
         }

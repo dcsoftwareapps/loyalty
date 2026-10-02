@@ -1,0 +1,110 @@
+@using System.Security.Claims
+@using LoyaltyCloud.Common.Services
+@using LoyaltyCloud.Admin.Auth
+@using LoyaltyCloud.Application.Stamps
+@implements IAsyncDisposable
+@inject IJSRuntime JS
+@inject AuthenticationStateProvider Authentication
+@inject IStampOperationsService Operations
+@inject ILogger<LoyaltyCloud.Admin.Services.WebStampCashierApi> Logger
+@inject AdminCurrentUserService CurrentUser
+
+@if (flow is not null)
+{
+    <LoyaltyCloud.Shared.StampCashierPanel Flow="flow" Scan="ScanAsync" ParseSerial="ParseSerial" LockedChanged="LockedChanged">
+        <ScannerContent>
+            @if (scanning)
+            {
+                <video @ref="video" class="kb-qr-video" autoplay muted playsinline></video>
+                <button class="kb-btn kb-btn--ghost" @onclick="CancelAsync">Cancelar</button>
+            }
+        </ScannerContent>
+    </LoyaltyCloud.Shared.StampCashierPanel>
+}
+
+@code {
+    [Parameter, EditorRequired] public Func<string?, string?> ParseSerial { get; set; } = default!;
+    [Parameter] public EventCallback<bool> LockedChanged { get; set; }
+    private StampCashierFlow? flow;
+    private bool scanning;
+    private bool scannerStarted;
+    private ElementReference video;
+    private DotNetObjectReference<WebStampCashier>? reference;
+    private TaskCompletionSource<string?>? scan;
+    private bool startRequested;
+    private bool disposed;
+    private string? scanError;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            var user = (await Authentication.GetAuthenticationStateAsync()).User;
+            var key = $"loyaltycloud.stamps.v1:{user.FindFirstValue(AdminClaimTypes.TenantId)}:{user.FindFirstValue(AdminClaimTypes.Subject)}";
+            flow = new(new LoyaltyCloud.Admin.Services.WebStampCashierApi(Operations, Logger, Authentication, CurrentUser), new BrowserStore(JS), key);
+            await flow.RestoreAsync();
+            await LockedChanged.InvokeAsync(flow.Pending is not null);
+            StateHasChanged();
+        }
+        if (startRequested)
+        {
+            startRequested = false;
+            reference ??= DotNetObjectReference.Create(this);
+            try
+            {
+                var result = await JS.InvokeAsync<StartResult>("kbeautyQrScanner.start", video, reference);
+                scannerStarted = result.Ok;
+                if (result.Ok && !scanning) await StopAsync();
+                if (!result.Ok) { scanError = result.Message; await CancelAsync(); }
+            }
+            catch (JSException) { scanError = "No se pudo abrir la cámara. Ingresa el ID manualmente."; await CancelAsync(); }
+        }
+    }
+
+    private async Task<StampScanResult> ScanAsync()
+    {
+        scanError = null;
+        scan = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        scanning = startRequested = true;
+        StateHasChanged();
+        return new(await scan.Task, scanError);
+    }
+
+    [JSInvokable]
+    public Task OnQrDetected(string raw) => InvokeAsync(async () =>
+    {
+        if (!scanning || scan is null || scan.Task.IsCompleted) return;
+        scanning = false;
+        await StopAsync();
+        scan.TrySetResult(raw);
+        StateHasChanged();
+    });
+
+    private async Task CancelAsync()
+    {
+        scanning = startRequested = false;
+        await StopAsync();
+        scan?.TrySetResult(null);
+        if (!disposed) StateHasChanged();
+    }
+    private async Task StopAsync()
+    {
+        if (!scannerStarted) return;
+        scannerStarted = false;
+        try { await JS.InvokeVoidAsync("kbeautyQrScanner.stop"); }
+        catch (JSDisconnectedException) { }
+    }
+    public async ValueTask DisposeAsync()
+    {
+        disposed = true;
+        await CancelAsync();
+        reference?.Dispose();
+    }
+    private sealed record StartResult(bool Ok, string? Message);
+    private sealed class BrowserStore(IJSRuntime js) : IStampPendingStore
+    {
+        public Task<string?> GetAsync(string key) => js.InvokeAsync<string?>("sessionStorage.getItem", key).AsTask();
+        public Task SetAsync(string key, string value) => js.InvokeVoidAsync("sessionStorage.setItem", key, value).AsTask();
+        public Task RemoveAsync(string key) => js.InvokeVoidAsync("sessionStorage.removeItem", key).AsTask();
+    }
+}

@@ -87,7 +87,8 @@ public sealed class CashierAuthController : ControllerBase
             tenant.Slug,
             user.Id,
             user.Username,
-            user.Role.ToString()));
+            user.Role.ToString(),
+            tenant.ProgramType.ToString()));
     }
 
     private async Task<Tenant?> ResolveTenantAsync(string tenantSlug, CancellationToken ct)
@@ -116,5 +117,6 @@ public sealed class CashierAuthController : ControllerBase
         string TenantSlug,
         Guid UserId,
         string Username,
-        string Role);
+        string Role,
+        string ProgramType = "Points");
 }

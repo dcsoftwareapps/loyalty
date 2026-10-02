@@ -5,7 +5,8 @@ namespace LoyaltyCloud.Application.Stamps;
 
 public sealed record StampRewardDto(Guid Id, string Name, string? Description, int RequiredStamps, DateTime EarnedAt);
 public sealed record StampStateDto(string SerialNumber, string CustomerName, Guid CycleId, int CycleSequence,
-    int CurrentStamps, int MaxStamps, bool CycleCompleted, IReadOnlyList<StampRewardDto> AvailableRewards);
+    int CurrentStamps, int MaxStamps, bool CycleCompleted, IReadOnlyList<StampRewardDto> AvailableRewards,
+    bool CanReverseLastEarn = false);
 public sealed record StampOperationResult(StampStateDto State, IReadOnlyList<StampRewardDto> UnlockedRewards);
 public sealed record EarnStampCommand(string SerialNumber, string IdempotencyKey) : IRequest<Result<StampOperationResult>>;
 public sealed record ReverseLastStampCommand(string SerialNumber, string IdempotencyKey) : IRequest<Result<StampOperationResult>>;

@@ -162,8 +162,18 @@ internal sealed class StampOperationsService(AppDbContext db, ITenantContext ten
         var rewards = await db.Set<EarnedStampReward>().AsNoTracking().Where(x => x.Status == EarnedStampRewardStatus.Available
             && db.StampCycles.Any(c => c.Id == x.StampCycleId && c.LoyaltyCardSerialNumber == card.SerialNumber))
             .OrderBy(x => x.EarnedAt).ThenBy(x => x.Id).ToListAsync(ct);
+        var rules = await db.StampProgramVersions.AsNoTracking().SingleAsync(x => x.Id == cycle.StampProgramVersionId, ct);
+        var access = await OperatorAsync(ct);
+        var lastEarn = await db.StampTransactions.Where(x => x.StampCycleId == cycle.Id && x.Type == StampTransactionType.Earn
+            && !db.StampTransactions.Any(r => r.ReversesTransactionId == x.Id))
+            .OrderByDescending(x => x.Sequence).Select(x => (Guid?)x.Id).FirstOrDefaultAsync(ct);
+        var canReverse = access.Error is null && lastEarn.HasValue
+            && (rules.ReversalPolicy == StampReversalPolicy.AdminAndCashier
+                || (rules.ReversalPolicy == StampReversalPolicy.AdminOnly && access.Role == TenantUserRole.Admin))
+            && !await db.Set<EarnedStampReward>().AnyAsync(x => x.SourceEarnTransactionId == lastEarn.Value
+                && x.Status == EarnedStampRewardStatus.Redeemed, ct);
         return new(card.SerialNumber, name, cycle.Id, cycle.Sequence, cycle.CurrentStamps, max,
-            cycle.CompletedAt.HasValue, rewards.Select(ToRewardDto).ToList());
+            cycle.CompletedAt.HasValue, rewards.Select(ToRewardDto).ToList(), canReverse);
     }
 
     private static StampRewardDto ToRewardDto(EarnedStampReward r) => new(r.Id, r.Name, r.Description, r.RequiredStamps, r.EarnedAt);
