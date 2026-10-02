@@ -23,8 +23,8 @@ namespace LoyaltyCloud.Tests.Integration;
 public sealed class StampSignedPassTests
 {
     [Theory]
-    [InlineData(2)] [InlineData(10)]
-    public async Task Production_generator_signs_complete_stamps_package_without_any_points_reads(int progress)
+    [InlineData(2, false)] [InlineData(10, false)] [InlineData(3, true)]
+    public async Task Production_generator_signs_complete_stamps_package_without_any_points_reads(int progress, bool hasMessage)
     {
         var id = Guid.NewGuid(); var now = DateTime.UtcNow;
         var context = new TenantContext(); context.SetTenant(id, "test-stamps");
@@ -43,6 +43,10 @@ public sealed class StampSignedPassTests
         stamps.Setup(x => x.ReadAsync(card.SerialNumber, It.IsAny<CancellationToken>())).ReturnsAsync(projection);
         stamps.Setup(x => x.Render(projection, branding.BackgroundColor)).Returns(StampStripRenderer.Render(projection, branding.BackgroundColor));
         var pointsNotifications = new Mock<IWalletNotificationReadService>(MockBehavior.Strict);
+        var message = hasMessage ? new WalletCustomMessage(Guid.NewGuid(), "Aviso", "Mensaje activo", "Detalle del mensaje", now.AddDays(1), "\uD83D\uDCE3 %@") : null;
+        pointsNotifications.Setup(x => x.GetActiveContextAsync(card.Id, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new WalletNotificationContext(null, null, null, null, null, null, message, null,
+                message is null ? null : new WalletRecentVisibleEvent(message.NotificationId, NotificationType.Custom, now, now, now.AddDays(1))));
         var levels = new Mock<ITenantLoyaltyLevelReadService>(MockBehavior.Strict);
         var transactions = new Mock<IPointTransactionRepository>(MockBehavior.Strict);
         var options = Options.Create(new ApplePassOptions
@@ -67,6 +71,22 @@ public sealed class StampSignedPassTests
         Assert.Equal(card.SerialNumber, root.GetProperty("barcodes")[0].GetProperty("message").GetString());
         Assert.Equal($"{progress} / 10", root.GetProperty("storeCard").GetProperty("auxiliaryFields")[0].GetProperty("value").GetString());
         Assert.Equal("SELLOS", root.GetProperty("storeCard").GetProperty("auxiliaryFields")[0].GetProperty("label").GetString());
+        Assert.Equal("Ahora tienes %@ sellos.", root.GetProperty("storeCard").GetProperty("auxiliaryFields")[0].GetProperty("changeMessage").GetString());
+        Assert.Equal("https://test.invalid", root.GetProperty("webServiceURL").GetString());
+        var messageFields = root.GetProperty("storeCard").GetProperty("auxiliaryFields").EnumerateArray()
+            .Where(x => x.GetProperty("key").GetString() == "custom_message").ToArray();
+        if (hasMessage)
+        {
+            var field = Assert.Single(messageFields);
+            Assert.Equal(message!.ShortMessage, field.GetProperty("value").GetString());
+            Assert.Equal(message.ChangeMessage, field.GetProperty("changeMessage").GetString());
+            Assert.Contains(message.LongMessage, root.GetProperty("storeCard").GetProperty("backFields").GetRawText());
+        }
+        else
+        {
+            Assert.Empty(messageFields);
+            Assert.DoesNotContain("custom_message_detail", root.GetRawText());
+        }
         foreach (var label in new[] { "PUNTOS", "NIVEL", "PRÓXIMO", "FALTAN" }) Assert.DoesNotContain(label, root.GetRawText());
         Assert.Empty(root.GetProperty("storeCard").GetProperty("primaryFields").EnumerateArray());
         using var manifest = JsonDocument.Parse(Read("manifest.json"));
@@ -81,6 +101,7 @@ public sealed class StampSignedPassTests
             using var image = Image.Load(Read(scale == 1 ? "strip.png" : $"strip@{scale}x.png"));
             Assert.Equal(375 * scale, image.Width); Assert.Equal(144 * scale, image.Height);
         }
+        pointsNotifications.Verify(x => x.GetActiveContextAsync(card.Id, It.IsAny<CancellationToken>()), Times.Once);
         pointsNotifications.VerifyNoOtherCalls(); levels.VerifyNoOtherCalls(); transactions.VerifyNoOtherCalls();
         // Test-only certificate: cryptographically signed package, not installable Apple-issued credentials.
         var directory = Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "../../../../../artifacts/stamps-wallet-production-tests"));

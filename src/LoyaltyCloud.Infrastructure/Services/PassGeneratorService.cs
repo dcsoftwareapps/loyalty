@@ -93,7 +93,8 @@ internal sealed class PassGeneratorService : IPassGeneratorService
                 stampBranding.WalletLogoBlobName, stampBranding.LogoBlobName, false, null, ct);
             var stampAssets = baseAssets.Concat(projectionService.Render(state, stampBranding.BackgroundColor)
                 .Select(x => new WalletPassAsset(x.Name, x.Bytes))).ToArray();
-            var json = JsonSerializer.SerializeToUtf8Bytes(BuildStampsPassJson(card, customer, stampBranding, state), PassJsonOpts);
+            var stampWalletContext = await _walletNotifications.GetActiveContextAsync(card.Id, ct);
+            var json = JsonSerializer.SerializeToUtf8Bytes(BuildStampsPassJson(card, customer, stampBranding, state, stampWalletContext), PassJsonOpts);
             _logger.LogInformation("Apple Wallet Stamps: serial={Serial}, cycle={Cycle}, version={Version}, progress={Current}/{Max}.",
                 card.SerialNumber, state.CycleId, state.VersionId, state.CurrentStamps, state.MaxStamps);
             return await PackageAsync(json, stampAssets, ct);
@@ -164,12 +165,26 @@ internal sealed class PassGeneratorService : IPassGeneratorService
         return output.ToArray();
     }
 
-    private object BuildStampsPassJson(LoyaltyCard card, Customer customer, TenantWalletBrandingDto branding, StampWalletProjection state)
+    private object BuildStampsPassJson(LoyaltyCard card, Customer customer, TenantWalletBrandingDto branding, StampWalletProjection state, WalletNotificationContext walletContext)
     {
         EnsureRequiredOption(_options.PassTypeIdentifier, "Apple:PassTypeIdentifier");
         EnsureRequiredOption(_options.TeamIdentifier, "Apple:TeamIdentifier");
         EnsureRequiredOption(_options.WebServiceURL, "Apple:WebServiceURL");
         EnsureRequiredOption(_options.OrganizationName, "Apple:OrganizationName");
+        var fields = new List<object>
+        {
+            new { key = "stamps", label = "SELLOS", value = $"{state.CurrentStamps} / {state.MaxStamps}", changeMessage = "Ahora tienes %@ sellos." }
+        };
+        var backFields = new List<object>
+        {
+            new { key = "customer", label = "CLIENTE", value = GetWalletDisplayName(customer, branding.CustomerFallbackName) }
+        };
+        if (walletContext.CustomMessage is { } message)
+        {
+            fields.Add(BuildCustomMessageField(message,
+                includeChangeMessage: walletContext.RecentVisibleEvent?.Type == NotificationType.Custom, out _));
+            backFields.Add(new { key = "custom_message_detail", label = "MENSAJE", value = $"{message.Title}\n\n{message.LongMessage}" });
+        }
         return new
         {
             formatVersion = 1, passTypeIdentifier = _options.PassTypeIdentifier, serialNumber = card.SerialNumber,
@@ -180,8 +195,8 @@ internal sealed class PassGeneratorService : IPassGeneratorService
             storeCard = new
             {
                 primaryFields = Array.Empty<object>(), secondaryFields = Array.Empty<object>(),
-                auxiliaryFields = new[] { new { key = "stamps", label = "SELLOS", value = $"{state.CurrentStamps} / {state.MaxStamps}" } },
-                backFields = new[] { new { key = "customer", label = "CLIENTE", value = GetWalletDisplayName(customer, branding.CustomerFallbackName) } }
+                auxiliaryFields = fields.ToArray(),
+                backFields = backFields.ToArray()
             },
             barcodes = new[] { new { format = "PKBarcodeFormatQR", message = card.SerialNumber,
                 messageEncoding = "iso-8859-1", altText = "Presenta este c\u00f3digo en caja" } }
