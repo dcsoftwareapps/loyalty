@@ -230,11 +230,6 @@ public sealed class RegisterCustomerHandler
         // 7. Generar y subir pase. Si falla, el cliente ya está creado — log y
         //    devolvemos URL vacía; podrá descargarlo después desde /api/customers/{serial}.
         string passUrl;
-        if (!isPoints)
-        {
-            // Stamps Wallet presentation will be implemented in a later phase.
-            return Result.Ok(new RegisterCustomerResponse(serial, string.Empty, card.CurrentPoints, card.Level));
-        }
         try
         {
             var passBytes = await _passes.GeneratePassAsync(card, customer, ct);

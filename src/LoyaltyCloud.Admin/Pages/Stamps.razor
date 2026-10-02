@@ -5,6 +5,9 @@
 @using LoyaltyCloud.Domain.Enums
 @inject ISender Sender
 @inject LoyaltyCloud.Application.Common.Interfaces.ITenantProgramReadService Programs
+@inject IStampVisualService Visuals
+@inject Microsoft.AspNetCore.Components.Authorization.AuthenticationStateProvider Authentication
+@inject LoyaltyCloud.Admin.Auth.AdminCurrentUserService CurrentUser
 
 <PageTitle>Sellos - LoyaltyCloud</PageTitle>
 
@@ -19,7 +22,7 @@ else
     @if (success is not null) { <div class="kb-form-success" role="status">@success</div> }
     @foreach (var message in errors) { <div class="kb-form-error" role="alert">@message</div> }
     <form @onsubmit="SaveAsync" @onsubmit:preventDefault>
-        <fieldset disabled="@busy" class="kb-stamp-form">
+        <fieldset disabled="@(busy || visualBusy)" class="kb-stamp-form">
             <div class="kb-form-row">
                 <label for="stamp-max">Sellos para completar tarjeta</label>
                 <input id="stamp-max" type="number" min="2" max="12" step="1" @bind="maxStamps" />
@@ -56,13 +59,31 @@ else
             </div>
         </fieldset>
     </form>
+    @if (visuals is not null)
+    {
+        <section>
+            <h2>Apariencia de la tarjeta</h2>
+            <p class="kb-muted">Las imágenes se actualizan en todas las tarjetas sin cambiar sus reglas.</p>
+            <StampImageUpload Label="Sello vacío" Preview="@visuals.EmptyPreview" Kind="StampImageKind.Empty" Disabled="@(busy || visualBusy)" Changed="ReloadVisualsAsync" BusyChanged="SetVisualBusy" />
+            <StampImageUpload Label="Sello lleno" Preview="@visuals.FilledPreview" Kind="StampImageKind.Filled" Disabled="@(busy || visualBusy)" Changed="ReloadVisualsAsync" BusyChanged="SetVisualBusy" />
+            @foreach (var reward in current?.Rewards ?? [])
+            {
+                if (reward.RewardIdentityId is Guid identity && visuals.RewardPreviews.TryGetValue(identity, out var preview))
+                {
+                    <StampImageUpload @key="identity" Label="@reward.Name" Preview="@preview" Kind="StampImageKind.Reward"
+                        RewardIdentityId="identity" Disabled="@(busy || visualBusy)" Changed="ReloadVisualsAsync" BusyChanged="SetVisualBusy" />
+                }
+            }
+        </section>
+    }
 }
 
 @code {
-    private bool loading = true, busy, isStamps;
+    private bool loading = true, busy, visualBusy, isStamps;
     private int maxStamps = 10, welcomeStamps;
     private StampReversalPolicy policy = StampReversalPolicy.None;
     private StampProgramDto? current;
+    private StampVisualDto? visuals;
     private readonly List<RewardForm> rewards = [];
     private readonly List<string> errors = [];
     private string? error, success;
@@ -71,37 +92,51 @@ else
     {
         try
         {
+            CurrentUser.SetCircuitPrincipal((await Authentication.GetAuthenticationStateAsync()).User);
             isStamps = await Programs.GetCurrentAsync() == LoyaltyProgramType.Stamps;
             if (!isStamps) return;
             current = await Sender.Send(new GetActiveStampProgramQuery());
+            await ReloadVisualsAsync();
             if (current is null) return;
             maxStamps = current.MaxStamps; welcomeStamps = current.WelcomeStamps; policy = current.ReversalPolicy;
-            rewards.AddRange(current.Rewards.Select(r => new RewardForm { RequiredStamps = r.RequiredStamps, Name = r.Name, Description = r.Description }));
+            rewards.AddRange(current.Rewards.Select(r => new RewardForm { RewardIdentityId = r.RewardIdentityId, RequiredStamps = r.RequiredStamps, Name = r.Name, Description = r.Description }));
         }
         finally { loading = false; }
     }
 
     private async Task SaveAsync()
     {
-        if (busy || !isStamps) return;
+        if (busy || visualBusy || !isStamps) return;
         success = error = null; errors.Clear();
         var command = new SetStampProgramCommand(maxStamps, welcomeStamps, policy,
-            rewards.Select(r => new StampRewardInput(r.RequiredStamps, r.Name, r.Description)).ToList());
+            rewards.Select(r => new StampRewardInput(r.RequiredStamps, r.Name, r.Description, r.RewardIdentityId)).ToList());
         var validation = await new SetStampProgramValidator().ValidateAsync(command);
         if (!validation.IsValid) { errors.AddRange(validation.Errors.Select(x => x.ErrorMessage).Distinct()); return; }
         busy = true;
         try
         {
+            CurrentUser.SetCircuitPrincipal((await Authentication.GetAuthenticationStateAsync()).User);
             var result = await Sender.Send(command);
             if (result.IsFailure) { error = result.Error; return; }
             success = current?.Id == result.Value.Id ? "No hay cambios para guardar." : "Programa de sellos guardado.";
             current = result.Value;
+            await ReloadVisualsAsync();
+            rewards.Clear();
+            rewards.AddRange(current.Rewards.Select(r => new RewardForm { RewardIdentityId = r.RewardIdentityId, RequiredStamps = r.RequiredStamps, Name = r.Name, Description = r.Description }));
         }
         finally { busy = false; }
     }
 
+    private async Task ReloadVisualsAsync()
+    {
+        CurrentUser.SetCircuitPrincipal((await Authentication.GetAuthenticationStateAsync()).User);
+        visuals = await Visuals.ReadAsync();
+    }
+    private void SetVisualBusy(bool value) => visualBusy = value;
+
     private sealed class RewardForm
     {
+        public Guid? RewardIdentityId { get; set; }
         public int RequiredStamps { get; set; } = 1;
         public string Name { get; set; } = string.Empty;
         public string? Description { get; set; }

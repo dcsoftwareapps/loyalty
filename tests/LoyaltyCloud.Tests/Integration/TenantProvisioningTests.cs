@@ -675,7 +675,7 @@ public sealed class TenantProvisioningTests
             _services = services;
         }
 
-        public static async Task<ProvisioningTestEnvironment> CreateAsync(string? migrationTarget = null)
+        public static async Task<ProvisioningTestEnvironment> CreateAsync(string? migrationTarget = null, Action<IServiceCollection>? configure = null)
         {
             var dbName = "LoyaltyCloud_MT3E_" + Guid.NewGuid().ToString("N");
             var configuration = new ConfigurationBuilder()
@@ -700,6 +700,7 @@ public sealed class TenantProvisioningTests
             services.AddInfrastructure(configuration, new TestHostEnvironment());
             services.RemoveAll<IStorageService>();
             services.AddScoped<IStorageService, InMemoryStorageService>();
+            configure?.Invoke(services);
             services.Configure<AdminAuthOptions>(_ => { });
             services.AddScoped<AdminAuthService>();
             services
@@ -765,8 +766,26 @@ public sealed class TenantProvisioningTests
             var context = CreateHttpContext(scope.ServiceProvider);
             context.User = new ClaimsPrincipal(new ClaimsIdentity([new Claim(ClaimTypes.NameIdentifier, adminId.ToString())], "Test"));
             scope.ServiceProvider.GetRequiredService<IHttpContextAccessor>().HttpContext = context;
+            var existing = await scope.ServiceProvider.GetRequiredService<IStampProgramService>().ReadActiveAsync();
             return await scope.ServiceProvider.GetRequiredService<ISender>().Send(new LoyaltyCloud.Application.Stamps.SetStampProgramCommand(
-                max, welcome, policy, [new(max / 2, "Mascarilla"), new(max, "Producto")]));
+                max, welcome, policy, [new(max / 2, "Mascarilla", RewardIdentityId: existing?.Rewards[0].RewardIdentityId),
+                    new(max, "Producto", RewardIdentityId: existing?.Rewards[1].RewardIdentityId)]));
+        }
+
+        public async Task<T> InTenantScopeAsync<T>(Guid tenantId, string slug, Func<IServiceProvider, Task<T>> action, bool authenticate = true)
+        {
+            using var scope = _services.CreateScope();
+            scope.ServiceProvider.GetRequiredService<IMutableTenantContext>().SetTenant(tenantId, slug);
+            scope.ServiceProvider.GetRequiredService<IHttpContextAccessor>().HttpContext = null;
+            if (authenticate)
+            {
+                var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+                var id = await db.TenantAdminUsers.Select(x => x.Id).SingleAsync();
+                var context = CreateHttpContext(scope.ServiceProvider);
+                context.User = new ClaimsPrincipal(new ClaimsIdentity([new Claim(ClaimTypes.NameIdentifier, id.ToString())], "Test"));
+                scope.ServiceProvider.GetRequiredService<IHttpContextAccessor>().HttpContext = context;
+            }
+            return await action(scope.ServiceProvider);
         }
 
         public async Task<T> SendAsOperatorAsync<T>(Guid tenantId, string slug, IRequest<T> command)

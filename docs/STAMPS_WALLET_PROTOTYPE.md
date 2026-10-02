@@ -1,7 +1,38 @@
 # Stamps Apple Wallet strip experiment
 
 This is an offline visual prototype on `feature/stamps-wallet-prototype`.
-It implements no loyalty rules, entities, uploads, database changes or Wallet integration.
+The offline command implements no loyalty rules or storage. The separate productive
+integration below now implements the approved design on the same branch, not deployed.
+
+## Productive integration - 2026-10-01
+
+- `StampStripRenderer` implements the balanced grid natively at each resolution:
+  375x144, 750x288, 1125x432, one row through 5 stamps, two rows through 12.
+- `StampWalletProjectionService` reads the latest existing cycle and its immutable
+  economic version. It never creates the next cycle. Completed remains N/N until Earn.
+- `StampVisualService` and `/stamps` implement empty/filled and reward image uploads,
+  previews and reset to deterministic defaults. Storage uses the existing private
+  Blob container/tenant prefix. PNG/JPEG contents are validated, not trusted by MIME.
+- Reward image belongs to `StampRewardIdentity`, explicitly transported by the editor,
+  not the versioned definition. Rename/move preserves identity/image; remove/add
+  creates a new identity. Historical thresholds and earned snapshots remain intact;
+  historical cycles use the current visual image of their linked identity.
+- Locked treatment is finalized for V1 as grayscale, reduced contrast/brightness
+  plus an integrated in-cell lock badge. Same source artwork, no separate locked asset.
+- Apple `storeCard` keeps primary fields empty to reserve the grid; front shows SELLOS
+  n/N and existing QR, back shows customer. Existing logo/colors/serial/token and
+  manifest/PKCS#7/PassKit paths are reused. Points and Google Wallet are unchanged.
+- Earn/Reversal refresh after SQL commit; visual changes refresh installed tenant
+  passes after save, best-effort. Redemption does not refresh because no accumulated
+  rewards counter/list is shown. No polling or automatic Stamps notifications added.
+- New migration: `20261002010407_AddStampRewardIdentityAndVisualAssets`, not applied
+  outside disposable LocalDB tests. Backfill creates one identity per old definition,
+  with no inferred continuity across old versions.
+- `StampVisualAssets` tests generate examples for every requested 5/10/12 progress
+  case (defaults/custom extreme-aspect artwork), and signed test-only pkpass packages
+  under ignored `artifacts/stamps-wallet-production-tests`. Test signing proves ZIP,
+  manifest and cryptographic structure, not Apple-issued certificate/device validity.
+- Real Blob upload and real installed iPhone/APNs QA remain required before release.
 
 ## Reproduce
 
@@ -92,13 +123,14 @@ excluded from the V1 product design.
 - A completed card remains visually full until the next earn. That earn starts a
   new cycle using the version effective at that time and displays 1/N.
 
-These decisions document future implementation behavior. This prototype does not
-implement Stamps, ProgramType, cycles or integration into PassGeneratorService.
+These decisions are implemented by the productive services above. The offline
+prototype command itself remains independent of Stamps rules, storage and signing.
 
-## Future assets
+## Offline prototype assets
 
 The composition supports the future concept of `EmptyStampImage`,
-`FilledStampImage` and a `RewardImage` per goal. Asset loading is not implemented.
+`FilledStampImage` and a `RewardImage` per goal. This offline command does not load
+assets; production loading is implemented by the separate services above.
 Current circles and diamonds are neutral placeholders, not production artwork.
 
 One reward source image is the agreed V1 upload model. LoyaltyCloud will generate

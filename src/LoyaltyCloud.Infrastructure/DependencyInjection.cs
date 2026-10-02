@@ -59,6 +59,9 @@ public static class DependencyInjection
 
         services.AddScoped<IUnitOfWork>(sp => sp.GetRequiredService<AppDbContext>());
         services.AddScoped<IStampProgramService, StampProgramService>();
+        services.AddScoped<LoyaltyCloud.Application.Stamps.IStampVisualService, StampVisualService>();
+        services.AddScoped<LoyaltyCloud.Application.Stamps.IStampVisualAssetStore, StampVisualAssetStore>();
+        services.AddScoped<LoyaltyCloud.Application.Stamps.IStampWalletProjectionService, StampWalletProjectionService>();
         services.AddScoped<LoyaltyCloud.Application.Stamps.IStampOperationsService, StampOperationsService>();
     }
 

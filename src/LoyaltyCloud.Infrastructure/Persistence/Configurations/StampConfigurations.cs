@@ -32,13 +32,42 @@ internal sealed class StampRewardDefinitionConfiguration : IEntityTypeConfigurat
         b.ToTable("StampRewardDefinitions", t => t.HasCheckConstraint("CK_StampRewardDefinition_Threshold", "[RequiredStamps] > 0"));
         b.HasKey(x => x.Id);
         b.HasIndex(x => new { x.TenantId, x.StampProgramVersionId, x.RequiredStamps }).IsUnique();
+        b.HasIndex(x => new { x.TenantId, x.StampProgramVersionId, x.RewardIdentityId }).IsUnique();
         b.Property(x => x.Name).HasMaxLength(150).IsRequired();
         b.Property(x => x.Description).HasMaxLength(1000);
         b.HasOne<StampProgramVersion>().WithMany().HasForeignKey(x => new { x.TenantId, x.StampProgramVersionId })
             .HasPrincipalKey(x => new { x.TenantId, x.Id }).OnDelete(DeleteBehavior.Restrict);
+        b.HasOne<StampRewardIdentity>().WithMany().HasForeignKey(x => new { x.TenantId, x.RewardIdentityId })
+            .HasPrincipalKey(x => new { x.TenantId, x.Id }).OnDelete(DeleteBehavior.Restrict);
         foreach (var name in new[] { nameof(StampRewardDefinition.RequiredStamps), nameof(StampRewardDefinition.Name),
-            nameof(StampRewardDefinition.Description), nameof(StampRewardDefinition.StampProgramVersionId) })
+            nameof(StampRewardDefinition.Description), nameof(StampRewardDefinition.StampProgramVersionId),
+            nameof(StampRewardDefinition.RewardIdentityId) })
             b.Property(name).Metadata.SetAfterSaveBehavior(PropertySaveBehavior.Throw);
+    }
+}
+
+internal sealed class StampRewardIdentityConfiguration : IEntityTypeConfiguration<StampRewardIdentity>
+{
+    public void Configure(EntityTypeBuilder<StampRewardIdentity> b)
+    {
+        b.ToTable("StampRewardIdentities");
+        b.HasKey(x => x.Id);
+        b.HasAlternateKey(x => new { x.TenantId, x.Id });
+        b.Property(x => x.ImageBlobName).HasMaxLength(1024);
+        b.HasOne<Tenant>().WithMany().HasForeignKey(x => x.TenantId).OnDelete(DeleteBehavior.Restrict);
+    }
+}
+
+internal sealed class StampVisualConfigurationMapping : IEntityTypeConfiguration<StampVisualConfiguration>
+{
+    public void Configure(EntityTypeBuilder<StampVisualConfiguration> b)
+    {
+        b.ToTable("StampVisualConfigurations");
+        b.HasKey(x => x.Id);
+        b.HasIndex(x => x.TenantId).IsUnique();
+        b.Property(x => x.EmptyStampBlobName).HasMaxLength(1024);
+        b.Property(x => x.FilledStampBlobName).HasMaxLength(1024);
+        b.HasOne<Tenant>().WithMany().HasForeignKey(x => x.TenantId).OnDelete(DeleteBehavior.Restrict);
     }
 }
 

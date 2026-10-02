@@ -4,7 +4,77 @@ Last updated: 2026-10-01
 
 Branch: `feature/stamps-wallet-prototype`
 
-Last task worked: Cashier Stamps UX for Web and MAUI.
+Last task worked: Stamps stable reward identities, visual assets/Admin and Apple Wallet.
+
+## 2026-10-01 - Stamps visual assets and productive Apple projection
+
+- Continued the existing partial working tree on feature/stamps-wallet-prototype;
+  no branch recreation, commit/push/merge/PR/deploy or STG/PROD database update.
+- Stable StampRewardIdentity is independent of immutable StampRewardDefinition.
+  Editor/contract transports explicit RewardIdentityId. Edits retain it; remove/add
+  creates another even for identical content. No name/threshold/description heuristics.
+  EarnedStampReward snapshots and historical cycle version thresholds stay unchanged.
+- Tenant visual config: empty/filled assets; reward image lives on the identity.
+  /stamps appearance section has previews/upload/reset independently of rule save.
+  Existing shared upload/preview CSS reused. New rewards receive upload controls
+  after saving their economic version and server-issued identities.
+  Page/upload callbacks refresh AdminCurrentUserService from authenticated circuit
+  state like existing WebStampCashierApi, rather than relying on callback HttpContext.
+- Private Blob storage reuses existing tenant prefix and PassContainer with random
+  stamps PNG paths. Actual decoding validates PNG/JPEG, 2 MB, dimensions <=4096;
+  normalizes one frame to PNG, max 1024, preserving aspect ratio. No credentials
+  reach UI. Old blobs/identities are retained rather than deleting historical assets.
+- Production renderer draws native 1x/2x/3x strips, maximum two rows; defaults are
+  deterministic ImageSharp artwork. Rewards occupy their threshold cells. Locked
+  image is grayscale/reduced contrast/brightness plus integrated in-cell lock.
+- Apple generator branches by persisted ProgramType before levels/Points reads.
+  Existing signing/package and identity are shared. Stamps front shows only SELLOS,
+  grid and QR; customer is on back. No accumulated reward history/count is rendered.
+  Existing public/PassKit routes serve Stamps; registration can generate its pass.
+- Wallet projection does not mutate cycles: latest cycle, own version, current
+  identity assets. Completed card stays N/N until backend Earn rolls it to 1/N.
+- Existing Apple refresh after committed Earn/Reversal; visuals refresh installed
+  tenant passes after save. APNs errors cannot undo economic writes. Redeem does not
+  refresh. No Google Wallet changes, new polling or automatic Stamps notifications.
+- Migration 20261002010407_AddStampRewardIdentityAndVisualAssets is unchanged in
+  model scope and not deployed. Its backfill creates independent identities per
+  prior definition. SQL LocalDB test applies the older migration, seeds two identical
+  historical definitions, then applies this migration and verifies separate IDs.
+- Final combined validation: 221/221 passed, covering StampVisualAssets,
+  StampFoundation/Operations/Admin/Cashier, TenantProgramType, WalletProductionUpdate,
+  TenantBranding, AdminCustomerPoints/AdminRedemptionFlow and CashierAuth.
+  After the final circuit-identity/busy-state UI adjustment, focused
+  StampVisualAssets + StampAdmin passed again: 43/43, with no compilation warnings.
+- Two complete pkpass ZIPs signed with test-only certificate generated under ignored
+  artifacts/stamps-wallet-production-tests. Verified detached PKCS#7, all manifest
+  hashes, icon/logo/strip entries, exact dimensions and serial/auth token/QR. These
+  are NOT installable passes signed with a real Apple-issued Pass certificate.
+- PNG examples cover all requested 5/10/12 progress states, defaults, intermediate
+  and final rewards, custom extreme-aspect artwork; files stay under ignored artifacts.
+- Remaining physical QA: real Blob upload/reset and previews in Admin, installed
+  iPhone pass grid/SELLOS/QR and locked state, welcome/completion/rollover, APNs after
+  Earn/Reversal and visual changes, historical thresholds/current image, Points pass
+  non-regression. Do not merge or release before integrated QA.
+
+Validation commands:
+
+```powershell
+dotnet test .\tests\LoyaltyCloud.Tests\LoyaltyCloud.Tests.csproj --filter "Category=StampVisualAssets|Category=StampFoundation|Category=StampOperations|Category=StampAdmin|Category=StampCashier|Category=TenantProgramType|Category=WalletProductionUpdate|Category=TenantBranding|Category=AdminCustomerPoints|Category=AdminRedemptionFlow|Category=CashierAuth"
+dotnet build .\src\LoyaltyCloud.API\LoyaltyCloud.API.csproj -c Release
+dotnet build .\src\LoyaltyCloud.Admin\LoyaltyCloud.Admin.csproj -c Release
+dotnet build .\src\LoyaltyCloud.Tools\LoyaltyCloud.Tools.csproj -c Release
+dotnet ef migrations has-pending-model-changes --project .\src\LoyaltyCloud.Infrastructure\LoyaltyCloud.Infrastructure.csproj --startup-project .\src\LoyaltyCloud.API\LoyaltyCloud.API.csproj
+git diff --check
+```
+
+Final results: API, Admin and Tools Release builds each passed with zero warnings
+and errors. EF reports no model changes since the last migration. `git diff --check`
+passed; Git prints only normal LF/CRLF notices. MAUI was not built or modified.
+Working tree contains 19 modified tracked files and 12 new files for this phase;
+generated examples/test pkpass files are ignored and are not staged.
+
+The older dated sections below describe scope at their own completion, not the
+current implementation.
 
 ## 2026-10-01 - Cashier Stamps UX
 

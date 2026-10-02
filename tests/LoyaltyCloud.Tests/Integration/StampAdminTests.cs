@@ -57,10 +57,14 @@ public sealed class StampAdminTests
         client.DefaultRequestHeaders.Add("Cookie", cookie);
         using var response = await client.GetAsync("/stamps");
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
-        var html = await response.Content.ReadAsStringAsync();
+        var html = WebUtility.HtmlDecode(await response.Content.ReadAsStringAsync());
         Assert.Contains("href=\"/stamps\"", html);
         Assert.Contains("Configura tu programa de sellos", html);
         Assert.Contains("Sellos de bienvenida", html); Assert.Contains("Solo administradores", html);
+        Assert.Contains("Apariencia de la tarjeta", html);
+        Assert.Contains("Sello vacío", html); Assert.Contains("Sello lleno", html);
+        Assert.Contains("Cambiar imagen", html); Assert.Contains("Usar predeterminada", html);
+        Assert.Contains("data:image/png;base64,", html);
         Assert.Contains("href=\"/customers\"", html); Assert.Contains("href=\"/marketing-notifications\"", html);
         Assert.Contains("href=\"/config\"", html); Assert.Contains("href=\"/staff\"", html);
         foreach (var route in new[] { "/dashboard", "/scan", "/redeem", "/rewards", "/levels", "/campaigns", "/reports/activity-trends" })

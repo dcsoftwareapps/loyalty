@@ -24,6 +24,8 @@ public class AppDbContext : DbContext, IUnitOfWork
     public DbSet<Customer> Customers => Set<Customer>();
     public DbSet<StampProgramVersion> StampProgramVersions => Set<StampProgramVersion>();
     public DbSet<StampRewardDefinition> StampRewardDefinitions => Set<StampRewardDefinition>();
+    public DbSet<StampRewardIdentity> StampRewardIdentities => Set<StampRewardIdentity>();
+    public DbSet<StampVisualConfiguration> StampVisualConfigurations => Set<StampVisualConfiguration>();
     public DbSet<StampCycle> StampCycles => Set<StampCycle>();
     public DbSet<StampTransaction> StampTransactions => Set<StampTransaction>();
     public DbSet<EarnedStampReward> EarnedStampRewards => Set<EarnedStampReward>();
@@ -227,6 +229,8 @@ public class AppDbContext : DbContext, IUnitOfWork
         ApplyTenantQueryFilter<TenantAdminUser>(modelBuilder);
         ApplyTenantQueryFilter<StampProgramVersion>(modelBuilder);
         ApplyTenantQueryFilter<StampRewardDefinition>(modelBuilder);
+        ApplyTenantQueryFilter<StampRewardIdentity>(modelBuilder);
+        ApplyTenantQueryFilter<StampVisualConfiguration>(modelBuilder);
         ApplyTenantQueryFilter<StampCycle>(modelBuilder);
         ApplyTenantQueryFilter<StampTransaction>(modelBuilder);
         ApplyTenantQueryFilter<EarnedStampReward>(modelBuilder);

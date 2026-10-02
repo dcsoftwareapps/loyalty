@@ -6,7 +6,7 @@ using MediatR;
 
 namespace LoyaltyCloud.Application.Stamps;
 
-public sealed record StampRewardInput(int RequiredStamps, string Name, string? Description = null);
+public sealed record StampRewardInput(int RequiredStamps, string Name, string? Description = null, Guid? RewardIdentityId = null);
 public sealed record StampProgramDto(Guid Id, int Version, int MaxStamps, int WelcomeStamps,
     StampReversalPolicy ReversalPolicy, IReadOnlyList<StampRewardInput> Rewards);
 public sealed record SetStampProgramCommand(int MaxStamps, int WelcomeStamps,
@@ -21,6 +21,9 @@ public sealed class SetStampProgramValidator : AbstractValidator<SetStampProgram
         RuleFor(x => x.WelcomeStamps).GreaterThanOrEqualTo(0).WithMessage("Los sellos de bienvenida no pueden ser negativos.")
             .LessThan(x => x.MaxStamps).WithMessage("Los sellos de bienvenida deben ser menos que el total de la tarjeta.");
         RuleFor(x => x.ReversalPolicy).IsInEnum().WithMessage("Selecciona una opción válida de reversión.");
+        RuleFor(x => x.Rewards).Must(rewards => rewards is null || rewards.Where(r => r.RewardIdentityId.HasValue)
+            .Select(r => r.RewardIdentityId).Distinct().Count() == rewards.Count(r => r.RewardIdentityId.HasValue))
+            .WithMessage("Cada recompensa debe tener una identidad distinta.");
         RuleFor(x => x.Rewards).NotNull().Must((x, rewards) => rewards is not null
             && rewards.Any(r => r.RequiredStamps == x.MaxStamps)
             && rewards.Select(r => r.RequiredStamps).Distinct().Count() == rewards.Count)

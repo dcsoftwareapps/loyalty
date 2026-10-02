@@ -80,7 +80,7 @@ Main technologies:
   It has not been applied to STG/PROD during this phase.
 - Stamps provisioning creates identity/auth/branding/subscription but no Points
   ProgramConfig or levels. Customer registration preserves Customer/LoyaltyCard,
-  serial and auth token, with no welcome/referral points and no generated Points pass.
+  serial and auth token, with no welcome/referral points; Apple now generates a Stamps pass.
 - `PointsProgramBehavior` rejects Points write commands through MediatR using the
   authenticated tenant context and persisted program type. Direct level management
   also rejects Stamps. Gift Cards remain independent and usable for both types.
@@ -93,7 +93,7 @@ Main technologies:
 - Application V1 accepts MaxStamps 2..12, WelcomeStamps 0..<MaxStamps, distinct
   positive reward thresholds up to MaxStamps and a required reward at MaxStamps.
   Domain/SQL have no structural upper limit of 12. Visual assets remain separate
-  and are not implemented in this phase.
+  from economic rules and never create program versions.
 - Version creation uses the SQL retry execution strategy, a serializable transaction
   and a per-tenant update lock. A stable version ID recognizes an already committed
   retry. Filtered unique indexes enforce one active version and one unfinished cycle.
@@ -123,7 +123,8 @@ Main technologies:
 - SQL tenant UPDLOCK/HOLDLOCK inside the execution strategy serializes operational
   writes and configuration across instances. Progress/ledger/reward/receipt commit
   together; RowVersion, unique ledger sequence and unique reversed transaction add
-  DB protection. No Wallet, notifications or external side effects are executed.
+  DB protection. External Apple refresh runs only after SQL commit; no automatic
+  Stamps LoyaltyNotifications are created.
 - API uses existing cashier bearer scheme and CashierOperations policy (Admin/Cashier),
   revalidates an active same-tenant operator and rejects Points. Routes: GET
   `/api/stamps/{serialNumber}`, POST `/api/stamps/{serialNumber}/earn`, POST
@@ -144,7 +145,8 @@ Main technologies:
   survives refresh/reconnect but is not guaranteed after closing the tab. Unknown
   HTTP outcomes retain the same key. Web calls existing Application service with
   circuit principal from AuthenticationStateProvider, without mobile signing secrets.
-  Wallet integration, visual assets and Stamps reports remain pending.
+  Apple Wallet and visual assets are now implemented below; Google Wallet Stamps,
+  automatic Stamps notifications and Stamps reports remain pending.
   Admin configuration is available at `/stamps` for TenantAdmin only, using existing
   Application commands. Initial save creates rules; edits create new versions.
   Equivalent rules/rewards, including reordered rewards, return the current version
@@ -155,6 +157,47 @@ Main technologies:
   Continue on `feature/stamps-wallet-prototype`; no PR/merge to staging until the
   complete Stamps feature is implemented and validated. Visual decisions live in
   `docs/STAMPS_WALLET_PROTOTYPE.md`.
+
+### Stamps visual assets and Apple Wallet (implemented on branch, not deployed)
+
+- `StampRewardIdentity.Id` is the stable reward identity. Immutable definitions
+  explicitly link it through `RewardIdentityId`; the editor/contract carries that ID.
+  Rename, description or threshold edits preserve it. Remove + add uses a new ID,
+  even with identical text/threshold. Never infer continuity by matching content.
+- `StampRewardIdentity.ImageBlobName` stores the current visual image. Historical
+  definitions/cycles use their original thresholds plus this current image;
+  EarnedStampReward economic snapshots remain unchanged. Removed identities/assets
+  are retained; visual removal clears the reference, not historical identity rows.
+- `StampVisualConfiguration` stores tenant-wide empty/filled image references.
+  `/stamps` has an independent appearance section using `StampImageUpload` and
+  `IStampVisualService`, with active same-tenant Admin revalidated in SQL.
+- Storage reuses Azure Blob PassContainer and the existing tenant branding prefix,
+  under `stamps/{randomGuid}.png`. No public credentials or caller-controlled paths.
+  Uploads inspect actual PNG/JPEG content, decode it, limit input to 2 MB and
+  4096x4096, keep one frame, auto-orient and normalize to PNG within 1024x1024.
+  Aspect ratio is preserved; deterministic ImageSharp defaults require no uploads.
+- `StampWalletProjectionService` is read-only and uses the latest existing cycle
+  and its own version. Completed N/N stays full until the next backend Earn starts
+  1/N. It never creates a cycle, calls operator logic or replaces historical rules.
+- `StampStripRenderer` draws each resolution natively: 375x144, 750x288, 1125x432.
+  2..5 use one row, 6..12 two. Reward artwork replaces its threshold cell; contain
+  preserves aspect ratio. Locked uses grayscale/reduced contrast/brightness and
+  an in-cell lock badge from the same image; no second asset or floating locks.
+- PassGeneratorService selects persisted ProgramType before Points reads. Stamps
+  uses storeCard, empty primary fields, SELLOS n/N, customer on the back, existing
+  tenant logo/colors and unchanged serial/token/QR/signature/manifest/PassKit routes.
+  No accumulated rewards list/counter is shown. Points fields remain unchanged.
+- Earn/Reversal refresh the card after commit using existing best-effort Apple
+  refresh/APNs. Receipt retries may request refresh again but never repeat ledger
+  writes. Redemption does not refresh because the grid is unchanged. Asset updates
+  refresh installed tenant passes after save, without creating economic versions.
+- Migration `20261002010407_AddStampRewardIdentityAndVisualAssets` remains the only
+  migration for this phase; it adds identities/visual configuration and composite
+  tenant FK. Backfill gives each prior definition its own identity using its ID,
+  without attempting to reconstruct past continuity. Not applied to STG/PROD.
+- Local tests validate actual signed ZIP/manifest/signature with test-only credentials;
+  this does not establish Apple certificate validity or device installation.
+  Physical iPhone/APNs QA and real Blob upload validation remain before release.
 
 Main entities:
 

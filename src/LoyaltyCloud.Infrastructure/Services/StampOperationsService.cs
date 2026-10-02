@@ -8,11 +8,13 @@ using LoyaltyCloud.Domain.Entities;
 using LoyaltyCloud.Domain.Enums;
 using LoyaltyCloud.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
 
 namespace LoyaltyCloud.Infrastructure.Services;
 
 internal sealed class StampOperationsService(AppDbContext db, ITenantContext tenantContext,
-    ITenantProgramReadService programs, ICurrentUserService currentUser, IDateTimeProvider clock) : IStampOperationsService
+    ITenantProgramReadService programs, ICurrentUserService currentUser, IDateTimeProvider clock,
+    IAppleWalletPassRefreshService refresh, ILogger<StampOperationsService> logger) : IStampOperationsService
 {
     public async Task<Result<StampStateDto>> ReadAsync(string serialNumber, CancellationToken ct = default)
     {
@@ -52,7 +54,7 @@ internal sealed class StampOperationsService(AppDbContext db, ITenantContext ten
         var tenantId = tenantContext.RequireTenantId();
         if (db.ChangeTracker.HasChanges()) throw new InvalidOperationException("Stamp operations require a clean unit of work.");
 
-        return await db.Database.CreateExecutionStrategy().ExecuteAsync(async () =>
+        var committedResult = await db.Database.CreateExecutionStrategy().ExecuteAsync(async () =>
         {
             db.ChangeTracker.Clear();
             await using var tx = await db.Database.BeginTransactionAsync(IsolationLevel.ReadCommitted, ct);
@@ -127,6 +129,17 @@ internal sealed class StampOperationsService(AppDbContext db, ITenantContext ten
             await tx.CommitAsync(ct);
             return Result.Ok(result);
         });
+        if (committedResult.IsSuccess && operation is "Earn" or "Reversal")
+        {
+            try
+            {
+                var cardId = await db.LoyaltyCards.Where(x => x.SerialNumber == serial).Select(x => x.Id).SingleAsync(ct);
+                await refresh.RefreshCardAsync(tenantId, cardId,
+                    operation == "Earn" ? PassUpdateReason.StampEarned : PassUpdateReason.StampReversed, ct);
+            }
+            catch (Exception ex) { logger.LogWarning(ex, "Stamps pass refresh failed after committed {Operation}. TenantId={TenantId}", operation, tenantId); }
+        }
+        return committedResult;
     }
 
     private async Task<(Guid UserId, TenantUserRole Role, string? Error)> OperatorAsync(CancellationToken ct)

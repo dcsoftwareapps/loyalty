@@ -53,7 +53,7 @@ internal sealed class StampProgramService(AppDbContext db, ITenantContext tenant
             {
                 var current = await ToDtoAsync(active, ct);
                 var rewards = command.Rewards.OrderBy(x => x.RequiredStamps)
-                    .Select(x => new StampRewardInput(x.RequiredStamps, x.Name.Trim(), NormalizeDescription(x.Description)));
+                    .Select(x => new StampRewardInput(x.RequiredStamps, x.Name.Trim(), NormalizeDescription(x.Description), x.RewardIdentityId));
                 if (current.MaxStamps == command.MaxStamps && current.WelcomeStamps == command.WelcomeStamps
                     && current.ReversalPolicy == command.ReversalPolicy
                     && current.Rewards.Select(x => x with { Description = NormalizeDescription(x.Description) }).SequenceEqual(rewards))
@@ -62,6 +62,10 @@ internal sealed class StampProgramService(AppDbContext db, ITenantContext tenant
                     return Result.Ok(current);
                 }
             }
+            var allowedIdentities = active is null ? new HashSet<Guid>() : (await db.StampRewardDefinitions
+                .Where(x => x.StampProgramVersionId == active.Id).Select(x => x.RewardIdentityId).ToListAsync(ct)).ToHashSet();
+            if (command.Rewards.Any(r => r.RewardIdentityId.HasValue && !allowedIdentities.Contains(r.RewardIdentityId.Value)))
+                return Result.Fail<StampProgramDto>("La recompensa no pertenece a la configuración activa de este negocio.");
             var now = clock.UtcNow;
             foreach (var previous in versions.Where(x => x.IsActive)) previous.Supersede(now);
             await db.SaveChangesAsync(ct);
@@ -70,7 +74,11 @@ internal sealed class StampProgramService(AppDbContext db, ITenantContext tenant
                 command.MaxStamps, command.WelcomeStamps, command.ReversalPolicy, userId, now);
             db.Add(next);
             foreach (var reward in command.Rewards)
-                db.Add(new StampRewardDefinition(Guid.NewGuid(), next, reward.RequiredStamps, reward.Name, NormalizeDescription(reward.Description)));
+            {
+                var identity = reward.RewardIdentityId ?? Guid.NewGuid();
+                if (!reward.RewardIdentityId.HasValue) db.Add(new StampRewardIdentity(identity, tenantId));
+                db.Add(new StampRewardDefinition(Guid.NewGuid(), next, reward.RequiredStamps, reward.Name, NormalizeDescription(reward.Description), identity));
+            }
             await db.SaveChangesAsync(ct);
             await transaction.CommitAsync(ct);
             return Result.Ok(await ToDtoAsync(next, ct));
@@ -88,7 +96,7 @@ internal sealed class StampProgramService(AppDbContext db, ITenantContext tenant
     private async Task<StampProgramDto> ToDtoAsync(StampProgramVersion version, CancellationToken ct)
     {
         var rewards = await db.Set<StampRewardDefinition>().AsNoTracking().Where(x => x.StampProgramVersionId == version.Id)
-            .OrderBy(x => x.RequiredStamps).Select(x => new StampRewardInput(x.RequiredStamps, x.Name, x.Description)).ToListAsync(ct);
+            .OrderBy(x => x.RequiredStamps).Select(x => new StampRewardInput(x.RequiredStamps, x.Name, x.Description, x.RewardIdentityId)).ToListAsync(ct);
         return new(version.Id, version.Version, version.MaxStamps, version.WelcomeStamps, version.ReversalPolicy, rewards);
     }
 
