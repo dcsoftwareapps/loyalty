@@ -153,7 +153,7 @@ public sealed class StampVisualAssetsTests
     }
 
     [Fact]
-    public async Task Earn_and_reversal_request_refresh_after_commit_but_reward_redemption_does_not()
+    public async Task Earn_reversal_and_reward_redemption_request_refresh_after_commit()
     {
         var refresh = new RecordingRefresh();
         await using var env = await EnvironmentAsync(new MemoryAssets(), refresh);
@@ -165,7 +165,10 @@ public sealed class StampVisualAssetsTests
         var earned = await env.SendAsOperatorAsync(id, "refresh-stamp", new EarnStampCommand(serial, "earn2"));
         var calls = refresh.CardCalls.Count;
         var redeemed = await env.SendAsOperatorAsync(id, "refresh-stamp", new RedeemStampRewardCommand(serial, earned.Value.UnlockedRewards.Single().Id, "redeem"));
-        Assert.True(redeemed.IsSuccess); Assert.Equal(calls, refresh.CardCalls.Count);
+        Assert.True(redeemed.IsSuccess); Assert.Equal(calls + 1, refresh.CardCalls.Count);
+        Assert.Equal(PassUpdateReason.StampRewardRedeemed, refresh.CardCalls.Last().Reason);
+        Assert.Null((await Projection(env, id, "refresh-stamp", serial)).Event);
+        Assert.Equal(StampWalletRewardState.Redeemed, (await Projection(env, id, "refresh-stamp", serial)).Rewards.Single(x => x.RequiredStamps == 5).State);
         Assert.Contains(refresh.CardCalls, x => x.Reason == PassUpdateReason.StampReversed);
         refresh.Fail = true;
         Assert.True((await env.SendAsOperatorAsync(id, "refresh-stamp", new EarnStampCommand(serial, "apns-down"))).IsSuccess);

@@ -6,7 +6,7 @@ namespace LoyaltyCloud.Application.Customers.Commands.JoinCustomer;
 public sealed record JoinCustomerCommand(
     string FirstName,
     string LastName,
-    string Phone) : IRequest<Result<JoinCustomerResponse>>;
+    string Phone, int? BirthdayDay = null, int? BirthdayMonth = null) : IRequest<Result<JoinCustomerResponse>>;
 
 public sealed record JoinCustomerResponse(
     Guid CustomerId,

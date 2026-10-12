@@ -224,6 +224,44 @@ namespace LoyaltyCloud.Infrastructure.Persistence.Migrations
                     b.ToTable("BillingSettings", (string)null);
                 });
 
+            modelBuilder.Entity("LoyaltyCloud.Domain.Entities.CashierRefreshToken", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<DateTime>("ExpiresAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<DateTime?>("RevokedAtUtc")
+                        .IsConcurrencyToken()
+                        .HasColumnType("datetime2");
+
+                    b.Property<Guid>("TenantAdminUserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("TokenHash")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .IsUnicode(false)
+                        .HasColumnType("varchar(64)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("TokenHash")
+                        .IsUnique();
+
+                    b.HasIndex("TenantId", "TenantAdminUserId");
+
+                    b.ToTable("CashierRefreshTokens", (string)null);
+                });
+
             modelBuilder.Entity("LoyaltyCloud.Domain.Entities.CustomNotificationCampaign", b =>
                 {
                     b.Property<Guid>("Id")
@@ -448,6 +486,11 @@ namespace LoyaltyCloud.Infrastructure.Persistence.Migrations
                         .IsRequired()
                         .ValueGeneratedOnAddOrUpdate()
                         .HasColumnType("rowversion");
+
+                    b.Property<string>("ShortName")
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .HasColumnType("nvarchar(40)");
 
                     b.Property<Guid>("SourceEarnTransactionId")
                         .HasColumnType("uniqueidentifier");
@@ -1753,6 +1796,42 @@ namespace LoyaltyCloud.Infrastructure.Persistence.Migrations
                     b.ToTable("StampOperationReceipts", (string)null);
                 });
 
+            modelBuilder.Entity("LoyaltyCloud.Domain.Entities.StampPassEventContext", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<bool>("AnnouncementEnabled")
+                        .HasColumnType("bit");
+
+                    b.Property<DateTime>("ExpiresAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<bool>("IsRollover")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("SerialNumber")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
+
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("TransactionId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("TenantId", "SerialNumber")
+                        .IsUnique();
+
+                    b.HasIndex("TenantId", "TransactionId");
+
+                    b.ToTable("StampPassEventContexts", (string)null);
+                });
+
             modelBuilder.Entity("LoyaltyCloud.Domain.Entities.StampProgramVersion", b =>
                 {
                     b.Property<Guid>("Id")
@@ -1831,6 +1910,11 @@ namespace LoyaltyCloud.Infrastructure.Persistence.Migrations
 
                     b.Property<Guid>("RewardIdentityId")
                         .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("ShortName")
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .HasColumnType("nvarchar(40)");
 
                     b.Property<Guid>("StampProgramVersionId")
                         .HasColumnType("uniqueidentifier");
@@ -2358,6 +2442,16 @@ namespace LoyaltyCloud.Infrastructure.Persistence.Migrations
                         .IsRequired();
                 });
 
+            modelBuilder.Entity("LoyaltyCloud.Domain.Entities.CashierRefreshToken", b =>
+                {
+                    b.HasOne("LoyaltyCloud.Domain.Entities.TenantAdminUser", null)
+                        .WithMany()
+                        .HasForeignKey("TenantId", "TenantAdminUserId")
+                        .HasPrincipalKey("TenantId", "Id")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
             modelBuilder.Entity("LoyaltyCloud.Domain.Entities.CustomNotificationCampaign", b =>
                 {
                     b.HasOne("LoyaltyCloud.Domain.Entities.Tenant", null)
@@ -2720,6 +2814,23 @@ namespace LoyaltyCloud.Infrastructure.Persistence.Migrations
                         .WithMany()
                         .HasForeignKey("TenantId", "SerialNumber")
                         .HasPrincipalKey("TenantId", "SerialNumber")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("LoyaltyCloud.Domain.Entities.StampPassEventContext", b =>
+                {
+                    b.HasOne("LoyaltyCloud.Domain.Entities.LoyaltyCard", null)
+                        .WithMany()
+                        .HasForeignKey("TenantId", "SerialNumber")
+                        .HasPrincipalKey("TenantId", "SerialNumber")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("LoyaltyCloud.Domain.Entities.StampTransaction", null)
+                        .WithMany()
+                        .HasForeignKey("TenantId", "TransactionId")
+                        .HasPrincipalKey("TenantId", "Id")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
                 });

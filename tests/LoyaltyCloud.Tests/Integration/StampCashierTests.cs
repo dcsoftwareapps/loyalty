@@ -56,8 +56,9 @@ public sealed class StampCashierTests
         flow.PrepareNextScan();
         await flow.LookupAsync("KB-TEST");
         Assert.Empty(api.Calls);
-        await flow.BeginAsync("Earn");
-        await flow.BeginAsync("Earn");
+        var intent = flow.EarnIntentKey;
+        await flow.BeginEarnAsync(intent);
+        await flow.BeginEarnAsync(intent);
         Assert.Single(api.Calls);
         Assert.True(flow.ScanConsumed);
     }
@@ -125,6 +126,51 @@ public sealed class StampCashierTests
         Assert.Null(other.Pending);
     }
 
+    [Fact]
+    public async Task Explicit_second_earn_uses_new_key_but_duplicate_callback_does_not()
+    {
+        var api = new FakeApi(); var flow = new StampCashierFlow(api, new Store(), "a");
+        await flow.LookupAsync("KB-TEST"); var firstIntent = flow.EarnIntentKey;
+        await flow.BeginEarnAsync(firstIntent); Assert.Equal("Sello agregado", flow.Message); Assert.Null(flow.Pending);
+        await flow.BeginEarnAsync(firstIntent); Assert.Single(api.Calls);
+        await flow.BeginEarnAsync(flow.EarnIntentKey); Assert.Equal(2, api.Calls.Count);
+        Assert.NotEqual(api.Calls[0].IdempotencyKey, api.Calls[1].IdempotencyKey);
+        Assert.Equal(api.Calls[0].SerialNumber, api.Calls[1].SerialNumber);
+    }
+
+    [Fact]
+    public async Task Pending_blocks_new_earn_client_switch_and_uses_original_key_on_retry()
+    {
+        var api = new FakeApi { Uncertain = true }; var flow = new StampCashierFlow(api, new Store(), "a");
+        await flow.LookupAsync("KB-TEST"); var intent = flow.EarnIntentKey; await flow.BeginEarnAsync(intent);
+        var pending = flow.Pending!; flow.PrepareNextScan(); await flow.LookupAsync("KB-OTHER"); await flow.BeginEarnAsync(intent);
+        Assert.Single(api.Calls); Assert.Equal(pending, flow.Pending); Assert.Equal("KB-TEST", flow.State!.SerialNumber);
+        api.Uncertain = false; await flow.RetryAsync(); Assert.Equal(pending, api.Calls[1]); Assert.Null(flow.Pending);
+        await flow.BeginEarnAsync(intent); Assert.Equal(2, api.Calls.Count);
+        await flow.BeginEarnAsync(flow.EarnIntentKey); Assert.Equal(3, api.Calls.Count); Assert.NotEqual(pending.IdempotencyKey, api.Calls[2].IdempotencyKey);
+    }
+
+    [Fact]
+    public async Task Concurrent_explicit_earn_callbacks_send_one_request()
+    {
+        var pause = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var api = new FakeApi { PauseExecute = pause.Task }; var flow = new StampCashierFlow(api, new Store(), "a");
+        await flow.LookupAsync("KB-TEST"); var intent = flow.EarnIntentKey; var first = flow.BeginEarnAsync(intent);
+        await flow.BeginEarnAsync(intent); Assert.Single(api.Calls); Assert.True(flow.Busy);
+        pause.SetResult(); await first; await flow.BeginEarnAsync(intent); Assert.Single(api.Calls);
+    }
+
+    [Fact]
+    public async Task Changing_customer_clears_feedback_unlock_and_invalidates_previous_earn_callback()
+    {
+        var api = new FakeApi { Unlock = true }; var flow = new StampCashierFlow(api, new Store(), "a");
+        await flow.AcceptScanAsync("KB-TEST"); Assert.NotEmpty(flow.Unlocked); var oldIntent = flow.EarnIntentKey;
+        flow.PrepareNextScan(); Assert.Null(flow.State); Assert.Null(flow.Message); Assert.Empty(flow.Unlocked);
+        await flow.LookupAsync("KB-OTHER"); await flow.BeginEarnAsync(oldIntent); Assert.Single(api.Calls);
+        await flow.BeginEarnAsync(flow.EarnIntentKey); Assert.Equal("KB-OTHER", api.Calls[1].SerialNumber);
+        await flow.BeginAsync("Reversal"); Assert.Equal("KB-OTHER", api.Calls[2].SerialNumber);
+    }
+
     private sealed class Store : IStampPendingStore
     {
         private readonly Dictionary<string, string> values = [];
@@ -139,6 +185,7 @@ public sealed class StampCashierTests
         public bool Unlock { get; set; }
         public string? BusinessError { get; set; }
         public Task? PauseRead { get; set; }
+        public Task? PauseExecute { get; set; }
         public List<PendingStampOperation> Calls { get; } = [];
         private CashierStampState State(string serial) => new(serial, "Cliente", Guid.NewGuid(), 1,
             Completed ? 10 : 5, 10, Completed, [], true);
@@ -147,12 +194,13 @@ public sealed class StampCashierTests
             if (PauseRead is not null) await PauseRead;
             return new(State(serial));
         }
-        public Task<StampCall<CashierStampResult>> ExecuteAsync(PendingStampOperation operation)
+        public async Task<StampCall<CashierStampResult>> ExecuteAsync(PendingStampOperation operation)
         {
             Calls.Add(operation);
-            return Task.FromResult(Uncertain ? new StampCall<CashierStampResult>(null, Uncertain: true)
+            if (PauseExecute is not null) await PauseExecute;
+            return Uncertain ? new StampCall<CashierStampResult>(null, Uncertain: true)
                 : BusinessError is not null ? new(null, BusinessError)
-                : new(new(State(operation.SerialNumber), Completed || Unlock ? [new(Guid.NewGuid(), "Producto gratis", null, 10, DateTime.UtcNow)] : [])));
+                : new(new(State(operation.SerialNumber), Completed || Unlock ? [new(Guid.NewGuid(), "Producto gratis", null, 10, DateTime.UtcNow)] : []));
         }
     }
 }

@@ -73,7 +73,14 @@ internal sealed class StampVisualService(AppDbContext db, ITenantContext tenantC
             if (config is null) { config = new(tenantId); db.Add(config); }
             config.SetImage(kind == StampImageKind.Filled, blob);
         }
-        await db.SaveChangesAsync(ct);
+        await db.Database.CreateExecutionStrategy().ExecuteAsync(async () =>
+        {
+            await using var tx = await db.Database.BeginTransactionAsync(ct);
+            await db.Database.ExecuteSqlInterpolatedAsync($"SELECT Id FROM Tenants WITH (UPDLOCK, HOLDLOCK) WHERE Id = {tenantId}", ct);
+            foreach (var context in await db.StampPassEventContexts.Where(x => x.AnnouncementEnabled).ToListAsync(ct)) context.Suppress();
+            await db.SaveChangesAsync(ct);
+            await tx.CommitAsync(ct);
+        });
         // SQL is committed before external best-effort APNs work; no economic version is created.
         try { await refresh.RefreshTenantInstalledPassesAsync(tenantId, PassUpdateReason.BrandingUpdated, ct); }
         catch (Exception ex) { logger.LogWarning(ex, "Stamps visual refresh failed after saving assets. TenantId={TenantId}", tenantId); }

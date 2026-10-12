@@ -958,8 +958,10 @@ input[type=color].kb-color-picker {
    ============================================================================ */
 .kb-form-row { display: flex; flex-direction: column; gap: 20px; max-width: 480px; margin-bottom: 24px; }
 .kb-stamp-form { border: 0; padding: 0; margin: 0; min-width: 0; max-width: 960px; }
-.kb-stamp-reward { display: grid; grid-template-columns: 100px minmax(0, 1fr) minmax(0, 1.5fr) 40px; gap: 16px; align-items: end; margin-bottom: 24px; }
-@media (max-width: 700px) {
+.kb-stamp-section { padding:24px 0; border-bottom:1px solid var(--kb-sand-200, #e2e8f0); margin-bottom:24px; }
+.kb-stamp-section h2 { margin-top:0; }
+.kb-stamp-reward { display: grid; grid-template-columns: 80px minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1.2fr) 40px; gap: 16px; align-items: start; margin-bottom: 24px; }
+@media (max-width: 1000px) {
     .kb-stamp-reward { grid-template-columns: minmax(0, 1fr) 40px; }
     .kb-stamp-reward .kb-field { grid-column: 1; }
     .kb-stamp-reward > button { grid-column: 2; grid-row: 1; }
@@ -1808,3 +1810,10 @@ input[type="checkbox"], input[type="radio"] { width: 18px; height: 18px; accent-
 .kb-gift-settings-layout input:not([type=checkbox]):not([type=color]):not([type=range]),.kb-gift-settings-layout select{max-width:420px}.kb-gift-settings-layout input[type=number]{max-width:220px}.kb-gift-settings-layout textarea{max-width:680px}
 @media(max-width:800px){.kb-gift-summary-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
 @media(max-width:520px){.kb-gift-summary-grid{grid-template-columns:1fr}.kb-gift-form,.kb-gift-form-grid,.kb-gift-settings-layout input:not([type=checkbox]),.kb-gift-settings-layout select,.kb-gift-settings-layout textarea{max-width:none}.kb-money-input{max-width:none}.kb-denomination-option{flex:1 1 42%}}
+
+/* Cashier surfaces share the Sellos heading and manual-entry hierarchy. */
+.kb-cashier-manual h3 { margin:0; font-family:var(--font-body); font-size:1rem; font-weight:700; }
+.kb-cashier-panel > h2 { margin-top:0; }
+
+.kb-cashier-mode { display:grid; gap:16px; }
+.kb-cashier-mode[hidden] { display:none; }

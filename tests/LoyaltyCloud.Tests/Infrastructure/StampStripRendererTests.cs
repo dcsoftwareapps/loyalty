@@ -39,6 +39,36 @@ public sealed class StampStripRendererTests
     }
 
     [Fact]
+    public void Upcoming_is_grayscale_without_overlay_available_is_color_and_redeemed_has_small_neutral_check()
+    {
+        var identity = Guid.NewGuid();
+        var image = Integration.StampVisualAssetsTests.Png(50, 50, new Rgba32(220, 40, 80));
+        var state = new StampWalletProjection(Guid.NewGuid(), Guid.NewGuid(), 1, 2, null, null,
+            [new(1, identity, image, StampWalletRewardState.Upcoming)]);
+        var upcoming = StampStripRenderer.Render(state, "#FFFFFF");
+        var available = StampStripRenderer.Render(state with { Rewards = [new(1, identity, image, StampWalletRewardState.Available)] }, "#FFFFFF");
+        var redeemed = StampStripRenderer.Render(state with { Rewards = [new(1, identity, image, StampWalletRewardState.Redeemed)] }, "#FFFFFF");
+        var directory = Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "../../../../../artifacts/stamps-wallet-production-tests/reward-states"));
+        Directory.CreateDirectory(directory);
+        File.WriteAllBytes(Path.Combine(directory, "upcoming.png"), upcoming[2].Bytes);
+        File.WriteAllBytes(Path.Combine(directory, "available.png"), available[2].Bytes);
+        File.WriteAllBytes(Path.Combine(directory, "redeemed.png"), redeemed[2].Bytes);
+        for (var n = 0; n < 3; n++)
+        {
+            var scale = n + 1;
+            using var next = Image.Load<Rgba32>(upcoming[n].Bytes); using var ready = Image.Load<Rgba32>(available[n].Bytes); using var used = Image.Load<Rgba32>(redeemed[n].Bytes);
+            var gray = next[145 * scale, 60 * scale]; Assert.Equal(gray.R, gray.G); Assert.Equal(gray.G, gray.B);
+            Assert.Equal(new Rgba32(220, 40, 80), ready[145 * scale, 60 * scale]);
+            Assert.Equal(gray, used[145 * scale, 60 * scale]);
+            var differences = 0;
+            for (var y = 0; y < next.Height; y++) for (var x = 0; x < next.Width; x++) if (next[x, y] != used[x, y]) differences++;
+            Assert.InRange(differences, 30 * scale * scale, 350 * scale * scale);
+            // No lock or other overlay anywhere within the upcoming reward's uniform art.
+            for (var y = 50 * scale; y < 94 * scale; y++) for (var x = 130 * scale; x < 170 * scale; x++) Assert.Equal(gray, next[x, y]);
+        }
+    }
+
+    [Fact]
     public void Locked_reward_differs_from_unlocked_even_for_monochrome_image()
     {
         var state = new StampWalletProjection(Guid.NewGuid(), Guid.NewGuid(), 4, 10, null, null,

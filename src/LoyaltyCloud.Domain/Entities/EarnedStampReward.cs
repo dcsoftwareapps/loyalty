@@ -11,6 +11,7 @@ public sealed class EarnedStampReward : Entity, ITenantOwned
     public Guid SourceEarnTransactionId { get; private set; }
     public Guid StampRewardDefinitionId { get; private set; }
     public string Name { get; private set; } = string.Empty;
+    public string ShortName { get; private set; } = string.Empty;
     public string? Description { get; private set; }
     public int RequiredStamps { get; private set; }
     public EarnedStampRewardStatus Status { get; private set; }
@@ -30,7 +31,7 @@ public sealed class EarnedStampReward : Entity, ITenantOwned
             || earn.Type != Enums.StampTransactionType.Earn || cycle.CurrentStamps != definition.RequiredStamps)
             throw new ArgumentException("Invalid earned reward transition.");
         TenantId = cycle.TenantId; StampCycleId = cycle.Id; SourceEarnTransactionId = earn.Id;
-        StampRewardDefinitionId = definition.Id; Name = definition.Name; Description = definition.Description;
+        StampRewardDefinitionId = definition.Id; ShortName = definition.ShortName; Name = definition.Name; Description = definition.Description;
         RequiredStamps = definition.RequiredStamps; EarnedAt = nowUtc;
     }
 

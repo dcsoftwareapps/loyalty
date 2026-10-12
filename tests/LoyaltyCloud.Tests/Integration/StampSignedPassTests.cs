@@ -71,13 +71,14 @@ public sealed class StampSignedPassTests
         Assert.Equal(card.SerialNumber, root.GetProperty("barcodes")[0].GetProperty("message").GetString());
         Assert.Equal($"{progress} / 10", root.GetProperty("storeCard").GetProperty("auxiliaryFields")[0].GetProperty("value").GetString());
         Assert.Equal("SELLOS", root.GetProperty("storeCard").GetProperty("auxiliaryFields")[0].GetProperty("label").GetString());
-        Assert.Equal("Ahora tienes %@ sellos.", root.GetProperty("storeCard").GetProperty("auxiliaryFields")[0].GetProperty("changeMessage").GetString());
+        Assert.False(root.GetProperty("storeCard").GetProperty("auxiliaryFields")[0].TryGetProperty("changeMessage", out _));
         Assert.Equal("https://test.invalid", root.GetProperty("webServiceURL").GetString());
         var messageFields = root.GetProperty("storeCard").GetProperty("auxiliaryFields").EnumerateArray()
             .Where(x => x.GetProperty("key").GetString() == "custom_message").ToArray();
         if (hasMessage)
         {
             var field = Assert.Single(messageFields);
+            Assert.Equal(string.Empty, field.GetProperty("label").GetString());
             Assert.Equal(message!.ShortMessage, field.GetProperty("value").GetString());
             Assert.Equal(message.ChangeMessage, field.GetProperty("changeMessage").GetString());
             Assert.Contains(message.LongMessage, root.GetProperty("storeCard").GetProperty("backFields").GetRawText());

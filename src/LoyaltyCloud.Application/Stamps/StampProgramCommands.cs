@@ -6,7 +6,7 @@ using MediatR;
 
 namespace LoyaltyCloud.Application.Stamps;
 
-public sealed record StampRewardInput(int RequiredStamps, string Name, string? Description = null, Guid? RewardIdentityId = null);
+public sealed record StampRewardInput(int RequiredStamps, string Name, string? Description = null, Guid? RewardIdentityId = null, string? ShortName = null);
 public sealed record StampProgramDto(Guid Id, int Version, int MaxStamps, int WelcomeStamps,
     StampReversalPolicy ReversalPolicy, IReadOnlyList<StampRewardInput> Rewards);
 public sealed record SetStampProgramCommand(int MaxStamps, int WelcomeStamps,
@@ -33,6 +33,8 @@ public sealed class SetStampProgramValidator : AbstractValidator<SetStampProgram
             reward.RuleFor(x => x.RequiredStamps).GreaterThan(0).WithMessage("El sello de la recompensa debe ser mayor que cero.");
             reward.RuleFor(x => x.Name).NotEmpty().WithMessage("Escribe el nombre de cada recompensa.")
                 .MaximumLength(150).WithMessage("El nombre debe tener como máximo 150 caracteres.");
+            reward.RuleFor(x => x.ShortName).Must(s => s is null || s.Trim().Length is >= 1 and <= 40)
+                .WithMessage("El nombre corto debe tener entre 1 y 40 caracteres.");
             reward.RuleFor(x => x.Description).MaximumLength(1000).WithMessage("La descripción debe tener como máximo 1000 caracteres.");
         });
         RuleFor(x => x.Rewards).Must((x, rewards) => rewards is not null && rewards.All(r => r.RequiredStamps <= x.MaxStamps))

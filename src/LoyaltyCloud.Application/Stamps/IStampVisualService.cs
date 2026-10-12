@@ -5,10 +5,14 @@ namespace LoyaltyCloud.Application.Stamps;
 
 public enum StampImageKind { Empty, Filled, Reward }
 public sealed record StampVisualDto(string EmptyPreview, string FilledPreview, IReadOnlyDictionary<Guid, string> RewardPreviews);
-public sealed record StampWalletReward(int RequiredStamps, Guid RewardIdentityId, byte[]? Image);
+public enum StampWalletRewardState { Upcoming, Available, Redeemed }
+public sealed record StampWalletReward(int RequiredStamps, Guid RewardIdentityId, byte[]? Image,
+    StampWalletRewardState? State = null);
+public sealed record StampWalletEvent(Guid TransactionId, string Operation, bool IsRollover,
+    string Value, string ChangeMessage, bool RewardUnlocked);
 public sealed record StampStripAsset(string Name, byte[] Bytes);
 public sealed record StampWalletProjection(Guid CycleId, Guid VersionId, int CurrentStamps, int MaxStamps,
-    byte[]? EmptyImage, byte[]? FilledImage, IReadOnlyList<StampWalletReward> Rewards);
+    byte[]? EmptyImage, byte[]? FilledImage, IReadOnlyList<StampWalletReward> Rewards, StampWalletEvent? Event = null);
 
 public interface IStampVisualService
 {

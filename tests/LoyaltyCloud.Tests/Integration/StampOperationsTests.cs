@@ -38,6 +38,44 @@ public sealed class StampOperationsTests
         env.SendAsOperatorAsync(id, Slug, new ReverseLastStampCommand(serial, key));
 
     [Fact]
+    public async Task Prior_cycle_reward_remains_available_at_two_of_ten_and_current_rewards_are_future()
+    {
+        await using var env = await Env.CreateAsync(); var (id, serial) = await SetupAsync(env);
+        StampOperationResult? result = null;
+        for (var i = 1; i <= 12; i++)
+        {
+            var earn = await Earn(env, id, serial, "qa-cycle-" + i); Assert.True(earn.IsSuccess, earn.Error); result = earn.Value;
+        }
+        Assert.Equal(2, result!.State.CurrentStamps); Assert.Equal(10, result.State.MaxStamps); Assert.Equal(2, result.State.CycleSequence);
+        Assert.Empty(result.UnlockedRewards);
+        var r2 = result.State.AvailableRewards.Single(r => r.RequiredStamps == 10);
+        Assert.Contains(result.State.CycleRewards!, r => r.RequiredStamps == 5 && !r.Used);
+        Assert.Contains(result.State.CycleRewards!, r => r.RequiredStamps == 10 && !r.Used);
+        await env.TenantReadAsync(id, Slug, async db =>
+        {
+            var earned = await db.EarnedStampRewards.SingleAsync(r => r.Id == r2.Id);
+            var cycle = await db.StampCycles.SingleAsync(c => c.Id == earned.StampCycleId);
+            Assert.Equal(1, cycle.Sequence); Assert.Equal(EarnedStampRewardStatus.Available, earned.Status);
+            var tx = await db.StampTransactions.SingleAsync(t => t.Id == earned.SourceEarnTransactionId);
+            Assert.Equal(StampTransactionType.Earn, tx.Type); Assert.Equal(10L, tx.Sequence);
+            return true;
+        });
+        var redeemed = await env.SendAsOperatorAsync(id, Slug, new RedeemStampRewardCommand(serial, r2.Id, "qa-redeem-old"));
+        Assert.True(redeemed.IsSuccess, redeemed.Error); Assert.DoesNotContain(redeemed.Value.State.AvailableRewards, r => r.Id == r2.Id);
+        Assert.Equal(2, redeemed.Value.State.CurrentStamps);
+    }
+
+    [Fact]
+    public async Task Stamps_customer_detail_failure_is_missing_points_levels()
+    {
+        await using var env = await Env.CreateAsync(); var (id, serial) = await SetupAsync(env);
+        var customerId = await env.TenantReadAsync(id, Slug, db => db.LoyaltyCards.Where(c => c.SerialNumber == serial).Select(c => c.CustomerId).SingleAsync());
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() => env.SendAsOperatorAsync(id, Slug,
+            new LoyaltyCloud.Application.Customers.Queries.GetCustomerDetail.GetCustomerDetailQuery(customerId)));
+        Assert.Equal("No hay niveles activos configurados para el tenant actual.", exception.Message);
+    }
+
+    [Fact]
     public async Task Earn_unlocks_completes_replays_original_result_and_rolls_over_with_new_rules()
     {
         await using var env = await Env.CreateAsync();
@@ -138,7 +176,11 @@ public sealed class StampOperationsTests
         await env.TenantReadAsync(id, Slug, async db =>
         {
             Assert.Equal(3, await db.StampTransactions.CountAsync(x => x.Type == StampTransactionType.Earn));
-            Assert.Equal(3, await db.StampOperationReceipts.CountAsync()); return true;
+            Assert.Equal(3, await db.StampOperationReceipts.CountAsync());
+            var context = Assert.Single(await db.StampPassEventContexts.ToListAsync());
+            Assert.True(context.AnnouncementEnabled);
+            Assert.Equal(3, (await db.StampTransactions.SingleAsync(x => x.Id == context.TransactionId)).Sequence);
+            return true;
         });
         var other = await env.JoinAsync(id, Slug, "Otra", "Stamp", "6465550002");
         Assert.True((await Earn(env, id, other.Value.SerialNumber, "same")).IsFailure);

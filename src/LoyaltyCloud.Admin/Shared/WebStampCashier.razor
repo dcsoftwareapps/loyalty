@@ -2,7 +2,9 @@
 @using LoyaltyCloud.Common.Services
 @using LoyaltyCloud.Admin.Auth
 @using LoyaltyCloud.Application.Stamps
+@using Microsoft.EntityFrameworkCore
 @implements IAsyncDisposable
+@inject IDbContextFactory<LoyaltyCloud.Infrastructure.Persistence.AppDbContext> DbFactory
 @inject IJSRuntime JS
 @inject AuthenticationStateProvider Authentication
 @inject IStampOperationsService Operations
@@ -11,7 +13,7 @@
 
 @if (flow is not null)
 {
-    <LoyaltyCloud.Shared.StampCashierPanel Flow="flow" Scan="ScanAsync" ParseSerial="ParseSerial" LockedChanged="LockedChanged">
+    <LoyaltyCloud.Shared.StampCashierPanel Flow="flow" Scan="ScanAsync" ParseSerial="ParseSerial" LockedChanged="OnLockedChangedAsync" RewardShortNames="rewardShortNames">
         <ScannerContent>
             @if (scanning)
             {
@@ -26,6 +28,26 @@
     [Parameter, EditorRequired] public Func<string?, string?> ParseSerial { get; set; } = default!;
     [Parameter] public EventCallback<bool> LockedChanged { get; set; }
     private StampCashierFlow? flow;
+    private IReadOnlyDictionary<Guid, string> rewardShortNames = new Dictionary<Guid, string>();
+    private async Task OnLockedChangedAsync(bool locked)
+    {
+        await LockedChanged.InvokeAsync(locked);
+        if (locked || flow is null) return;
+        rewardShortNames = new Dictionary<Guid, string>();
+        if (flow.Unlocked.Count == 0) return;
+        var ids = flow.Unlocked.Select(r => r.Id).ToArray();
+        try
+        {
+            await using var db = await DbFactory.CreateDbContextAsync();
+            // Earned snapshots are authoritative, including rewards from historical program versions.
+            rewardShortNames = await db.EarnedStampRewards.AsNoTracking().Where(r => ids.Contains(r.Id))
+                .ToDictionaryAsync(r => r.Id, r => r.ShortName);
+        }
+        catch (Exception ex)
+        {
+            Logger.LogWarning(ex, "Could not resolve reward display snapshots; using receipt names.");
+        }
+    }
     private bool scanning;
     private bool scannerStarted;
     private ElementReference video;

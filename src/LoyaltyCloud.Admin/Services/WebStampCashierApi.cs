@@ -43,5 +43,6 @@ public sealed class WebStampCashierApi(IStampOperationsService service, ILogger<
 
     private static CashierStampReward Map(StampRewardDto r) => new(r.Id, r.Name, r.Description, r.RequiredStamps, r.EarnedAt);
     private static CashierStampState Map(StampStateDto s) => new(s.SerialNumber, s.CustomerName, s.CycleId,
-        s.CycleSequence, s.CurrentStamps, s.MaxStamps, s.CycleCompleted, s.AvailableRewards.Select(Map).ToList(), s.CanReverseLastEarn);
+        s.CycleSequence, s.CurrentStamps, s.MaxStamps, s.CycleCompleted, s.AvailableRewards.Select(Map).ToList(), s.CanReverseLastEarn,
+        s.CycleRewards?.Select(r => new CashierStampCycleReward(r.DefinitionId, r.Name, r.Description, r.RequiredStamps, r.Used)).ToList());
 }

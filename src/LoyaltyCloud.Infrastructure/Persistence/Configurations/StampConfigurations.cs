@@ -34,12 +34,13 @@ internal sealed class StampRewardDefinitionConfiguration : IEntityTypeConfigurat
         b.HasIndex(x => new { x.TenantId, x.StampProgramVersionId, x.RequiredStamps }).IsUnique();
         b.HasIndex(x => new { x.TenantId, x.StampProgramVersionId, x.RewardIdentityId }).IsUnique();
         b.Property(x => x.Name).HasMaxLength(150).IsRequired();
+        b.Property(x => x.ShortName).HasMaxLength(StampRewardDefinition.ShortNameMaxLength).IsRequired();
         b.Property(x => x.Description).HasMaxLength(1000);
         b.HasOne<StampProgramVersion>().WithMany().HasForeignKey(x => new { x.TenantId, x.StampProgramVersionId })
             .HasPrincipalKey(x => new { x.TenantId, x.Id }).OnDelete(DeleteBehavior.Restrict);
         b.HasOne<StampRewardIdentity>().WithMany().HasForeignKey(x => new { x.TenantId, x.RewardIdentityId })
             .HasPrincipalKey(x => new { x.TenantId, x.Id }).OnDelete(DeleteBehavior.Restrict);
-        foreach (var name in new[] { nameof(StampRewardDefinition.RequiredStamps), nameof(StampRewardDefinition.Name),
+        foreach (var name in new[] { nameof(StampRewardDefinition.RequiredStamps), nameof(StampRewardDefinition.Name), nameof(StampRewardDefinition.ShortName),
             nameof(StampRewardDefinition.Description), nameof(StampRewardDefinition.StampProgramVersionId),
             nameof(StampRewardDefinition.RewardIdentityId) })
             b.Property(name).Metadata.SetAfterSaveBehavior(PropertySaveBehavior.Throw);

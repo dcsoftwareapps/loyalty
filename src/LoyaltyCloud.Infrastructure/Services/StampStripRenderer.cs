@@ -37,12 +37,13 @@ internal static class StampStripRenderer
                 var dimension = (int)Math.Round(size * .86 * scale);
                 using var source = bytes is null ? CreateDefault(kind, dimension) : Image.Load<Rgba32>(bytes);
                 source.Mutate(c => c.Resize(new ResizeOptions { Size = new Size(dimension, dimension), Mode = ResizeMode.Max }));
-                if (reward is not null && !filled) source.Mutate(c => c.Grayscale().Contrast(.55f).Brightness(.75f));
+                var rewardState = reward?.State ?? (filled ? StampWalletRewardState.Available : StampWalletRewardState.Upcoming);
+                if (reward is not null && rewardState != StampWalletRewardState.Available) source.Mutate(c => c.Grayscale().Contrast(.55f).Brightness(.75f));
                 var x = (int)Math.Round((left + size / 2) * scale - source.Width / 2d);
                 var y = (int)Math.Round((top + size / 2) * scale - source.Height / 2d);
                 canvas.Mutate(c => c.DrawImage(source, new Point(x, y), 1));
-                if (reward is not null && !filled)
-                    DrawLock(canvas, (int)Math.Round((left + size * .65) * scale),
+                if (reward is not null && rewardState == StampWalletRewardState.Redeemed)
+                    DrawCheck(canvas, (int)Math.Round((left + size * .65) * scale),
                         (int)Math.Round((top + size * .62) * scale), Math.Max(10, (int)(size * .29 * scale)));
             }
             using var output = new MemoryStream(); canvas.SaveAsPng(output);
@@ -73,19 +74,18 @@ internal static class StampStripRenderer
         return image;
     }
 
-    private static void DrawLock(Image<Rgba32> image, int left, int top, int size)
+    private static void DrawCheck(Image<Rgba32> image, int left, int top, int size)
     {
-        // Integrated in-cell lock badge remains distinct even for monochrome source art.
+        // Small neutral disc and white check; independent of tenant branding and source art.
         for (var y = 0; y < size; y++)
         for (var x = 0; x < size; x++)
         {
-            var color = new Rgba32(255, 255, 255);
-            var body = y >= size * .48 && y < size * .85 && x >= size * .22 && x < size * .78;
-            var dx = x - size * .5; var dy = y - size * .38;
-            var ring = y < size * .5 && dx * dx + dy * dy <= size * size * .08
-                && dx * dx + dy * dy >= size * size * .025;
-            if (body || ring) color = new Rgba32(35, 43, 48);
-            if (left + x < image.Width && top + y < image.Height) image[left + x, top + y] = color;
+            var u = x / (double)size; var v = y / (double)size;
+            var radius = Math.Sqrt(Math.Pow(u - .5, 2) + Math.Pow(v - .5, 2));
+            if (radius > .5 || left + x >= image.Width || top + y >= image.Height) continue;
+            var check = (u >= .22 && u <= .44 && Math.Abs(v - (u + .23)) < .065)
+                || (u >= .40 && u <= .79 && Math.Abs(v - (1.07 - u)) < .065);
+            image[left + x, top + y] = radius > .43 || check ? new Rgba32(255, 255, 255) : new Rgba32(35, 43, 48);
         }
     }
 

@@ -1,5 +1,5 @@
 @page "/cashier"
-@layout EmptyLayout
+@layout CashierAdaptiveLayout
 @attribute [Authorize(Policy = LoyaltyCloud.Admin.Auth.TenantAuthorizationPolicies.TenantUser)]
 @rendermode InteractiveServer
 @implements IAsyncDisposable
@@ -29,16 +29,19 @@
 <PageTitle>Caja - LoyaltyCloud</PageTitle>
 
 <main class="kb-cashier-shell">
-    <header class="kb-cashier-header">
-        <div>
-            <strong>LoyaltyCloud</strong>
-            <span>@CurrentUsername</span>
-        </div>
-        <form method="post" action="/logout">
-            <AntiforgeryToken />
-            <button type="submit" class="kb-btn kb-btn--ghost kb-btn--small">Cerrar sesión</button>
-        </form>
-    </header>
+    @if (!embeddedAdmin)
+    {
+        <header class="kb-cashier-header">
+            <div>
+                <strong>LoyaltyCloud</strong>
+                <span>@CurrentUsername</span>
+            </div>
+            <form method="post" action="/logout">
+                <AntiforgeryToken />
+                <button type="submit" class="kb-btn kb-btn--ghost kb-btn--small">Cerrar sesión</button>
+            </form>
+        </header>
+    }
 
     <section class="kb-cashier-segmented" role="group" aria-label="Modo de caja">
         <button type="button"
@@ -57,10 +60,9 @@
         </button>
     </section>
 
-    @if (surface == CashierSurface.GiftCard)
-    {
-        <section class="kb-cashier-hero">
-            <h1>Tarjeta de regalo</h1>
+    <div class="kb-cashier-mode" hidden="@(surface != CashierSurface.GiftCard)" data-cashier-surface="gift-card">
+        <section class="kb-cashier-panel">
+            <h2>Tarjeta de regalo</h2>
             <button type="button"
                     class="kb-btn kb-btn--primary kb-btn--large kb-btn--block"
                     @onclick="@(() => StartScannerAsync(ScannerPurpose.GiftCard))"
@@ -80,7 +82,8 @@
             </section>
         }
 
-        <section class="kb-cashier-panel">
+        <section class="kb-cashier-panel kb-cashier-manual">
+            <h3>Buscar tarjeta manualmente</h3>
             <label for="cashier-gift-card-code">Código</label>
             <input id="cashier-gift-card-code"
                    type="text"
@@ -162,12 +165,16 @@
                 </button>
             </div>
         }
-    }
-    else if (isStamps)
+    </div>
+    @if (isStamps)
     {
-        <LoyaltyCloud.Admin.Shared.WebStampCashier ParseSerial="ExtractSerial" LockedChanged="StampLockedChanged" />
+        <div class="kb-cashier-mode" hidden="@(surface != CashierSurface.Points)" data-cashier-surface="stamps">
+            <LoyaltyCloud.Admin.Shared.WebStampCashier ParseSerial="ExtractSerial" LockedChanged="StampLockedChanged" />
+        </div>
     }
-    else if (customer is null)
+    else if (surface == CashierSurface.Points)
+    {
+    @if (customer is null)
     {
         <section class="kb-cashier-hero">
             <h1>Cliente</h1>
@@ -384,6 +391,8 @@
         </button>
     }
 
+    }
+
     @if (errorMessage is not null)
     {
         <div class="kb-form-error kb-cashier-alert" role="alert">@errorMessage</div>
@@ -497,12 +506,14 @@
         await TenantInitializer.EnsureTenantContextAsync();
         isStamps = await Programs.GetCurrentAsync() == LoyaltyProgramType.Stamps;
         var principal = (await AuthenticationStateProvider.GetAuthenticationStateAsync()).User;
+        embeddedAdmin = CashierExperience.IsEmbeddedAdmin(principal);
         currentUsername = principal.FindFirstValue(AdminClaimTypes.Name)
             ?? principal.Identity?.Name
             ?? "Caja";
     }
 
     private bool isStamps;
+    private bool embeddedAdmin;
     private bool stampLocked;
     private void StampLockedChanged(bool value) => stampLocked = value;
 
@@ -513,19 +524,13 @@
 
         await StopScannerAsync();
         qrHandled = false;
-        errorMessage = null;
-        successMessage = null;
-        giftCardSuccessMessage = null;
-
-        if (nextSurface == CashierSurface.Points)
+        // Stamps and Gift Card are independent modes of this mounted cashier session.
+        // Keep their customer, feedback, amount and pending state when only changing tabs.
+        if (!isStamps)
         {
-            ResetGiftCardFlow();
+            errorMessage = null;
+            successMessage = null;
             ResetPointsFlow();
-        }
-        else
-        {
-            ResetPointsFlow();
-            ResetGiftCardFlow();
         }
 
         surface = nextSurface;

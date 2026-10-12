@@ -165,7 +165,7 @@ internal sealed class PassGeneratorService : IPassGeneratorService
         return output.ToArray();
     }
 
-    private object BuildStampsPassJson(LoyaltyCard card, Customer customer, TenantWalletBrandingDto branding, StampWalletProjection state, WalletNotificationContext walletContext)
+    internal object BuildStampsPassJson(LoyaltyCard card, Customer customer, TenantWalletBrandingDto branding, StampWalletProjection state, WalletNotificationContext walletContext)
     {
         EnsureRequiredOption(_options.PassTypeIdentifier, "Apple:PassTypeIdentifier");
         EnsureRequiredOption(_options.TeamIdentifier, "Apple:TeamIdentifier");
@@ -173,7 +173,9 @@ internal sealed class PassGeneratorService : IPassGeneratorService
         EnsureRequiredOption(_options.OrganizationName, "Apple:OrganizationName");
         var fields = new List<object>
         {
-            new { key = "stamps", label = "SELLOS", value = $"{state.CurrentStamps} / {state.MaxStamps}", changeMessage = "Ahora tienes %@ sellos." }
+            state.Event is { } stampEvent
+                ? (object)new { key = "stamps", label = "SELLOS", value = $"{state.CurrentStamps} / {state.MaxStamps}", changeMessage = stampEvent.ChangeMessage }
+                : new { key = "stamps", label = "SELLOS", value = $"{state.CurrentStamps} / {state.MaxStamps}" }
         };
         var backFields = new List<object>
         {
@@ -181,9 +183,13 @@ internal sealed class PassGeneratorService : IPassGeneratorService
         };
         if (walletContext.CustomMessage is { } message)
         {
-            fields.Add(BuildCustomMessageField(message,
-                includeChangeMessage: walletContext.RecentVisibleEvent?.Type == NotificationType.Custom, out _));
-            backFields.Add(new { key = "custom_message_detail", label = "MENSAJE", value = $"{message.Title}\n\n{message.LongMessage}" });
+            if (message.DisplayUntilUtc > _dt.UtcNow)
+            {
+                fields.Add(walletContext.RecentVisibleEvent?.Type == NotificationType.Custom
+                    ? (object)new { key = "custom_message", label = string.Empty, value = message.ShortMessage, changeMessage = message.ChangeMessage }
+                    : new { key = "custom_message", label = string.Empty, value = message.ShortMessage });
+                backFields.Add(new { key = "custom_message_detail", label = "MENSAJE", value = $"{message.Title}\n\n{message.LongMessage}" });
+            }
         }
         return new
         {

@@ -76,13 +76,26 @@ public sealed class CashierMobileAppTests
         Assert.Contains("loyaltycloud.cashier.session.v1", session);
         Assert.Contains("RestoreAsync", session);
         Assert.Contains("session.IsExpired(DateTimeOffset.UtcNow)", session);
-        Assert.Contains("await LogoutAsync();", session);
+        Assert.Contains("RefreshAfterUnauthorizedAsync", session);
         Assert.Contains("Sessions.RestoreAsync()", page);
         Assert.Contains("Sessions.SignInAsync", page);
         Assert.Contains("Sessions.LogoutAsync", page);
         Assert.DoesNotContain("localStorage", session, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("sessionStorage", session, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("Preferences", session, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    [Trait("Category", "CashierMobile")]
+    public void Login_preferences_persist_only_tenant_and_username()
+    {
+        var preferences=Read("src", "LoyaltyCloud.Cashier", "Services", "CashierLoginPreferences.cs");
+        Assert.Contains("Preferences.Default.Set(TenantKey, tenantSlug.Trim())", preferences);
+        Assert.Contains("Preferences.Default.Set(UsernameKey, username.Trim())", preferences);
+        Assert.Equal(2, preferences.Split("Preferences.Default.Set(").Length-1);
+        Assert.DoesNotContain("password", preferences, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("RefreshToken", preferences, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("AccessToken", preferences, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]
@@ -281,7 +294,9 @@ public sealed class CashierMobileAppTests
         Assert.Contains("!giftMode && !IsStamps", mobile);
         Assert.Contains("StampCashierPanel", mobile);
         Assert.Contains("<GiftCardPanel", mobile);
-        Assert.Contains("else if (isStamps)", web);
+        Assert.Contains("@if (isStamps)", web);
+        Assert.Contains("hidden=\"@(surface != CashierSurface.Points)\"", web);
+        Assert.Contains("hidden=\"@giftMode\"", mobile);
         Assert.Contains("WebStampCashier", web);
         Assert.Contains("LoyaltyCloud.Admin\\Shared\\StampCashierPanel.razor", project);
     }

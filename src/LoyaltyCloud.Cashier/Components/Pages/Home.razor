@@ -22,6 +22,7 @@
             <p class="eyebrow">LoyaltyCloud</p>
             <h1>Preparando caja</h1>
             <p class="muted">Revisando tu sesión...</p>
+            @if (restoreError is not null) { <p role="alert">@restoreError</p><button class="primary-button" @onclick="RestoreSessionAsync">Reintentar</button> }
         </section>
     }
     else if (session is null)
@@ -96,11 +97,13 @@
             </div>
 
             <div hidden="@(!giftMode)">
-                <GiftCardPanel @key="session" Session="session" BusyChanged="GiftBusyChanged" PendingChanged="GiftPendingChanged" />
+                <GiftCardPanel @key="@(session.SessionId + session.TenantSlug + session.UserId + session.ProgramType)" Session="session" BusyChanged="GiftBusyChanged" PendingChanged="GiftPendingChanged" />
             </div>
-            @if (!giftMode && IsStamps && stampFlow is not null)
+            @if (IsStamps && stampFlow is not null)
             {
-                <LoyaltyCloud.Shared.StampCashierPanel Flow="stampFlow" Scan="ScanStampAsync" ParseSerial="CashierQrPayloadParser.ExtractCustomerSerial" Mobile="true" LockedChanged="StampLockedChanged" />
+                <div hidden="@giftMode" data-cashier-surface="stamps">
+                    <LoyaltyCloud.Shared.StampCashierPanel Flow="stampFlow" Scan="ScanStampAsync" ParseSerial="CashierQrPayloadParser.ExtractCustomerSerial" Mobile="true" LockedChanged="StampLockedChanged" />
+                </div>
             }
             @if (!giftMode && !IsStamps)
             {
@@ -496,12 +499,20 @@
     protected override async Task OnInitializedAsync()
     {
         Sessions.SessionChanged += OnSessionChanged;
-        session = await Sessions.RestoreAsync();
-        if (session is null)
-            RestoreLoginIdentifiers();
-        else
-            await RestorePendingRewardRedemptionAsync();
-        restoring = false;
+        await RestoreSessionAsync();
+    }
+    private string? restoreError;
+    private async Task RestoreSessionAsync()
+    {
+        restoring=true; restoreError=null;
+        try
+        {
+            session=await Sessions.RestoreAsync();
+            if (session is null) RestoreLoginIdentifiers();
+            else await RestorePendingRewardRedemptionAsync();
+            restoring=false;
+        }
+        catch (HttpRequestException) { restoreError="No fue posible renovar tu sesión. Revisa la conexión e intenta de nuevo."; }
     }
 
     public void Dispose()
@@ -519,16 +530,16 @@
         successMessage = null;
         try
         {
-            var result = await Api.LoginAsync(login.TenantSlug, login.Username, login.Password);
+            var result = await Api.LoginAsync(login.TenantSlug, login.Username, login.Password, rememberMe: rememberMe);
             if (!result.Succeeded || result.Session is null)
             {
                 errorMessage = result.ErrorMessage ?? "No fue posible iniciar sesión.";
                 return;
             }
 
-            await Sessions.SignInAsync(result.Session);
+            await Sessions.SignInAsync(result.Session, rememberMe);
             LoginPreferences.Save(rememberMe, login.TenantSlug, login.Username);
-            session = result.Session;
+            session = Sessions.Current;
             login.Password = string.Empty;
             await RestorePendingRewardRedemptionAsync();
         }

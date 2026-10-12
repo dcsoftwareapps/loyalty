@@ -11,6 +11,7 @@ internal sealed class EarnedStampRewardConfiguration : IEntityTypeConfiguration<
     {
         b.ToTable("EarnedStampRewards"); b.HasKey(x => x.Id);
         b.Property(x => x.Name).HasMaxLength(150).IsRequired();
+        b.Property(x => x.ShortName).HasMaxLength(StampRewardDefinition.ShortNameMaxLength).IsRequired();
         b.Property(x => x.Description).HasMaxLength(1000);
         b.Property(x => x.Status).HasConversion<string>().HasMaxLength(30);
         b.Property(x => x.RowVersion).IsRowVersion();
@@ -22,7 +23,7 @@ internal sealed class EarnedStampRewardConfiguration : IEntityTypeConfiguration<
             .HasPrincipalKey(x => new { x.TenantId, x.Id }).OnDelete(DeleteBehavior.Restrict);
         // Definition ID is provenance, not a FK: its future removal must not remove an earned snapshot.
         foreach (var name in new[] { nameof(EarnedStampReward.StampCycleId), nameof(EarnedStampReward.SourceEarnTransactionId),
-            nameof(EarnedStampReward.StampRewardDefinitionId), nameof(EarnedStampReward.Name),
+            nameof(EarnedStampReward.StampRewardDefinitionId), nameof(EarnedStampReward.Name), nameof(EarnedStampReward.ShortName),
             nameof(EarnedStampReward.Description), nameof(EarnedStampReward.RequiredStamps), nameof(EarnedStampReward.EarnedAt) })
             b.Property(name).Metadata.SetAfterSaveBehavior(PropertySaveBehavior.Throw);
     }

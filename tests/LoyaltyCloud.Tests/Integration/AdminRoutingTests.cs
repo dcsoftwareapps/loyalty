@@ -480,7 +480,7 @@ public sealed class AdminRoutingTests : IClassFixture<AdminRoutingTests.AdminWeb
 
         Assert.Contains("@page \"/cashier\"", source);
         Assert.Contains("TenantAuthorizationPolicies.TenantUser", source);
-        Assert.Contains("@layout EmptyLayout", source);
+        Assert.Contains("@layout CashierAdaptiveLayout", source);
         Assert.Contains("CashierSurface.Points", source);
         Assert.Contains("private CashierSurface surface = CashierSurface.Points", source);
         Assert.Contains("class=\"kb-cashier-segmented\"", source);
@@ -893,7 +893,7 @@ public sealed class AdminRoutingTests : IClassFixture<AdminRoutingTests.AdminWeb
             "href=\"/giftcards\"", "href=\"/giftcards/issue\"", "href=\"/giftcards/redeem\"", "href=\"/giftcards/cards\"",
             "<span class=\"kb-sidebar-section\">Reportes</span>",
             "href=\"/customers\"", "href=\"/reports/activity-trends\"", "href=\"/giftcards/reports\"",
-            "<span class=\"kb-sidebar-section\">Gestión</span>",
+            "<span class=\"kb-sidebar-section\">Configuración</span>",
             "href=\"/levels\"", "href=\"/config\"", "href=\"/staff\"", "href=\"/quick-help\""
         };
 
@@ -937,7 +937,7 @@ public sealed class AdminRoutingTests : IClassFixture<AdminRoutingTests.AdminWeb
     {
         var source = File.ReadAllText(Path.Combine(GetRepositoryRoot(), "src", "LoyaltyCloud.Admin", "Components", "Layout", "MainLayout.razor"));
 
-        var managementIndex = source.IndexOf("<span class=\"kb-sidebar-section\">Gestión</span>", StringComparison.Ordinal);
+        var managementIndex = source.IndexOf("<span class=\"kb-sidebar-section\">Configuración</span>", StringComparison.Ordinal);
         var configIndex = source.IndexOf("href=\"/config\"", managementIndex, StringComparison.Ordinal);
         var billingIndex = source.IndexOf("href=\"@($\"/{TenantContext.TenantSlug}/billing\")", managementIndex, StringComparison.Ordinal);
         var staffIndex = source.IndexOf("href=\"/staff\"", managementIndex, StringComparison.Ordinal);
@@ -961,7 +961,7 @@ public sealed class AdminRoutingTests : IClassFixture<AdminRoutingTests.AdminWeb
         client.DefaultRequestHeaders.Add("Cookie", await _factory.CreateTenantAdminCookieAsync());
 
         using var response = await client.GetAsync("/quick-help");
-        var html = await response.Content.ReadAsStringAsync();
+        var html = System.Net.WebUtility.HtmlDecode(await response.Content.ReadAsStringAsync());
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         Assert.Contains("Ayuda rápida", html);

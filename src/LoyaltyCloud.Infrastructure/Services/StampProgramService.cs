@@ -53,7 +53,7 @@ internal sealed class StampProgramService(AppDbContext db, ITenantContext tenant
             {
                 var current = await ToDtoAsync(active, ct);
                 var rewards = command.Rewards.OrderBy(x => x.RequiredStamps)
-                    .Select(x => new StampRewardInput(x.RequiredStamps, x.Name.Trim(), NormalizeDescription(x.Description), x.RewardIdentityId));
+                    .Select(x => new StampRewardInput(x.RequiredStamps, x.Name.Trim(), NormalizeDescription(x.Description), x.RewardIdentityId, StampRewardDefinition.NormalizeShortName(x.ShortName, x.Name)));
                 if (current.MaxStamps == command.MaxStamps && current.WelcomeStamps == command.WelcomeStamps
                     && current.ReversalPolicy == command.ReversalPolicy
                     && current.Rewards.Select(x => x with { Description = NormalizeDescription(x.Description) }).SequenceEqual(rewards))
@@ -77,7 +77,7 @@ internal sealed class StampProgramService(AppDbContext db, ITenantContext tenant
             {
                 var identity = reward.RewardIdentityId ?? Guid.NewGuid();
                 if (!reward.RewardIdentityId.HasValue) db.Add(new StampRewardIdentity(identity, tenantId));
-                db.Add(new StampRewardDefinition(Guid.NewGuid(), next, reward.RequiredStamps, reward.Name, NormalizeDescription(reward.Description), identity));
+                db.Add(new StampRewardDefinition(Guid.NewGuid(), next, reward.RequiredStamps, reward.Name, NormalizeDescription(reward.Description), identity, reward.ShortName));
             }
             await db.SaveChangesAsync(ct);
             await transaction.CommitAsync(ct);
@@ -96,7 +96,7 @@ internal sealed class StampProgramService(AppDbContext db, ITenantContext tenant
     private async Task<StampProgramDto> ToDtoAsync(StampProgramVersion version, CancellationToken ct)
     {
         var rewards = await db.Set<StampRewardDefinition>().AsNoTracking().Where(x => x.StampProgramVersionId == version.Id)
-            .OrderBy(x => x.RequiredStamps).Select(x => new StampRewardInput(x.RequiredStamps, x.Name, x.Description, x.RewardIdentityId)).ToListAsync(ct);
+            .OrderBy(x => x.RequiredStamps).Select(x => new StampRewardInput(x.RequiredStamps, x.Name, x.Description, x.RewardIdentityId, x.ShortName)).ToListAsync(ct);
         return new(version.Id, version.Version, version.MaxStamps, version.WelcomeStamps, version.ReversalPolicy, rewards);
     }
 

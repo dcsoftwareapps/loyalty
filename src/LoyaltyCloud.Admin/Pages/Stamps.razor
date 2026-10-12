@@ -23,6 +23,8 @@ else
     @foreach (var message in errors) { <div class="kb-form-error" role="alert">@message</div> }
     <form @onsubmit="SaveAsync" @onsubmit:preventDefault>
         <fieldset disabled="@(busy || visualBusy)" class="kb-stamp-form">
+            <section class="kb-stamp-section">
+            <h2>Reglas del programa</h2>
             <div class="kb-form-row">
                 <label for="stamp-max">Sellos para completar tarjeta</label>
                 <input id="stamp-max" type="number" min="2" max="12" step="1" @bind="maxStamps" />
@@ -30,18 +32,21 @@ else
             <div class="kb-form-row">
                 <label for="stamp-welcome">Sellos de bienvenida</label>
                 <input id="stamp-welcome" type="number" min="0" max="@(maxStamps - 1)" step="1" @bind="welcomeStamps" />
-                <small class="kb-muted">Se aplican solamente al primer ciclo del cliente.</small>
+                <small class="kb-muted">Se otorgan una sola vez al registrar al cliente.</small>
             </div>
             <div class="kb-form-row">
-                <label for="stamp-reversal">Reversión de sellos</label>
+                <label for="stamp-reversal">Permitir cancelar el último sello</label>
                 <select id="stamp-reversal" @bind="policy">
                     <option value="@StampReversalPolicy.None">No permitir</option>
-                    <option value="@StampReversalPolicy.AdminOnly">Solo administradores</option>
+                    <option value="@StampReversalPolicy.AdminOnly">Administradores</option>
                     <option value="@StampReversalPolicy.AdminAndCashier">Administradores y cajeros</option>
                 </select>
             </div>
+            </section>
+            <section class="kb-stamp-section">
             <h2>Recompensas</h2>
             <p class="kb-muted">Agrega una recompensa para el último sello de la tarjeta.</p>
+            <p id="stamp-short-help" class="kb-muted">El nombre corto se usa en las notificaciones de Wallet. Procura que sea breve, por ejemplo: Café gratis.</p>
             @for (var i = 0; i < rewards.Count; i++)
             {
                 var reward = rewards[i];
@@ -49,21 +54,23 @@ else
                 <div class="kb-stamp-reward" @key="reward">
                     <div class="kb-field"><label for="@($"stamp-threshold-{index}")">Sello</label><input id="@($"stamp-threshold-{index}")" type="number" min="1" max="@maxStamps" @bind="reward.RequiredStamps" /></div>
                     <div class="kb-field"><label for="@($"stamp-name-{index}")">Nombre</label><input id="@($"stamp-name-{index}")" maxlength="150" @bind="reward.Name" required /></div>
+                    <div class="kb-field"><label for="@($"stamp-short-name-{index}")">Nombre corto</label><input id="@($"stamp-short-name-{index}")" maxlength="40" @bind="reward.ShortName" required aria-describedby="stamp-short-help" /></div>
                     <div class="kb-field"><label for="@($"stamp-description-{index}")">Descripción (opcional)</label><textarea id="@($"stamp-description-{index}")" maxlength="1000" rows="2" @bind="reward.Description"></textarea></div>
                     <button type="button" class="kb-icon-button" title="Eliminar recompensa" aria-label="Eliminar recompensa" @onclick="() => rewards.Remove(reward)"><NavIcon Name="close" /></button>
                 </div>
             }
+            </section>
             <div class="kb-actions-inline">
                 <button type="button" class="kb-btn kb-btn--ghost" @onclick="() => rewards.Add(new RewardForm())">Agregar recompensa</button>
-                <button type="submit" class="kb-btn kb-btn--primary">@(busy ? "Guardando..." : "Guardar cambios")</button>
+                <button type="submit" class="kb-btn kb-btn--primary">@(busy ? "Guardando..." : "Guardar reglas y recompensas")</button>
             </div>
         </fieldset>
     </form>
     @if (visuals is not null)
     {
-        <section>
+        <section class="kb-stamp-section">
             <h2>Apariencia de la tarjeta</h2>
-            <p class="kb-muted">Las imágenes se actualizan en todas las tarjetas sin cambiar sus reglas.</p>
+            <p class="kb-muted">Las imágenes se aplican inmediatamente en todas las tarjetas. No necesitas guardar reglas y recompensas para aplicar estas acciones.</p>
             <StampImageUpload Label="Sello vacío" Preview="@visuals.EmptyPreview" Kind="StampImageKind.Empty" Disabled="@(busy || visualBusy)" Changed="ReloadVisualsAsync" BusyChanged="SetVisualBusy" />
             <StampImageUpload Label="Sello lleno" Preview="@visuals.FilledPreview" Kind="StampImageKind.Filled" Disabled="@(busy || visualBusy)" Changed="ReloadVisualsAsync" BusyChanged="SetVisualBusy" />
             @foreach (var reward in current?.Rewards ?? [])
@@ -99,7 +106,7 @@ else
             await ReloadVisualsAsync();
             if (current is null) return;
             maxStamps = current.MaxStamps; welcomeStamps = current.WelcomeStamps; policy = current.ReversalPolicy;
-            rewards.AddRange(current.Rewards.Select(r => new RewardForm { RewardIdentityId = r.RewardIdentityId, RequiredStamps = r.RequiredStamps, Name = r.Name, Description = r.Description }));
+            rewards.AddRange(current.Rewards.Select(r => new RewardForm { RewardIdentityId = r.RewardIdentityId, RequiredStamps = r.RequiredStamps, Name = r.Name, ShortName = r.ShortName ?? "", Description = r.Description }));
         }
         finally { loading = false; }
     }
@@ -109,7 +116,7 @@ else
         if (busy || visualBusy || !isStamps) return;
         success = error = null; errors.Clear();
         var command = new SetStampProgramCommand(maxStamps, welcomeStamps, policy,
-            rewards.Select(r => new StampRewardInput(r.RequiredStamps, r.Name, r.Description, r.RewardIdentityId)).ToList());
+            rewards.Select(r => new StampRewardInput(r.RequiredStamps, r.Name, r.Description, r.RewardIdentityId, r.ShortName)).ToList());
         var validation = await new SetStampProgramValidator().ValidateAsync(command);
         if (!validation.IsValid) { errors.AddRange(validation.Errors.Select(x => x.ErrorMessage).Distinct()); return; }
         busy = true;
@@ -122,7 +129,7 @@ else
             current = result.Value;
             await ReloadVisualsAsync();
             rewards.Clear();
-            rewards.AddRange(current.Rewards.Select(r => new RewardForm { RewardIdentityId = r.RewardIdentityId, RequiredStamps = r.RequiredStamps, Name = r.Name, Description = r.Description }));
+            rewards.AddRange(current.Rewards.Select(r => new RewardForm { RewardIdentityId = r.RewardIdentityId, RequiredStamps = r.RequiredStamps, Name = r.Name, ShortName = r.ShortName ?? "", Description = r.Description }));
         }
         finally { busy = false; }
     }
@@ -139,6 +146,7 @@ else
         public Guid? RewardIdentityId { get; set; }
         public int RequiredStamps { get; set; } = 1;
         public string Name { get; set; } = string.Empty;
+        public string ShortName { get; set; } = string.Empty;
         public string? Description { get; set; }
     }
 }

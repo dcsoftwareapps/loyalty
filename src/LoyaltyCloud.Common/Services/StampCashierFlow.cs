@@ -3,9 +3,10 @@ using System.Text.Json;
 namespace LoyaltyCloud.Common.Services;
 
 public sealed record CashierStampReward(Guid Id, string Name, string? Description, int RequiredStamps, DateTime EarnedAt);
+public sealed record CashierStampCycleReward(Guid DefinitionId, string Name, string? Description, int RequiredStamps, bool Used);
 public sealed record CashierStampState(string SerialNumber, string CustomerName, Guid CycleId, int CycleSequence,
     int CurrentStamps, int MaxStamps, bool CycleCompleted, IReadOnlyList<CashierStampReward> AvailableRewards,
-    bool CanReverseLastEarn = false);
+    bool CanReverseLastEarn = false, IReadOnlyList<CashierStampCycleReward>? CycleRewards = null);
 public sealed record CashierStampResult(CashierStampState State, IReadOnlyList<CashierStampReward> UnlockedRewards);
 public sealed record StampCall<T>(T? Value, string? Error = null, bool Uncertain = false) where T : class;
 public sealed record PendingStampOperation(string Operation, string SerialNumber, string IdempotencyKey, Guid? RewardId);
@@ -36,6 +37,8 @@ public sealed class StampCashierFlow(IStampCashierApi api, IStampPendingStore st
     public string? Message { get; private set; }
     public string? Error { get; private set; }
     public bool ScanConsumed { get; private set; }
+    // A rendered Earn action owns this intent. Duplicate queued callbacks retain the old intent.
+    public string EarnIntentKey { get; private set; } = Guid.NewGuid().ToString("N");
 
     public async Task RestoreAsync()
     {
@@ -55,6 +58,7 @@ public sealed class StampCashierFlow(IStampCashierApi api, IStampPendingStore st
         try
         {
             ClearMessages();
+            EarnIntentKey = Guid.NewGuid().ToString("N");
             ScanConsumed = false;
             var result = await api.ReadAsync(serial);
             State = result.Value;
@@ -81,12 +85,23 @@ public sealed class StampCashierFlow(IStampCashierApi api, IStampPendingStore st
 
     public async Task BeginAsync(string operation, Guid? rewardId = null)
     {
-        if (State is null || Pending is not null || (operation == "Earn" && ScanConsumed)
-            || Interlocked.CompareExchange(ref gate, 1, 0) != 0) return;
+        if (operation == "Earn") { await BeginEarnAsync(EarnIntentKey); return; }
+        if (State is null || Pending is not null || Interlocked.CompareExchange(ref gate, 1, 0) != 0) return;
         try
         {
-            if (operation == "Earn") ScanConsumed = true;
             await BeginCoreAsync(operation, State.SerialNumber, rewardId);
+        }
+        finally { Volatile.Write(ref gate, 0); }
+    }
+
+    public async Task BeginEarnAsync(string intentKey)
+    {
+        if (Interlocked.CompareExchange(ref gate, 1, 0) != 0) return;
+        try
+        {
+            if (State is null || Pending is not null || intentKey != EarnIntentKey) return;
+            ScanConsumed = true; // Suppress repeated scanner callbacks; explicit Earn has its own intent.
+            await BeginCoreAsync("Earn", State.SerialNumber, null);
         }
         finally { Volatile.Write(ref gate, 0); }
     }
@@ -131,7 +146,7 @@ public sealed class StampCashierFlow(IStampCashierApi api, IStampPendingStore st
                 "Earn" when Unlocked.Count > 0 => "¡Recompensa desbloqueada!",
                 "Earn" => "Sello agregado",
                 "Redeem" => "Recompensa canjeada",
-                _ => "Último sello revertido"
+                _ => "Último sello cancelado"
             };
         }
         else Error = result.Error;
@@ -142,12 +157,14 @@ public sealed class StampCashierFlow(IStampCashierApi api, IStampPendingStore st
             return;
         }
         Pending = null;
+        if (operation.Operation == "Earn") EarnIntentKey = Guid.NewGuid().ToString("N");
     }
 
     public void PrepareNextScan()
     {
         if (Busy || Pending is not null) return;
         State = null;
+        EarnIntentKey = Guid.NewGuid().ToString("N");
         ScanConsumed = false;
         ClearMessages();
     }

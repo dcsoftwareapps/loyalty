@@ -22,6 +22,17 @@ public sealed class StampProgramTests
         Assert.Equal(valid, new SetStampProgramValidator().Validate(command).IsValid);
     }
 
+    [Theory]
+    [InlineData("", false)] [InlineData("   ", false)] [InlineData("Café gratis", true)]
+    public void Short_name_validation_is_friendly_and_trimmed(string value, bool valid)
+    {
+        var command = new SetStampProgramCommand(10, 0, StampReversalPolicy.None, [new(10, "Reward", ShortName: value)]);
+        var result = new SetStampProgramValidator().Validate(command);
+        Assert.Equal(valid, result.IsValid);
+        if (!valid) Assert.Contains(result.Errors, e => e.ErrorMessage == "El nombre corto debe tener entre 1 y 40 caracteres.");
+        Assert.False(new SetStampProgramValidator().Validate(command with { Rewards = [new(10, "Reward", ShortName: new string('x', 41))] }).IsValid);
+    }
+
     [Fact]
     public void Reward_validation_requires_distinct_valid_thresholds_and_final_reward()
     {

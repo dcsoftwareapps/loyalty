@@ -6,10 +6,12 @@
 @using LoyaltyCloud.Common.Results
 @inject ISender Sender
 @inject AdminDateTimeFormatter Dates
+@inject LoyaltyCloud.Application.Common.Interfaces.ITenantProgramReadService Programs
+@inject LoyaltyCloud.Admin.Auth.AdminTenantContextInitializer TenantInitializer
 
 <PageTitle>Clientes · LoyaltyCloud</PageTitle>
 
-<header class="kb-page-header"><div><span class="kb-eyebrow">Relaciones</span><h1>Clientes</h1><p>Busca clientes, revisa su nivel y consulta su actividad.</p></div></header>
+<header class="kb-page-header"><div><span class="kb-eyebrow">Relaciones</span><h1>Clientes</h1><p>@(isStamps ? "Busca clientes y consulta su registro." : "Busca clientes, revisa su nivel y consulta su actividad.")</p></div></header>
 
 <section class="kb-card kb-filter-bar">
     <div style="flex: 2; min-width: 240px;">
@@ -17,15 +19,18 @@
         <input id="search" type="text" @bind="searchTerm" @bind:event="oninput"
                @onkeydown="HandleSearchKeyDownAsync" />
     </div>
-    <div style="flex: 1; min-width: 160px;">
-        <label for="level">Nivel</label>
-        <select id="level" @bind="levelFilter" @bind:after="ReloadAsync">
-            <option value="">Todos</option>
-            <option value="@LoyaltyConstants.Levels.Mist">Mist</option>
-            <option value="@LoyaltyConstants.Levels.Glow">Glow</option>
-            <option value="@LoyaltyConstants.Levels.Radiance">Radiance</option>
-        </select>
-    </div>
+    @if (!isStamps)
+    {
+        <div style="flex: 1; min-width: 160px;">
+            <label for="level">Nivel</label>
+            <select id="level" @bind="levelFilter" @bind:after="ReloadAsync">
+                <option value="">Todos</option>
+                <option value="@LoyaltyConstants.Levels.Mist">Mist</option>
+                <option value="@LoyaltyConstants.Levels.Glow">Glow</option>
+                <option value="@LoyaltyConstants.Levels.Radiance">Radiance</option>
+            </select>
+        </div>
+    }
     <button class="kb-btn kb-btn--primary" @onclick="ReloadAsync">Filtrar</button>
 </section>
 
@@ -35,7 +40,7 @@
 }
 else if (page.Items.Count == 0)
 {
-    <div class="kb-empty-state"><span class="kb-empty-icon"><NavIcon Name="users" /></span><h3>No encontramos clientes</h3><p>Prueba con otro nombre, ID o nivel.</p></div>
+    <div class="kb-empty-state"><span class="kb-empty-icon"><NavIcon Name="users" /></span><h3>No encontramos clientes</h3><p>@(isStamps ? "Prueba con otro nombre o ID." : "Prueba con otro nombre, ID o nivel.")</p></div>
 }
 else
 {
@@ -44,10 +49,9 @@ else
             <tr>
                 <th>Nombre</th>
                 <th>ID del cliente</th>
-                <th>Nivel</th>
-                <th>Puntos</th>
+                @if (!isStamps) { <th>Nivel</th><th>Puntos</th> }
                 <th>Alta</th>
-                <th></th>
+                @if (!isStamps) { <th></th> }
             </tr>
         </thead>
         <tbody>
@@ -56,10 +60,13 @@ else
             <tr>
                 <td>@c.FullName</td>
                 <td><code>@c.SerialNumber</code></td>
-                <td><LevelBadge Level="@c.Level" /></td>
-                <td style="font-weight: 600;">@c.CurrentPoints.ToString("N0")</td>
+                @if (!isStamps)
+                {
+                    <td><LevelBadge Level="@c.Level" /></td>
+                    <td style="font-weight: 600;">@c.CurrentPoints.ToString("N0")</td>
+                }
                 <td style="color: var(--kb-ink-muted);">@Dates.Date(c.CreatedAt)</td>
-                <td><a href="/customers/@c.CustomerId">Ver detalle</a></td>
+                @if (!isStamps) { <td><a href="/customers/@c.CustomerId">Ver detalle</a></td> }
             </tr>
         }
         </tbody>
@@ -80,14 +87,21 @@ else
     private int pageNumber = 1;
     private PagedResult<CustomerListItemDto>? page;
 
-    protected override async Task OnInitializedAsync() => await ReloadAsync();
+    private bool isStamps;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await TenantInitializer.EnsureTenantContextAsync();
+        isStamps = await Programs.GetCurrentAsync() == LoyaltyCloud.Domain.Enums.LoyaltyProgramType.Stamps;
+        await ReloadAsync();
+    }
 
     private async Task ReloadAsync()
     {
         var pagination = new PaginationParams { PageNumber = pageNumber, PageSize = 20 };
         var result = await Sender.Send(new GetCustomersQuery(
             string.IsNullOrWhiteSpace(searchTerm) ? null : searchTerm,
-            string.IsNullOrWhiteSpace(levelFilter) ? null : levelFilter,
+            isStamps || string.IsNullOrWhiteSpace(levelFilter) ? null : levelFilter,
             pagination));
         if (result.IsSuccess) page = result.Value;
     }

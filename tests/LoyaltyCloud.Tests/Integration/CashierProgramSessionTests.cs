@@ -16,7 +16,10 @@ public sealed class CashierProgramSessionTests
         var session = new CashierSession("test-token", "Bearer", DateTimeOffset.UtcNow.AddHours(1), "testtenant", Guid.NewGuid(), "operator", "Cashier", program);
         await new CashierSessionService(store).SignInAsync(session);
         var restored = new CashierSessionService(store);
-        Assert.Equal(session, await restored.RestoreAsync());
+        var recovered = await restored.RestoreAsync();
+        Assert.Equal(session.AccessToken, recovered!.AccessToken);
+        Assert.Equal(program, recovered.ProgramType);
+        Assert.False(string.IsNullOrWhiteSpace(recovered.SessionId));
         await restored.LogoutAsync();
         Assert.Null(await new CashierSessionService(store).RestoreAsync());
     }

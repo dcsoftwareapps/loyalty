@@ -4,9 +4,10 @@ using MediatR;
 namespace LoyaltyCloud.Application.Stamps;
 
 public sealed record StampRewardDto(Guid Id, string Name, string? Description, int RequiredStamps, DateTime EarnedAt);
+public sealed record StampCycleRewardDto(Guid DefinitionId, string Name, string? Description, int RequiredStamps, bool Used);
 public sealed record StampStateDto(string SerialNumber, string CustomerName, Guid CycleId, int CycleSequence,
     int CurrentStamps, int MaxStamps, bool CycleCompleted, IReadOnlyList<StampRewardDto> AvailableRewards,
-    bool CanReverseLastEarn = false);
+    bool CanReverseLastEarn = false, IReadOnlyList<StampCycleRewardDto>? CycleRewards = null);
 public sealed record StampOperationResult(StampStateDto State, IReadOnlyList<StampRewardDto> UnlockedRewards);
 public sealed record EarnStampCommand(string SerialNumber, string IdempotencyKey) : IRequest<Result<StampOperationResult>>;
 public sealed record ReverseLastStampCommand(string SerialNumber, string IdempotencyKey) : IRequest<Result<StampOperationResult>>;

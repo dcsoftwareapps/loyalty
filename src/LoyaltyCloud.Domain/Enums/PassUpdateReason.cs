@@ -25,5 +25,6 @@ public enum PassUpdateReason
     /// <summary>Cambio visual de branding de la tarjeta digital.</summary>
     BrandingUpdated = 5,
     StampEarned = 6,
-    StampReversed = 7
+    StampReversed = 7,
+    StampRewardRedeemed = 8
 }

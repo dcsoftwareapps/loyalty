@@ -54,6 +54,7 @@ internal sealed class StampOperationsService(AppDbContext db, ITenantContext ten
         var tenantId = tenantContext.RequireTenantId();
         if (db.ChangeTracker.HasChanges()) throw new InvalidOperationException("Stamp operations require a clean unit of work.");
 
+        var shouldRefresh = false;
         var committedResult = await db.Database.CreateExecutionStrategy().ExecuteAsync(async () =>
         {
             db.ChangeTracker.Clear();
@@ -65,6 +66,11 @@ internal sealed class StampOperationsService(AppDbContext db, ITenantContext ten
             {
                 if (receipt.Operation != operation || receipt.SerialNumber != serial || receipt.RewardId != rewardId || receipt.OperatorUserId != userId)
                     return Result.Fail<StampOperationResult>("Conflict: La clave de idempotencia pertenece a otra operacion.");
+                // Replay the response without reactivating its context or refreshing a newer event.
+                var latestContext = await db.StampPassEventContexts.AsNoTracking().SingleOrDefaultAsync(x => x.SerialNumber == serial, ct);
+                var keyHash = Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(idempotencyKey)));
+                shouldRefresh = operation == "Redeem" ? latestContext?.AnnouncementEnabled != true
+                    : latestContext is not null && await db.StampTransactions.AnyAsync(x => x.Id == latestContext.TransactionId && x.IdempotencyKey == keyHash, ct);
                 return Result.Ok(JsonSerializer.Deserialize<StampOperationResult>(receipt.ResponseJson)!);
             }
             var card = await CardAsync(serial, ct);
@@ -72,12 +78,16 @@ internal sealed class StampOperationsService(AppDbContext db, ITenantContext ten
             var cycle = await LatestCycleAsync(serial, ct);
             if (cycle is null) return Result.Fail<StampOperationResult>("El cliente no tiene ciclo de Sellos.");
             var now = clock.UtcNow;
+            var eventContext = await db.StampPassEventContexts.SingleOrDefaultAsync(x => x.SerialNumber == serial, ct);
+            StampTransaction? eventTransaction = null;
+            var rollover = false;
             var unlocked = new List<EarnedStampReward>();
             var rules = await db.StampProgramVersions.SingleAsync(x => x.Id == cycle.StampProgramVersionId, ct);
             if (operation == "Earn")
             {
                 if (cycle.CompletedAt.HasValue)
                 {
+                    rollover = true;
                     var active = await db.StampProgramVersions.SingleOrDefaultAsync(x => x.IsActive, ct);
                     if (active is null) return Result.Fail<StampOperationResult>("El programa no tiene configuracion activa.");
                     cycle = new StampCycle(Guid.NewGuid(), card, active, now, checked(cycle.Sequence + 1));
@@ -87,6 +97,7 @@ internal sealed class StampOperationsService(AppDbContext db, ITenantContext ten
                 cycle.Earn(rules, now);
                 var earn = StampTransaction.Earn(cycle, userId, idempotencyKey, await NextSequenceAsync(cycle.Id, ct), now);
                 db.Add(earn);
+                eventTransaction = earn;
                 var definitions = await db.StampRewardDefinitions.Where(x => x.StampProgramVersionId == rules.Id
                     && x.RequiredStamps == cycle.CurrentStamps).ToListAsync(ct);
                 foreach (var definition in definitions)
@@ -110,7 +121,8 @@ internal sealed class StampOperationsService(AppDbContext db, ITenantContext ten
                     return Result.Fail<StampOperationResult>("Este sello no puede revertirse porque una recompensa obtenida con el ya fue canjeada.");
                 foreach (var reward in rewards.Where(x => x.Status == EarnedStampRewardStatus.Available)) reward.Void(userId, now);
                 cycle.ReverseEarn();
-                db.Add(StampTransaction.Reversal(cycle, userId, idempotencyKey, await NextSequenceAsync(cycle.Id, ct), now, earn));
+                eventTransaction = StampTransaction.Reversal(cycle, userId, idempotencyKey, await NextSequenceAsync(cycle.Id, ct), now, earn);
+                db.Add(eventTransaction);
             }
             else
             {
@@ -120,6 +132,12 @@ internal sealed class StampOperationsService(AppDbContext db, ITenantContext ten
                 if (reward.Status != EarnedStampRewardStatus.Available)
                     return Result.Fail<StampOperationResult>("Conflict: La recompensa ya no esta disponible.");
                 reward.Redeem(userId, now);
+                eventContext?.Suppress();
+            }
+            if (eventTransaction is not null)
+            {
+                if (eventContext is null) db.Add(new StampPassEventContext(serial!, eventTransaction, rollover));
+                else eventContext.SetEvent(eventTransaction, rollover);
             }
             await db.SaveChangesAsync(ct);
             var result = new StampOperationResult(await StateAsync(card, cycle, ct), unlocked.Select(ToRewardDto).ToList());
@@ -127,15 +145,16 @@ internal sealed class StampOperationsService(AppDbContext db, ITenantContext ten
                 JsonSerializer.Serialize(result), now));
             await db.SaveChangesAsync(ct);
             await tx.CommitAsync(ct);
+            shouldRefresh = true;
             return Result.Ok(result);
         });
-        if (committedResult.IsSuccess && operation is "Earn" or "Reversal")
+        if (committedResult.IsSuccess && shouldRefresh)
         {
             try
             {
                 var cardId = await db.LoyaltyCards.Where(x => x.SerialNumber == serial).Select(x => x.Id).SingleAsync(ct);
                 await refresh.RefreshCardAsync(tenantId, cardId,
-                    operation == "Earn" ? PassUpdateReason.StampEarned : PassUpdateReason.StampReversed, ct);
+                    operation == "Earn" ? PassUpdateReason.StampEarned : operation == "Reversal" ? PassUpdateReason.StampReversed : PassUpdateReason.StampRewardRedeemed, ct);
             }
             catch (Exception ex) { logger.LogWarning(ex, "Stamps pass refresh failed after committed {Operation}. TenantId={TenantId}", operation, tenantId); }
         }
@@ -185,8 +204,16 @@ internal sealed class StampOperationsService(AppDbContext db, ITenantContext ten
                 || (rules.ReversalPolicy == StampReversalPolicy.AdminOnly && access.Role == TenantUserRole.Admin))
             && !await db.Set<EarnedStampReward>().AnyAsync(x => x.SourceEarnTransactionId == lastEarn.Value
                 && x.Status == EarnedStampRewardStatus.Redeemed, ct);
+        var definitions = await db.StampRewardDefinitions.AsNoTracking().Where(x => x.StampProgramVersionId == cycle.StampProgramVersionId)
+            .OrderBy(x => x.RequiredStamps).ToListAsync(ct);
+        var used = await db.EarnedStampRewards.AsNoTracking().Where(x => x.StampCycleId == cycle.Id
+            && x.Status == EarnedStampRewardStatus.Redeemed).ToListAsync(ct);
+        var cycleRewards = definitions.Where(d => d.RequiredStamps > cycle.CurrentStamps
+            || used.Any(r => r.StampRewardDefinitionId == d.Id))
+            .Select(d => new StampCycleRewardDto(d.Id, d.Name, d.Description, d.RequiredStamps,
+                used.Any(r => r.StampRewardDefinitionId == d.Id))).ToList();
         return new(card.SerialNumber, name, cycle.Id, cycle.Sequence, cycle.CurrentStamps, max,
-            cycle.CompletedAt.HasValue, rewards.Select(ToRewardDto).ToList(), canReverse);
+            cycle.CompletedAt.HasValue, rewards.Select(ToRewardDto).ToList(), canReverse, cycleRewards);
     }
 
     private static StampRewardDto ToRewardDto(EarnedStampReward r) => new(r.Id, r.Name, r.Description, r.RequiredStamps, r.EarnedAt);

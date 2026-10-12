@@ -6,61 +6,125 @@
     <h2>Sellos</h2>
     @if (scanError is not null) { <div role="alert">@scanError</div> }
     @if (Flow.Error is not null) { <div role="alert">@Flow.Error</div> }
-    @if (Flow.Message is not null) { <h3 role="status">@Flow.Message</h3> }
-    @foreach (var reward in Flow.Unlocked) { <p><strong>@reward.Name</strong></p> }
     @if (Flow.Pending is not null)
     {
         <button class="@PrimaryClass" disabled="@Flow.Busy" @onclick="RetryAsync">Reintentar</button>
     }
     else
     {
-        <button class="@PrimaryClass" disabled="@(Flow.Busy || scanning)" @onclick="ScanAsync">
-            @(scanning ? "Escaneando..." : Flow.ScanConsumed || Flow.State is not null ? "Escanear otro cliente" : "Escanear cliente")
-        </button>
-        @ScannerContent
         @if (Flow.State is null)
         {
-            <label>ID del cliente <input class="@InputClass" @bind="serial" disabled="@(Flow.Busy || scanning)" /></label>
-            <button class="@SecondaryClass" disabled="@(Flow.Busy || scanning || string.IsNullOrWhiteSpace(serial))" @onclick="LookupAsync">Buscar</button>
+            <div class="stamp-scan-entry">
+                <button class="@PrimaryClass" disabled="@(Flow.Busy || scanning)" @onclick="ScanAsync">@(scanning ? "Escaneando..." : "Escanear cliente")</button>
+                @ScannerContent
+            </div>
+            <section class="stamp-manual-entry">
+                <h3>Buscar cliente manualmente</h3>
+                <label>ID del cliente <input class="@InputClass" @bind="serial" disabled="@(Flow.Busy || scanning)" /></label>
+                <button class="@SecondaryClass" disabled="@(Flow.Busy || scanning || string.IsNullOrWhiteSpace(serial))" @onclick="LookupAsync">Buscar</button>
+            </section>
         }
         else
         {
-            <h3>@Flow.State.CustomerName</h3>
-            <p><strong>@Flow.State.CurrentStamps de @Flow.State.MaxStamps sellos</strong></p>
-            @if (!Flow.ScanConsumed)
+            <div class="stamp-customer"><span class="stamp-customer-label">CLIENTE</span><h3>@Flow.State.CustomerName</h3></div>
+            <p class="stamp-progress-count"><strong>@Flow.State.CurrentStamps de @Flow.State.MaxStamps sellos</strong></p>
+            <div class="stamp-progress" role="img" aria-label="@($"{Flow.State.CurrentStamps} de {Flow.State.MaxStamps} sellos")">
+                @for (var stamp = 1; stamp <= Flow.State.MaxStamps; stamp++)
+                {
+                    <span class="@(stamp <= Flow.State.CurrentStamps ? "stamp-dot filled" : "stamp-dot")" aria-hidden="true">@(stamp <= Flow.State.CurrentStamps ? "✓" : stamp.ToString())</span>
+                }
+            </div>
+            var earnIntent = Flow.EarnIntentKey;
+            <button @key="earnIntent" class="@PrimaryClass" disabled="@(Flow.Busy || Flow.Pending is not null || scanning || confirmation is not null)" @onclick="@(() => EarnAsync(earnIntent))">Agregar sello</button>
+            @if (Flow.Unlocked.Count > 0)
             {
-                <button class="@PrimaryClass" disabled="@(Flow.Busy || scanning || confirmation is not null)" @onclick="EarnAsync">Agregar sello</button>
+                <div class="kb-form-success stamp-unlock" role="status" aria-live="polite" aria-atomic="true">
+                    <strong>🎁 ¡Recompensa desbloqueada!</strong>
+                    @foreach (var reward in Flow.Unlocked) { <p>@UnlockName(reward)</p> }
+                    @if (Flow.Message == "¡Tarjeta completada!") { <p>@Flow.Message</p> }
+                </div>
             }
-            <h3>Recompensas disponibles</h3>
+            else if (Flow.Message is not null)
+            {
+                <div class="kb-form-success stamp-feedback" role="status" aria-live="polite" aria-atomic="true"><span aria-hidden="true">✓ </span>@Flow.Message</div>
+            }
+            @if (Flow.State.AvailableRewards.Count > 0 || Flow.State.CycleRewards?.Count > 0) { <h3>Recompensas</h3> }
             @foreach (var group in Flow.State.AvailableRewards.GroupBy(r => new { r.Name, r.Description, r.RequiredStamps }))
             {
-                <div>
-                    <span>@group.Key.Name ×@group.Count()</span>
+                <div class="stamp-reward available">
+                    <div><span class="stamp-reward-label">Disponible</span><strong>@group.Key.Name @(group.Count() > 1 ? $"×{group.Count()}" : "")</strong>
+                        @if (!string.IsNullOrWhiteSpace(group.Key.Description)) { <p>@group.Key.Description</p> }
+                    </div>
                     <button class="@SecondaryClass" disabled="@(Flow.Busy || confirmation is not null)" @onclick="@(() => ConfirmReward(group.First().Id))">Canjear</button>
                 </div>
             }
+            @foreach (var reward in Flow.State.CycleRewards ?? [])
+            {
+                <div class="@(reward.Used ? "stamp-reward used" : "stamp-reward upcoming")">
+                    @if (reward.Used) { <span aria-label="Ya utilizada">✓</span> }
+                    <div><strong>@reward.Name</strong>
+                        @if (!reward.Used) { <p>Al llegar a @reward.RequiredStamps sellos</p> }
+                    </div>
+                </div>
+            }
+            <section class="stamp-change-customer" aria-label="Cambiar cliente">
+                <h3>Cambiar cliente</h3>
+                <button class="@SecondaryClass" disabled="@(Flow.Busy || Flow.Pending is not null || scanning || confirmation is not null)" @onclick="ScanAsync">@(scanning ? "Escaneando..." : "Escanear cliente")</button>
+                <button class="@SecondaryClass" disabled="@(Flow.Busy || Flow.Pending is not null || scanning || confirmation is not null)" @onclick="SearchAnotherAsync">Buscar otro cliente</button>
+            </section>
+            @ScannerContent
             @if (Flow.State.CanReverseLastEarn)
             {
-                <button class="@SecondaryClass" disabled="@(Flow.Busy || confirmation is not null)" @onclick="ConfirmReverse">Revertir último sello</button>
+                <button class="@SecondaryClass" disabled="@(Flow.Busy || confirmation is not null)" @onclick="ConfirmReverse">Cancelar último sello</button>
             }
         }
         @if (confirmation is not null)
         {
             <div role="group" aria-label="Confirmación">
-                <p>@(confirmation == "Redeem" ? "¿Canjear esta recompensa?" : "¿Revertir el último sello?")</p>
+                <p>@(confirmation == "Redeem" ? "¿Canjear esta recompensa?" : "¿Cancelar el último sello?")</p>
                 @if (confirmation == "Reversal") { <p>El progreso disminuirá en un sello y las recompensas obtenidas con ese sello dejarán de estar disponibles.</p> }
                 <button class="@SecondaryClass" disabled="@Flow.Busy" @onclick="Cancel">Cancelar</button>
-                <button class="@PrimaryClass" disabled="@Flow.Busy" @onclick="ConfirmAsync">@(confirmation == "Redeem" ? "Canjear" : "Revertir")</button>
+                <button class="@PrimaryClass" disabled="@Flow.Busy" @onclick="ConfirmAsync">@(confirmation == "Redeem" ? "Canjear" : "Cancelar sello")</button>
             </div>
         }
     }
 </section>
+
+<style>
+.stamp-progress { display:flex; flex-wrap:wrap; gap:10px; margin:16px 0 24px; }
+.stamp-dot { display:flex; align-items:center; justify-content:center; width:42px; height:42px; border:2px solid #cbd5e1; border-radius:50%; background:#f8fafc; color:#64748b; font-weight:700; }
+.stamp-dot.filled { background:#243746; color:white; border-color:#243746; }
+.stamp-reward { display:flex; align-items:center; justify-content:space-between; gap:14px; padding:16px; margin:12px 0; border-radius:12px; border:1px solid #cbd5e1; }
+.stamp-reward p { margin:5px 0 0; }
+.stamp-reward.available { border:2px solid #326347; background:#edf7ef; color:#193d27; }
+.stamp-reward.upcoming { background:#f8fafc; color:#475569; }
+.stamp-reward.used { background:#f8fafc; color:#64748b; }
+.stamp-unlock { background:#edf7ef; color:#193d27; border:2px solid #326347; border-radius:14px; padding:20px; margin:16px 0; }
+.stamp-unlock > strong { display:block; font-size:1.15rem; }
+.stamp-unlock p { margin:8px 0 0; font-weight:700; }
+.stamp-feedback { padding:14px 16px; border-radius:12px; background:#edf7ef; color:#193d27; border:1px solid #326347; }
+.stamp-manual-entry { margin-top:20px; padding-top:20px; border-top:1px solid #cbd5e1; display:grid; gap:14px; }
+.stamp-manual-entry h3 { margin:0; font:inherit; font-weight:700; }
+.stamp-manual-entry label { display:grid; gap:8px; }
+.stamp-customer-label, .stamp-reward-label { display:block; font-size:.75rem; font-weight:700; letter-spacing:.06em; margin-bottom:6px; }
+.stamp-customer h3 { margin:0; font:inherit; font-size:1.4rem; font-weight:800; }
+.stamp-reward { flex-wrap:wrap; }
+.stamp-reward > div { min-width:0; overflow-wrap:anywhere; }
+.stamp-scan-entry { display:grid; gap:14px; }
+.stamp-change-customer { display:grid; gap:12px; margin-top:16px; }
+.stamp-change-customer h3 { margin:0; font:inherit; font-size:.8rem; font-weight:700; text-transform:uppercase; }
+.operation-section > h2 { font:inherit; font-size:1.08rem; font-weight:800; }
+.operation-section .stamp-manual-entry .input { width:100%; box-sizing:border-box; }
+.operation-section > button { margin-top:14px; }
+</style>
 
 @code {
     [Parameter, EditorRequired] public StampCashierFlow Flow { get; set; } = default!;
     [Parameter, EditorRequired] public Func<Task<StampScanResult>> Scan { get; set; } = default!;
     [Parameter, EditorRequired] public Func<string?, string?> ParseSerial { get; set; } = default!;
     [Parameter] public RenderFragment? ScannerContent { get; set; }
+    [Parameter] public IReadOnlyDictionary<Guid, string>? RewardShortNames { get; set; }
+    private string UnlockName(CashierStampReward reward) => RewardShortNames is not null && RewardShortNames.TryGetValue(reward.Id, out var name) && !string.IsNullOrWhiteSpace(name) ? name : reward.Name;
     [Parameter] public bool Mobile { get; set; }
     [Parameter] public EventCallback<bool> LockedChanged { get; set; }
     private string PanelClass => Mobile ? "operation-section" : "kb-cashier-panel";
@@ -77,6 +141,7 @@
     {
         if (scanning || Flow.Busy || Flow.Pending is not null) return;
         Flow.PrepareNextScan();
+        serial = "";
         Cancel();
         scanError = null;
         scanning = true;
@@ -90,7 +155,16 @@
         finally { scanning = false; await LockedChanged.InvokeAsync(Flow.Pending is not null); }
     }
     private Task LookupAsync() => RunAsync(() => Flow.LookupAsync(ParseSerial(serial) ?? ""));
-    private Task EarnAsync() => RunAsync(() => Flow.BeginAsync("Earn"));
+    private Task EarnAsync(string intentKey) => RunAsync(() => Flow.BeginEarnAsync(intentKey));
+    private Task SearchAnotherAsync()
+    {
+        if (scanning || Flow.Busy || Flow.Pending is not null) return Task.CompletedTask;
+        Flow.PrepareNextScan();
+        serial = "";
+        scanError = null;
+        Cancel();
+        return Task.CompletedTask;
+    }
     private Task RetryAsync() => RunAsync(Flow.RetryAsync);
     private async Task RunAsync(Func<Task> action)
     {

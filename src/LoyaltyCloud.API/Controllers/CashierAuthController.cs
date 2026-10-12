@@ -19,6 +19,7 @@ public sealed class CashierAuthController : ControllerBase
         Detail = "Credenciales invalidas."
     };
 
+    private readonly CashierRefreshTokenService _refresh;
     private readonly AppDbContext _db;
     private readonly IMutableTenantContext _tenantContext;
     private readonly IPasswordHashingService _passwords;
@@ -27,6 +28,7 @@ public sealed class CashierAuthController : ControllerBase
     private readonly ILogger<CashierAuthController> _logger;
 
     public CashierAuthController(
+        CashierRefreshTokenService refresh,
         AppDbContext db,
         IMutableTenantContext tenantContext,
         IPasswordHashingService passwords,
@@ -34,6 +36,7 @@ public sealed class CashierAuthController : ControllerBase
         LoyaltyCloud.Common.Services.IDateTimeProvider clock,
         ILogger<CashierAuthController> logger)
     {
+        _refresh = refresh;
         _db = db;
         _tenantContext = tenantContext;
         _passwords = passwords;
@@ -70,25 +73,35 @@ public sealed class CashierAuthController : ControllerBase
             return Unauthorized(InvalidLoginProblem);
         }
 
-        var issuedAt = new DateTimeOffset(DateTime.SpecifyKind(_clock.UtcNow, DateTimeKind.Utc));
-        var token = _tokens.CreateToken(tenant, user);
-        _logger.LogInformation(
-            "Cashier login succeeded. TenantId={TenantId}, TenantSlug={TenantSlug}, UserId={UserId}, Role={Role}.",
-            tenant.Id,
-            tenant.Slug,
-            user.Id,
-            user.Role);
+        (string Token, DateTimeOffset Expires)? refresh = request.RememberMe ? _refresh.Issue(tenant,user) : null;
+        if (refresh is not null) await _db.SaveChangesAsync(ct);
+        _logger.LogInformation("Cashier login succeeded. TenantId={TenantId}, UserId={UserId}", tenant.Id, user.Id);
+        return Ok(BuildResponse(tenant,user,refresh?.Token,refresh?.Expires));
+    }
 
-        return Ok(new CashierLoginResponse(
-            token.AccessToken,
-            "Bearer",
-            token.ExpiresAtUtc,
-            (int)Math.Max(1, Math.Ceiling((token.ExpiresAtUtc - issuedAt).TotalSeconds)),
-            tenant.Slug,
-            user.Id,
-            user.Username,
-            user.Role.ToString(),
-            tenant.ProgramType.ToString()));
+    [HttpPost("refresh")]
+    [EnableRateLimiting(CashierAuthDefaults.LoginRateLimitPolicy)]
+    public async Task<IActionResult> Refresh([FromBody] CashierRefreshRequest request,CancellationToken ct)
+    {
+        var renewed=await _refresh.RotateAsync(request.RefreshToken,ct);
+        if (renewed is null) return Unauthorized(InvalidLoginProblem);
+        var r=renewed.Value;
+        return Ok(BuildResponse(r.Tenant,r.User,r.Token,r.Expires));
+    }
+
+    [HttpPost("logout")]
+    public async Task<IActionResult> Logout([FromBody] CashierRefreshRequest request,CancellationToken ct)
+    {
+        await _refresh.RevokeAsync(request.RefreshToken,ct);
+        return NoContent();
+    }
+
+    private CashierLoginResponse BuildResponse(Tenant tenant,TenantAdminUser user,string? refresh,DateTimeOffset? refreshExpires)
+    {
+        var token=_tokens.CreateToken(tenant,user);
+        return new(token.AccessToken,"Bearer",token.ExpiresAtUtc,
+            (int)Math.Max(1,Math.Ceiling((token.ExpiresAtUtc-new DateTimeOffset(DateTime.SpecifyKind(_clock.UtcNow,DateTimeKind.Utc))).TotalSeconds)),
+            tenant.Slug,user.Id,user.Username,user.Role.ToString(),tenant.ProgramType.ToString(),refresh,refreshExpires);
     }
 
     private async Task<Tenant?> ResolveTenantAsync(string tenantSlug, CancellationToken ct)
@@ -107,7 +120,8 @@ public sealed class CashierAuthController : ControllerBase
         }
     }
 
-    public sealed record CashierLoginRequest(string TenantSlug, string Username, string Password);
+    public sealed record CashierLoginRequest(string TenantSlug, string Username, string Password, bool RememberMe = false);
+    public sealed record CashierRefreshRequest(string RefreshToken);
 
     public sealed record CashierLoginResponse(
         string AccessToken,
@@ -118,5 +132,6 @@ public sealed class CashierAuthController : ControllerBase
         Guid UserId,
         string Username,
         string Role,
-        string ProgramType = "Points");
+        string ProgramType = "Points",
+        string? RefreshToken = null, DateTimeOffset? RefreshTokenExpiresAtUtc = null);
 }

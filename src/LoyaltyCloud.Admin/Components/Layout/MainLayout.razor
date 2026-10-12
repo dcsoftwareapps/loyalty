@@ -53,7 +53,9 @@
                 }
                 else
                 {
-                    <NavLink href="/stamps"><NavIcon Name="levels" /><span>Sellos</span></NavLink>
+                    <AuthorizeView Policy="@LoyaltyCloud.Admin.Auth.TenantAuthorizationPolicies.CashierOperations">
+                        <NavLink href="/cashier"><NavIcon Name="scan" /><span>Operaciones</span></NavLink>
+                    </AuthorizeView>
                 }
                 <NavLink href="/marketing-notifications"><NavIcon Name="message" /><span>Mensajes</span></NavLink>
 
@@ -77,7 +79,11 @@
                     <NavLink href="/giftcards/reports"><NavIcon Name="gift" /><span>Tarjetas de regalo</span></NavLink>
                 }
 
-                <span class="kb-sidebar-section">Gestión</span>
+                <span class="kb-sidebar-section">Configuración</span>
+                @if (!isPoints)
+                {
+                    <NavLink href="/stamps"><NavIcon Name="levels" /><span>Sellos</span></NavLink>
+                }
                 @if (isPoints)
                 {
                     <NavLink href="/levels"><NavIcon Name="levels" /><span>Niveles</span></NavLink>
@@ -105,7 +111,7 @@
             {
                 <h1>Programa no disponible</h1>
                 <p>Esta página no corresponde al programa de tu negocio.</p>
-                <a class="kb-btn kb-btn--primary" href="@(isPoints ? "/dashboard" : "/stamps")">Volver al programa</a>
+                <a class="kb-btn kb-btn--primary" href="@(isPoints ? "/dashboard" : "/cashier")">Volver al programa</a>
             }
         </div></main>
     </div>
