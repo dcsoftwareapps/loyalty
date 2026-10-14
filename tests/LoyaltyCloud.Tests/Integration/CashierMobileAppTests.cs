@@ -17,8 +17,8 @@ public sealed class CashierMobileAppTests
         Assert.Contains("net9.0-ios", project);
         Assert.Contains("Microsoft.AspNetCore.Components.WebView.Maui", project);
         Assert.Contains("<ApplicationTitle>LoyaltyCloud</ApplicationTitle>", project);
-        Assert.Contains("<ApplicationDisplayVersion>1.0.0</ApplicationDisplayVersion>", project);
-        Assert.Contains("<ApplicationVersion>1</ApplicationVersion>", project);
+        Assert.Contains("<ApplicationDisplayVersion>1.0.1</ApplicationDisplayVersion>", project);
+        Assert.Contains("<ApplicationVersion>2</ApplicationVersion>", project);
         Assert.Contains("src\\LoyaltyCloud.Cashier\\LoyaltyCloud.Cashier.csproj", solution);
     }
 
