@@ -5,6 +5,7 @@ using System.Security.Cryptography.X509Certificates;
 using System.Text;
 using System.Text.Json;
 using LoyaltyCloud.Application.Common.Interfaces;
+using LoyaltyCloud.Application.Stamps;
 using LoyaltyCloud.Common.Services;
 using LoyaltyCloud.Domain.Entities;
 using LoyaltyCloud.Domain.Enums;
@@ -29,6 +30,8 @@ internal sealed class PassGeneratorService : IPassGeneratorService
     private readonly IDateTimeProvider _dt;
     private readonly ApplePassOptions _options;
     private readonly ILogger<PassGeneratorService> _logger;
+    private readonly ITenantProgramReadService? _programs;
+    private readonly IStampWalletProjectionService? _stamps;
 
     private static readonly JsonSerializerOptions PassJsonOpts = new()
     {
@@ -55,7 +58,9 @@ internal sealed class PassGeneratorService : IPassGeneratorService
         ILevelProgressService levelProgress,
         IDateTimeProvider dt,
         IOptions<ApplePassOptions> options,
-        ILogger<PassGeneratorService> logger)
+        ILogger<PassGeneratorService> logger,
+        ITenantProgramReadService? programs = null,
+        IStampWalletProjectionService? stamps = null)
     {
         _secrets = secrets;
         _walletNotifications = walletNotifications;
@@ -68,12 +73,32 @@ internal sealed class PassGeneratorService : IPassGeneratorService
         _dt = dt;
         _options = options.Value;
         _logger = logger;
+        _programs = programs;
+        _stamps = stamps;
     }
 
     public async Task<byte[]> GeneratePassAsync(LoyaltyCard card, Customer customer, CancellationToken ct = default)
     {
         ArgumentNullException.ThrowIfNull(card);
         ArgumentNullException.ThrowIfNull(customer);
+
+        if (_programs is not null && await _programs.GetCurrentAsync(ct) == LoyaltyProgramType.Stamps)
+        {
+            if (card.TenantId != _tenantContext.RequireTenantId() || customer.TenantId != card.TenantId || card.CustomerId != customer.Id)
+                throw new InvalidOperationException("Cross-tenant Stamps pass.");
+            var projectionService = _stamps ?? throw new InvalidOperationException("Stamps Wallet projection is not configured.");
+            var state = await projectionService.ReadAsync(card.SerialNumber, ct);
+            var stampBranding = await _tenantBranding.GetCurrentAsync(ct);
+            var baseAssets = await _walletAssets.LoadAssetsAsync(stampBranding.TenantId, stampBranding.TenantSlug,
+                stampBranding.WalletLogoBlobName, stampBranding.LogoBlobName, false, null, ct);
+            var stampAssets = baseAssets.Concat(projectionService.Render(state, stampBranding.BackgroundColor)
+                .Select(x => new WalletPassAsset(x.Name, x.Bytes))).ToArray();
+            var stampWalletContext = await _walletNotifications.GetActiveContextAsync(card.Id, ct);
+            var json = JsonSerializer.SerializeToUtf8Bytes(BuildStampsPassJson(card, customer, stampBranding, state, stampWalletContext), PassJsonOpts);
+            _logger.LogInformation("Apple Wallet Stamps: serial={Serial}, cycle={Cycle}, version={Version}, progress={Current}/{Max}.",
+                card.SerialNumber, state.CycleId, state.VersionId, state.CurrentStamps, state.MaxStamps);
+            return await PackageAsync(json, stampAssets, ct);
+        }
 
         var walletContext = await _walletNotifications.GetActiveContextAsync(card.Id, ct);
         var branding = await _tenantBranding.GetCurrentAsync(ct);
@@ -106,6 +131,15 @@ internal sealed class PassGeneratorService : IPassGeneratorService
             branding.AppleWalletStripImageBlobName,
             ct);
 
+        var passBytes = await PackageAsync(passJsonBytes, assets, ct);
+        _logger.LogInformation(
+            "Apple Wallet generated pass diagnostic: serial={Serial}, currentPoints={CurrentPoints}, pointsFieldValue={PointsFieldValue}, lastActivityAt={LastActivityAt:O}, pkpassBytes={Bytes}, pkpassSha256={PkpassSha256}.",
+            card.SerialNumber, card.CurrentPoints, progress.PointsText, card.LastActivityAt, passBytes.Length, Sha256Short(passBytes));
+        return passBytes;
+    }
+
+    private async Task<byte[]> PackageAsync(byte[] passJsonBytes, IReadOnlyList<WalletPassAsset> assets, CancellationToken ct)
+    {
         var manifest = new Dictionary<string, string>(StringComparer.Ordinal)
         {
             ["pass.json"] = Sha1Hex(passJsonBytes)
@@ -128,22 +162,51 @@ internal sealed class PassGeneratorService : IPassGeneratorService
                 AddZipEntry(zip, asset.Name, asset.Bytes);
         }
 
-        _logger.LogInformation(
-            "Pass .pkpass generado para serial {Serial} ({Bytes} bytes). Archivos: {Files}",
-            card.SerialNumber,
-            output.Length,
-            string.Join(", ", new[] { "pass.json", "manifest.json", "signature" }.Concat(assets.Select(a => a.Name))));
-
-        _logger.LogInformation(
-            "Apple Wallet generated pass diagnostic: serial={Serial}, currentPoints={CurrentPoints}, pointsFieldValue={PointsFieldValue}, lastActivityAt={LastActivityAt:O}, pkpassBytes={Bytes}, pkpassSha256={PkpassSha256}.",
-            card.SerialNumber,
-            card.CurrentPoints,
-            progress.PointsText,
-            card.LastActivityAt,
-            output.Length,
-            Sha256Short(output.ToArray()));
-
         return output.ToArray();
+    }
+
+    internal object BuildStampsPassJson(LoyaltyCard card, Customer customer, TenantWalletBrandingDto branding, StampWalletProjection state, WalletNotificationContext walletContext)
+    {
+        EnsureRequiredOption(_options.PassTypeIdentifier, "Apple:PassTypeIdentifier");
+        EnsureRequiredOption(_options.TeamIdentifier, "Apple:TeamIdentifier");
+        EnsureRequiredOption(_options.WebServiceURL, "Apple:WebServiceURL");
+        EnsureRequiredOption(_options.OrganizationName, "Apple:OrganizationName");
+        var fields = new List<object>
+        {
+            state.Event is { } stampEvent
+                ? (object)new { key = "stamps", label = "SELLOS", value = $"{state.CurrentStamps} / {state.MaxStamps}", changeMessage = stampEvent.ChangeMessage }
+                : new { key = "stamps", label = "SELLOS", value = $"{state.CurrentStamps} / {state.MaxStamps}" }
+        };
+        var backFields = new List<object>
+        {
+            new { key = "customer", label = "CLIENTE", value = GetWalletDisplayName(customer, branding.CustomerFallbackName) }
+        };
+        if (walletContext.CustomMessage is { } message)
+        {
+            if (message.DisplayUntilUtc > _dt.UtcNow)
+            {
+                fields.Add(walletContext.RecentVisibleEvent?.Type == NotificationType.Custom
+                    ? (object)new { key = "custom_message", label = string.Empty, value = message.ShortMessage, changeMessage = message.ChangeMessage }
+                    : new { key = "custom_message", label = string.Empty, value = message.ShortMessage });
+                backFields.Add(new { key = "custom_message_detail", label = "MENSAJE", value = $"{message.Title}\n\n{message.LongMessage}" });
+            }
+        }
+        return new
+        {
+            formatVersion = 1, passTypeIdentifier = _options.PassTypeIdentifier, serialNumber = card.SerialNumber,
+            teamIdentifier = _options.TeamIdentifier, webServiceURL = _options.WebServiceURL,
+            authenticationToken = card.AuthenticationToken, organizationName = branding.OrganizationName,
+            description = branding.Description, backgroundColor = branding.BackgroundColor,
+            foregroundColor = branding.ForegroundColor, labelColor = branding.LabelColor,
+            storeCard = new
+            {
+                primaryFields = Array.Empty<object>(), secondaryFields = Array.Empty<object>(),
+                auxiliaryFields = fields.ToArray(),
+                backFields = backFields.ToArray()
+            },
+            barcodes = new[] { new { format = "PKBarcodeFormatQR", message = card.SerialNumber,
+                messageEncoding = "iso-8859-1", altText = "Presenta este c\u00f3digo en caja" } }
+        };
     }
 
     public Task<string> GetPassDownloadUrlAsync(string serialNumber, CancellationToken ct = default) =>

@@ -410,7 +410,9 @@ public sealed class WalletPassJsonUpdateStructureTests
                     OrganizationName = "KBeauty MX",
                     ApnHost = "https://api.push.apple.com"
                 }),
-                logger
+                logger,
+                null,
+                null
             ],
             culture: null)!;
 

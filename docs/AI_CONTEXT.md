@@ -1,6 +1,6 @@
 # LoyaltyCloud - AI Context
 
-Last updated: 2026-09-08
+Last updated: 2026-10-01
 
 Purpose: permanent technical context for continuing LoyaltyCloud with ChatGPT/Codex without losing important repository, infrastructure and product memory between chats.
 
@@ -67,6 +67,137 @@ Main technologies:
 - PowerShell/Azure CLI infra scripts.
 
 ## Domain Model
+
+### Loyalty program type (Stamps foundation, not yet released)
+
+- `Tenant.ProgramType` uses `LoyaltyProgramType.Points` or `Stamps` and is selected
+  at provisioning. Existing callers default to Points; Platform Admin explicitly
+  offers Puntos/Sellos. Tools supports optional `--program-type Points|Stamps`.
+- ProgramType is immutable: constructor-only selection, private setter, no change
+  command/API, and EF rejects updates after insert. It is not a ProgramConfig key.
+- Migration `20261001134125_AddTenantProgramType` adds only `Tenants.ProgramType`
+  (`nvarchar(30)`, required, default `Points`), backfilling existing tenants as Points.
+  It has not been applied to STG/PROD during this phase.
+- Stamps provisioning creates identity/auth/branding/subscription but no Points
+  ProgramConfig or levels. Customer registration preserves Customer/LoyaltyCard,
+  serial and auth token, with no welcome/referral points; Apple now generates a Stamps pass.
+- `PointsProgramBehavior` rejects Points write commands through MediatR using the
+  authenticated tenant context and persisted program type. Direct level management
+  also rejects Stamps. Gift Cards remain independent and usable for both types.
+- Stamps domain foundation is implemented on this branch: immutable economic
+  `StampProgramVersion`, `StampRewardDefinition`, `StampCycle` and `StampTransaction`.
+  `SetStampProgramCommand` creates the initial configuration or a new version;
+  `GetActiveStampProgramQuery` reads current rules. Admin UI is `/stamps`; no new configuration API.
+  Configuration writes require an authenticated, active same-tenant Admin verified
+  against SQL; Cashier and anonymous calls are rejected.
+- Application V1 accepts MaxStamps 2..12, WelcomeStamps 0..<MaxStamps, distinct
+  positive reward thresholds up to MaxStamps and a required reward at MaxStamps.
+  Domain/SQL have no structural upper limit of 12. Visual assets remain separate
+  from economic rules and never create program versions.
+- Version creation uses the SQL retry execution strategy, a serializable transaction
+  and a per-tenant update lock. A stable version ID recognizes an already committed
+  retry. Filtered unique indexes enforce one active version and one unfinished cycle.
+  Existing cycles retain their version; rule/reward edits create a new version.
+- Stamps registration requires active configuration before creating Customer/Card.
+  The same unit of work inserts cycle #1 and system Welcome ledger when positive;
+  zero welcome still creates a cycle, without a zero transaction. Points is unchanged.
+  Cycles reference the existing `(TenantId, SerialNumber)` card alternate key, avoiding
+  any schema changes to Points tables. Cycle/version and ledger/cycle FKs are composite.
+- Migration `20261001180152_AddStampProgramFoundation` creates only four Stamps tables.
+  It has not been applied to STG/PROD. Completed cycles remain full until the next
+  Earn creates the next cycle; registration/configuration do not roll cycles over.
+- Stamps operational engine is implemented on this branch: exactly +1 Earn, threshold
+  reward snapshots, final completion, next-Earn rollover using active rules without
+  welcome, audited redemption without consuming stamps and last-effective-Earn reversal.
+  Reversal uses the current cycle's original policy; available rewards become Voided,
+  any redeemed reward blocks the entire reversal. Older cycles cannot be reopened
+  once another cycle exists, even after undoing all earns in that newer cycle.
+- `EarnedStampReward` stores Available/Redeemed/Voided and redemption/void audit.
+  Definition ID is provenance without a deletion-blocking FK; immutable snapshots
+  survive definition removal. Available rewards are returned individually with IDs,
+  including rewards accumulated across cycles, for later UI grouping.
+- `StampOperationReceipt` has a tenant-wide, case-sensitive unique idempotency key,
+  operation/serial/reward/operator fingerprint and original response JSON. Same-key
+  retry replays the committed result; incompatible use returns conflict. Operational
+  ledger keys are SHA256 of the client key, separate from system Welcome's key.
+- SQL tenant UPDLOCK/HOLDLOCK inside the execution strategy serializes operational
+  writes and configuration across instances. Progress/ledger/reward/receipt commit
+  together; RowVersion, unique ledger sequence and unique reversed transaction add
+  DB protection. External Apple refresh runs only after SQL commit; no automatic
+  Stamps LoyaltyNotifications are created.
+- API uses existing cashier bearer scheme and CashierOperations policy (Admin/Cashier),
+  revalidates an active same-tenant operator and rejects Points. Routes: GET
+  `/api/stamps/{serialNumber}`, POST `/api/stamps/{serialNumber}/earn`, POST
+  `/api/stamps/{serialNumber}/reverse-last`, POST
+  `/api/stamps/{serialNumber}/rewards/{rewardId}/redeem`. Write body contains only
+  `idempotencyKey`; unknown fields such as quantity/operator are rejected.
+- Migration `20261001192907_AddStampOperations` adds earned rewards, operation receipts
+  and Stamps ledger sequence/unique indexes. No STG/PROD migration was applied.
+- Stamps Cashier UX is implemented on this branch for Web and MAUI. Login response
+  includes ProgramType; mobile persists it in session and requests a fresh login for
+  older saved sessions without it. Web reads the persisted tenant program.
+  Shared `StampCashierPanel` and `StampCashierFlow` handle manual read-only lookup,
+  automatic +1 after QR, explicit next scan, reward grouping/confirmation and reversal.
+  `CanReverseLastEarn` is calculated by backend using cycle policy, real operator and
+  last effective Earn; backend still revalidates every write. No changes to motor rules.
+  Pending Earn/Redeem/Reversal is saved before sending, scoped by environment/tenant/
+  user. MAUI uses existing SecureStorage adapter; Web uses tab sessionStorage, which
+  survives refresh/reconnect but is not guaranteed after closing the tab. Unknown
+  HTTP outcomes retain the same key. Web calls existing Application service with
+  circuit principal from AuthenticationStateProvider, without mobile signing secrets.
+  Apple Wallet and visual assets are now implemented below; Google Wallet Stamps,
+  automatic Stamps notifications and Stamps reports remain pending.
+  Admin configuration is available at `/stamps` for TenantAdmin only, using existing
+  Application commands. Initial save creates rules; edits create new versions.
+  Equivalent rules/rewards, including reordered rewards, return the current version
+  without writes. Navigation and direct-page rendering are program-aware: Stamps
+  excludes Points operations, levels, campaigns, dashboard and Points-based reports.
+  Customers, Messages, enabled Gift Cards, billing, staff and general branding remain
+  available. `/config` omits Points benefits and its Points preview for Stamps.
+  Continue on `feature/stamps-wallet-prototype`; no PR/merge to staging until the
+  complete Stamps feature is implemented and validated. Visual decisions live in
+  `docs/STAMPS_WALLET_PROTOTYPE.md`.
+
+### Stamps visual assets and Apple Wallet (implemented on branch, not deployed)
+
+- `StampRewardIdentity.Id` is the stable reward identity. Immutable definitions
+  explicitly link it through `RewardIdentityId`; the editor/contract carries that ID.
+  Rename, description or threshold edits preserve it. Remove + add uses a new ID,
+  even with identical text/threshold. Never infer continuity by matching content.
+- `StampRewardIdentity.ImageBlobName` stores the current visual image. Historical
+  definitions/cycles use their original thresholds plus this current image;
+  EarnedStampReward economic snapshots remain unchanged. Removed identities/assets
+  are retained; visual removal clears the reference, not historical identity rows.
+- `StampVisualConfiguration` stores tenant-wide empty/filled image references.
+  `/stamps` has an independent appearance section using `StampImageUpload` and
+  `IStampVisualService`, with active same-tenant Admin revalidated in SQL.
+- Storage reuses Azure Blob PassContainer and the existing tenant branding prefix,
+  under `stamps/{randomGuid}.png`. No public credentials or caller-controlled paths.
+  Uploads inspect actual PNG/JPEG content, decode it, limit input to 2 MB and
+  4096x4096, keep one frame, auto-orient and normalize to PNG within 1024x1024.
+  Aspect ratio is preserved; deterministic ImageSharp defaults require no uploads.
+- `StampWalletProjectionService` is read-only and uses the latest existing cycle
+  and its own version. Completed N/N stays full until the next backend Earn starts
+  1/N. It never creates a cycle, calls operator logic or replaces historical rules.
+- `StampStripRenderer` draws each resolution natively: 375x144, 750x288, 1125x432.
+  2..5 use one row, 6..12 two. Reward artwork replaces its threshold cell; contain
+  preserves aspect ratio. Locked uses grayscale/reduced contrast/brightness and
+  an in-cell lock badge from the same image; no second asset or floating locks.
+- PassGeneratorService selects persisted ProgramType before Points reads. Stamps
+  uses storeCard, empty primary fields, SELLOS n/N, customer on the back, existing
+  tenant logo/colors and unchanged serial/token/QR/signature/manifest/PassKit routes.
+  No accumulated rewards list/counter is shown. Points fields remain unchanged.
+- Earn/Reversal refresh the card after commit using existing best-effort Apple
+  refresh/APNs. Receipt retries may request refresh again but never repeat ledger
+  writes. Redemption does not refresh because the grid is unchanged. Asset updates
+  refresh installed tenant passes after save, without creating economic versions.
+- Migration `20261002010407_AddStampRewardIdentityAndVisualAssets` remains the only
+  migration for this phase; it adds identities/visual configuration and composite
+  tenant FK. Backfill gives each prior definition its own identity using its ID,
+  without attempting to reconstruct past continuity. Not applied to STG/PROD.
+- Local tests validate actual signed ZIP/manifest/signature with test-only credentials;
+  this does not establish Apple certificate validity or device installation.
+  Physical iPhone/APNs QA and real Blob upload validation remain before release.
 
 Main entities:
 

@@ -90,7 +90,7 @@
         {
             var destination = await Auth.IsBillingOnlyAsync(HttpContext)
                 ? $"/{tenant.Slug}/billing"
-                : Auth.GetAuthenticatedLandingPath(HttpContext.User);
+                : await Auth.GetAuthenticatedLandingPathAsync(HttpContext.User);
             HttpContext.Response.Redirect(destination);
             return;
         }
@@ -101,7 +101,7 @@
             if (result == AdminLoginResult.Success)
             {
                 var billingOnly = await Auth.IsBillingOnlyTenantAsync(TenantSlug);
-                var destination = Auth.GetPostLoginDestination(HttpContext, tenant.Slug, billingOnly, ReturnUrl);
+                var destination = await Auth.GetPostLoginDestinationAsync(HttpContext, tenant.Slug, billingOnly, ReturnUrl);
                 HttpContext.Response.Redirect(destination);
             }
             else

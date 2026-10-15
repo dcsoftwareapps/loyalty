@@ -28,8 +28,8 @@
         <DefineConstants Condition="'$(CashierEnvironment)' != 'Production'">$(DefineConstants);LOYALTYCLOUD_STG</DefineConstants>
 
         <!-- Versions -->
-        <ApplicationDisplayVersion>1.0.0</ApplicationDisplayVersion>
-        <ApplicationVersion>1</ApplicationVersion>
+        <ApplicationDisplayVersion>1.0.1</ApplicationDisplayVersion>
+        <ApplicationVersion>2</ApplicationVersion>
 
         <!-- To develop, package, and publish an app to the Microsoft Store, see: https://aka.ms/MauiTemplateUnpackaged -->
         <WindowsPackageType>None</WindowsPackageType>
@@ -67,6 +67,10 @@
         <PackageReference Include="Microsoft.Extensions.Http" Version="9.0.8" />
         <PackageReference Include="Microsoft.Extensions.Logging.Debug" Version="9.0.8" />
         <PackageReference Include="ZXing.Net.Maui.Controls" Version="0.5.2" />
+    </ItemGroup>
+    <ItemGroup>
+        <ProjectReference Include="..\LoyaltyCloud.Common\LoyaltyCloud.Common.csproj" />
+        <Content Include="..\LoyaltyCloud.Admin\Shared\StampCashierPanel.razor" Link="Components\Cashier\StampCashierPanel.razor" />
     </ItemGroup>
 
 </Project>

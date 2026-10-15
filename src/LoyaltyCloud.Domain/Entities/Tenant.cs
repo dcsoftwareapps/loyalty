@@ -1,5 +1,6 @@
 using System.Text.RegularExpressions;
 using LoyaltyCloud.Domain.Common;
+using LoyaltyCloud.Domain.Enums;
 
 namespace LoyaltyCloud.Domain.Entities;
 
@@ -9,6 +10,7 @@ public sealed partial class Tenant : Entity
     public string DisplayName { get; private set; } = string.Empty;
     public bool IsActive { get; private set; }
     public string TimeZoneId { get; private set; } = string.Empty;
+    public LoyaltyProgramType ProgramType { get; private set; } = LoyaltyProgramType.Points;
     public DateTime CreatedAt { get; private set; }
     public DateTime? UpdatedAt { get; private set; }
 
@@ -26,8 +28,12 @@ public sealed partial class Tenant : Entity
         string displayName,
         string timeZoneId,
         DateTime createdAtUtc,
-        bool isActive = true) : base(id)
+        bool isActive = true,
+        LoyaltyProgramType programType = LoyaltyProgramType.Points) : base(id)
     {
+        if (!Enum.IsDefined(programType))
+            throw new ArgumentOutOfRangeException(nameof(programType));
+        ProgramType = programType;
         Slug = NormalizeSlug(slug);
         DisplayName = Require(displayName, nameof(displayName), 200);
         TimeZoneId = Require(timeZoneId, nameof(timeZoneId), 100);

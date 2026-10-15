@@ -81,8 +81,20 @@
                         <label for="phone">Teléfono</label>
                         <input id="phone" type="tel" inputmode="tel" autocomplete="tel" @bind="form.Phone" />
                     </div>
+                    <div class="kb-join-birthday">
+                        <label>Cumpleaños (opcional)</label>
+                        <p class="kb-muted">Recibe beneficios especiales en tu mes.</p>
+                        <label for="birthday-day">Día</label>
+                        <select id="birthday-day" @bind="birthday.Day"><option value="">Sin seleccionar</option>
+                            @for (var day = 1; day <= 31; day++) { <option value="@day">@day</option> }
+                        </select>
+                        <label for="birthday-month">Mes</label>
+                        <select id="birthday-month" @bind="birthday.Month"><option value="">Sin seleccionar</option>
+                            @for (var month = 1; month <= 12; month++) { <option value="@month">@MonthName(month)</option> }
+                        </select>
+                    </div>
                     <button class="kb-btn kb-btn--primary kb-btn--block kb-btn--large" @onclick="JoinAsync" disabled="@busy">
-                        @(busy ? "Creating your membership..." : "Join")
+                        @(busy ? "Creando tu tarjeta..." : "Registrarme")
                     </button>
                 </div>
             }
@@ -122,45 +134,7 @@
                 {
                     <a class="kb-btn kb-btn--ghost kb-btn--block" href="@googleWalletFallbackUrl" target="_top" rel="noopener">Abrir Google Wallet</a>
                 }
-                @if (!birthdaySaved && !birthdaySkipped)
-                {
-                    <div class="kb-join-birthday">
-                        <h2>Agrega tu cumpleaños</h2>
-                        <p class="kb-muted">Recibe beneficios especiales en tu mes.</p>
-                        <div class="kb-form-row kb-form-row--horizontal">
-                            <div style="flex:1;min-width:120px;">
-                                <label for="birthday-day">Día</label>
-                                <select id="birthday-day" @bind="birthday.Day">
-                                    @for (var day = 1; day <= 31; day++)
-                                    {
-                                        <option value="@day">@day</option>
-                                    }
-                                </select>
-                            </div>
-                            <div style="flex:1;min-width:140px;">
-                                <label for="birthday-month">Mes</label>
-                                <select id="birthday-month" @bind="birthday.Month">
-                                    @for (var month = 1; month <= 12; month++)
-                                    {
-                                        <option value="@month">@MonthName(month)</option>
-                                    }
-                                </select>
-                            </div>
-                        </div>
-                        <div class="kb-actions-inline" style="width:100%;">
-                            <button class="kb-btn kb-btn--primary" @onclick="SaveBirthdayAsync" disabled="@busy">
-                                Guardar cumpleaños
-                            </button>
-                            <button class="kb-btn kb-btn--ghost" @onclick="@(() => birthdaySkipped = true)" disabled="@busy">
-                                Omitir por ahora
-                            </button>
-                        </div>
-                    </div>
-                }
-                else if (birthdaySaved)
-                {
-                    <div class="kb-form-success">Cumpleaños guardado.</div>
-                }
+
             }
         }
     </section>
@@ -181,8 +155,6 @@
     private string? googleWalletFallbackUrl;
     private bool loadingTenant = true;
     private bool busy;
-    private bool birthdaySaved;
-    private bool birthdaySkipped;
     private bool showWalletChoice;
 
     private HttpClient Api => HttpClientFactory.CreateClient("LoyaltyCloudApi");
@@ -220,8 +192,6 @@
         walletChoiceMessage = null;
         googleWalletFallbackUrl = null;
         showWalletChoice = false;
-        birthdaySaved = false;
-        birthdaySkipped = false;
 
         var resolved = await TenantResolver.ResolveBySlugAsync(TenantSlug);
         if (resolved is null)
@@ -271,6 +241,12 @@
             return;
         }
 
+        if ((birthday.Day.HasValue || birthday.Month.HasValue)
+            && !(birthday.Month is >= 1 and <= 12 && birthday.Day >= 1 && birthday.Day <= DateTime.DaysInMonth(2000, birthday.Month.Value)))
+        {
+            errorMsg = "Selecciona un día y mes de cumpleaños válidos o deja ambos vacíos.";
+            return;
+        }
         busy = true;
         processingStatus = "Creating your membership...";
         try
@@ -278,7 +254,7 @@
             using var response = await Api.PostAsJsonAsync($"api/public/{tenant.Slug}/join", new PublicJoinRequest(
                 form.FirstName.Trim(),
                 form.LastName.Trim(),
-                form.Phone.Trim()));
+                form.Phone.Trim(), birthday.Day, birthday.Month));
 
             if (!response.IsSuccessStatusCode)
             {
@@ -434,39 +410,6 @@
         }
     }
 
-    private async Task SaveBirthdayAsync()
-    {
-        if (joinResult is null || tenant is null)
-            return;
-
-        errorMsg = null;
-        if (birthday.Day < 1 || birthday.Month < 1 || birthday.Month > 12 || birthday.Day > DateTime.DaysInMonth(2000, birthday.Month))
-        {
-            errorMsg = "El día no es válido para el mes seleccionado.";
-            return;
-        }
-
-        busy = true;
-        try
-        {
-            using var response = await Api.PutAsJsonAsync(
-                $"api/public/{tenant.Slug}/join/{joinResult.SerialNumber}/birthday",
-                new PublicBirthdayRequest(birthday.Day, birthday.Month));
-
-            if (!response.IsSuccessStatusCode)
-            {
-                errorMsg = await ReadApiErrorAsync(response);
-                return;
-            }
-
-            birthdaySaved = true;
-        }
-        finally
-        {
-            busy = false;
-        }
-    }
-
     private static async Task<string> ReadApiErrorAsync(HttpResponseMessage response)
     {
         try
@@ -538,11 +481,11 @@
 
     private sealed class BirthdayForm
     {
-        public int Day { get; set; } = 1;
-        public int Month { get; set; } = 1;
+        public int? Day { get; set; }
+        public int? Month { get; set; }
     }
 
-    private sealed record PublicJoinRequest(string FirstName, string LastName, string Phone);
+    private sealed record PublicJoinRequest(string FirstName, string LastName, string Phone, int? BirthdayDay, int? BirthdayMonth);
 
     private sealed record PublicJoinResponse(
         Guid CustomerId,
@@ -554,7 +497,6 @@
         string PassDownloadUrl,
         bool GoogleWalletEnabled);
 
-    private sealed record PublicBirthdayRequest(int Day, int Month);
 
     private sealed record GoogleWalletSaveLinkResponse(
         string SaveUrl,

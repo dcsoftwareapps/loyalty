@@ -1,0 +1,22 @@
+@inherits LayoutComponentBase
+@using LoyaltyCloud.Admin.Auth
+@inject AuthenticationStateProvider AuthenticationStateProvider
+
+@if (resolved)
+{
+    <LayoutView Layout="@selectedLayout">@Body</LayoutView>
+}
+
+@code {
+    private bool resolved;
+    private Type selectedLayout = typeof(EmptyLayout);
+
+    protected override async Task OnParametersSetAsync()
+    {
+        resolved = false;
+        var principal = (await AuthenticationStateProvider.GetAuthenticationStateAsync()).User;
+        selectedLayout = CashierExperience.IsEmbeddedAdmin(principal)
+                ? typeof(MainLayout) : typeof(EmptyLayout);
+        resolved = true;
+    }
+}

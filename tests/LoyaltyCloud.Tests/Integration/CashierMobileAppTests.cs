@@ -17,8 +17,8 @@ public sealed class CashierMobileAppTests
         Assert.Contains("net9.0-ios", project);
         Assert.Contains("Microsoft.AspNetCore.Components.WebView.Maui", project);
         Assert.Contains("<ApplicationTitle>LoyaltyCloud</ApplicationTitle>", project);
-        Assert.Contains("<ApplicationDisplayVersion>1.0.0</ApplicationDisplayVersion>", project);
-        Assert.Contains("<ApplicationVersion>1</ApplicationVersion>", project);
+        Assert.Contains("<ApplicationDisplayVersion>1.0.1</ApplicationDisplayVersion>", project);
+        Assert.Contains("<ApplicationVersion>2</ApplicationVersion>", project);
         Assert.Contains("src\\LoyaltyCloud.Cashier\\LoyaltyCloud.Cashier.csproj", solution);
     }
 
@@ -72,17 +72,30 @@ public sealed class CashierMobileAppTests
         var session = Read("src", "LoyaltyCloud.Cashier", "Services", "CashierSessionService.cs");
         var page = Read("src", "LoyaltyCloud.Cashier", "Components", "Pages", "Home.razor");
 
-        Assert.Contains("SecureStorage.Default", session);
+        Assert.Contains("SecureStorage.Default", Read("src", "LoyaltyCloud.Cashier", "Services", "MauiSecureTokenStore.cs"));
         Assert.Contains("loyaltycloud.cashier.session.v1", session);
         Assert.Contains("RestoreAsync", session);
         Assert.Contains("session.IsExpired(DateTimeOffset.UtcNow)", session);
-        Assert.Contains("await LogoutAsync();", session);
+        Assert.Contains("RefreshAfterUnauthorizedAsync", session);
         Assert.Contains("Sessions.RestoreAsync()", page);
         Assert.Contains("Sessions.SignInAsync", page);
         Assert.Contains("Sessions.LogoutAsync", page);
         Assert.DoesNotContain("localStorage", session, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("sessionStorage", session, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("Preferences", session, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    [Trait("Category", "CashierMobile")]
+    public void Login_preferences_persist_only_tenant_and_username()
+    {
+        var preferences=Read("src", "LoyaltyCloud.Cashier", "Services", "CashierLoginPreferences.cs");
+        Assert.Contains("Preferences.Default.Set(TenantKey, tenantSlug.Trim())", preferences);
+        Assert.Contains("Preferences.Default.Set(UsernameKey, username.Trim())", preferences);
+        Assert.Equal(2, preferences.Split("Preferences.Default.Set(").Length-1);
+        Assert.DoesNotContain("password", preferences, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("RefreshToken", preferences, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("AccessToken", preferences, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]
@@ -268,6 +281,24 @@ public sealed class CashierMobileAppTests
         Assert.Contains("CashierRedemptionResponse", contracts);
         Assert.Contains("CashierCancelRedemptionResponse", contracts);
         Assert.Contains("CashierMonetaryRedemptionPreview", contracts);
+    }
+
+    [Fact]
+    [Trait("Category", "StampCashier")]
+    public void Program_surfaces_keep_points_and_gift_cards_while_linking_one_stamps_panel()
+    {
+        var mobile = Read("src", "LoyaltyCloud.Cashier", "Components", "Pages", "Home.razor");
+        var web = Read("src", "LoyaltyCloud.Admin", "Pages", "CashierLanding.razor");
+        var project = Read("src", "LoyaltyCloud.Cashier", "LoyaltyCloud.Cashier.csproj");
+        Assert.Contains("session?.ProgramType == \"Stamps\"", mobile);
+        Assert.Contains("!giftMode && !IsStamps", mobile);
+        Assert.Contains("StampCashierPanel", mobile);
+        Assert.Contains("<GiftCardPanel", mobile);
+        Assert.Contains("@if (isStamps)", web);
+        Assert.Contains("hidden=\"@(surface != CashierSurface.Points)\"", web);
+        Assert.Contains("hidden=\"@giftMode\"", mobile);
+        Assert.Contains("WebStampCashier", web);
+        Assert.Contains("LoyaltyCloud.Admin\\Shared\\StampCashierPanel.razor", project);
     }
 
     private static string Read(params string[] parts) =>

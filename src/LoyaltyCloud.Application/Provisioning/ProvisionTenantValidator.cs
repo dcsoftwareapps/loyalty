@@ -7,6 +7,8 @@ internal sealed partial class ProvisionTenantValidator : AbstractValidator<Provi
 {
     public ProvisionTenantValidator()
     {
+        RuleFor(c => c.ProgramType).IsInEnum();
+
         RuleFor(c => c.Slug)
             .Cascade(CascadeMode.Stop)
             .NotEmpty()
