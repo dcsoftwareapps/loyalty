@@ -13,8 +13,8 @@ public sealed class CashierMobileAppTests
 
         Assert.Contains("Microsoft.NET.Sdk.Razor", project);
         Assert.Contains("<UseMaui>true</UseMaui>", project);
-        Assert.Contains("net9.0-android", project);
-        Assert.Contains("net9.0-ios", project);
+        Assert.Contains("net10.0-android", project);
+        Assert.Contains("net10.0-ios", project);
         Assert.Contains("Microsoft.AspNetCore.Components.WebView.Maui", project);
         Assert.Contains("<ApplicationTitle>LoyaltyCloud</ApplicationTitle>", project);
         Assert.Contains("<ApplicationDisplayVersion>1.0.1</ApplicationDisplayVersion>", project);

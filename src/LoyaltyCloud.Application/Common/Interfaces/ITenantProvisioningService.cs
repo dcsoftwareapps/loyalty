@@ -23,4 +23,6 @@ public sealed record ProvisionTenantRequest(
     string? WhatsAppUrl,
     string? InstagramUrl,
     string? TermsUrl,
+    string? AdminEmail,
+    ProvisioningTrialPolicy TrialPolicy,
     LoyaltyProgramType ProgramType = LoyaltyProgramType.Points);

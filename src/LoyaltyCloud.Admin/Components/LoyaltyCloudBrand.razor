@@ -1,0 +1,9 @@
+<a class="lp-brand @CssClass" href="@Href" aria-label="@AriaLabel">
+    <img class="lp-brand-wordmark" src="images/brand/loyaltycloud-wordmark.svg" alt="" />
+</a>
+
+@code {
+    [Parameter] public string Href { get; set; } = "/";
+    [Parameter] public string CssClass { get; set; } = string.Empty;
+    [Parameter] public string AriaLabel { get; set; } = "LoyaltyCloud";
+}

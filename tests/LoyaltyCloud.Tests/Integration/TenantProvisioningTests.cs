@@ -62,15 +62,22 @@ public sealed class TenantProvisioningTests
     [Trait("Category", "TenantProvisioning")]
     public async Task Provisioning_creates_complete_trial_tenant()
     {
-        await using var env = await ProvisioningTestEnvironment.CreateAsync();
+        var now = new DateTime(2026, 1, 15, 12, 0, 0, DateTimeKind.Utc);
+        await using var env = await ProvisioningTestEnvironment.CreateAsync(nowUtc: now);
 
-        var result = await env.ProvisionAsync("beauty-room", "Beauty Room", "owner", AdminPassword);
+        var result = await env.ProvisionAsync(
+            "beauty-room",
+            "Beauty Room",
+            "owner",
+            AdminPassword,
+            adminEmail: "  Owner@Example.COM ");
 
         Assert.True(result.IsSuccess, result.Error);
         Assert.Equal("beauty-room", result.Value.TenantSlug);
         Assert.NotEqual(Guid.Empty, result.Value.TenantId);
         Assert.NotEqual(Guid.Empty, result.Value.AdminUserId);
         Assert.Equal(TenantSubscriptionStatus.Trial.ToString(), result.Value.SubscriptionStatus);
+        Assert.Equal(now.AddDays(14), result.Value.TrialEndsAtUtc);
 
         var row = await env.PlatformReadAsync(async db => await db.Tenants
             .Where(t => t.Id == result.Value.TenantId)
@@ -94,14 +101,165 @@ public sealed class TenantProvisioningTests
         Assert.Equal("trial", row.Subscription.PlanCode);
         Assert.NotNull(row.Subscription.CurrentPeriodStart);
         Assert.NotNull(row.Subscription.CurrentPeriodEnd);
-        Assert.True(row.Subscription.IsOperational(DateTime.UtcNow));
+        Assert.True(row.Subscription.IsOperational(now));
         Assert.Equal("owner", row.Admin.Username);
         Assert.Equal("OWNER", row.Admin.NormalizedUsername);
+        Assert.Equal("Owner@Example.COM", row.Admin.Email);
+        Assert.Equal("OWNER@EXAMPLE.COM", row.Admin.NormalizedEmail);
+        Assert.Equal(TenantUserRole.Admin, row.Admin.Role);
         Assert.True(row.Admin.IsActive);
         Assert.NotEqual(AdminPassword, row.Admin.PasswordHash);
         Assert.DoesNotContain(AdminPassword, row.Admin.PasswordHash, StringComparison.Ordinal);
         Assert.Equal(TenantProvisioningDefaults.ProgramConfigRows.Count, row.ConfigCount);
         Assert.Equal(TenantProvisioningDefaults.LoyaltyLevels.Count, row.LevelCount);
+        Assert.Equal(result.Value.TrialEndsAtUtc, row.Subscription.CurrentPeriodEnd);
+    }
+
+    [Theory]
+    [Trait("Category", "TenantProvisioning")]
+    [InlineData(2026, 1, 31, 2026, 2, 28)]
+    [InlineData(2028, 1, 31, 2028, 2, 29)]
+    [InlineData(2026, 2, 28, 2026, 3, 28)]
+    public async Task Calendar_month_trial_uses_calendar_arithmetic(
+        int year,
+        int month,
+        int day,
+        int expectedYear,
+        int expectedMonth,
+        int expectedDay)
+    {
+        var now = new DateTime(year, month, day, 9, 30, 0, DateTimeKind.Utc);
+        await using var env = await ProvisioningTestEnvironment.CreateAsync(nowUtc: now);
+
+        var result = await env.ProvisionAsync(
+            $"calendar-{year}-{month}-{day}",
+            "Calendar Trial",
+            "owner",
+            AdminPassword,
+            adminEmail: "owner@example.com",
+            trialPolicy: ProvisioningTrialPolicy.OneCalendarMonth);
+
+        Assert.True(result.IsSuccess, result.Error);
+        Assert.Equal(
+            new DateTime(expectedYear, expectedMonth, expectedDay, 9, 30, 0, DateTimeKind.Utc),
+            result.Value.TrialEndsAtUtc);
+    }
+
+    [Fact]
+    [Trait("Category", "TenantProvisioning")]
+    public async Task Existing_internal_provisioning_keeps_configured_fourteen_day_trial()
+    {
+        var now = new DateTime(2026, 1, 31, 8, 0, 0, DateTimeKind.Utc);
+        await using var env = await ProvisioningTestEnvironment.CreateAsync(nowUtc: now);
+
+        var result = await env.ProvisionAsync("legacy-trial", "Legacy Trial", "owner", AdminPassword);
+
+        Assert.True(result.IsSuccess, result.Error);
+        Assert.Equal(now.AddDays(14), result.Value.TrialEndsAtUtc);
+        var admin = await env.PlatformReadAsync(db => db.TenantAdminUsers
+            .IgnoreQueryFilters()
+            .SingleAsync(user => user.Id == result.Value.AdminUserId));
+        Assert.Null(admin.Email);
+        Assert.Null(admin.NormalizedEmail);
+    }
+
+    [Fact]
+    [Trait("Category", "TenantProvisioning")]
+    public async Task Invalid_owner_email_fails_without_creating_tenant()
+    {
+        await using var env = await ProvisioningTestEnvironment.CreateAsync();
+
+        var result = await env.ProvisionAsync(
+            "invalid-email",
+            "Invalid Email",
+            "owner",
+            AdminPassword,
+            adminEmail: "not-an-email");
+
+        Assert.True(result.IsFailure);
+        Assert.False(await env.PlatformReadAsync(db => db.Tenants.AnyAsync(t => t.Slug == "invalid-email")));
+    }
+
+    [Fact]
+    [Trait("Category", "TenantProvisioning")]
+    public async Task Same_owner_email_can_exist_in_different_tenants()
+    {
+        await using var env = await ProvisioningTestEnvironment.CreateAsync();
+
+        var first = await env.ProvisionAsync(
+            "email-tenant-a", "Email Tenant A", "owner", AdminPassword, adminEmail: "OWNER@example.com");
+        var second = await env.ProvisionAsync(
+            "email-tenant-b", "Email Tenant B", "owner", AdminPassword, adminEmail: " owner@EXAMPLE.com ");
+
+        Assert.True(first.IsSuccess, first.Error);
+        Assert.True(second.IsSuccess, second.Error);
+    }
+
+    [Fact]
+    [Trait("Category", "TenantProvisioning")]
+    public async Task Duplicate_normalized_email_is_rejected_within_tenant()
+    {
+        await using var env = await ProvisioningTestEnvironment.CreateAsync();
+        var provisioned = await env.ProvisionAsync(
+            "unique-email", "Unique Email", "owner", AdminPassword, adminEmail: "owner@example.com");
+        Assert.True(provisioned.IsSuccess, provisioned.Error);
+
+        await Assert.ThrowsAsync<DbUpdateException>(() => env.TenantWriteAsync(
+            provisioned.Value.TenantId,
+            "unique-email",
+            async db =>
+        {
+            db.TenantAdminUsers.Add(new TenantAdminUser(
+                Guid.NewGuid(),
+                provisioned.Value.TenantId,
+                "second-owner",
+                "test-password-hash",
+                DateTime.UtcNow,
+                email: " OWNER@EXAMPLE.COM "));
+            await db.SaveChangesAsync();
+        }));
+    }
+
+    [Fact]
+    [Trait("Category", "TenantProvisioning")]
+    public async Task Existing_username_uniqueness_remains_enforced_within_tenant()
+    {
+        await using var env = await ProvisioningTestEnvironment.CreateAsync();
+        var provisioned = await env.ProvisionAsync(
+            "unique-username", "Unique Username", "owner", AdminPassword, adminEmail: "first@example.com");
+        Assert.True(provisioned.IsSuccess, provisioned.Error);
+
+        await Assert.ThrowsAsync<DbUpdateException>(() => env.TenantWriteAsync(
+            provisioned.Value.TenantId,
+            "unique-username",
+            async db =>
+            {
+                db.TenantAdminUsers.Add(new TenantAdminUser(
+                    Guid.NewGuid(),
+                    provisioned.Value.TenantId,
+                    " OWNER ",
+                    "test-password-hash",
+                    DateTime.UtcNow,
+                    email: "second@example.com"));
+                await db.SaveChangesAsync();
+            }));
+    }
+
+    [Fact]
+    [Trait("Category", "TenantProvisioning")]
+    public void Provisioning_contract_does_not_accept_security_or_subscription_state()
+    {
+        var propertyNames = typeof(ProvisionTenantCommand).GetProperties()
+            .Select(property => property.Name)
+            .ToHashSet(StringComparer.Ordinal);
+
+        Assert.DoesNotContain("TenantId", propertyNames);
+        Assert.DoesNotContain("Role", propertyNames);
+        Assert.DoesNotContain("IsActive", propertyNames);
+        Assert.DoesNotContain("SubscriptionStatus", propertyNames);
+        Assert.DoesNotContain("TrialEndsAtUtc", propertyNames);
+        Assert.DoesNotContain("StripeCustomerId", propertyNames);
+        Assert.DoesNotContain("PaymentMethod", propertyNames);
     }
 
     [Fact]
@@ -675,7 +833,10 @@ public sealed class TenantProvisioningTests
             _services = services;
         }
 
-        public static async Task<ProvisioningTestEnvironment> CreateAsync(string? migrationTarget = null, Action<IServiceCollection>? configure = null)
+        public static async Task<ProvisioningTestEnvironment> CreateAsync(
+            string? migrationTarget = null,
+            Action<IServiceCollection>? configure = null,
+            DateTime? nowUtc = null)
         {
             var dbName = "LoyaltyCloud_MT3E_" + Guid.NewGuid().ToString("N");
             var configuration = new ConfigurationBuilder()
@@ -698,6 +859,11 @@ public sealed class TenantProvisioningTests
             services.AddLogging();
             services.AddApplication();
             services.AddInfrastructure(configuration, new TestHostEnvironment());
+            if (nowUtc.HasValue)
+            {
+                services.RemoveAll<IDateTimeProvider>();
+                services.AddSingleton<IDateTimeProvider>(new FixedDateTimeProvider(nowUtc.Value));
+            }
             services.RemoveAll<IStorageService>();
             services.AddScoped<IStorageService, InMemoryStorageService>();
             configure?.Invoke(services);
@@ -734,6 +900,8 @@ public sealed class TenantProvisioningTests
             string? primaryColor = null,
             string? secondaryColor = null,
             string? instagramUrl = null,
+            string? adminEmail = null,
+            ProvisioningTrialPolicy trialPolicy = ProvisioningTrialPolicy.ConfiguredDays,
             LoyaltyProgramType programType = LoyaltyProgramType.Points)
         {
             using var scope = _services.CreateScope();
@@ -746,6 +914,8 @@ public sealed class TenantProvisioningTests
                 PrimaryColor: primaryColor,
                 SecondaryColor: secondaryColor,
                 InstagramUrl: instagramUrl,
+                AdminEmail: adminEmail,
+                TrialPolicy: trialPolicy,
                 ProgramType: programType));
         }
 
@@ -866,6 +1036,13 @@ public sealed class TenantProvisioningTests
             return await query(scope.ServiceProvider.GetRequiredService<AppDbContext>());
         }
 
+        public async Task TenantWriteAsync(Guid tenantId, string tenantSlug, Func<AppDbContext, Task> action)
+        {
+            using var scope = _services.CreateScope();
+            scope.ServiceProvider.GetRequiredService<IMutableTenantContext>().SetTenant(tenantId, tenantSlug);
+            await action(scope.ServiceProvider.GetRequiredService<AppDbContext>());
+        }
+
         public async Task<T> TenantReadAsync<T>(Guid tenantId, string slug, Func<AppDbContext, Task<T>> query)
         {
             using var scope = _services.CreateScope();
@@ -873,7 +1050,7 @@ public sealed class TenantProvisioningTests
             return await query(scope.ServiceProvider.GetRequiredService<AppDbContext>());
         }
 
-        private async Task InitializeAsync(string? migrationTarget)
+        private async Task InitializeAsync(string? migrationTarget = null)
         {
             using var scope = _services.CreateScope();
             var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
@@ -891,6 +1068,12 @@ public sealed class TenantProvisioningTests
             context.Request.Host = new HostString("admin.test");
             return context;
         }
+    }
+
+    private sealed class FixedDateTimeProvider(DateTime utcNow) : IDateTimeProvider
+    {
+        public DateTime UtcNow { get; } = utcNow;
+        public DateTime Today => UtcNow.Date;
     }
 
     private sealed class TestHostEnvironment : IHostEnvironment

@@ -31,6 +31,8 @@ public sealed class ProvisionTenantHandler
             WhatsAppUrl: command.WhatsAppUrl,
             InstagramUrl: command.InstagramUrl,
             TermsUrl: command.TermsUrl,
+            AdminEmail: command.AdminEmail?.Trim(),
+            TrialPolicy: command.TrialPolicy,
             ProgramType: command.ProgramType);
 
         return await _provisioning.ProvisionAsync(request, ct);

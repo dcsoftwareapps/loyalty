@@ -60,10 +60,11 @@ internal sealed class TenantProvisioningService : ITenantProvisioningService
 
         _logger.LogInformation("Tenant provisioning started. TenantSlug={TenantSlug}", slug);
 
-        var strategy = _db.Database.CreateExecutionStrategy();
-        return await strategy.ExecuteAsync(async () =>
+        async Task<Result<ProvisionTenantResult>> ExecuteAsync(bool ownsTransaction)
         {
-            await using var tx = await _db.Database.BeginTransactionAsync(cancellationToken);
+            await using var tx = ownsTransaction
+                ? await _db.Database.BeginTransactionAsync(cancellationToken)
+                : null;
             try
             {
                 if (await _db.Tenants.AnyAsync(t => t.Slug == slug, cancellationToken))
@@ -78,7 +79,12 @@ internal sealed class TenantProvisioningService : ITenantProvisioningService
                 var now = _clock.UtcNow;
                 var tenantId = Guid.NewGuid();
                 var adminUserId = Guid.NewGuid();
-                var trialDays = Math.Max(1, _options.TrialDays);
+                var trialEndsAt = request.TrialPolicy switch
+                {
+                    ProvisioningTrialPolicy.ConfiguredDays => now.AddDays(Math.Max(1, _options.TrialDays)),
+                    ProvisioningTrialPolicy.OneCalendarMonth => now.AddMonths(1),
+                    _ => throw new InvalidOperationException("Politica de trial no soportada.")
+                };
 
                 var tenant = new Tenant(
                     tenantId,
@@ -129,7 +135,7 @@ internal sealed class TenantProvisioningService : ITenantProvisioningService
                     TenantSubscriptionStatus.Trial,
                     "trial",
                     currentPeriodStart: now,
-                    currentPeriodEnd: now.AddDays(trialDays));
+                    currentPeriodEnd: trialEndsAt);
 
                 _db.Tenants.Add(tenant);
                 _db.TenantBrandings.Add(branding);
@@ -143,7 +149,8 @@ internal sealed class TenantProvisioningService : ITenantProvisioningService
                     tenantId,
                     request.AdminUsername,
                     passwordHash,
-                    now));
+                    now,
+                    email: request.AdminEmail));
 
                 foreach (var row in request.ProgramType == LoyaltyProgramType.Points
                     ? TenantProvisioningDefaults.ProgramConfigRows
@@ -173,7 +180,8 @@ internal sealed class TenantProvisioningService : ITenantProvisioningService
                 }
 
                 await _db.SaveChangesAsync(cancellationToken);
-                await tx.CommitAsync(cancellationToken);
+                if (tx is not null)
+                    await tx.CommitAsync(cancellationToken);
 
                 _logger.LogInformation(
                     "Tenant provisioning completed. TenantId={TenantId}, TenantSlug={TenantSlug}",
@@ -184,11 +192,13 @@ internal sealed class TenantProvisioningService : ITenantProvisioningService
                     tenantId,
                     slug,
                     adminUserId,
-                    TenantSubscriptionStatus.Trial.ToString()));
+                    TenantSubscriptionStatus.Trial.ToString(),
+                    trialEndsAt));
             }
             catch (DbUpdateException ex) when (IsUniqueConstraintViolation(ex))
             {
-                await tx.RollbackAsync(cancellationToken);
+                if (tx is not null)
+                    await tx.RollbackAsync(cancellationToken);
                 _logger.LogWarning(
                     ex,
                     "Tenant provisioning failed. TenantSlug={TenantSlug}, Reason={Reason}",
@@ -198,7 +208,8 @@ internal sealed class TenantProvisioningService : ITenantProvisioningService
             }
             catch (Exception ex)
             {
-                await tx.RollbackAsync(cancellationToken);
+                if (tx is not null)
+                    await tx.RollbackAsync(cancellationToken);
                 _logger.LogError(
                     ex,
                     "Tenant provisioning failed. TenantSlug={TenantSlug}, Reason={Reason}",
@@ -206,7 +217,13 @@ internal sealed class TenantProvisioningService : ITenantProvisioningService
                     "unexpected_error");
                 throw;
             }
-        });
+        }
+
+        if (_db.Database.CurrentTransaction is not null)
+            return await ExecuteAsync(ownsTransaction: false);
+
+        var strategy = _db.Database.CreateExecutionStrategy();
+        return await strategy.ExecuteAsync(() => ExecuteAsync(ownsTransaction: true));
     }
 
     private static bool IsUniqueConstraintViolation(DbUpdateException ex)

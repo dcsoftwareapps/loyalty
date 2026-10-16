@@ -8,6 +8,8 @@ public sealed class TenantAdminUser : Entity, ITenantOwned
     public Guid TenantId { get; private set; }
     public string Username { get; private set; } = string.Empty;
     public string NormalizedUsername { get; private set; } = string.Empty;
+    public string? Email { get; private set; }
+    public string? NormalizedEmail { get; private set; }
     public string PasswordHash { get; private set; } = string.Empty;
     public TenantUserRole Role { get; private set; } = TenantUserRole.Admin;
     public bool IsActive { get; private set; }
@@ -25,13 +27,16 @@ public sealed class TenantAdminUser : Entity, ITenantOwned
         string passwordHash,
         DateTime createdAtUtc,
         bool isActive = true,
-        TenantUserRole role = TenantUserRole.Admin) : base(id)
+        TenantUserRole role = TenantUserRole.Admin,
+        string? email = null) : base(id)
     {
         TenantId = tenantId == Guid.Empty
             ? throw new ArgumentException("TenantId requerido.", nameof(tenantId))
             : tenantId;
         Username = Tenant.Require(username, nameof(username), 150);
         NormalizedUsername = NormalizeUsername(username);
+        Email = NormalizeOptionalEmailDisplay(email);
+        NormalizedEmail = NormalizeEmail(email);
         PasswordHash = Tenant.Require(passwordHash, nameof(passwordHash), 1000);
         Role = role;
         CreatedAt = createdAtUtc;
@@ -65,4 +70,14 @@ public sealed class TenantAdminUser : Entity, ITenantOwned
 
     public static string NormalizeUsername(string username) =>
         Tenant.Require(username, nameof(username), 150).ToUpperInvariant();
+
+    public static string? NormalizeEmail(string? email) =>
+        string.IsNullOrWhiteSpace(email)
+            ? null
+            : Tenant.Require(email.Trim(), nameof(email), 254).ToUpperInvariant();
+
+    private static string? NormalizeOptionalEmailDisplay(string? email) =>
+        string.IsNullOrWhiteSpace(email)
+            ? null
+            : Tenant.Require(email.Trim(), nameof(email), 254);
 }

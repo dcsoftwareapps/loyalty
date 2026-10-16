@@ -46,4 +46,3 @@ public sealed class CashierStampApi(AuthenticatedCashierApiClient api) : IStampC
         catch (JsonException) { return new(null, "Respuesta no válida.", true); }
     }
 }
-
