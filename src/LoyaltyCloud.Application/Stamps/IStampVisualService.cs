@@ -3,11 +3,16 @@ using LoyaltyCloud.Application.Common.Interfaces;
 
 namespace LoyaltyCloud.Application.Stamps;
 
-public enum StampImageKind { Empty, Filled, Reward }
-public sealed record StampVisualDto(string EmptyPreview, string FilledPreview, IReadOnlyDictionary<Guid, string> RewardPreviews);
+public enum StampImageKind { Empty, Filled, Reward, UpcomingReward }
+public sealed record StampUpcomingRewardPreview(string Preview, bool IsCustom);
+public sealed record StampVisualDto(string EmptyPreview, string FilledPreview, IReadOnlyDictionary<Guid, string> RewardPreviews)
+{
+    public IReadOnlyDictionary<Guid, StampUpcomingRewardPreview> UpcomingRewardPreviews { get; init; }
+        = new Dictionary<Guid, StampUpcomingRewardPreview>();
+}
 public enum StampWalletRewardState { Upcoming, Available, Redeemed }
 public sealed record StampWalletReward(int RequiredStamps, Guid RewardIdentityId, byte[]? Image,
-    StampWalletRewardState? State = null);
+    StampWalletRewardState? State = null, byte[]? UpcomingImage = null);
 public sealed record StampWalletEvent(Guid TransactionId, string Operation, bool IsRollover,
     string Value, string ChangeMessage, bool RewardUnlocked);
 public sealed record StampStripAsset(string Name, byte[] Bytes);

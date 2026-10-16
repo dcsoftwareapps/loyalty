@@ -97,54 +97,57 @@ else
                     <small class="kb-muted">Ajusta qué tan grande se verá el logo en Apple Wallet.</small>
                 </div>
 
-                <div class="kb-form-row">
-                    <label>Contenido principal</label>
-                    <div class="kb-radio-stack">
-                        <label class="kb-radio-option">
-                            <input type="radio"
-                                   name="apple-wallet-primary-content"
-                                   value="@PrimaryContentCustomerName"
-                                   checked="@IsCustomerNameMode"
-                                   @onchange="OnPrimaryContentModeChanged"
-                                   disabled="@brandingBusy" />
-                            <span>Nombre del cliente</span>
-                        </label>
-                        <label class="kb-radio-option">
-                            <input type="radio"
-                                   name="apple-wallet-primary-content"
-                                   value="@PrimaryContentImage"
-                                   checked="@IsImageMode"
-                                   @onchange="OnPrimaryContentModeChanged"
-                                   disabled="@brandingBusy" />
-                            <span>Imagen de portada</span>
-                        </label>
-                    </div>
-                </div>
-
-                @if (IsImageMode)
+                @if (isPoints)
                 {
                     <div class="kb-form-row">
-                        <label for="wallet-strip">Imagen de portada</label>
-                        <label class="kb-file-upload">
-                            <span class="kb-btn kb-btn--ghost kb-btn--small">Cambiar portada</span>
-                            <InputFile id="wallet-strip"
-                                       class="kb-file-input-hidden"
-                                       OnChange="UploadAppleWalletStripImageAsync"
-                                       accept="image/png,image/jpeg"
+                        <label>Contenido principal</label>
+                        <div class="kb-radio-stack">
+                            <label class="kb-radio-option">
+                                <input type="radio"
+                                       name="apple-wallet-primary-content"
+                                       value="@PrimaryContentCustomerName"
+                                       checked="@IsCustomerNameMode"
+                                       @onchange="OnPrimaryContentModeChanged"
                                        disabled="@brandingBusy" />
-                        </label>
-                        @if (!string.IsNullOrWhiteSpace(selectedAppleWalletStripFileName))
-                        {
-                            <span class="kb-file-name">@selectedAppleWalletStripFileName</span>
-                        }
-                        @if (!string.IsNullOrWhiteSpace(branding?.AppleWalletStripImageUrl))
-                        {
-                            <div class="kb-strip-preview">
-                                <img src="@branding.AppleWalletStripImageUrl" alt="Imagen de portada de Apple Wallet" />
-                            </div>
-                        }
-                        <small class="kb-muted">Tamaño recomendado: 1125 × 432 px. Usa una imagen horizontal. Se recortará automáticamente para ajustarse sin deformarse.</small>
+                                <span>Nombre del cliente</span>
+                            </label>
+                            <label class="kb-radio-option">
+                                <input type="radio"
+                                       name="apple-wallet-primary-content"
+                                       value="@PrimaryContentImage"
+                                       checked="@IsImageMode"
+                                       @onchange="OnPrimaryContentModeChanged"
+                                       disabled="@brandingBusy" />
+                                <span>Imagen de portada</span>
+                            </label>
+                        </div>
                     </div>
+
+                    @if (IsImageMode)
+                    {
+                        <div class="kb-form-row">
+                            <label for="wallet-strip">Imagen de portada</label>
+                            <label class="kb-file-upload">
+                                <span class="kb-btn kb-btn--ghost kb-btn--small">Cambiar portada</span>
+                                <InputFile id="wallet-strip"
+                                           class="kb-file-input-hidden"
+                                           OnChange="UploadAppleWalletStripImageAsync"
+                                           accept="image/png,image/jpeg"
+                                           disabled="@brandingBusy" />
+                            </label>
+                            @if (!string.IsNullOrWhiteSpace(selectedAppleWalletStripFileName))
+                            {
+                                <span class="kb-file-name">@selectedAppleWalletStripFileName</span>
+                            }
+                            @if (!string.IsNullOrWhiteSpace(branding?.AppleWalletStripImageUrl))
+                            {
+                                <div class="kb-strip-preview">
+                                    <img src="@branding.AppleWalletStripImageUrl" alt="Imagen de portada de Apple Wallet" />
+                                </div>
+                            }
+                            <small class="kb-muted">Tamaño recomendado: 1125 × 432 px. Usa una imagen horizontal. Se recortará automáticamente para ajustarse sin deformarse.</small>
+                        </div>
+                    }
                 }
 
                 <div class="kb-form-row kb-form-row--horizontal">
@@ -399,7 +402,7 @@ else
             errorMsg = "El color de la tarjeta debe usar formato #RRGGBB.";
             return;
         }
-        if (IsImageMode && branding?.HasAppleWalletStripImage != true)
+        if (isPoints && IsImageMode && branding?.HasAppleWalletStripImage != true)
         {
             errorMsg = "Sube una imagen de portada antes de seleccionar esta opción.";
             return;
@@ -410,7 +413,7 @@ else
         {
             var result = await Api.PutAsJsonAsync<WalletBrandingRequest, TenantBrandingInfo>(
                 "api/config/wallet-branding",
-                new WalletBrandingRequest(walletBackgroundColor, walletLogoScalePercent, appleWalletPrimaryContentMode));
+                new WalletBrandingRequest(walletBackgroundColor, walletLogoScalePercent, isPoints ? appleWalletPrimaryContentMode : null));
             if (result.IsSuccess)
             {
                 branding = result.Value;
@@ -599,7 +602,7 @@ else
     private sealed record WalletBrandingRequest(
         string? WalletBackgroundColor,
         int WalletLogoScalePercent,
-        string AppleWalletPrimaryContentMode);
+        string? AppleWalletPrimaryContentMode);
 
     private sealed record WalletLogoUploadRequest(
         string FileName,

@@ -1747,6 +1747,10 @@ namespace LoyaltyCloud.Infrastructure.Persistence.Migrations
 
             modelBuilder.Entity("LoyaltyCloud.Domain.Entities.StampCycle", b =>
                 {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
                     b.Property<DateTime?>("CompletedAt")
                         .HasColumnType("datetime2");
 
@@ -1995,6 +1999,10 @@ namespace LoyaltyCloud.Infrastructure.Persistence.Migrations
 
                     b.Property<Guid>("TenantId")
                         .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("UpcomingImageBlobName")
+                        .HasMaxLength(1024)
+                        .HasColumnType("nvarchar(1024)");
 
                     b.HasKey("Id");
 

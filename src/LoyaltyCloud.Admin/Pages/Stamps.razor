@@ -77,8 +77,16 @@ else
             {
                 if (reward.RewardIdentityId is Guid identity && visuals.RewardPreviews.TryGetValue(identity, out var preview))
                 {
-                    <StampImageUpload @key="identity" Label="@reward.Name" Preview="@preview" Kind="StampImageKind.Reward"
+                    <h3>@reward.Name</h3>
+                    <StampImageUpload @key="identity" Label="Imagen disponible" Preview="@preview" Kind="StampImageKind.Reward"
+                        HelpText="Esta es la imagen que verá el cliente cuando desbloquee la recompensa."
                         RewardIdentityId="identity" Disabled="@(busy || visualBusy)" Changed="ReloadVisualsAsync" BusyChanged="SetVisualBusy" />
+                    @if (visuals.UpcomingRewardPreviews.TryGetValue(identity, out var upcoming))
+                    {
+                        <StampImageUpload Label="Imagen antes de desbloquear (opcional)" Preview="@upcoming.Preview" Kind="StampImageKind.UpcomingReward"
+                            HasCustomImage="@upcoming.IsCustom" HelpText="Opcional. Si no agregas una imagen, usaremos la imagen disponible en escala de grises hasta que el cliente desbloquee la recompensa."
+                            RewardIdentityId="identity" Disabled="@(busy || visualBusy)" Changed="ReloadVisualsAsync" BusyChanged="SetVisualBusy" />
+                    }
                 }
             }
         </section>
