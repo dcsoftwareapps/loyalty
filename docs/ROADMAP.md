@@ -102,6 +102,7 @@ La base activa de produccion/UAT es `LoyaltyCloudFree`.
 
 ## TODO
 
+- Stamps: validar integracion/fisica Apple Wallet y uploads Blob antes de release. ProgramType/provisioning, configuracion versionada/ciclo/welcome, motor/API/idempotencia, Cashier Web/MAUI, identidad estable de recompensas, assets/Admin visual y proyeccion Apple productiva estan implementados en feature/stamps-wallet-prototype. Google Wallet Stamps, notificaciones automaticas y reportes siguen pendientes. /stamps separa reglas versionadas de imagenes actuales; Gift Cards sigue independiente. Migraciones aun no aplicadas a STG/PROD.
 - Terminar pagos recurrentes
 - Dashboard de valor
 - Vista de clientes eliminados

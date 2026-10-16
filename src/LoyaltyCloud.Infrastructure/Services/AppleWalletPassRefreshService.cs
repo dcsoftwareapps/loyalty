@@ -67,6 +67,7 @@ internal sealed class AppleWalletPassRefreshService : IAppleWalletPassRefreshSer
         PassUpdateReason reason,
         CancellationToken ct = default)
     {
+        await SuppressStampContextAsync(tenantId, null, reason, ct);
         var serials = await _db.DeviceRegistrations
             .AsNoTracking()
             .Where(d => d.TenantId == tenantId)
@@ -74,14 +75,14 @@ internal sealed class AppleWalletPassRefreshService : IAppleWalletPassRefreshSer
             .Distinct()
             .ToListAsync(ct);
 
-        return await RefreshSerialsAsync(tenantId, serials, reason, ct);
+        return await RefreshSerialsAsync(tenantId, serials, reason, ct, suppressStampContext: false);
     }
 
     private async Task<AppleWalletPassRefreshResult> RefreshSerialsAsync(
         Guid tenantId,
         IReadOnlyCollection<string> serialNumbers,
         PassUpdateReason reason,
-        CancellationToken ct)
+        CancellationToken ct, bool suppressStampContext = true)
     {
         var normalizedSerials = serialNumbers
             .Where(s => !string.IsNullOrWhiteSpace(s))
@@ -111,6 +112,7 @@ internal sealed class AppleWalletPassRefreshService : IAppleWalletPassRefreshSer
                 "Sin tarjetas para actualizar.");
         }
 
+        if (suppressStampContext) await SuppressStampContextAsync(tenantId, normalizedSerials, reason, ct);
         var devices = await _db.DeviceRegistrations
             .AsNoTracking()
             .Where(d => d.TenantId == tenantId && normalizedSerials.Contains(d.SerialNumber))
@@ -237,6 +239,22 @@ internal sealed class AppleWalletPassRefreshService : IAppleWalletPassRefreshSer
             unsupported,
             worstFailure,
             failureReason);
+    }
+
+    private async Task SuppressStampContextAsync(Guid tenantId, string[]? serials, PassUpdateReason reason, CancellationToken ct)
+    {
+        // Economic operations own their context atomically. Redeem already suppresses it at commit.
+        if (reason is PassUpdateReason.StampEarned or PassUpdateReason.StampReversed or PassUpdateReason.StampRewardRedeemed
+            || !await _db.Tenants.AnyAsync(x => x.Id == tenantId && x.ProgramType == LoyaltyProgramType.Stamps, ct)) return;
+        await _db.Database.CreateExecutionStrategy().ExecuteAsync(async () =>
+        {
+            await using var tx = await _db.Database.BeginTransactionAsync(ct);
+            await _db.Database.ExecuteSqlInterpolatedAsync($"SELECT Id FROM Tenants WITH (UPDLOCK, HOLDLOCK) WHERE Id = {tenantId}", ct);
+            var contexts = _db.StampPassEventContexts.Where(x => x.TenantId == tenantId && x.AnnouncementEnabled);
+            if (serials is not null) contexts = contexts.Where(x => serials.Contains(x.SerialNumber));
+            await contexts.ExecuteUpdateAsync(s => s.SetProperty(x => x.AnnouncementEnabled, false), ct);
+            await tx.CommitAsync(ct);
+        });
     }
 
     private static ApnPushFailureType SelectWorstFailure(ApnPushFailureType current, ApnPushFailureType candidate)

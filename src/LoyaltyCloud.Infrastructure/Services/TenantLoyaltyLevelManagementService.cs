@@ -75,6 +75,10 @@ internal sealed class TenantLoyaltyLevelManagementService : ITenantLoyaltyLevelM
     {
         var tenantId = _tenantContext.RequireTenantId();
         var now = _dt.UtcNow;
+        if (!await _db.Tenants.AnyAsync(tenant => tenant.Id == tenantId
+            && tenant.ProgramType == LoyaltyProgramType.Points, ct))
+            return Result.Fail<UpdateTenantLoyaltyLevelsResultDto>(
+                "Esta operacion solo esta disponible para programas de Puntos.");
         var validationError = Validate(levels);
         if (validationError is not null)
             return Result.Fail<UpdateTenantLoyaltyLevelsResultDto>(validationError);

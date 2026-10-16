@@ -32,7 +32,8 @@ public sealed class ProvisionTenantHandler
             InstagramUrl: command.InstagramUrl,
             TermsUrl: command.TermsUrl,
             AdminEmail: command.AdminEmail?.Trim(),
-            TrialPolicy: command.TrialPolicy);
+            TrialPolicy: command.TrialPolicy,
+            ProgramType: command.ProgramType);
 
         return await _provisioning.ProvisionAsync(request, ct);
     }

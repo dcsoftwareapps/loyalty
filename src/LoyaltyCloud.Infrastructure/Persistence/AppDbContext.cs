@@ -22,6 +22,15 @@ public class AppDbContext : DbContext, IUnitOfWork
     private static readonly Guid MissingTenantId = Guid.Empty;
 
     public DbSet<Customer> Customers => Set<Customer>();
+    public DbSet<StampProgramVersion> StampProgramVersions => Set<StampProgramVersion>();
+    public DbSet<StampRewardDefinition> StampRewardDefinitions => Set<StampRewardDefinition>();
+    public DbSet<StampRewardIdentity> StampRewardIdentities => Set<StampRewardIdentity>();
+    public DbSet<StampVisualConfiguration> StampVisualConfigurations => Set<StampVisualConfiguration>();
+    public DbSet<StampCycle> StampCycles => Set<StampCycle>();
+    public DbSet<StampTransaction> StampTransactions => Set<StampTransaction>();
+    public DbSet<EarnedStampReward> EarnedStampRewards => Set<EarnedStampReward>();
+    public DbSet<StampPassEventContext> StampPassEventContexts => Set<StampPassEventContext>();
+    public DbSet<StampOperationReceipt> StampOperationReceipts => Set<StampOperationReceipt>();
     public DbSet<LoyaltyCard> LoyaltyCards => Set<LoyaltyCard>();
     public DbSet<PointTransaction> PointTransactions => Set<PointTransaction>();
     public DbSet<PointLot> PointLots => Set<PointLot>();
@@ -38,6 +47,7 @@ public class AppDbContext : DbContext, IUnitOfWork
     public DbSet<Tenant> Tenants => Set<Tenant>();
     public DbSet<TenantBranding> TenantBrandings => Set<TenantBranding>();
     public DbSet<TenantSubscription> TenantSubscriptions => Set<TenantSubscription>();
+    public DbSet<CashierRefreshToken> CashierRefreshTokens => Set<CashierRefreshToken>();
     public DbSet<TenantAdminUser> TenantAdminUsers => Set<TenantAdminUser>();
     public DbSet<TenantLoyaltyLevel> TenantLoyaltyLevels => Set<TenantLoyaltyLevel>();
     public DbSet<BillingSettings> BillingSettings => Set<BillingSettings>();
@@ -220,6 +230,16 @@ public class AppDbContext : DbContext, IUnitOfWork
     private void ApplyTenantQueryFilters(ModelBuilder modelBuilder)
     {
         ApplyTenantQueryFilter<TenantAdminUser>(modelBuilder);
+        ApplyTenantQueryFilter<CashierRefreshToken>(modelBuilder);
+        ApplyTenantQueryFilter<StampProgramVersion>(modelBuilder);
+        ApplyTenantQueryFilter<StampRewardDefinition>(modelBuilder);
+        ApplyTenantQueryFilter<StampRewardIdentity>(modelBuilder);
+        ApplyTenantQueryFilter<StampVisualConfiguration>(modelBuilder);
+        ApplyTenantQueryFilter<StampCycle>(modelBuilder);
+        ApplyTenantQueryFilter<StampTransaction>(modelBuilder);
+        ApplyTenantQueryFilter<EarnedStampReward>(modelBuilder);
+        ApplyTenantQueryFilter<StampOperationReceipt>(modelBuilder);
+        ApplyTenantQueryFilter<StampPassEventContext>(modelBuilder);
         ApplyTenantQueryFilter<Customer>(modelBuilder);
         ApplyTenantQueryFilter<LoyaltyCard>(modelBuilder);
         ApplyTenantQueryFilter<RewardCatalogItem>(modelBuilder);

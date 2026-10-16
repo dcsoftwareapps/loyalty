@@ -1,0 +1,58 @@
+@using LoyaltyCloud.Application.Stamps
+@inject IStampVisualService Visuals
+@inject ILogger<StampImageUpload> Logger
+@inject Microsoft.AspNetCore.Components.Authorization.AuthenticationStateProvider Authentication
+@inject LoyaltyCloud.Admin.Auth.AdminCurrentUserService CurrentUser
+
+<div class="kb-form-row">
+    <label>@Label</label>
+    <div class="kb-logo-preview"><img src="@Preview" alt="@Label" /></div>
+    <div class="kb-actions-inline">
+        <label class="kb-file-upload">
+            <span>Cambiar imagen</span>
+            <InputFile accept="image/png,image/jpeg" OnChange="UploadAsync" disabled="@(busy || Disabled)" />
+        </label>
+        <button type="button" class="kb-btn kb-btn--ghost" disabled="@(busy || Disabled)" @onclick="RemoveAsync">Usar predeterminada</button>
+    </div>
+    <small class="kb-muted">PNG o JPG, máximo 2 MB. Mantén la proporción original y evita márgenes vacíos excesivos.</small>
+    @if (error is not null) { <div class="kb-form-error" role="alert">@error</div> }
+</div>
+
+@code {
+    [Parameter] public string Label { get; set; } = string.Empty;
+    [Parameter] public string Preview { get; set; } = string.Empty;
+    [Parameter] public StampImageKind Kind { get; set; }
+    [Parameter] public Guid? RewardIdentityId { get; set; }
+    [Parameter] public bool Disabled { get; set; }
+    [Parameter] public EventCallback Changed { get; set; }
+    [Parameter] public EventCallback<bool> BusyChanged { get; set; }
+    private bool busy;
+    private string? error;
+
+    private async Task UploadAsync(InputFileChangeEventArgs args)
+    {
+        if (busy || Disabled) return;
+        if (args.File.Size > 2 * 1024 * 1024) { error = "La imagen debe pesar máximo 2 MB."; return; }
+        using var content = args.File.OpenReadStream(2 * 1024 * 1024);
+        using var buffer = new MemoryStream();
+        await content.CopyToAsync(buffer);
+        await SaveAsync(buffer.ToArray());
+    }
+
+    private Task RemoveAsync() => SaveAsync(null);
+    private async Task SaveAsync(byte[]? bytes)
+    {
+        if (busy || Disabled) return;
+        busy = true; error = null;
+        try
+        {
+            await BusyChanged.InvokeAsync(true);
+            CurrentUser.SetCircuitPrincipal((await Authentication.GetAuthenticationStateAsync()).User);
+            var result = await Visuals.UpdateAsync(Kind, RewardIdentityId, bytes);
+            if (result.IsFailure) error = result.Error;
+            else await Changed.InvokeAsync();
+        }
+        catch (Exception ex) { Logger.LogError(ex, "Stamps visual upload failed. Kind={Kind}", Kind); error = "No se pudo guardar la imagen. Intenta de nuevo."; }
+        finally { busy = false; await BusyChanged.InvokeAsync(false); }
+    }
+}

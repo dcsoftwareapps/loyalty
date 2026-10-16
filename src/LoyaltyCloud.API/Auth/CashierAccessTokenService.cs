@@ -39,7 +39,8 @@ public sealed class CashierAccessTokenService
             user.Role.ToString(),
             user.Username,
             now.ToUnixTimeSeconds(),
-            expiresAt.ToUnixTimeSeconds());
+            expiresAt.ToUnixTimeSeconds(),
+            Guid.NewGuid().ToString("N"));
 
         var payloadJson = JsonSerializer.SerializeToUtf8Bytes(payload, CashierTokenJsonContext.Default.CashierTokenPayload);
         var encodedPayload = WebEncoders.Base64UrlEncode(payloadJson);
@@ -165,7 +166,8 @@ public sealed record CashierTokenPayload(
     string Role,
     string Name,
     long IssuedAt,
-    long ExpiresAt);
+    long ExpiresAt,
+    string? TokenId = null);
 
 [JsonSerializable(typeof(CashierTokenPayload))]
 internal partial class CashierTokenJsonContext : JsonSerializerContext;

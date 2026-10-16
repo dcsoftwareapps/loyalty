@@ -65,6 +65,8 @@ public static class MauiProgram
             var options = services.GetRequiredService<CashierApiOptions>();
             client.BaseAddress = options.BaseUri;
         }).AddHttpMessageHandler<CashierAuthorizationHandler>();
+        builder.Services.AddSingleton<LoyaltyCloud.Common.Services.IStampCashierApi, CashierStampApi>();
+        builder.Services.AddSingleton<LoyaltyCloud.Common.Services.IStampPendingStore, MauiStampPendingStore>();
 
 #if DEBUG
         builder.Services.AddBlazorWebViewDeveloperTools();

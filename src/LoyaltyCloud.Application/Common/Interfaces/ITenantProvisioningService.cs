@@ -1,5 +1,6 @@
 using LoyaltyCloud.Common.Results;
 using LoyaltyCloud.Application.Provisioning;
+using LoyaltyCloud.Domain.Enums;
 
 namespace LoyaltyCloud.Application.Common.Interfaces;
 
@@ -23,4 +24,5 @@ public sealed record ProvisionTenantRequest(
     string? InstagramUrl,
     string? TermsUrl,
     string? AdminEmail,
-    ProvisioningTrialPolicy TrialPolicy);
+    ProvisioningTrialPolicy TrialPolicy,
+    LoyaltyProgramType ProgramType = LoyaltyProgramType.Points);

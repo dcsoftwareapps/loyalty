@@ -250,23 +250,27 @@ public sealed class AdminAuthService
         context.User = principal;
     }
 
-    public string GetAuthenticatedLandingPath(ClaimsPrincipal principal)
+    public async Task<string> GetAuthenticatedLandingPathAsync(ClaimsPrincipal principal)
     {
-        var role = principal.FindFirstValue(ClaimTypes.Role);
-        return string.Equals(role, TenantUserRoles.Cashier, StringComparison.Ordinal)
-            ? "/cashier"
-            : "/dashboard";
+        if (principal.IsInRole(TenantUserRoles.Cashier)) return "/cashier";
+        return await ReadPrincipalProgramAsync(principal) == LoyaltyProgramType.Stamps ? "/cashier" : "/dashboard";
     }
 
-    public string GetPostLoginDestination(HttpContext context, string tenantSlug, bool billingOnly, string? returnUrl)
+    public async Task<string> GetPostLoginDestinationAsync(HttpContext context, string tenantSlug, bool billingOnly, string? returnUrl)
     {
-        if (string.Equals(context.User.FindFirstValue(ClaimTypes.Role), TenantUserRoles.Cashier, StringComparison.Ordinal))
-            return "/cashier";
+        if (context.User.IsInRole(TenantUserRoles.Cashier)) return "/cashier";
+        if (billingOnly) return $"/{tenantSlug}/billing";
+        var program = await ReadPrincipalProgramAsync(context.User);
+        if (IsLocalReturnUrl(returnUrl) && (program == LoyaltyProgramType.Points || LoyaltyCloud.Admin.Services.AdminProgramNavigation.IsAllowed(program, returnUrl!))) return returnUrl!;
+        return program == LoyaltyProgramType.Stamps ? "/cashier" : "/dashboard";
+    }
 
-        if (billingOnly)
-            return $"/{tenantSlug}/billing";
-
-        return IsLocalReturnUrl(returnUrl) ? returnUrl! : "/dashboard";
+    private async Task<LoyaltyProgramType> ReadPrincipalProgramAsync(ClaimsPrincipal principal)
+    {
+        if (!Guid.TryParse(principal.FindFirstValue(AdminClaimTypes.TenantId), out var tenantId)) return LoyaltyProgramType.Points;
+        await using var db = await _dbContextFactory.CreateDbContextAsync();
+        return await db.Tenants.AsNoTracking().Where(x => x.Id == tenantId)
+            .Select(x => x.ProgramType).SingleOrDefaultAsync();
     }
 
     public static bool IsLocalReturnUrl(string? value) =>

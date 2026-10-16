@@ -5,7 +5,8 @@ namespace LoyaltyCloud.Cashier.Services;
 public sealed record CashierLoginRequest(
     [property: JsonPropertyName("tenantSlug")] string TenantSlug,
     [property: JsonPropertyName("username")] string Username,
-    [property: JsonPropertyName("password")] string Password);
+    [property: JsonPropertyName("password")] string Password,
+    [property: JsonPropertyName("rememberMe")] bool RememberMe = false);
 
 public sealed record CashierLoginResponse(
     [property: JsonPropertyName("accessToken")] string AccessToken,
@@ -15,7 +16,9 @@ public sealed record CashierLoginResponse(
     [property: JsonPropertyName("tenantSlug")] string TenantSlug,
     [property: JsonPropertyName("userId")] Guid UserId,
     [property: JsonPropertyName("username")] string Username,
-    [property: JsonPropertyName("role")] string Role);
+    [property: JsonPropertyName("role")] string Role,
+    [property: JsonPropertyName("programType")] string ProgramType = "Points",
+    string? RefreshToken = null, DateTimeOffset? RefreshTokenExpiresAtUtc = null);
 
 public sealed record CashierSession(
     string AccessToken,
@@ -24,8 +27,12 @@ public sealed record CashierSession(
     string TenantSlug,
     Guid UserId,
     string Username,
-    string Role)
+    string Role,
+    string ProgramType = "Points",
+    string? RefreshToken = null, DateTimeOffset? RefreshTokenExpiresAtUtc = null, string SessionId = "")
 {
+    public bool IsSameSession(CashierSession other) => string.IsNullOrEmpty(SessionId) ? this == other
+        : SessionId == other.SessionId && TenantSlug == other.TenantSlug && UserId == other.UserId && ProgramType == other.ProgramType;
     public bool IsExpired(DateTimeOffset now) => ExpiresAtUtc <= now;
 }
 

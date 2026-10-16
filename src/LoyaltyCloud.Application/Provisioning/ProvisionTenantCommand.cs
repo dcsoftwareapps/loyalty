@@ -1,5 +1,6 @@
 using LoyaltyCloud.Common.Results;
 using MediatR;
+using LoyaltyCloud.Domain.Enums;
 
 namespace LoyaltyCloud.Application.Provisioning;
 
@@ -16,14 +17,14 @@ public sealed record ProvisionTenantCommand(
     string? InstagramUrl = null,
     string? TermsUrl = null,
     string? AdminEmail = null,
-    ProvisioningTrialPolicy TrialPolicy = ProvisioningTrialPolicy.ConfiguredDays) : IRequest<Result<ProvisionTenantResult>>;
+    ProvisioningTrialPolicy TrialPolicy = ProvisioningTrialPolicy.ConfiguredDays,
+    LoyaltyProgramType ProgramType = LoyaltyProgramType.Points) : IRequest<Result<ProvisionTenantResult>>;
 
 public enum ProvisioningTrialPolicy
 {
     ConfiguredDays = 0,
     OneCalendarMonth = 1
 }
-
 public sealed record ProvisionTenantResult(
     Guid TenantId,
     string TenantSlug,

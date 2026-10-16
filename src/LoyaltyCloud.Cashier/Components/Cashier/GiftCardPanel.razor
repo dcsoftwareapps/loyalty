@@ -58,7 +58,7 @@
     private bool disposed;
     private string? error;
     private string? success;
-    private bool IsCurrent => !disposed && Sessions.Current == Session;
+    private bool IsCurrent => !disposed && Sessions.Current?.IsSameSession(Session) == true;
 
     protected override Task OnInitializedAsync() => RestoreAsync();
     public void Dispose() => disposed = true;
