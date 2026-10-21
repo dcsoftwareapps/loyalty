@@ -9,6 +9,7 @@
 @using LoyaltyCloud.Application.SuperAdmin
 @using LoyaltyCloud.Application.SuperAdmin.Commands.UploadTenantLogo
 @using LoyaltyCloud.Application.SuperAdmin.Queries.ListPlatformTenants
+@using LoyaltyCloud.Domain.Entities
 @using LoyaltyCloud.Domain.Enums
 @using Microsoft.AspNetCore.Components.Forms
 @inject ISender Sender
@@ -46,15 +47,15 @@
         <div class="kb-form-row kb-form-row--horizontal">
             <div style="flex:1;min-width:220px;">
                 <label for="tenant-name">Nombre</label>
-                <input id="tenant-name" type="text" @bind="form.DisplayName" />
+                <input id="tenant-name" maxlength="200" type="text" @bind="form.DisplayName" />
             </div>
             <div style="flex:1;min-width:220px;">
                 <label for="tenant-slug">Slug</label>
-                <input id="tenant-slug" type="text" @bind="form.Slug" />
+                <input id="tenant-slug" maxlength="50" type="text" @bind="form.Slug" />
             </div>
             <div style="flex:1;min-width:220px;">
                 <label for="tenant-timezone">Zona horaria</label>
-                <input id="tenant-timezone" type="text" @bind="form.TimeZoneId" />
+                <input id="tenant-timezone" maxlength="100" type="text" @bind="form.TimeZoneId" />
             </div>
             <div style="flex:1;min-width:220px;">
                 <label for="tenant-program-type">Tipo de programa</label>
@@ -68,7 +69,7 @@
         <div class="kb-form-row kb-form-row--horizontal">
             <div style="flex:1;min-width:220px;">
                 <label for="tenant-admin">Usuario admin</label>
-                <input id="tenant-admin" type="text" @bind="form.AdminUsername" />
+                <input id="tenant-admin" maxlength="150" type="text" @bind="form.AdminUsername" />
             </div>
             <div style="flex:1;min-width:220px;">
                 <label for="tenant-password">Password inicial</label>
@@ -85,7 +86,7 @@
                            aria-label="Selector de color primario"
                            value='@ColorPickerValue(form.PrimaryColor, "#111827")'
                            @oninput="SetPrimaryColor" />
-                    <input id="tenant-primary"
+                    <input id="tenant-primary" maxlength="@TenantBranding.ColorMaxLength"
                            type="text"
                            @bind="form.PrimaryColor"
                            @bind:event="oninput"
@@ -101,7 +102,7 @@
                            aria-label="Selector de color secundario"
                            value='@ColorPickerValue(form.SecondaryColor, "#F3F4F6")'
                            @oninput="SetSecondaryColor" />
-                    <input id="tenant-secondary"
+                    <input id="tenant-secondary" maxlength="@TenantBranding.ColorMaxLength"
                            type="text"
                            @bind="form.SecondaryColor"
                            @bind:event="oninput"
@@ -111,22 +112,22 @@
             </div>
             <div style="flex:1;min-width:180px;">
                 <label for="tenant-phone">Soporte</label>
-                <input id="tenant-phone" type="text" @bind="form.SupportPhone" />
+                <input id="tenant-phone" maxlength="@TenantBranding.SupportPhoneMaxLength" type="text" @bind="form.SupportPhone" />
             </div>
         </div>
 
         <div class="kb-form-row kb-form-row--horizontal">
             <div style="flex:1;min-width:220px;">
                 <label for="tenant-whatsapp">WhatsApp URL</label>
-                <input id="tenant-whatsapp" type="text" @bind="form.WhatsAppUrl" />
+                <input id="tenant-whatsapp" maxlength="@TenantBranding.UrlMaxLength" type="text" @bind="form.WhatsAppUrl" />
             </div>
             <div style="flex:1;min-width:220px;">
                 <label for="tenant-instagram">Instagram URL</label>
-                <input id="tenant-instagram" type="text" @bind="form.InstagramUrl" />
+                <input id="tenant-instagram" maxlength="@TenantBranding.UrlMaxLength" type="text" @bind="form.InstagramUrl" />
             </div>
             <div style="flex:1;min-width:220px;">
                 <label for="tenant-terms">Términos URL</label>
-                <input id="tenant-terms" type="text" @bind="form.TermsUrl" />
+                <input id="tenant-terms" maxlength="@TenantBranding.UrlMaxLength" type="text" @bind="form.TermsUrl" />
             </div>
         </div>
 

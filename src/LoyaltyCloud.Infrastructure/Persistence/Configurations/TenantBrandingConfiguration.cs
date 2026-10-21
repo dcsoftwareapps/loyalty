@@ -25,12 +25,12 @@ internal sealed class TenantBrandingConfiguration : IEntityTypeConfiguration<Ten
             .HasDefaultValue(AppleWalletPrimaryContentMode.CustomerName)
             .IsRequired();
         builder.Property(b => b.AppleWalletStripImageBlobName).HasMaxLength(500);
-        builder.Property(b => b.PrimaryColor).HasMaxLength(20).IsRequired();
-        builder.Property(b => b.SecondaryColor).HasMaxLength(20).IsRequired();
-        builder.Property(b => b.SupportPhone).HasMaxLength(50);
-        builder.Property(b => b.WhatsAppUrl).HasMaxLength(1000);
-        builder.Property(b => b.InstagramUrl).HasMaxLength(1000);
-        builder.Property(b => b.TermsUrl).HasMaxLength(1000);
+        builder.Property(b => b.PrimaryColor).HasMaxLength(TenantBranding.ColorMaxLength).IsRequired();
+        builder.Property(b => b.SecondaryColor).HasMaxLength(TenantBranding.ColorMaxLength).IsRequired();
+        builder.Property(b => b.SupportPhone).HasMaxLength(TenantBranding.SupportPhoneMaxLength);
+        builder.Property(b => b.WhatsAppUrl).HasMaxLength(TenantBranding.UrlMaxLength);
+        builder.Property(b => b.InstagramUrl).HasMaxLength(TenantBranding.UrlMaxLength);
+        builder.Property(b => b.TermsUrl).HasMaxLength(TenantBranding.UrlMaxLength);
 
     }
 }

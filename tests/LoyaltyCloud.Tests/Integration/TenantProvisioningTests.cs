@@ -47,6 +47,123 @@ public sealed class TenantProvisioningTests
     private const string AdminPassword = "Provision123!";
 
     [Fact]
+    [Trait("Category", "TenantProvisioning")]
+    public async Task Oversized_support_phone_is_rejected_without_partial_tenant()
+    {
+        await using var env = await ProvisioningTestEnvironment.CreateAsync();
+        var result = await env.ProvisionCommandAsync(new("phone-overflow", "Phone", null, "owner", AdminPassword,
+            SupportPhone: new string('1', 51)));
+        Assert.True(result.IsFailure);
+        Assert.Contains("50", result.Error);
+        Assert.Equal(0, await env.PlatformReadAsync(db => db.Tenants.IgnoreQueryFilters().CountAsync()));
+        Assert.Equal(0, await env.PlatformReadAsync(db => db.TenantBrandings.IgnoreQueryFilters().CountAsync()));
+        Assert.Equal(0, await env.PlatformReadAsync(db => db.TenantSubscriptions.IgnoreQueryFilters().CountAsync()));
+        Assert.Equal(0, await env.PlatformReadAsync(db => db.TenantAdminUsers.IgnoreQueryFilters().CountAsync()));
+        Assert.Equal(0, await env.PlatformReadAsync(db => db.ProgramConfigs.IgnoreQueryFilters().CountAsync()));
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    [Trait("Category", "TenantProvisioning")]
+    public async Task Branding_overflow_is_rejected_for_commands_and_direct_service_calls(bool direct)
+    {
+        await using var env = await ProvisioningTestEnvironment.CreateAsync();
+        var command = new ProvisionTenantCommand("brand-overflow", "Brand", null, "owner", AdminPassword);
+        var longUrl = "https://example.com/" + new string('a', 1001 - "https://example.com/".Length);
+        foreach (var invalid in new[]
+        {
+            command with { SupportPhone = new string('1', 51) },
+            command with { PrimaryColor = new string('a', 21) },
+            command with { SecondaryColor = new string('a', 21) },
+            command with { WhatsAppUrl = longUrl },
+            command with { InstagramUrl = longUrl },
+            command with { TermsUrl = longUrl },
+            command with { TimeZoneId = new string('a', 101) }
+        })
+        {
+            var result = await env.ProvisionCommandAsync(invalid, direct);
+            Assert.True(result.IsFailure);
+            Assert.Contains("máximo", result.Error);
+        }
+        Assert.Equal(0, await env.PlatformReadAsync(db => db.Tenants.IgnoreQueryFilters().CountAsync()));
+        Assert.Equal(0, await env.PlatformReadAsync(db => db.TenantBrandings.IgnoreQueryFilters().CountAsync()));
+        Assert.Equal(0, await env.PlatformReadAsync(db => db.TenantSubscriptions.IgnoreQueryFilters().CountAsync()));
+        Assert.Equal(0, await env.PlatformReadAsync(db => db.TenantAdminUsers.IgnoreQueryFilters().CountAsync()));
+        Assert.Equal(0, await env.PlatformReadAsync(db => db.ProgramConfigs.IgnoreQueryFilters().CountAsync()));
+        Assert.Equal(0, await env.PlatformReadAsync(db => db.TenantLoyaltyLevels.IgnoreQueryFilters().CountAsync()));
+    }
+
+    [Theory]
+    [InlineData(LoyaltyProgramType.Points, 49, 999)]
+    [InlineData(LoyaltyProgramType.Stamps, 50, 1000)]
+    [Trait("Category", "TenantProvisioning")]
+    public async Task Branding_within_and_at_limits_is_stored_without_truncation(LoyaltyProgramType program, int phoneLength, int urlLength)
+    {
+        await using var env = await ProvisioningTestEnvironment.CreateAsync();
+        var phone = new string('1', phoneLength);
+        var url = "https://example.com/" + new string('a', urlLength - "https://example.com/".Length);
+        var result = await env.ProvisionCommandAsync(new("brand-limits", new string('N', 200), null,
+            new string('u', 150), AdminPassword, PrimaryColor: new string('a', 20), SecondaryColor: "#123456",
+            SupportPhone: " " + phone + " ", WhatsAppUrl: url, InstagramUrl: url, TermsUrl: url, ProgramType: program));
+        Assert.True(result.IsSuccess, result.Error);
+        var branding = await env.PlatformReadAsync(db => db.TenantBrandings.SingleAsync());
+        Assert.Equal(phone, branding.SupportPhone);
+        Assert.Equal(url, branding.WhatsAppUrl);
+        Assert.Equal(url, branding.InstagramUrl);
+        Assert.Equal(url, branding.TermsUrl);
+        Assert.Equal("#111827", branding.PrimaryColor); // existing invalid-color fallback
+        Assert.Equal("#123456", branding.SecondaryColor);
+        Assert.Equal(1, await env.PlatformReadAsync(db => db.TenantAdminUsers.IgnoreQueryFilters().CountAsync()));
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    [InlineData("   ")]
+    [Trait("Category", "TenantProvisioning")]
+    public async Task Optional_branding_blanks_remain_null(string? optional)
+    {
+        await using var env = await ProvisioningTestEnvironment.CreateAsync();
+        var result = await env.ProvisionCommandAsync(new("optional-brand", "Optional", null, "owner", AdminPassword,
+            PrimaryColor: optional, SecondaryColor: optional, SupportPhone: optional,
+            WhatsAppUrl: optional, InstagramUrl: optional, TermsUrl: optional));
+        Assert.True(result.IsSuccess, result.Error);
+        var branding = await env.PlatformReadAsync(db => db.TenantBrandings.SingleAsync());
+        Assert.Null(branding.SupportPhone);
+        Assert.Null(branding.WhatsAppUrl);
+        Assert.Null(branding.InstagramUrl);
+        Assert.Null(branding.TermsUrl);
+        Assert.Equal("#111827", branding.PrimaryColor);
+        Assert.Equal("#F3F4F6", branding.SecondaryColor);
+    }
+
+    [Fact]
+    [Trait("Category", "TenantProvisioning")]
+    public async Task Platform_form_keeps_values_and_shows_validation_without_navigation()
+    {
+        var page = new AdminApp::LoyaltyCloud.Admin.Pages.PlatformTenants();
+        var flags = System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic;
+        var type = page.GetType();
+        var form = type.GetField("form", flags)!.GetValue(page)!;
+        var phone = new string('1', 51);
+        form.GetType().GetProperty("SupportPhone")!.SetValue(form, phone);
+        form.GetType().GetProperty("DisplayName")!.SetValue(form, "Keep this name");
+        form.GetType().GetProperty("AdminPassword")!.SetValue(form, AdminPassword);
+        var sender = new Moq.Mock<ISender>();
+        sender.Setup(x => x.Send(Moq.It.IsAny<IRequest<Result<ProvisionTenantResult>>>(), Moq.It.IsAny<CancellationToken>()))
+            .Returns(Task.FromResult(Result.Fail<ProvisionTenantResult>("Soporte: máximo 50 caracteres.")));
+        type.GetProperty("Sender", flags)!.SetValue(page, sender.Object);
+        type.GetMethod("StartCreate", flags)!.Invoke(page, null);
+        await (Task)type.GetMethod("CreateAsync", flags)!.Invoke(page, null)!;
+        Assert.Equal(phone, form.GetType().GetProperty("SupportPhone")!.GetValue(form));
+        Assert.Equal("Keep this name", form.GetType().GetProperty("DisplayName")!.GetValue(form));
+        Assert.True((bool)type.GetField("showCreate", flags)!.GetValue(page)!);
+        Assert.False((bool)type.GetField("busy", flags)!.GetValue(page)!);
+        Assert.Contains("Soporte: máximo 50 caracteres.", (List<string>)type.GetField("validationErrors", flags)!.GetValue(page)!);
+    }
+
+    [Fact]
     [Trait("Category", "TenantProgramType")]
     public void Tenant_defaults_to_points_and_has_no_public_program_type_mutator()
     {
@@ -890,6 +1007,18 @@ public sealed class TenantProvisioningTests
             {
                 await _services.DisposeAsync();
             }
+        }
+
+        public async Task<Result<ProvisionTenantResult>> ProvisionCommandAsync(ProvisionTenantCommand command, bool direct = false)
+        {
+            using var scope = _services.CreateScope();
+            if (!direct)
+                return await scope.ServiceProvider.GetRequiredService<ISender>().Send(command);
+            return await scope.ServiceProvider.GetRequiredService<ITenantProvisioningService>().ProvisionAsync(new(
+                command.Slug, command.DisplayName, command.TimeZoneId ?? "America/Tijuana", command.AdminUsername,
+                command.AdminPassword, command.PrimaryColor, command.SecondaryColor, command.SupportPhone,
+                command.WhatsAppUrl, command.InstagramUrl, command.TermsUrl, command.AdminEmail,
+                command.TrialPolicy, command.ProgramType));
         }
 
         public async Task<Result<ProvisionTenantResult>> ProvisionAsync(

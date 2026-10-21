@@ -1,3 +1,4 @@
+using FluentValidation;
 using LoyaltyCloud.Application.Common.Interfaces;
 using LoyaltyCloud.Application.Provisioning;
 using LoyaltyCloud.Common.Results;
@@ -15,6 +16,7 @@ namespace LoyaltyCloud.Infrastructure.Services;
 internal sealed class TenantProvisioningService : ITenantProvisioningService
 {
     private const string DuplicateSlugError = "El identificador del negocio ya está en uso.";
+    private readonly IValidator<ProvisionTenantCommand> _validator;
     private readonly AppDbContext _db;
     private readonly IMutableTenantContext _tenantContext;
     private readonly IPasswordHashingService _passwords;
@@ -24,6 +26,7 @@ internal sealed class TenantProvisioningService : ITenantProvisioningService
 
     public TenantProvisioningService(
         AppDbContext db,
+        IValidator<ProvisionTenantCommand> validator,
         IMutableTenantContext tenantContext,
         IPasswordHashingService passwords,
         IDateTimeProvider clock,
@@ -31,6 +34,7 @@ internal sealed class TenantProvisioningService : ITenantProvisioningService
         ILogger<TenantProvisioningService> logger)
     {
         _db = db;
+        _validator = validator;
         _tenantContext = tenantContext;
         _passwords = passwords;
         _clock = clock;
@@ -45,8 +49,15 @@ internal sealed class TenantProvisioningService : ITenantProvisioningService
         if (_tenantContext.HasTenant)
             return Result.Fail<ProvisionTenantResult>("Provisioning debe ejecutarse sin TenantContext previo.");
 
-        if (!Enum.IsDefined(request.ProgramType))
-            return Result.Fail<ProvisionTenantResult>("Tipo de programa no valido.");
+        // Direct callers (Tools/signup) receive the same validation as MediatR,
+        // before opening a transaction, tracking entities or accessing SQL.
+        var validation = await _validator.ValidateAsync(new ProvisionTenantCommand(
+            request.Slug, request.DisplayName, request.TimeZoneId, request.AdminUsername,
+            request.AdminPassword, request.PrimaryColor, request.SecondaryColor, request.SupportPhone,
+            request.WhatsAppUrl, request.InstagramUrl, request.TermsUrl, request.AdminEmail,
+            request.TrialPolicy, request.ProgramType), cancellationToken);
+        if (!validation.IsValid)
+            return Result.Fail<ProvisionTenantResult>(validation.Errors.Select(failure => failure.ErrorMessage));
 
         string slug;
         try
