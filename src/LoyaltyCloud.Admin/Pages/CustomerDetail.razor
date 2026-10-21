@@ -10,6 +10,9 @@
 @inject ISender Sender
 @inject NavigationManager Nav
 @inject AdminDateTimeFormatter Dates
+@inject LoyaltyCloud.Application.Common.Interfaces.ITenantProgramReadService Programs
+@inject LoyaltyCloud.Admin.Auth.AdminTenantContextInitializer TenantInitializer
+@inject LoyaltyCloud.Domain.Repositories.ICustomerRepository Customers
 
 <PageTitle>@(detail?.Summary.FullName ?? "Cliente") - LoyaltyCloud</PageTitle>
 
@@ -29,7 +32,7 @@ else
             <a href="/customers" style="color: var(--kb-ink-muted);">Volver a clientes</a>
             <h1 style="margin-top:12px;">@detail.Summary.FullName</h1>
             <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
-                <LevelBadge Level="@detail.Summary.Level" />
+                @if (isPoints) { <LevelBadge Level="@detail.Summary.Level" /> }
                 <span class="@StatusBadgeClass(detail.Summary.IsActive)">@(detail.Summary.IsActive ? "Activo" : "Inactivo")</span>
                 <span class="@StatusBadgeClass(detail.Summary.WalletIssued)">Wallet @(detail.Summary.WalletIssued ? "emitida" : "no emitida")</span>
             </div>
@@ -41,7 +44,7 @@ else
             }
         </div>
 
-        @if (!string.IsNullOrWhiteSpace(detail.Wallet.SerialNumber))
+        @if (isPoints && !string.IsNullOrWhiteSpace(detail.Wallet.SerialNumber))
         {
             <a class="kb-btn kb-btn--primary" href="@ScanHref()">
                 Sumar puntos
@@ -49,6 +52,8 @@ else
         }
     </div>
 
+    @if (isPoints)
+    {
     <section style="margin-bottom:32px;">
         <h2>Estadísticas rápidas</h2>
         <div class="kb-grid">
@@ -62,6 +67,7 @@ else
             <MetricCard Label="Confirmados" Value="@FormatNumber(detail.Statistics.ConfirmedRedemptions)" />
         </div>
     </section>
+    }
 
     <section style="margin-bottom:32px;">
         <h2>Información general</h2>
@@ -72,8 +78,11 @@ else
                 <DetailItem Label="Cumpleaños" Value="@BirthdayText()" />
                 <DetailItem Label="Fecha de registro" Value="@FormatDate(detail.Summary.CreatedAt)" />
                 <DetailItem Label="Estado" Value="@StatusText(detail.Summary.IsActive)" />
-                <DetailItem Label="Nivel actual" Value="@detail.Summary.Level" />
-                <DetailItem Label="Fecha de nivel" Value="@FormatNullableDateTime(detail.Summary.LevelAchievedAt)" />
+                @if (isPoints)
+                {
+                    <DetailItem Label="Nivel actual" Value="@detail.Summary.Level" />
+                    <DetailItem Label="Fecha de nivel" Value="@FormatNullableDateTime(detail.Summary.LevelAchievedAt)" />
+                }
                 <DetailItem Label="Wallet emitida" Value="@YesNo(detail.Summary.WalletIssued)" />
             </div>
         </div>
@@ -116,6 +125,8 @@ else
         </div>
     </section>
 
+    @if (isPoints)
+    {
     <section style="margin-bottom:32px;">
         <h2>Auditoría de saldo</h2>
         <div class="kb-grid">
@@ -155,6 +166,7 @@ else
             </div>
         </div>
     </section>
+    }
 
     <section style="margin-bottom:32px;">
         <h2>Tarjeta Loyalty / Wallet</h2>
@@ -167,7 +179,7 @@ else
             <div class="kb-card">
                 <div class="kb-detail-grid">
                     <DetailItem Label="ID del cliente" Value="@DisplayText(detail.Wallet.SerialNumber)" />
-                    <DetailItem Label="Puntos actuales" Value="@FormatNullableNumber(detail.Wallet.CurrentPoints)" />
+                    @if (isPoints) { <DetailItem Label="Puntos actuales" Value="@FormatNullableNumber(detail.Wallet.CurrentPoints)" /> }
                     <DetailItem Label="Fecha de emisión" Value="@FormatNullableDate(detail.Wallet.IssuedAt)" />
                     <DetailItem Label="Última actualización" Value="@FormatNullableDateTime(detail.Wallet.LastActivityAt)" />
                     <DetailItem Label="Dispositivos registrados" Value="@FormatNumber(detail.Wallet.DeviceRegistrationCount)" />
@@ -214,6 +226,8 @@ else
         }
     </section>
 
+    @if (isPoints)
+    {
     <section style="margin-bottom:32px;">
         <h2>Historial de puntos</h2>
         @if (detail.PointHistory.Count == 0)
@@ -362,11 +376,19 @@ else
             </table>
         }
     </section>
+    }
 
     <section class="kb-card kb-danger-zone" style="margin-top:32px;">
         <h2>Eliminar cliente</h2>
         <p class="kb-muted">
-            El cliente dejará de aparecer en búsquedas, reportes operativos, puntos, canjes y Wallet. Su historial se conserva.
+            @if (isPoints)
+            {
+                <text>El cliente dejará de aparecer en búsquedas, reportes operativos, puntos, canjes y Wallet. Su historial se conserva.</text>
+            }
+            else
+            {
+                <text>El cliente dejará de aparecer en las búsquedas y operaciones del programa y en Wallet. Su historial se conserva.</text>
+            }
         </p>
         @if (deleteError is not null)
         {
@@ -397,6 +419,7 @@ else
     [Parameter] public string? SerialNumber { get; set; }
 
     private CustomerDetailDto? detail;
+    private bool isPoints;
     private string? errorMsg;
     private string? birthdaySuccess;
     private string? birthdayError;
@@ -409,8 +432,19 @@ else
 
     protected override async Task OnInitializedAsync()
     {
+        await TenantInitializer.EnsureTenantContextAsync();
+        isPoints = await Programs.GetCurrentAsync() == LoyaltyProgramType.Points;
         if (CustomerId == Guid.Empty && !string.IsNullOrWhiteSpace(SerialNumber))
         {
+            if (!isPoints)
+            {
+                // The existing neutral lookup enforces tenant and active customer/card.
+                var customer = await Customers.GetBySerialNumberAsync(SerialNumber);
+                if (customer is not null) Nav.NavigateTo($"/customers/{customer.Id}", replace: true);
+                else errorMsg = "No se encontró cliente con ese ID.";
+                return;
+            }
+
             var legacyResult = await Sender.Send(
                 new LoyaltyCloud.Application.Customers.Queries.GetCustomerBySerial.GetCustomerBySerialQuery(SerialNumber));
             if (legacyResult.IsSuccess)
