@@ -15,24 +15,28 @@ internal sealed class CustomerDetailReadService : ICustomerDetailReadService
     private readonly ITenantLoyaltyLevelReadService _tenantLevels;
     private readonly ILevelProgressService _levelProgress;
     private readonly ITenantContext _tenantContext;
+    private readonly ITenantProgramReadService _programs;
 
     public CustomerDetailReadService(
         AppDbContext db,
         IDateTimeProvider dt,
         ITenantLoyaltyLevelReadService tenantLevels,
         ILevelProgressService levelProgress,
-        ITenantContext tenantContext)
+        ITenantContext tenantContext,
+        ITenantProgramReadService programs)
     {
         _db = db;
         _dt = dt;
         _tenantLevels = tenantLevels;
         _levelProgress = levelProgress;
         _tenantContext = tenantContext;
+        _programs = programs;
     }
 
     public async Task<CustomerDetailDto?> GetByCustomerIdAsync(Guid customerId, CancellationToken ct = default)
     {
         var tenantId = _tenantContext.RequireTenantId();
+        var isPoints = await _programs.GetCurrentAsync(ct) == LoyaltyProgramType.Points;
         var baseInfo = await (
             from customer in _db.Customers.AsNoTracking()
             where customer.TenantId == tenantId && customer.Id == customerId && customer.IsActive
@@ -51,10 +55,10 @@ internal sealed class CustomerDetailReadService : ICustomerDetailReadService
                 CardId = card == null ? (Guid?)null : card.Id,
                 SerialNumber = card == null ? null : card.SerialNumber,
                 CardIsActive = card != null && card.IsActive,
-                CurrentPoints = card == null ? 0 : card.CurrentPoints,
-                LifetimePoints = card == null ? 0 : card.LifetimePoints,
-                Level = card == null ? "Sin Wallet" : card.Level,
-                LevelAchievedAt = card == null ? (DateTime?)null : card.LevelAchievedAt,
+                CurrentPoints = !isPoints || card == null ? 0 : card.CurrentPoints,
+                LifetimePoints = !isPoints || card == null ? 0 : card.LifetimePoints,
+                Level = !isPoints ? string.Empty : card == null ? "Sin Wallet" : card.Level,
+                LevelAchievedAt = !isPoints || card == null ? (DateTime?)null : card.LevelAchievedAt,
                 LastActivityAt = card == null ? (DateTime?)null : card.LastActivityAt
             })
             .FirstOrDefaultAsync(ct);
@@ -63,29 +67,30 @@ internal sealed class CustomerDetailReadService : ICustomerDetailReadService
             return null;
 
         var hasCard = baseInfo.CardId.HasValue;
+        var hasPointsCard = isPoints && hasCard;
         var cardId = baseInfo.CardId ?? Guid.Empty;
         var serial = baseInfo.SerialNumber;
 
-        var pointsRedeemed = hasCard
+        var pointsRedeemed = hasPointsCard
             ? await _db.PointTransactions
                 .AsNoTracking()
                 .Where(t => t.TenantId == tenantId && t.LoyaltyCardId == cardId && t.Type == TransactionType.Redemption && t.Points < 0)
                 .SumAsync(t => (int?)-t.Points, ct) ?? 0
             : 0;
 
-        var pendingRedemptions = hasCard
+        var pendingRedemptions = hasPointsCard
             ? await _db.Redemptions
                 .AsNoTracking()
                 .CountAsync(r => r.TenantId == tenantId && r.LoyaltyCardId == cardId && r.Status == RedemptionStatus.Pending, ct)
             : 0;
 
-        var cancelledRedemptions = hasCard
+        var cancelledRedemptions = hasPointsCard
             ? await _db.Redemptions
                 .AsNoTracking()
                 .CountAsync(r => r.TenantId == tenantId && r.LoyaltyCardId == cardId && r.Status == RedemptionStatus.Cancelled, ct)
             : 0;
 
-        var confirmedRedemptions = hasCard
+        var confirmedRedemptions = hasPointsCard
             ? await _db.Redemptions
                 .AsNoTracking()
                 .CountAsync(r => r.TenantId == tenantId && r.LoyaltyCardId == cardId && r.Status == RedemptionStatus.Confirmed, ct)
@@ -99,17 +104,17 @@ internal sealed class CustomerDetailReadService : ICustomerDetailReadService
             : 0;
 
         var now = _dt.UtcNow;
-        var rollingLevel = baseInfo.Level;
+        var rollingLevel = isPoints ? baseInfo.Level : string.Empty;
         var rollingPoints = 0;
         var rollingProgress = new RollingProgressDto(
             RollingPoints: 0,
-            CurrentLevel: baseInfo.Level,
+            CurrentLevel: rollingLevel,
             CurrentLevelThreshold: 0,
             NextLevelName: null,
             NextLevelThreshold: null,
             PointsToNextLevel: 0,
             IsMaxLevel: true);
-        if (hasCard)
+        if (hasPointsCard)
         {
             var windowStart = now.AddMonths(-12);
             rollingPoints = await _db.PointTransactions
@@ -134,7 +139,7 @@ internal sealed class CustomerDetailReadService : ICustomerDetailReadService
                 IsMaxLevel: progress.IsMaxLevel);
         }
 
-        var lotRows = hasCard
+        var lotRows = hasPointsCard
             ? await (
                 from lot in _db.PointLots.AsNoTracking()
                 where lot.TenantId == tenantId && lot.LoyaltyCardId == cardId
@@ -184,7 +189,7 @@ internal sealed class CustomerDetailReadService : ICustomerDetailReadService
             .ToList();
 
         var shouldLoadConsumptions = lotRows.Any(l => l.RemainingAmount < l.OriginalAmount);
-        var consumptionRows = hasCard && shouldLoadConsumptions
+        var consumptionRows = hasPointsCard && shouldLoadConsumptions
             ? await (
                 from consumption in _db.PointLotConsumptions.AsNoTracking()
                 join lot in _db.PointLots.AsNoTracking() on consumption.PointLotId equals lot.Id
@@ -243,7 +248,7 @@ internal sealed class CustomerDetailReadService : ICustomerDetailReadService
                 IsReversed: row.IsReversed));
         }
 
-        var pointTransactions = hasCard
+        var pointTransactions = hasPointsCard
             ? await (
                 from transaction in _db.PointTransactions.AsNoTracking()
                 join campaign in _db.PointCampaigns.AsNoTracking()
@@ -268,7 +273,7 @@ internal sealed class CustomerDetailReadService : ICustomerDetailReadService
             : [];
 
         var pointHistory = new List<CustomerPointHistoryItemDto>();
-        if (hasCard && pointTransactions.Count > 0)
+        if (hasPointsCard && pointTransactions.Count > 0)
         {
             var balance = baseInfo.CurrentPoints;
             pointHistory = pointTransactions
@@ -289,7 +294,7 @@ internal sealed class CustomerDetailReadService : ICustomerDetailReadService
                 .ToList();
         }
 
-        var redemptionHistory = hasCard
+        var redemptionHistory = hasPointsCard
             ? await (
                 from redemption in _db.Redemptions.AsNoTracking()
                 join reward in _db.RewardCatalogItems.AsNoTracking() on redemption.RewardCatalogItemId equals reward.Id into rewards
@@ -340,20 +345,20 @@ internal sealed class CustomerDetailReadService : ICustomerDetailReadService
                 CreatedAt: baseInfo.CreatedAt,
                 IsActive: baseInfo.CustomerIsActive && (!hasCard || baseInfo.CardIsActive),
                 Level: rollingLevel,
-                LevelAchievedAt: baseInfo.LevelAchievedAt,
+                LevelAchievedAt: isPoints ? baseInfo.LevelAchievedAt : null,
                 WalletIssued: hasCard),
             Wallet: new CustomerWalletDto(
                 WalletIssued: hasCard,
                 SerialNumber: serial,
-                CurrentPoints: hasCard ? baseInfo.CurrentPoints : null,
+                CurrentPoints: hasPointsCard ? baseInfo.CurrentPoints : null,
                 IssuedAt: hasCard ? baseInfo.CreatedAt : null,
                 LastActivityAt: baseInfo.LastActivityAt,
                 DeviceRegistrationCount: deviceCount,
                 LastPushSentAt: null),
             Statistics: new CustomerStatisticsDto(
-                CurrentPoints: baseInfo.CurrentPoints,
+                CurrentPoints: isPoints ? baseInfo.CurrentPoints : 0,
                 RollingPoints: rollingPoints,
-                LifetimePoints: baseInfo.LifetimePoints,
+                LifetimePoints: isPoints ? baseInfo.LifetimePoints : 0,
                 PointsRedeemed: pointsRedeemed,
                 TotalRedemptions: totalRedemptions,
                 PendingRedemptions: pendingRedemptions,

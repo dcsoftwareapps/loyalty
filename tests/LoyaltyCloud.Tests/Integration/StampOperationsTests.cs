@@ -5,6 +5,12 @@ using LoyaltyCloud.Common.Results;
 using LoyaltyCloud.Domain.Entities;
 using LoyaltyCloud.Domain.Enums;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
+using LoyaltyCloud.Application.Common.Interfaces;
+using Moq;
+using Microsoft.EntityFrameworkCore.Diagnostics;
+using System.Data.Common;
 using Xunit;
 using Env = LoyaltyCloud.Tests.Integration.TenantProvisioningTests.ProvisioningTestEnvironment;
 
@@ -66,13 +72,46 @@ public sealed class StampOperationsTests
     }
 
     [Fact]
-    public async Task Stamps_customer_detail_failure_is_missing_points_levels()
+    public async Task Stamps_customer_detail_does_not_load_points_levels_or_audit()
     {
-        await using var env = await Env.CreateAsync(); var (id, serial) = await SetupAsync(env);
+        var levels = new Mock<ITenantLoyaltyLevelReadService>(MockBehavior.Strict);
+        var queries = new RejectPointsDetailQueries();
+        await using var env = await Env.CreateAsync(configure: services =>
+        {
+            services.RemoveAll<ITenantLoyaltyLevelReadService>(); services.AddSingleton(levels.Object);
+            services.ConfigureDbContext<LoyaltyCloud.Infrastructure.Persistence.AppDbContext>(options => options.AddInterceptors(queries));
+        });
+        var (id, serial) = await SetupAsync(env);
         var customerId = await env.TenantReadAsync(id, Slug, db => db.LoyaltyCards.Where(c => c.SerialNumber == serial).Select(c => c.CustomerId).SingleAsync());
-        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() => env.SendAsOperatorAsync(id, Slug,
-            new LoyaltyCloud.Application.Customers.Queries.GetCustomerDetail.GetCustomerDetailQuery(customerId)));
-        Assert.Equal("No hay niveles activos configurados para el tenant actual.", exception.Message);
+        queries.Enabled = true;
+        var result = await env.SendAsOperatorAsync(id, Slug,
+            new LoyaltyCloud.Application.Customers.Queries.GetCustomerDetail.GetCustomerDetailQuery(customerId));
+        Assert.True(result.IsSuccess, result.Error);
+        Assert.Equal(customerId, result.Value.Summary.CustomerId); Assert.Equal(serial, result.Value.Wallet.SerialNumber);
+        Assert.Empty(result.Value.Summary.Level); Assert.Null(result.Value.Summary.LevelAchievedAt); Assert.Null(result.Value.Wallet.CurrentPoints);
+        Assert.Empty(result.Value.PointHistory); Assert.Empty(result.Value.RedemptionHistory);
+        Assert.Empty(result.Value.LoyaltyAudit.Lots); Assert.Empty(result.Value.LoyaltyAudit.Consumptions);
+        Assert.Null(result.Value.LoyaltyAudit.UpcomingExpiration);
+        levels.Verify(x => x.GetActiveLevelsAsync(It.IsAny<CancellationToken>()), Times.Never);
+        Assert.True(queries.Reads > 0);
+    }
+
+    private sealed class RejectPointsDetailQueries : DbCommandInterceptor
+    {
+        public bool Enabled;
+        public int Reads;
+        public override ValueTask<InterceptionResult<DbDataReader>> ReaderExecutingAsync(DbCommand command,
+            CommandEventData eventData, InterceptionResult<DbDataReader> result, CancellationToken ct = default)
+        {
+            if (Enabled)
+            {
+                Reads++;
+                foreach (var table in new[] { "TenantLoyaltyLevels", "PointTransactions", "PointLots", "PointLotConsumptions", "PointCampaigns", "Redemptions", "RewardCatalogItems" })
+                    if (command.CommandText.Contains($"[{table}]", StringComparison.OrdinalIgnoreCase))
+                        throw new InvalidOperationException($"Points-only table queried by Stamps Customer Detail: {table}");
+            }
+            return ValueTask.FromResult(result);
+        }
     }
 
     [Fact]
