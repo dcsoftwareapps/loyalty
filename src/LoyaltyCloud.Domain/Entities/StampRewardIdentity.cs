@@ -6,6 +6,7 @@ public sealed class StampRewardIdentity : Entity, ITenantOwned
 {
     public Guid TenantId { get; private set; }
     public string? ImageBlobName { get; private set; }
+    public string? UpcomingImageBlobName { get; private set; }
     private StampRewardIdentity() { }
     public StampRewardIdentity(Guid id, Guid tenantId) : base(id)
     {
@@ -13,6 +14,7 @@ public sealed class StampRewardIdentity : Entity, ITenantOwned
         TenantId = tenantId;
     }
     public void SetImage(string? blobName) => ImageBlobName = blobName;
+    public void SetUpcomingImage(string? blobName) => UpcomingImageBlobName = blobName;
 }
 
 public sealed class StampVisualConfiguration : Entity, ITenantOwned

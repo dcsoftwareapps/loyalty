@@ -48,7 +48,8 @@ internal sealed class StampWalletProjectionService(AppDbContext db, ITenantConte
                 earned.Any(x => x.StampRewardDefinitionId == definition.Id && x.Status == EarnedStampRewardStatus.Available)
                     ? StampWalletRewardState.Available
                     : earned.Any(x => x.StampRewardDefinitionId == definition.Id && x.Status == EarnedStampRewardStatus.Redeemed)
-                        ? StampWalletRewardState.Redeemed : StampWalletRewardState.Upcoming));
+                        ? StampWalletRewardState.Redeemed : StampWalletRewardState.Upcoming,
+                await assets.ReadAsync(tenantId, identities[definition.RewardIdentityId].UpcomingImageBlobName, ct)));
         var eventContext = await db.StampPassEventContexts.AsNoTracking().SingleOrDefaultAsync(x =>
             x.SerialNumber == serialNumber && x.AnnouncementEnabled && x.ExpiresAtUtc > clock.UtcNow, ct);
         StampWalletEvent? passEvent = null;

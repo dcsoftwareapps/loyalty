@@ -18,6 +18,102 @@ namespace LoyaltyCloud.Tests.Integration;
 public sealed class StampVisualAssetsTests
 {
     [Fact]
+    public async Task Optional_upcoming_upload_and_removal_preserve_available_art_and_historical_rules()
+    {
+        var store = new MemoryAssets(); var refresh = new RecordingRefresh();
+        await using var env = await EnvironmentAsync(store, refresh);
+        const string slug = "upcoming-art";
+        var id = (await env.ProvisionAsync(slug, "Upcoming", "owner", "Owner123!", programType: LoyaltyProgramType.Stamps)).Value.TenantId;
+        var rules = await env.SendAsOperatorAsync(id, slug, new SetStampProgramCommand(10, 4, StampReversalPolicy.None, [new(10, "Reward", null)]));
+        var identity = rules.Value.Rewards.Single().RewardIdentityId!.Value;
+        var serial = (await env.JoinAsync(id, slug, "Old", "Card", "6465550014")).Value.SerialNumber;
+        var available = StampVisualService.NormalizeImage(Png(50, 50, new Rgba32(220, 40, 80)));
+        var upcoming = StampVisualService.NormalizeImage(Png(50, 50, new Rgba32(20, 160, 230)));
+        async Task Update(StampImageKind kind, byte[]? bytes)
+        {
+            var result = await env.InTenantScopeAsync(id, slug, sp => sp.GetRequiredService<IStampVisualService>().UpdateAsync(kind, identity, bytes));
+            Assert.True(result.IsSuccess, result.Error);
+        }
+        Task<StampVisualDto> Preview() => env.InTenantScopeAsync(id, slug, sp => sp.GetRequiredService<IStampVisualService>().ReadAsync());
+        await Update(StampImageKind.Reward, available);
+        var before = await Projection(env, id, slug, serial);
+        Assert.Null(before.Rewards.Single().UpcomingImage);
+        Assert.False((await Preview()).UpcomingRewardPreviews[identity].IsCustom);
+        string? availablePath = null;
+        await env.TenantReadAsync(id, slug, async db =>
+        {
+            var row = await db.StampRewardIdentities.SingleAsync();
+            availablePath = row.ImageBlobName; Assert.NotNull(availablePath); Assert.Null(row.UpcomingImageBlobName);
+            return true;
+        });
+        // A current visual identity is shared with historical rules; no economic snapshot changes.
+        var changed = await env.SendAsOperatorAsync(id, slug, new SetStampProgramCommand(8, 0, StampReversalPolicy.None, [new(8, "Reward", null, identity)]));
+        Assert.True(changed.IsSuccess, changed.Error);
+        await Update(StampImageKind.UpcomingReward, upcoming);
+        var custom = await Projection(env, id, slug, serial);
+        Assert.Equal(rules.Value.Id, custom.VersionId); Assert.Equal(10, custom.Rewards.Single().RequiredStamps);
+        Assert.Equal(available, custom.Rewards.Single().Image); Assert.Equal(upcoming, custom.Rewards.Single().UpcomingImage);
+        var preview = (await Preview()).UpcomingRewardPreviews[identity]; Assert.True(preview.IsCustom);
+        Assert.Equal(upcoming, Convert.FromBase64String(preview.Preview.Split(',')[1]));
+        var uploads = store.Count;
+        await Update(StampImageKind.UpcomingReward, null);
+        Assert.Equal(uploads, store.Count); // NULL is meaningful, never upload a synthetic fallback.
+        var after = await Projection(env, id, slug, serial);
+        Assert.Equal(before.Rewards.Single().Image, after.Rewards.Single().Image); Assert.Null(after.Rewards.Single().UpcomingImage);
+        Assert.Equal(StampStripRenderer.Render(before, "#FFFFFF")[0].Bytes, StampStripRenderer.Render(after, "#FFFFFF")[0].Bytes);
+        var automatic = (await Preview()).UpcomingRewardPreviews[identity]; Assert.False(automatic.IsCustom);
+        using var gray = Image.Load<Rgba32>(Convert.FromBase64String(automatic.Preview.Split(',')[1]));
+        Assert.Equal(gray[25, 25].R, gray[25, 25].G); Assert.Equal(gray[25, 25].G, gray[25, 25].B);
+        await env.TenantReadAsync(id, slug, async db =>
+        {
+            var row = await db.StampRewardIdentities.SingleAsync(); Assert.Null(row.UpcomingImageBlobName); Assert.Equal(availablePath, row.ImageBlobName);
+            Assert.Equal(2, await db.StampProgramVersions.CountAsync()); Assert.Empty(await db.StampPassEventContexts.ToListAsync()); return true;
+        });
+        Assert.Equal(3, refresh.TenantCalls.Count);
+    }
+
+    [Fact]
+    public async Task Wallet_projects_only_cycle_rewards_even_when_active_version_adds_an_intermediate_milestone()
+    {
+        await using var env = await EnvironmentAsync(new MemoryAssets(), new RecordingRefresh());
+        const string slug = "one-reward-grid";
+        var tenant = (await env.ProvisionAsync(slug, "Grid", "owner", "Owner123!", programType: LoyaltyProgramType.Stamps)).Value.TenantId;
+        var v1 = await env.SendAsOperatorAsync(tenant, slug, new SetStampProgramCommand(10, 4, StampReversalPolicy.None,
+            [new(10, "Reward final", null)]));
+        Assert.True(v1.IsSuccess, v1.Error);
+        var serial = (await env.JoinAsync(tenant, slug, "First", "Card", "6465550011")).Value.SerialNumber;
+        var first = await Projection(env, tenant, slug, serial);
+        Assert.Equal(4, first.CurrentStamps); Assert.Equal(10, first.MaxStamps);
+        Assert.Equal(v1.Value.Id, first.VersionId);
+        Assert.Equal(10, Assert.Single(first.Rewards).RequiredStamps);
+        Assert.Equal(StampWalletRewardState.Upcoming, first.Rewards.Single().State);
+
+        var v2 = await env.SendAsOperatorAsync(tenant, slug, new SetStampProgramCommand(10, 4, StampReversalPolicy.None,
+            [new(5, "Reward intermedia", null), new(10, "Reward final", null, v1.Value.Rewards.Single().RewardIdentityId)]));
+        Assert.True(v2.IsSuccess, v2.Error);
+        var secondSerial = (await env.JoinAsync(tenant, slug, "Second", "Card", "6465550012")).Value.SerialNumber;
+        var second = await Projection(env, tenant, slug, secondSerial);
+        Assert.Equal(v2.Value.Id, second.VersionId);
+        Assert.Equal(new[] { 5, 10 }, second.Rewards.OrderBy(x => x.RequiredStamps).Select(x => x.RequiredStamps));
+        Assert.All(second.Rewards, r => Assert.Equal(StampWalletRewardState.Upcoming, r.State));
+        var historical = await Projection(env, tenant, slug, serial);
+        Assert.Equal(v1.Value.Id, historical.VersionId);
+        Assert.Equal(10, Assert.Single(historical.Rewards).RequiredStamps);
+        // Removing milestone 5 from the active program must not rewrite a V2 card.
+        var v3 = await env.SendAsOperatorAsync(tenant, slug, new SetStampProgramCommand(10, 4, StampReversalPolicy.None,
+            [new(10, "Reward final", null, v1.Value.Rewards.Single().RewardIdentityId)]));
+        Assert.True(v3.IsSuccess, v3.Error);
+        var thirdSerial = (await env.JoinAsync(tenant, slug, "Third", "Card", "6465550013")).Value.SerialNumber;
+        Assert.Equal(10, Assert.Single((await Projection(env, tenant, slug, thirdSerial)).Rewards).RequiredStamps);
+        var retained = await Projection(env, tenant, slug, secondSerial);
+        Assert.Equal(v2.Value.Id, retained.VersionId);
+        Assert.Equal(new[] { 5, 10 }, retained.Rewards.OrderBy(x => x.RequiredStamps).Select(x => x.RequiredStamps));
+        Assert.Equal(first.CurrentStamps, historical.CurrentStamps);
+        Assert.Equal(StampStripRenderer.Render(first, "#FFFFFF")[0].Bytes,
+            StampStripRenderer.Render(historical, "#FFFFFF")[0].Bytes);
+    }
+
+    [Fact]
     public async Task Migration_backfills_independent_identities_without_guessing_equal_reward_text()
     {
         await using var env = await Env.CreateAsync("20261001192907_AddStampOperations");
@@ -190,6 +286,7 @@ public sealed class StampVisualAssetsTests
     internal sealed class MemoryAssets : IStampVisualAssetStore
     {
         private readonly ConcurrentDictionary<(Guid, string), byte[]> _images = new();
+        public int Count => _images.Count;
         public Task<string> UploadAsync(Guid tenantId, byte[] png, CancellationToken ct)
         {
             var name = $"{tenantId:N}/{Guid.NewGuid():N}.png"; _images[(tenantId, name)] = png; return Task.FromResult(name);

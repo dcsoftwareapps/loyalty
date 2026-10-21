@@ -55,6 +55,7 @@ internal sealed class StampRewardIdentityConfiguration : IEntityTypeConfiguratio
         b.HasKey(x => x.Id);
         b.HasAlternateKey(x => new { x.TenantId, x.Id });
         b.Property(x => x.ImageBlobName).HasMaxLength(1024);
+        b.Property(x => x.UpcomingImageBlobName).HasMaxLength(1024);
         b.HasOne<Tenant>().WithMany().HasForeignKey(x => x.TenantId).OnDelete(DeleteBehavior.Restrict);
     }
 }

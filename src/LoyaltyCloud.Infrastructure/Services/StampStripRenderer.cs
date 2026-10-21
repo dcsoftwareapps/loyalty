@@ -33,12 +33,13 @@ internal static class StampStripRenderer
                 var reward = state.Rewards.SingleOrDefault(x => x.RequiredStamps == position);
                 var filled = position <= state.CurrentStamps;
                 var kind = reward is not null ? StampImageKind.Reward : filled ? StampImageKind.Filled : StampImageKind.Empty;
-                var bytes = reward?.Image ?? (reward is null ? filled ? state.FilledImage : state.EmptyImage : null);
+                var rewardState = reward?.State ?? (filled ? StampWalletRewardState.Available : StampWalletRewardState.Upcoming);
+                var customUpcoming = reward is not null && rewardState == StampWalletRewardState.Upcoming && reward.UpcomingImage is not null;
+                var bytes = customUpcoming ? reward!.UpcomingImage : reward?.Image ?? (reward is null ? filled ? state.FilledImage : state.EmptyImage : null);
                 var dimension = (int)Math.Round(size * .86 * scale);
                 using var source = bytes is null ? CreateDefault(kind, dimension) : Image.Load<Rgba32>(bytes);
                 source.Mutate(c => c.Resize(new ResizeOptions { Size = new Size(dimension, dimension), Mode = ResizeMode.Max }));
-                var rewardState = reward?.State ?? (filled ? StampWalletRewardState.Available : StampWalletRewardState.Upcoming);
-                if (reward is not null && rewardState != StampWalletRewardState.Available) source.Mutate(c => c.Grayscale().Contrast(.55f).Brightness(.75f));
+                if (reward is not null && rewardState != StampWalletRewardState.Available && !customUpcoming) ApplyMutedRewardTreatment(source);
                 var x = (int)Math.Round((left + size / 2) * scale - source.Width / 2d);
                 var y = (int)Math.Round((top + size / 2) * scale - source.Height / 2d);
                 canvas.Mutate(c => c.DrawImage(source, new Point(x, y), 1));
@@ -50,6 +51,16 @@ internal static class StampStripRenderer
             result.Add(new StampStripAsset(scale == 1 ? "strip.png" : $"strip@{scale}x.png", output.ToArray()));
         }
         return result;
+    }
+
+    internal static void ApplyMutedRewardTreatment(Image<Rgba32> image) =>
+        image.Mutate(c => c.Grayscale().Contrast(.55f).Brightness(.75f));
+
+    internal static byte[] UpcomingPreview(byte[] availableImage)
+    {
+        using var image = Image.Load<Rgba32>(availableImage);
+        ApplyMutedRewardTreatment(image);
+        using var output = new MemoryStream(); image.SaveAsPng(output); return output.ToArray();
     }
 
     internal static byte[] DefaultImage(StampImageKind kind)

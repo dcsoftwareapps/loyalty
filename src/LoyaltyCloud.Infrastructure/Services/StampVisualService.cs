@@ -41,19 +41,27 @@ internal sealed class StampVisualService(AppDbContext db, ITenantContext tenantC
             return "data:image/png;base64," + Convert.ToBase64String(bytes);
         }
         var previews = new Dictionary<Guid, string>();
-        foreach (var identity in identities) previews[identity.Id] = await Preview(identity.ImageBlobName, StampImageKind.Reward);
+        var upcomingPreviews = new Dictionary<Guid, StampUpcomingRewardPreview>();
+        foreach (var identity in identities)
+        {
+            var available = await assets.ReadAsync(tenantId, identity.ImageBlobName, ct) ?? StampStripRenderer.DefaultImage(StampImageKind.Reward);
+            var upcoming = await assets.ReadAsync(tenantId, identity.UpcomingImageBlobName, ct);
+            previews[identity.Id] = "data:image/png;base64," + Convert.ToBase64String(available);
+            upcomingPreviews[identity.Id] = new("data:image/png;base64," + Convert.ToBase64String(upcoming ?? StampStripRenderer.UpcomingPreview(available)), upcoming is not null);
+        }
         return new(await Preview(config?.EmptyStampBlobName, StampImageKind.Empty),
-            await Preview(config?.FilledStampBlobName, StampImageKind.Filled), previews);
+            await Preview(config?.FilledStampBlobName, StampImageKind.Filled), previews) { UpcomingRewardPreviews = upcomingPreviews };
     }
 
     public async Task<Result> UpdateAsync(StampImageKind kind, Guid? rewardIdentityId, byte[]? image, CancellationToken ct = default)
     {
         if (!await AuthorizedAsync(ct)) return Result.Fail("Solo TenantAdmin puede configurar Sellos.");
-        if (!Enum.IsDefined(kind) || (kind == StampImageKind.Reward) != rewardIdentityId.HasValue)
+        var rewardImage = kind is StampImageKind.Reward or StampImageKind.UpcomingReward;
+        if (!Enum.IsDefined(kind) || rewardImage != rewardIdentityId.HasValue)
             return Result.Fail("Tipo de imagen inválido.");
-        var identity = kind == StampImageKind.Reward
+        var identity = rewardImage
             ? await db.StampRewardIdentities.SingleOrDefaultAsync(x => x.Id == rewardIdentityId, ct) : null;
-        if (kind == StampImageKind.Reward && (identity is null || !await db.StampRewardDefinitions.AnyAsync(d =>
+        if (rewardImage && (identity is null || !await db.StampRewardDefinitions.AnyAsync(d =>
             d.RewardIdentityId == identity.Id && db.StampProgramVersions.Any(v => v.Id == d.StampProgramVersionId && v.IsActive), ct)))
             return Result.Fail("Recompensa no disponible en la configuración activa.");
         byte[]? png = null;
@@ -66,7 +74,11 @@ internal sealed class StampVisualService(AppDbContext db, ITenantContext tenantC
         }
         var tenantId = tenantContext.RequireTenantId();
         var blob = png is null ? null : await assets.UploadAsync(tenantId, png, ct);
-        if (identity is not null) identity.SetImage(blob);
+        if (identity is not null)
+        {
+            if (kind == StampImageKind.UpcomingReward) identity.SetUpcomingImage(blob);
+            else identity.SetImage(blob);
+        }
         else
         {
             var config = await db.StampVisualConfigurations.SingleOrDefaultAsync(ct);

@@ -169,7 +169,9 @@ public sealed class StampPassContextTests
             var cycle = new StampCycle(Guid.NewGuid(), card, version, now); cycle.Earn(version, now);
             var transaction = StampTransaction.Earn(cycle, userId, "legacy", 1, now);
             var identity = new StampRewardIdentity(Guid.NewGuid(), id);
-            db.AddRange(version, customer, card, cycle, transaction, identity); await db.SaveChangesAsync();
+            db.AddRange(version, customer, card, cycle, transaction); await db.SaveChangesAsync();
+            // Seed the historical schema, before UpcomingImageBlobName existed.
+            await db.Database.ExecuteSqlInterpolatedAsync($"INSERT INTO StampRewardIdentities (Id,TenantId) VALUES ({identity.Id},{id})");
             var longName = new string('A', 100);
             await db.Database.ExecuteSqlInterpolatedAsync($"INSERT INTO StampRewardDefinitions (Id,TenantId,StampProgramVersionId,RewardIdentityId,RequiredStamps,Name) VALUES ({definitionId},{id},{version.Id},{identity.Id},{1},{longName})");
             await db.Database.ExecuteSqlInterpolatedAsync($"INSERT INTO EarnedStampRewards (Id,TenantId,StampCycleId,SourceEarnTransactionId,StampRewardDefinitionId,Name,RequiredStamps,Status,EarnedAt) VALUES ({rewardId},{id},{cycle.Id},{transaction.Id},{definitionId},{"Snapshot anterior"},{1},{"Available"},{now})");
