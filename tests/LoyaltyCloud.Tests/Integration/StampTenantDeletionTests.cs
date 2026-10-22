@@ -76,7 +76,7 @@ public sealed class StampTenantDeletionTests
         Assert.True(await db.LoyaltyCards.IgnoreQueryFilters().AnyAsync(x => x.TenantId == b));
     }
 
-    private static async Task<Guid> SeedTrackedAsync(AppDbContext db, TenantContext context, string slug)
+    internal static async Task<Guid> SeedTrackedAsync(AppDbContext db, TenantContext context, string slug)
     {
         context.Clear();
         var id = Guid.NewGuid(); var now = DateTime.UtcNow; var adminId = Guid.NewGuid();
@@ -113,7 +113,7 @@ public sealed class StampTenantDeletionTests
         await db.StampPassEventContexts.IgnoreQueryFilters().CountAsync(x => x.TenantId == id)
     ];
 
-    private static async Task<Guid> SeedAsync(Env env, string slug, string phone)
+    internal static async Task<Guid> SeedAsync(Env env, string slug, string phone)
     {
         var provisioned = await env.ProvisionAsync(slug, "Stamps delete QA", "owner", "Owner123!",
             programType: LoyaltyProgramType.Stamps);
@@ -164,7 +164,7 @@ public sealed class StampTenantDeletionTests
 
     // Compare every scalar column in every mapped tenant table, including rowversions.
     // Read SQL directly so tenant query filters cannot hide orphan rows or changes to B.
-    private static Task<Dictionary<string, string>> CaptureAsync(Env env, Guid tenantId) =>
+    internal static Task<Dictionary<string, string>> CaptureAsync(Env env, Guid tenantId) =>
         env.PlatformReadAsync(async db =>
         {
             var snapshot = new Dictionary<string, string>();
@@ -189,7 +189,7 @@ public sealed class StampTenantDeletionTests
 
     private static string Quote(string identifier) => "[" + identifier.Replace("]", "]]", StringComparison.Ordinal) + "]";
 
-    private static void AssertSnapshotsEqual(Dictionary<string, string> expected, Dictionary<string, string> actual)
+    internal static void AssertSnapshotsEqual(Dictionary<string, string> expected, Dictionary<string, string> actual)
     {
         Assert.Equal(expected.Keys.OrderBy(x => x), actual.Keys.OrderBy(x => x));
         foreach (var row in expected) Assert.Equal(row.Value, actual[row.Key]);

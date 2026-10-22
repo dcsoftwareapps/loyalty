@@ -282,6 +282,19 @@ internal sealed class SuperAdminTenantManagementService : ISuperAdminTenantManag
         await _db.StampRewardIdentities.IgnoreQueryFilters().Where(x => x.TenantId == tenantId).ExecuteDeleteAsync(ct);
         await _db.StampVisualConfigurations.IgnoreQueryFilters().Where(x => x.TenantId == tenantId).ExecuteDeleteAsync(ct);
 
+        await _db.CashierRefreshTokens.IgnoreQueryFilters().Where(x => x.TenantId == tenantId).ExecuteDeleteAsync(ct);
+        await _db.MemberDigitalWallets.IgnoreQueryFilters().Where(x => x.TenantId == tenantId).ExecuteDeleteAsync(ct);
+        await _db.GiftCardDeviceRegistrations.IgnoreQueryFilters().Where(x => x.TenantId == tenantId).ExecuteDeleteAsync(ct);
+        await _db.GiftCardWallets.IgnoreQueryFilters().Where(x => x.TenantId == tenantId).ExecuteDeleteAsync(ct);
+        await _db.GiftCardTransactions.IgnoreQueryFilters().Where(x => x.TenantId == tenantId).ExecuteDeleteAsync(ct);
+        await _db.GiftCards.IgnoreQueryFilters().Where(x => x.TenantId == tenantId).ExecuteDeleteAsync(ct);
+        await _db.GiftCardConfigurations.IgnoreQueryFilters().Where(x => x.TenantId == tenantId).ExecuteDeleteAsync(ct);
+        await _db.GiftCardDenominations.IgnoreQueryFilters().Where(x => x.TenantId == tenantId).ExecuteDeleteAsync(ct);
+        await _db.PaymentTransactions.IgnoreQueryFilters().Where(x => x.TenantId == tenantId).ExecuteDeleteAsync(ct);
+        await _db.BillingOrders.IgnoreQueryFilters().Where(x => x.TenantId == tenantId).ExecuteDeleteAsync(ct);
+        await _db.TenantBillingProfiles.IgnoreQueryFilters().Where(x => x.TenantId == tenantId).ExecuteDeleteAsync(ct);
+        await _db.SelfServiceSignupAttempts.IgnoreQueryFilters().Where(x => x.TenantId == tenantId).ExecuteDeleteAsync(ct);
+
         await _db.NotificationDeliveries.IgnoreQueryFilters().Where(x => x.TenantId == tenantId).ExecuteDeleteAsync(ct);
         await _db.LoyaltyNotifications.IgnoreQueryFilters().Where(x => x.TenantId == tenantId).ExecuteDeleteAsync(ct);
         await _db.PointLotConsumptions.IgnoreQueryFilters().Where(x => x.TenantId == tenantId).ExecuteDeleteAsync(ct);
@@ -315,6 +328,19 @@ internal sealed class SuperAdminTenantManagementService : ISuperAdminTenantManag
         _db.StampProgramVersions.RemoveRange(await _db.StampProgramVersions.IgnoreQueryFilters().Where(x => x.TenantId == tenantId).ToListAsync(ct));
         _db.StampRewardIdentities.RemoveRange(await _db.StampRewardIdentities.IgnoreQueryFilters().Where(x => x.TenantId == tenantId).ToListAsync(ct));
         _db.StampVisualConfigurations.RemoveRange(await _db.StampVisualConfigurations.IgnoreQueryFilters().Where(x => x.TenantId == tenantId).ToListAsync(ct));
+
+        _db.CashierRefreshTokens.RemoveRange(await _db.CashierRefreshTokens.IgnoreQueryFilters().Where(x => x.TenantId == tenantId).ToListAsync(ct));
+        _db.MemberDigitalWallets.RemoveRange(await _db.MemberDigitalWallets.IgnoreQueryFilters().Where(x => x.TenantId == tenantId).ToListAsync(ct));
+        _db.GiftCardDeviceRegistrations.RemoveRange(await _db.GiftCardDeviceRegistrations.IgnoreQueryFilters().Where(x => x.TenantId == tenantId).ToListAsync(ct));
+        _db.GiftCardWallets.RemoveRange(await _db.GiftCardWallets.IgnoreQueryFilters().Where(x => x.TenantId == tenantId).ToListAsync(ct));
+        _db.GiftCardTransactions.RemoveRange(await _db.GiftCardTransactions.IgnoreQueryFilters().Where(x => x.TenantId == tenantId).ToListAsync(ct));
+        _db.GiftCards.RemoveRange(await _db.GiftCards.IgnoreQueryFilters().Where(x => x.TenantId == tenantId).ToListAsync(ct));
+        _db.GiftCardConfigurations.RemoveRange(await _db.GiftCardConfigurations.IgnoreQueryFilters().Where(x => x.TenantId == tenantId).ToListAsync(ct));
+        _db.GiftCardDenominations.RemoveRange(await _db.GiftCardDenominations.IgnoreQueryFilters().Where(x => x.TenantId == tenantId).ToListAsync(ct));
+        _db.PaymentTransactions.RemoveRange(await _db.PaymentTransactions.IgnoreQueryFilters().Where(x => x.TenantId == tenantId).ToListAsync(ct));
+        _db.BillingOrders.RemoveRange(await _db.BillingOrders.IgnoreQueryFilters().Where(x => x.TenantId == tenantId).ToListAsync(ct));
+        _db.TenantBillingProfiles.RemoveRange(await _db.TenantBillingProfiles.IgnoreQueryFilters().Where(x => x.TenantId == tenantId).ToListAsync(ct));
+        _db.SelfServiceSignupAttempts.RemoveRange(await _db.SelfServiceSignupAttempts.IgnoreQueryFilters().Where(x => x.TenantId == tenantId).ToListAsync(ct));
 
         _db.NotificationDeliveries.RemoveRange(await _db.NotificationDeliveries.ToListAsync(ct));
         _db.LoyaltyNotifications.RemoveRange(await _db.LoyaltyNotifications.ToListAsync(ct));
