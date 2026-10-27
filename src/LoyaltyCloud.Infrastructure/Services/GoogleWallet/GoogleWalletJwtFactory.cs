@@ -52,6 +52,31 @@ public sealed class GoogleWalletJwtFactory
         return $"{_options.SaveUrlBase.TrimEnd('/')}/{jwt}";
     }
 
+    public string CreateStampSaveUrl(
+        GoogleWalletCredentials credentials,
+        GoogleStampWalletObjectData walletObject,
+        DateTime nowUtc)
+    {
+        ArgumentNullException.ThrowIfNull(credentials);
+        ArgumentNullException.ThrowIfNull(walletObject);
+        var payload = new Dictionary<string, object?>
+        {
+            ["iss"] = credentials.ClientEmail,
+            ["aud"] = "google",
+            ["typ"] = "savetowallet",
+            ["iat"] = ToUnixSeconds(nowUtc),
+            ["origins"] = _options.Origins,
+            ["payload"] = new Dictionary<string, object?>
+            {
+                ["loyaltyObjects"] = new[]
+                {
+                    new Dictionary<string, object?> { ["id"] = walletObject.Id, ["classId"] = walletObject.ClassId }
+                }
+            }
+        };
+        return $"{_options.SaveUrlBase.TrimEnd('/')}/{SignJwt(payload, credentials.PrivateKeyPem)}";
+    }
+
     public string CreateGiftCardSaveUrl(GoogleWalletCredentials credentials, string objectId, string classId, DateTime nowUtc)
     {
         var payload = new Dictionary<string, object?>

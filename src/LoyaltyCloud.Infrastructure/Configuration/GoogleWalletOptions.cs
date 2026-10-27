@@ -36,8 +36,15 @@ public sealed partial class GoogleWalletOptions
             errors.Add("GoogleWallet:IssuerId debe contener solo letras, numeros, guion, guion bajo o punto.");
         if (string.IsNullOrWhiteSpace(ClassSuffix))
             errors.Add("GoogleWallet:ClassSuffix es requerido.");
+        else if (!IdentifierPattern().IsMatch(ClassSuffix.Trim()))
+            errors.Add("GoogleWallet:ClassSuffix debe contener solo caracteres ASCII alfanumericos, guion, guion bajo o punto.");
         if (string.IsNullOrWhiteSpace(ObjectIdPrefix))
             errors.Add("GoogleWallet:ObjectIdPrefix es requerido.");
+        else if (!IdentifierPattern().IsMatch(ObjectIdPrefix.Trim()))
+            errors.Add("GoogleWallet:ObjectIdPrefix debe contener solo caracteres ASCII alfanumericos, guion, guion bajo o punto.");
+        if (!Uri.TryCreate(LogoUri, UriKind.Absolute, out var logoUri)
+            || logoUri.Scheme != Uri.UriSchemeHttps || logoUri.IsLoopback)
+            errors.Add("GoogleWallet:LogoUri debe ser una URL HTTPS publica cuando Google Wallet esta habilitado.");
         if (string.IsNullOrWhiteSpace(ServiceAccountJson) && string.IsNullOrWhiteSpace(ServiceAccountJsonPath))
             errors.Add("GoogleWallet:ServiceAccountJson o GoogleWallet:ServiceAccountJsonPath es requerido cuando GoogleWallet esta habilitado.");
         if (!string.IsNullOrWhiteSpace(HexBackgroundColor) && !HexColorPattern().IsMatch(HexBackgroundColor.Trim()))
@@ -48,6 +55,9 @@ public sealed partial class GoogleWalletOptions
 
     [GeneratedRegex("^[A-Za-z0-9._-]+$")]
     private static partial Regex IssuerIdPattern();
+
+    [GeneratedRegex("^[A-Za-z0-9._-]+$")]
+    private static partial Regex IdentifierPattern();
 
     [GeneratedRegex("^#[0-9A-Fa-f]{6}$")]
     private static partial Regex HexColorPattern();
