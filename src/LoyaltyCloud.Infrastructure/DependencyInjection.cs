@@ -70,7 +70,11 @@ public static class DependencyInjection
         services.Configure<ApplePassOptions>(configuration.GetSection(ApplePassOptions.SectionName));
         services.Configure<AzureStorageOptions>(configuration.GetSection(AzureStorageOptions.SectionName));
         services.Configure<WalletOptions>(configuration.GetSection(WalletOptions.SectionName));
-        services.Configure<GoogleWalletOptions>(configuration.GetSection(GoogleWalletOptions.SectionName));
+        services.AddOptions<GoogleWalletOptions>()
+            .Bind(configuration.GetSection(GoogleWalletOptions.SectionName))
+            .Validate(options => options.ValidateForEnabled().Count == 0,
+                "La configuracion GoogleWallet habilitada es invalida.")
+            .ValidateOnStart();
         services.Configure<ProvisioningOptions>(configuration.GetSection(ProvisioningOptions.SectionName));
         services.Configure<BillingOptions>(configuration.GetSection(BillingOptions.SectionName));
         services.Configure<StripeOptions>(configuration.GetSection(StripeOptions.SectionName));
@@ -149,6 +153,7 @@ public static class DependencyInjection
         services.AddScoped<ICustomNotificationAudienceReadService, CustomNotificationAudienceReadService>();
         services.AddScoped<ILoyaltyNotificationService, LoyaltyNotificationService>();
         services.AddScoped<IAppleWalletPassRefreshService, AppleWalletPassRefreshService>();
+        services.AddScoped<IStampWalletRefreshService, StampWalletRefreshService>();
         services.AddScoped<INotificationChannelProcessor, AppleWalletNotificationChannelProcessor>();
         services.AddScoped<INotificationChannelProcessor, GoogleWalletNotificationChannelProcessor>();
     }
@@ -260,9 +265,12 @@ public static class DependencyInjection
     {
         services.AddScoped<GoogleWalletIdGenerator>();
         services.AddScoped<GoogleWalletObjectMapper>();
+        services.AddScoped<GoogleStampWalletMapper>();
+        services.AddScoped<GoogleStampWalletAssetTokenService>();
         services.AddScoped<GoogleWalletJwtFactory>();
         services.AddScoped<IGoogleWalletCredentialsProvider, GoogleWalletCredentialsProvider>();
         services.AddScoped<IGoogleWalletService, GoogleWalletService>();
+        services.AddScoped<IGoogleStampWalletService, GoogleStampWalletService>();
         services.AddScoped<GoogleWalletBrandingSynchronizer>();
         services.AddHttpClient<IGoogleWalletClient, GoogleWalletClient>();
     }

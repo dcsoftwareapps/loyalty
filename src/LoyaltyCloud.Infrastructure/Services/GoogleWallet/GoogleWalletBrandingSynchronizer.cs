@@ -15,7 +15,9 @@ internal sealed class GoogleWalletBrandingSynchronizer(
     IGoogleWalletClient client,
     GoogleWalletObjectMapper mapper,
     IOptions<GoogleWalletOptions> options,
-    ILogger<GoogleWalletBrandingSynchronizer> logger)
+    ILogger<GoogleWalletBrandingSynchronizer> logger,
+    GoogleStampWalletMapper? stampMapper = null,
+    IGoogleStampWalletService? stampWallet = null)
 {
     public async Task<bool> RefreshAsync(Guid tenantId, CancellationToken ct)
     {
@@ -24,6 +26,8 @@ internal sealed class GoogleWalletBrandingSynchronizer(
         try
         {
             await using var db = await factory.CreateDbContextAsync(ct);
+            var programType = await db.Tenants.AsNoTracking()
+                .Where(x => x.Id == tenantId).Select(x => x.ProgramType).SingleOrDefaultAsync(ct);
             var classes = await db.MemberDigitalWallets.AsNoTracking()
                 .Where(x => x.TenantId == tenantId && x.Provider == DigitalWalletProvider.Google)
                 .Select(x => x.ExternalClassId).Distinct().ToListAsync(ct);
@@ -37,9 +41,26 @@ internal sealed class GoogleWalletBrandingSynchronizer(
                     .AnyAsync(x => x.Provider == DigitalWalletProvider.Google
                         && x.ExternalClassId == classId && x.TenantId != tenantId, ct);
                 if (shared) { success = false; logger.LogWarning("Shared legacy Loyalty class skipped. TenantId={TenantId}", tenantId); continue; }
-                try { await client.EnsureLoyaltyClassAsync(mapper.ToClassData(classId, options.Value, effective), ct); }
+                try
+                {
+                    if (programType == LoyaltyProgramType.Stamps && stampMapper is not null)
+                        await client.EnsureStampLoyaltyClassAsync(stampMapper.ToClassData(classId, options.Value, effective), ct);
+                    else
+                        await client.EnsureLoyaltyClassAsync(mapper.ToClassData(classId, options.Value, effective), ct);
+                }
                 catch (OperationCanceledException) when (ct.IsCancellationRequested) { throw; }
                 catch (Exception ex) { success = false; logger.LogWarning("Loyalty branding sync failed. TenantId={TenantId}, FailureType={FailureType}", tenantId, ex.GetType().Name); }
+            }
+            if (programType == LoyaltyProgramType.Stamps && stampWallet is not null)
+            {
+                var serials = await db.MemberDigitalWallets.AsNoTracking()
+                    .Where(x => x.TenantId == tenantId && x.Provider == DigitalWalletProvider.Google)
+                    .Join(db.LoyaltyCards.AsNoTracking(), wallet => wallet.LoyaltyCardId, card => card.Id,
+                        (_, card) => card.SerialNumber)
+                    .Distinct()
+                    .ToListAsync(ct);
+                foreach (var serial in serials)
+                    await stampWallet.SynchronizeBySerialNumberIfExistsAsync(serial, ct);
             }
             return success;
         }

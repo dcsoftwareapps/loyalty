@@ -6,6 +6,10 @@ public interface IGoogleWalletClient
 
     Task CreateOrUpdateObjectAsync(GoogleWalletObjectData walletObject, bool notifyOnUpdate = false, CancellationToken ct = default);
 
+    Task EnsureStampLoyaltyClassAsync(GoogleStampWalletClassData walletClass, CancellationToken ct = default);
+
+    Task CreateOrUpdateStampObjectAsync(GoogleStampWalletObjectData walletObject, bool notifyOnUpdate = false, CancellationToken ct = default);
+
     Task EnsureGiftCardClassAsync(GoogleGiftCardClassData walletClass, CancellationToken ct = default);
     Task CreateOrUpdateGiftCardObjectAsync(GoogleGiftCardObjectData walletObject, CancellationToken ct = default);
 

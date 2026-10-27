@@ -26,6 +26,8 @@ internal sealed class GoogleWalletService : IGoogleWalletService
     private readonly GoogleWalletJwtFactory _jwtFactory;
     private readonly IDateTimeProvider _dt;
     private readonly ILogger<GoogleWalletService> _logger;
+    private readonly ITenantProgramReadService _programs;
+    private readonly IGoogleStampWalletService _stamps;
 
     public GoogleWalletService(
         IOptions<GoogleWalletOptions> options,
@@ -39,7 +41,9 @@ internal sealed class GoogleWalletService : IGoogleWalletService
         GoogleWalletObjectMapper mapper,
         GoogleWalletJwtFactory jwtFactory,
         IDateTimeProvider dt,
-        ILogger<GoogleWalletService> logger)
+        ILogger<GoogleWalletService> logger,
+        ITenantProgramReadService programs,
+        IGoogleStampWalletService stamps)
     {
         _options = options.Value;
         _memberWalletData = memberWalletData;
@@ -53,6 +57,8 @@ internal sealed class GoogleWalletService : IGoogleWalletService
         _jwtFactory = jwtFactory;
         _dt = dt;
         _logger = logger;
+        _programs = programs;
+        _stamps = stamps;
     }
 
     public async Task<Result<GoogleWalletSaveLinkResponse>> GetOrCreateSaveLinkAsync(
@@ -61,6 +67,9 @@ internal sealed class GoogleWalletService : IGoogleWalletService
     {
         if (!_options.Enabled)
             return Result.Fail<GoogleWalletSaveLinkResponse>("Google Wallet esta deshabilitado.");
+
+        if (await _programs.GetCurrentAsync(ct) == LoyaltyProgramType.Stamps)
+            return await _stamps.GetOrCreateSaveLinkAsync(serialNumber, ct);
 
         var dataResult = await _memberWalletData.GetBySerialNumberAsync(serialNumber, ct);
         if (dataResult.IsFailure)
@@ -127,6 +136,12 @@ internal sealed class GoogleWalletService : IGoogleWalletService
     {
         if (!_options.Enabled)
             return;
+
+        if (await _programs.GetCurrentAsync(ct) == LoyaltyProgramType.Stamps)
+        {
+            await _stamps.SynchronizeBySerialNumberIfExistsAsync(serialNumber, ct);
+            return;
+        }
 
         var dataResult = await _memberWalletData.GetBySerialNumberAsync(serialNumber, ct);
         if (dataResult.IsFailure)
