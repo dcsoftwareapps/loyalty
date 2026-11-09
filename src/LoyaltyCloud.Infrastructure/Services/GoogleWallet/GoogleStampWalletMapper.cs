@@ -38,7 +38,8 @@ public sealed class GoogleStampWalletMapper
             .FirstOrDefault();
         var earned = projection.EarnedRewards ?? [];
         var availableRewards = earned.Where(x => x.State == StampWalletRewardState.Available).ToList();
-        var redeemed = earned.Count(x => x.State == StampWalletRewardState.Redeemed);
+        var redeemed = earned.Count(x =>
+            x.CycleSequence == projection.CycleSequence && x.State == StampWalletRewardState.Redeemed);
 
         return new(
             objectId,

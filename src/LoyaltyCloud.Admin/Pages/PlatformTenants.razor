@@ -15,6 +15,7 @@
 @inject ISender Sender
 @inject NavigationManager Nav
 @inject AdminDateTimeFormatter Dates
+@inject ILogger<PlatformTenants> Logger
 
 <PageTitle>Tenants - LoyaltyCloud Platform</PageTitle>
 
@@ -27,7 +28,16 @@
 </div>
 
 @if (success is not null) { <div class="kb-form-success">@success</div> }
-@if (error is not null) { <div class="kb-form-error">@error</div> }
+@if (error is not null)
+{
+    <div class="kb-form-error" role="alert">
+        @error
+        @if (tenantWithFailedLogoUploadId is { } tenantId)
+        {
+            <a href="/platform/tenants/@tenantId">Abrir el tenant y volver a intentar la carga del logo</a>
+        }
+    </div>
+}
 
 @if (showCreate)
 {
@@ -47,15 +57,15 @@
         <div class="kb-form-row kb-form-row--horizontal">
             <div style="flex:1;min-width:220px;">
                 <label for="tenant-name">Nombre</label>
-                <input id="tenant-name" maxlength="200" type="text" @bind="form.DisplayName" />
+                <input id="tenant-name" maxlength="200" type="text" @bind="form.DisplayName" @bind:event="oninput" />
             </div>
             <div style="flex:1;min-width:220px;">
                 <label for="tenant-slug">Slug</label>
-                <input id="tenant-slug" maxlength="50" type="text" @bind="form.Slug" />
+                <input id="tenant-slug" maxlength="50" type="text" @bind="form.Slug" @bind:event="oninput" />
             </div>
             <div style="flex:1;min-width:220px;">
                 <label for="tenant-timezone">Zona horaria</label>
-                <input id="tenant-timezone" maxlength="100" type="text" @bind="form.TimeZoneId" />
+                <input id="tenant-timezone" maxlength="100" type="text" @bind="form.TimeZoneId" @bind:event="oninput" />
             </div>
             <div style="flex:1;min-width:220px;">
                 <label for="tenant-program-type">Tipo de programa</label>
@@ -69,11 +79,12 @@
         <div class="kb-form-row kb-form-row--horizontal">
             <div style="flex:1;min-width:220px;">
                 <label for="tenant-admin">Usuario admin</label>
-                <input id="tenant-admin" maxlength="150" type="text" @bind="form.AdminUsername" />
+                <input id="tenant-admin" maxlength="150" type="text" @bind="form.AdminUsername" @bind:event="oninput" />
             </div>
             <div style="flex:1;min-width:220px;">
                 <label for="tenant-password">Password inicial</label>
-                <input id="tenant-password" type="password" @bind="form.AdminPassword" />
+                <input id="tenant-password" type="password" autocomplete="new-password"
+                       @bind="form.AdminPassword" @bind:event="oninput" />
             </div>
         </div>
 
@@ -112,22 +123,22 @@
             </div>
             <div style="flex:1;min-width:180px;">
                 <label for="tenant-phone">Soporte</label>
-                <input id="tenant-phone" maxlength="@TenantBranding.SupportPhoneMaxLength" type="text" @bind="form.SupportPhone" />
+                <input id="tenant-phone" maxlength="@TenantBranding.SupportPhoneMaxLength" type="text" @bind="form.SupportPhone" @bind:event="oninput" />
             </div>
         </div>
 
         <div class="kb-form-row kb-form-row--horizontal">
             <div style="flex:1;min-width:220px;">
                 <label for="tenant-whatsapp">WhatsApp URL</label>
-                <input id="tenant-whatsapp" maxlength="@TenantBranding.UrlMaxLength" type="text" @bind="form.WhatsAppUrl" />
+                <input id="tenant-whatsapp" maxlength="@TenantBranding.UrlMaxLength" type="text" @bind="form.WhatsAppUrl" @bind:event="oninput" />
             </div>
             <div style="flex:1;min-width:220px;">
                 <label for="tenant-instagram">Instagram URL</label>
-                <input id="tenant-instagram" maxlength="@TenantBranding.UrlMaxLength" type="text" @bind="form.InstagramUrl" />
+                <input id="tenant-instagram" maxlength="@TenantBranding.UrlMaxLength" type="text" @bind="form.InstagramUrl" @bind:event="oninput" />
             </div>
             <div style="flex:1;min-width:220px;">
                 <label for="tenant-terms">Términos URL</label>
-                <input id="tenant-terms" maxlength="@TenantBranding.UrlMaxLength" type="text" @bind="form.TermsUrl" />
+                <input id="tenant-terms" maxlength="@TenantBranding.UrlMaxLength" type="text" @bind="form.TermsUrl" @bind:event="oninput" />
             </div>
         </div>
 
@@ -217,6 +228,7 @@ else
     private bool busy;
     private string? success;
     private string? error;
+    private Guid? tenantWithFailedLogoUploadId;
     private IBrowserFile? selectedLogo;
     private string? selectedLogoName;
     private string? logoPreviewUrl;
@@ -240,6 +252,7 @@ else
         showCreate = true;
         success = null;
         error = null;
+        tenantWithFailedLogoUploadId = null;
     }
 
     private void CancelCreate()
@@ -288,16 +301,13 @@ else
 
             if (selectedLogo is not null)
             {
-                await using var logoStream = selectedLogo.OpenReadStream(MaxLogoBytes);
-                var logoResult = await Sender.Send(new UploadTenantLogoCommand(
-                    result.Value.TenantId,
-                    selectedLogo.Name,
-                    selectedLogo.ContentType,
-                    logoStream,
-                    selectedLogo.Size));
-                if (logoResult.IsFailure)
+                var logoError = await TryUploadLogoAsync(result.Value.TenantId, selectedLogo);
+                if (logoError is not null)
                 {
-                    validationErrors.AddRange(logoResult.Errors);
+                    CancelCreate();
+                    tenantWithFailedLogoUploadId = result.Value.TenantId;
+                    error = $"El tenant se creó correctamente, pero no se pudo cargar el logo. {logoError}";
+                    await LoadAsync();
                     return;
                 }
             }
@@ -309,6 +319,23 @@ else
         finally
         {
             busy = false;
+        }
+    }
+
+    private async Task<string?> TryUploadLogoAsync(Guid tenantId, IBrowserFile logo)
+    {
+        try
+        {
+            await using var logoStream = logo.OpenReadStream(MaxLogoBytes);
+            var result = await Sender.Send(new UploadTenantLogoCommand(
+                tenantId, logo.Name, logo.ContentType, logoStream, logo.Size));
+            return result.IsSuccess ? null : string.Join(" ", result.Errors);
+        }
+        catch (Azure.RequestFailedException exception)
+        {
+            Logger.LogWarning("Tenant created but Azure Blob logo upload failed. TenantId={TenantId}, Status={Status}, ErrorCode={ErrorCode}.",
+                tenantId, exception.Status, exception.ErrorCode);
+            return "El servicio de almacenamiento rechazó la carga.";
         }
     }
 

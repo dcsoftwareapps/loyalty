@@ -31,7 +31,7 @@ public sealed class GoogleStampWalletMapperTests
     }
 
     [Fact]
-    public void Object_maps_intermediate_final_available_redeemed_and_previous_cycle_rewards()
+    public void Object_preserves_available_rewards_from_previous_cycles()
     {
         var availableId = Guid.NewGuid();
         var projection = Projection(5, 10) with
@@ -53,9 +53,27 @@ public sealed class GoogleStampWalletMapperTests
         var value = mapper.ToObjectData("object", "class", "Ana", "LC-1", true, DateTime.UnixEpoch, projection, null);
 
         Assert.Equal("Cafe, Postre", value.AvailableRewardsText);
-        Assert.Equal("1 recompensa canjeada", value.RewardHistoryText);
+        Assert.Equal("Sin canjes en este ciclo", value.RewardHistoryText);
         Assert.Equal("En el sello 10", value.NextRewardText);
         Assert.Equal(2, value.CycleSequence);
+    }
+
+    [Fact]
+    public void Object_counts_only_redemptions_in_the_current_cycle()
+    {
+        var projection = Projection(5, 10) with
+        {
+            CycleSequence = 2,
+            EarnedRewards =
+            [
+                new(Guid.NewGuid(), "Cafe", "Cafe", 5, StampWalletRewardState.Redeemed, 2),
+                new(Guid.NewGuid(), "Postre", "Postre", 10, StampWalletRewardState.Redeemed, 1)
+            ]
+        };
+
+        var value = mapper.ToObjectData("object", "class", "Ana", "LC-1", true, DateTime.UnixEpoch, projection, null);
+
+        Assert.Equal("1 recompensa canjeada", value.RewardHistoryText);
     }
 
     [Fact]

@@ -20,6 +20,9 @@ using LoyaltyCloud.Application.Levels;
 using LoyaltyCloud.Application.Levels.Commands.UpdateTenantLoyaltyLevels;
 using LoyaltyCloud.Application.Campaigns.Commands.CreatePointCampaign;
 using LoyaltyCloud.Application.SuperAdmin.Commands.DeleteTenant;
+using LoyaltyCloud.Application.SuperAdmin.Commands.UploadTenantLogo;
+using LoyaltyCloud.Application.SuperAdmin;
+using LoyaltyCloud.Application.SuperAdmin.Queries.ListPlatformTenants;
 using LoyaltyCloud.Common.Constants;
 using LoyaltyCloud.Common.Results;
 using LoyaltyCloud.Common.Services;
@@ -31,6 +34,7 @@ using LoyaltyCloud.Infrastructure.Persistence.Seed;
 using MediatR;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
+using Microsoft.AspNetCore.Components.Forms;
 using Microsoft.AspNetCore.Http;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
@@ -161,6 +165,51 @@ public sealed class TenantProvisioningTests
         Assert.True((bool)type.GetField("showCreate", flags)!.GetValue(page)!);
         Assert.False((bool)type.GetField("busy", flags)!.GetValue(page)!);
         Assert.Contains("Soporte: máximo 50 caracteres.", (List<string>)type.GetField("validationErrors", flags)!.GetValue(page)!);
+    }
+
+    [Theory]
+    [InlineData(false, "Almacenamiento de logos no configurado.")]
+    [InlineData(true, "El servicio de almacenamiento rechazó la carga.")]
+    [Trait("Category", "TenantProvisioning")]
+    public async Task Platform_form_reports_committed_tenant_when_optional_logo_upload_fails(bool storageRejectsUpload, string expectedError)
+    {
+        var page = new AdminApp::LoyaltyCloud.Admin.Pages.PlatformTenants();
+        var flags = System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic;
+        var type = page.GetType();
+        var form = type.GetField("form", flags)!.GetValue(page)!;
+        form.GetType().GetProperty("AdminPassword")!.SetValue(form, AdminPassword);
+        type.GetMethod("StartCreate", flags)!.Invoke(page, null);
+
+        var logo = new Moq.Mock<IBrowserFile>();
+        logo.SetupGet(x => x.Name).Returns("qa-logo.png");
+        logo.SetupGet(x => x.ContentType).Returns("image/png");
+        logo.SetupGet(x => x.Size).Returns(1);
+        logo.Setup(x => x.OpenReadStream(Moq.It.IsAny<long>(), Moq.It.IsAny<CancellationToken>()))
+            .Returns(() => new MemoryStream([0]));
+        type.GetField("selectedLogo", flags)!.SetValue(page, logo.Object);
+
+        var tenantId = Guid.NewGuid();
+        var provisioned = new ProvisionTenantResult(tenantId, "qa-tenant", Guid.NewGuid(), "Trial", DateTime.UnixEpoch);
+        var sender = new Moq.Mock<ISender>();
+        sender.Setup(x => x.Send(Moq.It.IsAny<ProvisionTenantCommand>(), Moq.It.IsAny<CancellationToken>()))
+            .Returns(Task.FromResult(Result.Ok(provisioned)));
+        sender.Setup(x => x.Send(Moq.It.Is<UploadTenantLogoCommand>(command => command.TenantId == tenantId), Moq.It.IsAny<CancellationToken>()))
+            .Returns(() => storageRejectsUpload
+                ? Task.FromException<Result<TenantBrandingLogoResult>>(new Azure.RequestFailedException(403, "Synthetic Azure response"))
+                : Task.FromResult(Result.Fail<TenantBrandingLogoResult>("Almacenamiento de logos no configurado.")));
+        sender.Setup(x => x.Send(Moq.It.IsAny<ListPlatformTenantsQuery>(), Moq.It.IsAny<CancellationToken>()))
+            .Returns(Task.FromResult<IReadOnlyList<PlatformTenantListItemDto>>([]));
+        type.GetProperty("Sender", flags)!.SetValue(page, sender.Object);
+        type.GetProperty("Logger", flags)!.SetValue(page,
+            Microsoft.Extensions.Logging.Abstractions.NullLogger<AdminApp::LoyaltyCloud.Admin.Pages.PlatformTenants>.Instance);
+
+        await (Task)type.GetMethod("CreateAsync", flags)!.Invoke(page, null)!;
+
+        Assert.False((bool)type.GetField("showCreate", flags)!.GetValue(page)!);
+        Assert.Equal(tenantId, type.GetField("tenantWithFailedLogoUploadId", flags)!.GetValue(page));
+        Assert.Contains(expectedError, (string)type.GetField("error", flags)!.GetValue(page)!);
+        Assert.True(string.IsNullOrEmpty((string?)form.GetType().GetProperty("AdminPassword")!.GetValue(form)));
+        sender.Verify(x => x.Send(Moq.It.IsAny<ProvisionTenantCommand>(), Moq.It.IsAny<CancellationToken>()), Moq.Times.Once);
     }
 
     [Fact]
