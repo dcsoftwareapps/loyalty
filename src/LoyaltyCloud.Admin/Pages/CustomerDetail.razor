@@ -182,9 +182,12 @@ else
                     @if (isPoints) { <DetailItem Label="Puntos actuales" Value="@FormatNullableNumber(detail.Wallet.CurrentPoints)" /> }
                     <DetailItem Label="Fecha de emisión" Value="@FormatNullableDate(detail.Wallet.IssuedAt)" />
                     <DetailItem Label="Última actualización" Value="@FormatNullableDateTime(detail.Wallet.LastActivityAt)" />
-                    <DetailItem Label="Dispositivos registrados" Value="@FormatNumber(detail.Wallet.DeviceRegistrationCount)" />
-                    <DetailItem Label="Último push enviado" Value="@FormatNullableDateTime(detail.Wallet.LastPushSentAt)" />
+                    <DetailItem Label="Dispositivos Apple registrados" Value="@FormatNumber(detail.Wallet.DeviceRegistrationCount)" />
+                    <DetailItem Label="Último push Apple" Value="@FormatNullableDateTime(detail.Wallet.LastPushSentAt)" />
+                    <DetailItem Label="Objeto Google Wallet" Value="@GoogleWalletStatusText(detail.Wallet.GoogleWalletStatus)" />
+                    <DetailItem Label="Última sincronización con Google" Value="@FormatNullableDateTime(detail.Wallet.GoogleWalletLastSynchronizedAt)" />
                 </div>
+                <p class="kb-muted" style="margin-top:12px;">Google no informa cuántos dispositivos guardaron el pase ni confirma la entrega de notificaciones. El estado refleja la última sincronización registrada.</p>
             </div>
         }
     </section>
@@ -484,6 +487,14 @@ else
                 : campaignName;
     private static string PointColor(int points) => points >= 0 ? "var(--kb-sage)" : "var(--kb-blush)";
     private static string StatusText(bool isActive) => isActive ? "Activo" : "Inactivo";
+    private static string GoogleWalletStatusText(DigitalWalletStatus? status) => status switch
+    {
+        DigitalWalletStatus.Created => "Creado, pendiente de sincronización",
+        DigitalWalletStatus.Active => "Última sincronización correcta",
+        DigitalWalletStatus.Inactive => "Inactivo",
+        DigitalWalletStatus.Error => "Error de sincronización",
+        _ => "No generado"
+    };
     private static string YesNo(bool value) => value ? "Si" : "No";
     private string BirthdayText() =>
         detail?.Summary.BirthdayCaptured == true

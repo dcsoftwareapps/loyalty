@@ -54,6 +54,36 @@ public sealed class GoogleStampWalletIntegrationTests : IntegrationTestBase
     }
 
     [Fact]
+    public async Task Customer_detail_shows_google_sync_without_counting_it_as_an_apple_device()
+    {
+        Guid customerId;
+        using (var scope = Factory.Services.CreateScope())
+        {
+            scope.ServiceProvider.GetRequiredService<IMutableTenantContext>().SetTenant(TenantId, TenantSlug);
+            var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+            customerId = await db.LoyaltyCards.Where(x => x.SerialNumber == Serial)
+                .Select(x => x.CustomerId).SingleAsync();
+            var before = await scope.ServiceProvider.GetRequiredService<ICustomerDetailReadService>()
+                .GetByCustomerIdAsync(customerId);
+            Assert.NotNull(before);
+            Assert.Null(before.Wallet.GoogleWalletStatus);
+            Assert.Equal(0, before.Wallet.DeviceRegistrationCount);
+        }
+
+        var response = await Client.PostAsync($"/api/customers/{Serial}/wallets/google/save-link", null);
+        response.EnsureSuccessStatusCode();
+
+        using var verify = Factory.Services.CreateScope();
+        verify.ServiceProvider.GetRequiredService<IMutableTenantContext>().SetTenant(TenantId, TenantSlug);
+        var detail = await verify.ServiceProvider.GetRequiredService<ICustomerDetailReadService>()
+            .GetByCustomerIdAsync(customerId);
+        Assert.NotNull(detail);
+        Assert.Equal(DigitalWalletStatus.Active, detail.Wallet.GoogleWalletStatus);
+        Assert.NotNull(detail.Wallet.GoogleWalletLastSynchronizedAt);
+        Assert.Equal(0, detail.Wallet.DeviceRegistrationCount);
+    }
+
+    [Fact]
     public async Task Save_link_creates_stamps_class_object_once_and_subsequent_sync_keeps_ids()
     {
         var response = await Client.PostAsync($"/api/customers/{Serial}/wallets/google/save-link", null);

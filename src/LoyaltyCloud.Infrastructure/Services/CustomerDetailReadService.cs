@@ -103,6 +103,15 @@ internal sealed class CustomerDetailReadService : ICustomerDetailReadService
                 .CountAsync(d => d.TenantId == tenantId && d.SerialNumber == serial, ct)
             : 0;
 
+        var googleWallet = hasCard
+            ? await _db.MemberDigitalWallets
+                .AsNoTracking()
+                .Where(w => w.TenantId == tenantId && w.LoyaltyCardId == cardId
+                    && w.Provider == DigitalWalletProvider.Google)
+                .Select(w => new { w.Status, w.LastSynchronizedAt })
+                .SingleOrDefaultAsync(ct)
+            : null;
+
         var now = _dt.UtcNow;
         var rollingLevel = isPoints ? baseInfo.Level : string.Empty;
         var rollingPoints = 0;
@@ -354,7 +363,9 @@ internal sealed class CustomerDetailReadService : ICustomerDetailReadService
                 IssuedAt: hasCard ? baseInfo.CreatedAt : null,
                 LastActivityAt: baseInfo.LastActivityAt,
                 DeviceRegistrationCount: deviceCount,
-                LastPushSentAt: null),
+                LastPushSentAt: null,
+                GoogleWalletStatus: googleWallet?.Status,
+                GoogleWalletLastSynchronizedAt: googleWallet?.LastSynchronizedAt),
             Statistics: new CustomerStatisticsDto(
                 CurrentPoints: isPoints ? baseInfo.CurrentPoints : 0,
                 RollingPoints: rollingPoints,
