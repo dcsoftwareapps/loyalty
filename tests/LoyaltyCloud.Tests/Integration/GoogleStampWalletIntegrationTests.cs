@@ -2,6 +2,7 @@ using System.Net;
 using System.Net.Http.Json;
 using LoyaltyCloud.Application.Common.Interfaces;
 using LoyaltyCloud.Application.Common.Wallet;
+using LoyaltyCloud.Common.Security;
 using LoyaltyCloud.Domain.Entities;
 using LoyaltyCloud.Domain.Enums;
 using LoyaltyCloud.Infrastructure.Persistence;
@@ -81,6 +82,49 @@ public sealed class GoogleStampWalletIntegrationTests : IntegrationTestBase
         Assert.Equal(DigitalWalletStatus.Active, detail.Wallet.GoogleWalletStatus);
         Assert.NotNull(detail.Wallet.GoogleWalletLastSynchronizedAt);
         Assert.Equal(0, detail.Wallet.DeviceRegistrationCount);
+    }
+
+    [Fact]
+    public async Task Signed_admin_sync_updates_existing_stamp_object_for_the_right_tenant()
+    {
+        const string pathPrefix = "/api/internal/stamps/google/";
+        var path = $"{pathPrefix}{Serial}/sync";
+        Assert.Equal(HttpStatusCode.Unauthorized, (await Client.PostAsync(path, null)).StatusCode);
+
+        (await Client.PostAsync($"/api/customers/{Serial}/wallets/google/save-link", null))
+            .EnsureSuccessStatusCode();
+        var original = Assert.Single(Factory.GoogleWallet.StampObjects);
+
+        using (var scope = Factory.Services.CreateScope())
+        {
+            scope.ServiceProvider.GetRequiredService<IMutableTenantContext>().SetTenant(TenantId, TenantSlug);
+            var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+            var cycle = await db.StampCycles.SingleAsync(x => x.LoyaltyCardSerialNumber == Serial);
+            var program = await db.StampProgramVersions.SingleAsync(x => x.Id == cycle.StampProgramVersionId);
+            cycle.Earn(program, DateTime.UtcNow);
+            await db.SaveChangesAsync();
+        }
+
+        using (var otherTenant = SignedSyncRequest(path, TenantSeed.KBeautySlug))
+        {
+            var response = await Client.SendAsync(otherTenant);
+            response.EnsureSuccessStatusCode();
+            Assert.False((await response.Content.ReadFromJsonAsync<GoogleStampWalletSyncResponse>())!.Synchronized);
+            Assert.Single(Factory.GoogleWallet.StampObjects);
+        }
+
+        using (var correctTenant = SignedSyncRequest(path, TenantSlug))
+        {
+            var response = await Client.SendAsync(correctTenant);
+            response.EnsureSuccessStatusCode();
+            Assert.True((await response.Content.ReadFromJsonAsync<GoogleStampWalletSyncResponse>())!.Synchronized);
+        }
+
+        var updated = Factory.GoogleWallet.StampObjects.Last();
+        Assert.Equal(original.Id, updated.Id);
+        Assert.Equal(3, updated.CurrentStamps);
+        Assert.NotEqual(original.ProgressImageUri, updated.ProgressImageUri);
+        Assert.True(Factory.GoogleWallet.StampObjectUpdateNotifications.Last());
     }
 
     [Fact]
@@ -224,5 +268,18 @@ public sealed class GoogleStampWalletIntegrationTests : IntegrationTestBase
             .SetTenant(TenantId, TenantSlug);
         await scope.ServiceProvider.GetRequiredService<IGoogleWalletService>()
             .SynchronizeBySerialNumberIfExistsAsync(Serial);
+    }
+
+    private static HttpRequestMessage SignedSyncRequest(string path, string tenantSlug)
+    {
+        const string sharedSecret = "test-admin-api-shared-secret-with-enough-length";
+        var timestamp = DateTimeOffset.UtcNow.ToString("O");
+        var request = new HttpRequestMessage(HttpMethod.Post, path);
+        request.Headers.Add(AdminApiSignature.TenantSlugHeader, tenantSlug);
+        request.Headers.Add(AdminApiSignature.OperatorHeader, "test-admin");
+        request.Headers.Add(AdminApiSignature.TimestampHeader, timestamp);
+        request.Headers.Add(AdminApiSignature.SignatureHeader, AdminApiSignature.CreateSignature(
+            sharedSecret, "POST", path, timestamp, tenantSlug, "test-admin", []));
+        return request;
     }
 }

@@ -75,13 +75,21 @@ internal sealed class GoogleStampWalletService(
         if (!_options.Enabled) return;
         try
         {
-            await SynchronizeCoreAsync(serialNumber, createIfMissing: false, ct);
+            await SynchronizeExistingAsync(serialNumber, ct);
         }
         catch (OperationCanceledException) when (ct.IsCancellationRequested) { throw; }
         catch (Exception ex)
         {
             logger.LogWarning(ex, "Google Wallet Stamps sync failed. Serial={Serial}", serialNumber);
         }
+    }
+
+    public async Task<bool> SynchronizeExistingAsync(string serialNumber, CancellationToken ct = default)
+    {
+        if (!_options.Enabled)
+            throw new InvalidOperationException("Google Wallet esta deshabilitado en la API.");
+
+        return await SynchronizeCoreAsync(serialNumber, createIfMissing: false, ct) is not null;
     }
 
     private async Task<SyncState?> SynchronizeCoreAsync(

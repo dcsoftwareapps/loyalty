@@ -12,4 +12,8 @@ public interface IGoogleStampWalletService
     Task SynchronizeBySerialNumberIfExistsAsync(
         string serialNumber,
         CancellationToken ct = default);
+
+    Task<bool> SynchronizeExistingAsync(
+        string serialNumber,
+        CancellationToken ct = default);
 }
