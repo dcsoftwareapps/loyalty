@@ -15,9 +15,13 @@ public sealed record StampWalletReward(int RequiredStamps, Guid RewardIdentityId
     StampWalletRewardState? State = null, byte[]? UpcomingImage = null);
 public sealed record StampWalletEvent(Guid TransactionId, string Operation, bool IsRollover,
     string Value, string ChangeMessage, bool RewardUnlocked);
+public sealed record StampWalletEarnedReward(Guid Id, string Name, string ShortName,
+    int RequiredStamps, StampWalletRewardState State, int CycleSequence);
 public sealed record StampStripAsset(string Name, byte[] Bytes);
 public sealed record StampWalletProjection(Guid CycleId, Guid VersionId, int CurrentStamps, int MaxStamps,
-    byte[]? EmptyImage, byte[]? FilledImage, IReadOnlyList<StampWalletReward> Rewards, StampWalletEvent? Event = null);
+    byte[]? EmptyImage, byte[]? FilledImage, IReadOnlyList<StampWalletReward> Rewards,
+    StampWalletEvent? Event = null, int CycleSequence = 1,
+    IReadOnlyList<StampWalletEarnedReward>? EarnedRewards = null);
 
 public interface IStampVisualService
 {

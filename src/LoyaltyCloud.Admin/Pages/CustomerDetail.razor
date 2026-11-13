@@ -6,6 +6,7 @@
 @using LoyaltyCloud.Application.Customers.Queries.GetCustomerDetail
 @using LoyaltyCloud.Application.Customers.Commands.UpdateCustomerBirthday
 @using LoyaltyCloud.Application.Customers.Commands.DeleteCustomer
+@using LoyaltyCloud.Application.Common.Wallet
 @using LoyaltyCloud.Domain.Enums
 @inject ISender Sender
 @inject NavigationManager Nav
@@ -13,6 +14,7 @@
 @inject LoyaltyCloud.Application.Common.Interfaces.ITenantProgramReadService Programs
 @inject LoyaltyCloud.Admin.Auth.AdminTenantContextInitializer TenantInitializer
 @inject LoyaltyCloud.Domain.Repositories.ICustomerRepository Customers
+@inject LoyaltyCloud.Admin.Services.AdminApiClient Api
 
 <PageTitle>@(detail?.Summary.FullName ?? "Cliente") - LoyaltyCloud</PageTitle>
 
@@ -182,9 +184,20 @@ else
                     @if (isPoints) { <DetailItem Label="Puntos actuales" Value="@FormatNullableNumber(detail.Wallet.CurrentPoints)" /> }
                     <DetailItem Label="Fecha de emisión" Value="@FormatNullableDate(detail.Wallet.IssuedAt)" />
                     <DetailItem Label="Última actualización" Value="@FormatNullableDateTime(detail.Wallet.LastActivityAt)" />
-                    <DetailItem Label="Dispositivos registrados" Value="@FormatNumber(detail.Wallet.DeviceRegistrationCount)" />
-                    <DetailItem Label="Último push enviado" Value="@FormatNullableDateTime(detail.Wallet.LastPushSentAt)" />
+                    <DetailItem Label="Dispositivos Apple registrados" Value="@FormatNumber(detail.Wallet.DeviceRegistrationCount)" />
+                    <DetailItem Label="Último push Apple" Value="@FormatNullableDateTime(detail.Wallet.LastPushSentAt)" />
+                    <DetailItem Label="Objeto Google Wallet" Value="@GoogleWalletStatusText(detail.Wallet.GoogleWalletStatus)" />
+                    <DetailItem Label="Última sincronización con Google" Value="@FormatNullableDateTime(detail.Wallet.GoogleWalletLastSynchronizedAt)" />
                 </div>
+                <p class="kb-muted" style="margin-top:12px;">Google no informa cuántos dispositivos guardaron el pase ni confirma la entrega de notificaciones. El estado refleja la última sincronización registrada.</p>
+                @if (!isPoints && detail.Wallet.GoogleWalletStatus.HasValue)
+                {
+                    <button class="kb-btn kb-btn--ghost" disabled="@googleSyncBusy" @onclick="SyncGoogleWalletAsync">
+                        @(googleSyncBusy ? "Sincronizando..." : "Sincronizar Google Wallet")
+                    </button>
+                    @if (googleSyncError is not null) { <p class="kb-form-error" role="alert">@googleSyncError</p> }
+                    @if (googleSyncSuccess is not null) { <p class="kb-muted" role="status">@googleSyncSuccess</p> }
+                }
             </div>
         }
     </section>
@@ -424,6 +437,9 @@ else
     private string? birthdaySuccess;
     private string? birthdayError;
     private bool birthdayBusy;
+    private bool googleSyncBusy;
+    private string? googleSyncError;
+    private string? googleSyncSuccess;
     private string? deleteError;
     private bool deleteBusy;
     private bool deleteConfirmationVisible;
@@ -475,6 +491,38 @@ else
     private string FormatDateTime(DateTime value) => Dates.DateTime(value);
     private string FormatNullableDate(DateTime? value) => Dates.Date(value);
     private string FormatNullableDateTime(DateTime? value) => Dates.DateTime(value);
+
+    private async Task SyncGoogleWalletAsync()
+    {
+        if (detail is null || googleSyncBusy || isPoints || !detail.Wallet.GoogleWalletStatus.HasValue
+            || string.IsNullOrWhiteSpace(detail.Wallet.SerialNumber)) return;
+
+        googleSyncBusy = true;
+        googleSyncError = null;
+        googleSyncSuccess = null;
+        try
+        {
+            var path = $"/api/internal/stamps/google/{Uri.EscapeDataString(detail.Wallet.SerialNumber)}/sync";
+            var result = await Api.PostAsync<GoogleStampWalletSyncResponse>(path);
+            if (result.IsFailure || !result.Value.Synchronized)
+            {
+                googleSyncError = result.IsFailure ? result.Error : "No se encontró un objeto Google Wallet para esta tarjeta.";
+                return;
+            }
+
+            var refreshed = await Sender.Send(new GetCustomerDetailQuery(detail.Summary.CustomerId));
+            if (refreshed.IsSuccess) detail = refreshed.Value;
+            googleSyncSuccess = "Google Wallet sincronizado. La actualización visible en el teléfono puede tardar unos minutos.";
+        }
+        catch (Exception)
+        {
+            googleSyncError = "No se pudo contactar la API. Intenta de nuevo.";
+        }
+        finally
+        {
+            googleSyncBusy = false;
+        }
+    }
     private static string DisplayText(string? value) => string.IsNullOrWhiteSpace(value) ? "No disponible" : value;
     private static string CampaignText(string? campaignName, decimal? appliedMultiplier) =>
         string.IsNullOrWhiteSpace(campaignName)
@@ -484,6 +532,14 @@ else
                 : campaignName;
     private static string PointColor(int points) => points >= 0 ? "var(--kb-sage)" : "var(--kb-blush)";
     private static string StatusText(bool isActive) => isActive ? "Activo" : "Inactivo";
+    private static string GoogleWalletStatusText(DigitalWalletStatus? status) => status switch
+    {
+        DigitalWalletStatus.Created => "Creado, pendiente de sincronización",
+        DigitalWalletStatus.Active => "Última sincronización correcta",
+        DigitalWalletStatus.Inactive => "Inactivo",
+        DigitalWalletStatus.Error => "Error de sincronización",
+        _ => "No generado"
+    };
     private static string YesNo(bool value) => value ? "Si" : "No";
     private string BirthdayText() =>
         detail?.Summary.BirthdayCaptured == true

@@ -58,6 +58,7 @@ public sealed class GoogleWalletNotificationClientTests
             credentialsProvider.Object,
             new GoogleWalletJwtFactory(options),
             new GoogleWalletObjectMapper(),
+            new GoogleStampWalletMapper(),
             options,
             clock.Object,
             NullLogger<GoogleWalletClient>.Instance);
@@ -178,7 +179,7 @@ public sealed class GoogleWalletNotificationClientTests
         var clock = new Mock<IDateTimeProvider>(); clock.SetupGet(x => x.UtcNow).Returns(new DateTime(2026, 9, 1, 12, 0, 0, DateTimeKind.Utc));
         var options = Options.Create(new GoogleWalletOptions { Enabled = true, IssuerId = "issuer-test", ApiBaseUrl = "https://walletobjects.example.test/walletobjects/v1" });
         var handler = new CaptureHandler(giftCardResourcesExist);
-        return (new GoogleWalletClient(new HttpClient(handler), provider.Object, new GoogleWalletJwtFactory(options), new GoogleWalletObjectMapper(), options, clock.Object, NullLogger<GoogleWalletClient>.Instance), handler);
+        return (new GoogleWalletClient(new HttpClient(handler), provider.Object, new GoogleWalletJwtFactory(options), new GoogleWalletObjectMapper(), new GoogleStampWalletMapper(), options, clock.Object, NullLogger<GoogleWalletClient>.Instance), handler);
     }
 
     private static GoogleWalletObjectData ObjectData() => new(

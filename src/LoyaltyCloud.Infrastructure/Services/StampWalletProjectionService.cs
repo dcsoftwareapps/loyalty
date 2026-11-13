@@ -14,6 +14,8 @@ internal sealed class StampWalletProjectionService(AppDbContext db, ITenantConte
     public async Task<StampWalletProjection> ReadAsync(string serialNumber, CancellationToken ct = default)
     {
         var tenantId = context.RequireTenantId();
+        if (!db.Database.IsRelational())
+            return await ReadCoreAsync(serialNumber, ct);
         return await db.Database.CreateExecutionStrategy().ExecuteAsync(async () =>
         {
             // Read cycle, rewards and announcement as one coherent snapshot against economic writers.
@@ -41,6 +43,18 @@ internal sealed class StampWalletProjectionService(AppDbContext db, ITenantConte
         var identities = await db.StampRewardIdentities.AsNoTracking().Where(x => ids.Contains(x.Id)).ToDictionaryAsync(x => x.Id, ct);
         var earned = await db.EarnedStampRewards.AsNoTracking().Where(x => x.StampCycleId == cycle.Id
             && x.Status != EarnedStampRewardStatus.Voided).ToListAsync(ct);
+        var earnedAcrossCycles = await db.EarnedStampRewards.AsNoTracking()
+            .Where(x => x.Status != EarnedStampRewardStatus.Voided
+                && db.StampCycles.Any(c => c.Id == x.StampCycleId && c.LoyaltyCardSerialNumber == serialNumber))
+            .Join(db.StampCycles.AsNoTracking(), reward => reward.StampCycleId, stampCycle => stampCycle.Id,
+                (reward, stampCycle) => new { Reward = reward, stampCycle.Sequence })
+            .OrderBy(x => x.Sequence).ThenBy(x => x.Reward.RequiredStamps).ThenBy(x => x.Reward.Id)
+            .Select(x => new StampWalletEarnedReward(x.Reward.Id, x.Reward.Name, x.Reward.ShortName,
+                x.Reward.RequiredStamps,
+                x.Reward.Status == EarnedStampRewardStatus.Available
+                    ? StampWalletRewardState.Available : StampWalletRewardState.Redeemed,
+                x.Sequence))
+            .ToListAsync(ct);
         var rewards = new List<StampWalletReward>();
         foreach (var definition in definitions)
             rewards.Add(new(definition.RequiredStamps, definition.RewardIdentityId,
@@ -70,7 +84,8 @@ internal sealed class StampWalletProjectionService(AppDbContext db, ITenantConte
         }
         return new(cycle.Id, version.Id, cycle.CurrentStamps, version.MaxStamps,
             await assets.ReadAsync(tenantId, config?.EmptyStampBlobName, ct),
-            await assets.ReadAsync(tenantId, config?.FilledStampBlobName, ct), rewards, passEvent);
+            await assets.ReadAsync(tenantId, config?.FilledStampBlobName, ct), rewards, passEvent,
+            cycle.Sequence, earnedAcrossCycles);
     }
 
     public IReadOnlyList<StampStripAsset> Render(StampWalletProjection projection, string backgroundColor)

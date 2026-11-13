@@ -24,9 +24,10 @@ builder.Configuration.AddLoyaltyCloudKeyVault(builder.Configuration["Azure:KeyVa
 // Servicios
 // =============================================================================
 
-// Capas de negocio — Admin habla con Application/MediatR in-process, no HTTP.
+// Admin ejecuta operaciones en Application; la actualización Google Wallet se delega a API.
 builder.Services.AddApplication();
 builder.Services.AddInfrastructure(builder.Configuration, builder.Environment);
+builder.Services.AddScoped<IStampWalletRefreshService, AdminStampWalletRefreshService>();
 builder.Services.AddScoped<AdminCurrentUserService>();
 builder.Services.AddScoped<LoyaltyCloud.Common.Services.ICurrentUserService>(services => services.GetRequiredService<AdminCurrentUserService>());
 builder.Services.AddScoped<AdminTenantContextInitializer>();

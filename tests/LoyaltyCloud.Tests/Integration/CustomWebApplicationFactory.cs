@@ -11,6 +11,7 @@ using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.AspNetCore.TestHost;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
@@ -64,6 +65,8 @@ public sealed class CustomWebApplicationFactory : WebApplicationFactory<Program>
                 ["GoogleWallet:ObjectIdPrefix"] = "member",
                 ["GoogleWallet:ProgramName"] = "KBeauty Loyalty",
                 ["GoogleWallet:IssuerName"] = "KBeauty MX",
+                ["GoogleWallet:LogoUri"] = "https://api.loyaltycloud.test/assets/google-wallet-logo.png",
+                ["GoogleWallet:ServiceAccountJson"] = "{}",
                 ["GoogleWallet:SaveUrlBase"] = "https://pay.google.com/gp/v/save"
             });
         });
@@ -73,7 +76,9 @@ public sealed class CustomWebApplicationFactory : WebApplicationFactory<Program>
             // Reemplazar DbContext por InMemory.
             services.RemoveAll<DbContextOptions<AppDbContext>>();
             services.RemoveAll<Microsoft.EntityFrameworkCore.Infrastructure.IDbContextOptionsConfiguration<AppDbContext>>();
-            services.AddDbContext<AppDbContext>(opts => opts.UseInMemoryDatabase(_dbName));
+            services.AddDbContext<AppDbContext>(opts => opts
+                .UseInMemoryDatabase(_dbName)
+                .ConfigureWarnings(warnings => warnings.Ignore(InMemoryEventId.TransactionIgnoredWarning)));
 
             // Reemplazar servicios externos por fakes en memoria.
             services.RemoveAll<IPassGeneratorService>();

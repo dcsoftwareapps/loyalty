@@ -31,7 +31,9 @@ public sealed record CustomerWalletDto(
     DateTime? IssuedAt,
     DateTime? LastActivityAt,
     int DeviceRegistrationCount,
-    DateTime? LastPushSentAt);
+    DateTime? LastPushSentAt,
+    DigitalWalletStatus? GoogleWalletStatus,
+    DateTime? GoogleWalletLastSynchronizedAt);
 
 public sealed record CustomerStatisticsDto(
     int CurrentPoints,

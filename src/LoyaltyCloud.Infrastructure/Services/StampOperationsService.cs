@@ -14,7 +14,7 @@ namespace LoyaltyCloud.Infrastructure.Services;
 
 internal sealed class StampOperationsService(AppDbContext db, ITenantContext tenantContext,
     ITenantProgramReadService programs, ICurrentUserService currentUser, IDateTimeProvider clock,
-    IAppleWalletPassRefreshService refresh, ILogger<StampOperationsService> logger) : IStampOperationsService
+    IStampWalletRefreshService refresh, ILogger<StampOperationsService> logger) : IStampOperationsService
 {
     public async Task<Result<StampStateDto>> ReadAsync(string serialNumber, CancellationToken ct = default)
     {
@@ -153,7 +153,7 @@ internal sealed class StampOperationsService(AppDbContext db, ITenantContext ten
             try
             {
                 var cardId = await db.LoyaltyCards.Where(x => x.SerialNumber == serial).Select(x => x.Id).SingleAsync(ct);
-                await refresh.RefreshCardAsync(tenantId, cardId,
+                await refresh.RefreshCardAsync(tenantId, cardId, serial!,
                     operation == "Earn" ? PassUpdateReason.StampEarned : operation == "Reversal" ? PassUpdateReason.StampReversed : PassUpdateReason.StampRewardRedeemed, ct);
             }
             catch (Exception ex) { logger.LogWarning(ex, "Stamps pass refresh failed after committed {Operation}. TenantId={TenantId}", operation, tenantId); }
