@@ -226,8 +226,14 @@ app.MapPost("/signup", async (
 
         if (result.IsFailure)
         {
-            var code = result.Error.Contains("identificador del negocio", StringComparison.OrdinalIgnoreCase)
-                ? "slug-conflict"
+            var error = result.Error;
+            var code = error.Contains("identificador del negocio", StringComparison.OrdinalIgnoreCase) ? "slug-conflict"
+                : error.Contains("TenantContext", StringComparison.OrdinalIgnoreCase) ? "session-conflict"
+                : error.Contains("Email", StringComparison.OrdinalIgnoreCase) ? "email-invalid"
+                : error.Contains("Password", StringComparison.OrdinalIgnoreCase) ? "password-invalid"
+                : error.Contains("BusinessDisplayName", StringComparison.OrdinalIgnoreCase) ? "business-invalid"
+                : error.Contains("Slug", StringComparison.OrdinalIgnoreCase) ? "slug-invalid"
+                : error.Contains("TimeZoneId", StringComparison.OrdinalIgnoreCase) ? "timezone-invalid"
                 : "invalid";
             return Results.Redirect($"/signup?error={code}");
         }

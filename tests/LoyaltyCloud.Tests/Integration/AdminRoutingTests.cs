@@ -185,6 +185,42 @@ public sealed class AdminRoutingTests : IClassFixture<AdminRoutingTests.AdminWeb
 
     [Fact]
     [Trait("Category", "PublicSignup")]
+    public async Task Signup_from_an_authenticated_tenant_creates_a_separate_trial()
+    {
+        var firstSlug = "signup-" + Guid.NewGuid().ToString("N")[..10];
+        var secondSlug = "signup-" + Guid.NewGuid().ToString("N")[..10];
+        using var client = _factory.CreateClient(new WebApplicationFactoryClientOptions { AllowAutoRedirect = false, HandleCookies = false });
+
+        var (firstForm, firstCookies) = await LoadSignupFormAsync(client);
+        PopulateValidSignup(firstForm, firstSlug, $"{firstSlug}@example.test");
+        using var firstRequest = CreateSignupRequest(firstForm, firstCookies);
+        using var firstResponse = await client.SendAsync(firstRequest);
+        Assert.Equal("/dashboard", firstResponse.Headers.Location?.OriginalString);
+        var authCookie = ExtractCookie(firstResponse, "loyaltycloud.admin.auth");
+
+        using var secondGet = new HttpRequestMessage(HttpMethod.Get, "/signup");
+        secondGet.Headers.Add("Cookie", authCookie);
+        using var secondPage = await client.SendAsync(secondGet);
+        Assert.Equal(HttpStatusCode.OK, secondPage.StatusCode);
+        var secondForm = ExtractHiddenInputs(await secondPage.Content.ReadAsStringAsync());
+        var secondCookies = ExtractCookies(secondPage);
+        PopulateValidSignup(secondForm, secondSlug, $"{secondSlug}@example.test");
+        secondForm["Password"] = "123456789";
+        secondForm["ConfirmPassword"] = "123456789";
+        using var secondRequest = CreateSignupRequest(secondForm, $"{secondCookies}; {authCookie}");
+        using var secondResponse = await client.SendAsync(secondRequest);
+
+        Assert.Equal("/dashboard", secondResponse.Headers.Location?.OriginalString);
+        Assert.NotEqual(authCookie, ExtractCookie(secondResponse, "loyaltycloud.admin.auth"));
+        Assert.Equal(1, (await _factory.ReadSignupSnapshotAsync(firstSlug)).TenantCount);
+        var secondTenant = await _factory.ReadSignupSnapshotAsync(secondSlug);
+        Assert.Equal(1, secondTenant.TenantCount);
+        Assert.Equal(1, secondTenant.AdminCount);
+        Assert.Equal(TenantSubscriptionStatus.Trial, secondTenant.SubscriptionStatus);
+    }
+
+    [Fact]
+    [Trait("Category", "PublicSignup")]
     public async Task Duplicate_slug_and_invalid_input_are_controlled_without_extra_tenants()
     {
         var slug = "duplicate-" + Guid.NewGuid().ToString("N")[..8];
@@ -200,12 +236,27 @@ public sealed class AdminRoutingTests : IClassFixture<AdminRoutingTests.AdminWeb
         using var duplicateRequest = CreateSignupRequest(duplicate, duplicateCookies);
         using var duplicateResponse = await client.SendAsync(duplicateRequest);
         Assert.Equal("/signup?error=slug-conflict", duplicateResponse.Headers.Location?.OriginalString);
+        using var duplicatePage = await client.GetAsync(duplicateResponse.Headers.Location);
+        Assert.Contains("Esta dirección ya está en uso", WebUtility.HtmlDecode(await duplicatePage.Content.ReadAsStringAsync()));
 
         var (invalid, invalidCookies) = await LoadSignupFormAsync(client);
         PopulateValidSignup(invalid, "invalid slug", "not-an-email");
         using var invalidRequest = CreateSignupRequest(invalid, invalidCookies);
         using var invalidResponse = await client.SendAsync(invalidRequest);
-        Assert.Equal("/signup?error=invalid", invalidResponse.Headers.Location?.OriginalString);
+        Assert.Equal("/signup?error=email-invalid", invalidResponse.Headers.Location?.OriginalString);
+
+        using var invalidPage = await client.GetAsync(invalidResponse.Headers.Location);
+        Assert.Contains("Revisa el correo electrónico", WebUtility.HtmlDecode(await invalidPage.Content.ReadAsStringAsync()));
+
+        var (weak, weakCookies) = await LoadSignupFormAsync(client);
+        PopulateValidSignup(weak, "weak-" + Guid.NewGuid().ToString("N")[..8], "weak@example.test");
+        weak["Password"] = "123";
+        weak["ConfirmPassword"] = "123";
+        using var weakRequest = CreateSignupRequest(weak, weakCookies);
+        using var weakResponse = await client.SendAsync(weakRequest);
+        Assert.Equal("/signup?error=password-invalid", weakResponse.Headers.Location?.OriginalString);
+        using var weakPage = await client.GetAsync(weakResponse.Headers.Location);
+        Assert.Contains("al menos 8 caracteres", WebUtility.HtmlDecode(await weakPage.Content.ReadAsStringAsync()));
 
         Assert.Equal(1, (await _factory.ReadSignupSnapshotAsync(slug)).TenantCount);
         Assert.Equal(0, await _factory.CountTenantsBySlugAsync("invalid slug"));

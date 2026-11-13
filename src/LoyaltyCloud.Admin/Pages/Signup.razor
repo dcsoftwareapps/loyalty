@@ -6,8 +6,8 @@
 
 <PageTitle>Comienza gratis | LoyaltyCloud</PageTitle>
 <HeadContent>
-    <link rel="stylesheet" href="css/landing.css?v=20260925-wordmark-scale" />
-    <script src="js/signup.js" defer></script>
+    <link rel="stylesheet" href="css/landing.css?v=20261112-signup-responsive" />
+    <script src="js/signup.js?v=20261112-validation" defer></script>
     <meta name="description" content="Crea tu cuenta de LoyaltyCloud y comienza un mes gratis, sin tarjeta." />
 </HeadContent>
 
@@ -95,8 +95,14 @@
     {
         "password-mismatch" => "Las contraseñas no coinciden.",
         "slug-conflict" => "Esta dirección ya está en uso. Elige otra.",
-        "invalid" => "Revisa los datos e inténtalo nuevamente.",
-        "unexpected" => "No fue posible crear la cuenta. Inténtalo nuevamente.",
+        "session-conflict" => "No pudimos iniciar un registro nuevo con la sesión anterior. Cierra sesión y vuelve a intentarlo.",
+        "email-invalid" => "Revisa el correo electrónico. Debe tener un formato como nombre@negocio.com.",
+        "password-invalid" => "La contraseña debe tener al menos 8 caracteres.",
+        "business-invalid" => "Escribe el nombre de tu negocio.",
+        "slug-invalid" => "La dirección del negocio debe tener entre 3 y 50 caracteres, con minúsculas, números y guiones.",
+        "timezone-invalid" => "Selecciona una zona horaria de la lista.",
+        "invalid" => "No pudimos validar la información. Completa de nuevo el formulario y, si vuelve a ocurrir, contacta a soporte.",
+        "unexpected" => "No pudimos crear tu cuenta por un problema temporal. Inténtalo de nuevo o contacta a soporte si continúa.",
         "rate-limited" => "Demasiados intentos. Espera unos minutos e inténtalo nuevamente.",
         _ => null
     };
