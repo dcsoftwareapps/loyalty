@@ -86,7 +86,7 @@
                     <p class="eyebrow">LoyaltyCloud Caja</p>
                     <h1>@(giftMode ? "Tarjeta de regalo" : IsStamps ? "Sellos" : "Puntos")</h1>
                 </div>
-                <button type="button" class="link-button" @onclick="LogoutAsync" disabled="@(busy || giftBusy)">
+                <button type="button" class="link-button" @onclick="RequestLogout" disabled="@(busy || giftBusy || showLogoutConfirmation)">
                     Salir
                 </button>
             </div>
@@ -401,7 +401,37 @@
     }
 </main>
 
+@if (showLogoutConfirmation && session is not null)
+{
+    <div class="cashier-logout-confirm" role="dialog" aria-modal="true" aria-label="Cerrar sesión" @onkeydown="HandleLogoutKeyDown">
+        <ConfirmModal Show="true" Title="Cerrar sesión" Message="¿Estás seguro de que quieres salir?"
+                      CancelText="Cancelar" ConfirmText="Salir"
+                      OnCancel="CancelLogout" OnConfirm="ConfirmLogoutAsync" />
+    </div>
+}
+
 @code {
+    private bool showLogoutConfirmation;
+
+    private void RequestLogout()
+    {
+        if (!busy && !giftBusy && session is not null) showLogoutConfirmation = true;
+    }
+
+    private void CancelLogout() => showLogoutConfirmation = false;
+
+    private void HandleLogoutKeyDown(KeyboardEventArgs args)
+    {
+        if (args.Key == "Escape") CancelLogout();
+    }
+
+    private async Task ConfirmLogoutAsync()
+    {
+        if (!showLogoutConfirmation) return;
+        showLogoutConfirmation = false;
+        await LogoutAsync();
+    }
+
     private async Task OpenPrivacyPolicyAsync()
     {
         try

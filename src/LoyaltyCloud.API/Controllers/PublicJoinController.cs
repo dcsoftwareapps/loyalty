@@ -150,13 +150,13 @@ public sealed class PublicJoinController : ControllerBase
     public sealed record PublicJoinRequest(
         string FirstName,
         string LastName,
-        string Phone, int? BirthdayDay = null, int? BirthdayMonth = null);
+        string? Phone = null, int? BirthdayDay = null, int? BirthdayMonth = null);
 
     public sealed record PublicJoinResponse(
         Guid CustomerId,
         string SerialNumber,
         string FullName,
-        string Phone,
+        string? Phone,
         bool AlreadyExists,
         string Message,
         string PassDownloadUrl,

@@ -54,6 +54,8 @@ public sealed class MemberWalletDataServiceTests
 
         Assert.True(result.IsSuccess);
         Assert.Equal(customer.Id, result.Value.CustomerId);
+        Assert.Null(customer.Phone);
+        Assert.Null(result.Value.Phone);
         Assert.Equal(card.Id, result.Value.LoyaltyCardId);
         Assert.Equal(card.SerialNumber, result.Value.SerialNumber);
         Assert.Equal("Ana Lopez", result.Value.FullName);

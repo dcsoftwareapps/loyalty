@@ -75,6 +75,7 @@
     <ItemGroup>
         <ProjectReference Include="..\LoyaltyCloud.Common\LoyaltyCloud.Common.csproj" />
         <Content Include="..\LoyaltyCloud.Admin\Shared\StampCashierPanel.razor" Link="Components\Cashier\StampCashierPanel.razor" />
+        <Content Include="..\LoyaltyCloud.Admin\Components\ConfirmModal.razor" Link="Components\Cashier\ConfirmModal.razor" />
     </ItemGroup>
 
 </Project>

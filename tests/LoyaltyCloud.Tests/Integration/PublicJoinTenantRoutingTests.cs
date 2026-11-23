@@ -336,7 +336,30 @@ public sealed class PublicJoinTenantRoutingTests : IClassFixture<CustomWebApplic
         Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
     }
 
-    private async Task<HttpResponseMessage> JoinAsync(string slug, string firstName, string lastName, string phone) =>
+    [Theory]
+    [InlineData(null)] [InlineData("")] [InlineData("   ")]
+    public async Task Public_join_accepts_absent_phone_and_does_not_recover_by_name(string? phone)
+    {
+        using var firstResponse = await JoinAsync("kbeauty", "Optional", "Phone", phone);
+        using var secondResponse = await JoinAsync("kbeauty", "Optional", "Phone", phone);
+        Assert.Equal(HttpStatusCode.OK, firstResponse.StatusCode);
+        Assert.Equal(HttpStatusCode.OK, secondResponse.StatusCode);
+        using var first = System.Text.Json.JsonDocument.Parse(await firstResponse.Content.ReadAsStringAsync());
+        using var second = System.Text.Json.JsonDocument.Parse(await secondResponse.Content.ReadAsStringAsync());
+        Assert.Equal(System.Text.Json.JsonValueKind.Null, first.RootElement.GetProperty("phone").ValueKind);
+        Assert.NotEqual(first.RootElement.GetProperty("customerId").GetGuid(), second.RootElement.GetProperty("customerId").GetGuid());
+        Assert.False(second.RootElement.GetProperty("alreadyExists").GetBoolean());
+    }
+
+    [Theory]
+    [InlineData("abc")] [InlineData("123")]
+    public async Task Public_join_rejects_provided_invalid_phone(string phone)
+    {
+        using var response = await JoinAsync("kbeauty", "Invalid", "Phone", phone);
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+    }
+
+    private async Task<HttpResponseMessage> JoinAsync(string slug, string firstName, string lastName, string? phone) =>
         await _client.PostAsJsonAsync($"api/public/{slug}/join", new
         {
             firstName,

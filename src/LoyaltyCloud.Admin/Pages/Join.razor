@@ -10,6 +10,7 @@
 @using Microsoft.AspNetCore.Mvc
 @inject IHttpClientFactory HttpClientFactory
 @inject IPublicTenantResolver TenantResolver
+@inject ITenantProgramReadService Programs
 @inject IMutableTenantContext TenantContext
 @inject NavigationManager Navigation
 @inject ILogger<Join> Logger
@@ -78,8 +79,9 @@
                         <input id="last-name" type="text" autocomplete="family-name" @bind="form.LastName" />
                     </div>
                     <div>
-                        <label for="phone">Teléfono</label>
-                        <input id="phone" type="tel" inputmode="tel" autocomplete="tel" @bind="form.Phone" />
+                        <label for="phone">Teléfono (opcional)</label>
+                        <input id="phone" type="tel" inputmode="tel" autocomplete="tel" maxlength="30" aria-describedby="phone-help" @bind="form.Phone" />
+                        <p id="phone-help" class="kb-muted"><small>Agrega tu teléfono para poder recuperar tus @PhoneProgramLabel si pierdes tu tarjeta.</small></p>
                     </div>
                     <div class="kb-join-birthday">
                         <label>Cumpleaños (opcional)</label>
@@ -217,6 +219,7 @@
 
         TenantContext.Clear();
         TenantContext.SetTenant(resolved.TenantId, resolved.Slug);
+        phoneProgram = await Programs.GetCurrentAsync();
         tenant = resolved;
         loadingTenant = false;
 
@@ -234,10 +237,9 @@
         errorMsg = null;
         processingStatus = null;
         if (string.IsNullOrWhiteSpace(form.FirstName)
-            || string.IsNullOrWhiteSpace(form.LastName)
-            || string.IsNullOrWhiteSpace(form.Phone))
+            || string.IsNullOrWhiteSpace(form.LastName))
         {
-            errorMsg = "Captura nombre, apellido y teléfono.";
+            errorMsg = "Captura nombre y apellido.";
             return;
         }
 
@@ -254,7 +256,7 @@
             using var response = await Api.PostAsJsonAsync($"api/public/{tenant.Slug}/join", new PublicJoinRequest(
                 form.FirstName.Trim(),
                 form.LastName.Trim(),
-                form.Phone.Trim(), birthday.Day, birthday.Month));
+                string.IsNullOrWhiteSpace(form.Phone) ? null : form.Phone.Trim(), birthday.Day, birthday.Month));
 
             if (!response.IsSuccessStatusCode)
             {
@@ -472,6 +474,9 @@
         return Regex.IsMatch(trimmed, "^#(?:[0-9a-fA-F]{3}){1,2}$") ? trimmed : fallback;
     }
 
+    private LoyaltyCloud.Domain.Enums.LoyaltyProgramType phoneProgram;
+    private string PhoneProgramLabel => phoneProgram == LoyaltyCloud.Domain.Enums.LoyaltyProgramType.Stamps ? "sellos" : "puntos";
+
     private sealed class JoinForm
     {
         public string FirstName { get; set; } = string.Empty;
@@ -485,13 +490,13 @@
         public int? Month { get; set; }
     }
 
-    private sealed record PublicJoinRequest(string FirstName, string LastName, string Phone, int? BirthdayDay, int? BirthdayMonth);
+    private sealed record PublicJoinRequest(string FirstName, string LastName, string? Phone, int? BirthdayDay, int? BirthdayMonth);
 
     private sealed record PublicJoinResponse(
         Guid CustomerId,
         string SerialNumber,
         string FullName,
-        string Phone,
+        string? Phone,
         bool AlreadyExists,
         string Message,
         string PassDownloadUrl,

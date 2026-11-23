@@ -4,6 +4,9 @@ namespace LoyaltyCloud.Application.Common.Interfaces;
 
 public interface ITenantBrandingLogoService
 {
+    /// <summary>Reads the current tenant-owned branding logo for registration QR rendering, without caching.</summary>
+    Task<byte[]?> ReadRegistrationLogoAsync(Guid tenantId, CancellationToken cancellationToken = default);
+
     Task<Result<TenantBrandingLogoResult>> UploadAsync(
         Guid tenantId,
         string fileName,

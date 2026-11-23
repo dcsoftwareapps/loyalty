@@ -29,6 +29,7 @@ internal sealed class CustomerRepository : ICustomerRepository
 
     public Task<Customer?> GetByNormalizedPhoneAsync(string normalizedPhone, CancellationToken ct = default)
     {
+        if (string.IsNullOrWhiteSpace(normalizedPhone)) return Task.FromResult<Customer?>(null);
         var normalized = normalizedPhone.Trim();
         var tenantId = _tenantContext.RequireTenantId();
         return _db.Customers.FirstOrDefaultAsync(c =>

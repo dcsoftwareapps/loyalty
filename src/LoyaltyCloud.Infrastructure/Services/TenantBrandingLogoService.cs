@@ -375,6 +375,92 @@ internal sealed class TenantBrandingLogoService :
         return Result.Ok();
     }
 
+    public async Task<byte[]?> ReadRegistrationLogoAsync(Guid tenantId, CancellationToken cancellationToken = default)
+    {
+        var branding = await _db.TenantBrandings.AsNoTracking()
+            .Where(x => x.TenantId == tenantId).Select(x => new { x.LogoBlobName, x.LogoUrl })
+            .SingleOrDefaultAsync(cancellationToken);
+        if (branding is null) return null;
+        var blobName = branding.LogoBlobName;
+        if (string.IsNullOrWhiteSpace(blobName))
+            return await ReadLegacyRegistrationLogoAsync(branding.LogoUrl, cancellationToken);
+        if (_container is null || !blobName.StartsWith(GetTenantBrandingPrefix(tenantId) + "/", StringComparison.Ordinal)) return null;
+        try
+        {
+            var blob = _container.GetBlobClient(blobName);
+            using var response = (await blob.DownloadStreamingAsync(cancellationToken: cancellationToken)).Value.Content;
+            using var output = new MemoryStream();
+            var buffer = new byte[8192];
+            int read;
+            while ((read = await response.ReadAsync(buffer.AsMemory(), cancellationToken)) > 0)
+            {
+                if (output.Length + read > MaxLogoBytes) return null;
+                await output.WriteAsync(buffer.AsMemory(0, read), cancellationToken);
+            }
+            return output.ToArray();
+        }
+        catch (RequestFailedException)
+        {
+            _logger.LogWarning("Registration QR logo unavailable for tenant {TenantId}.", tenantId);
+            return null;
+        }
+    }
+
+    private static async Task<byte[]?> ReadLegacyRegistrationLogoAsync(string? url, CancellationToken ct)
+    {
+        if (!Uri.TryCreate(url, UriKind.Absolute, out var uri)
+            || (uri.Scheme != "https" && uri.Scheme != "http")
+            || !string.IsNullOrEmpty(uri.UserInfo) || (uri.Port != 80 && uri.Port != 443)) return null;
+        // Legacy branding can contain an external URL. Resolve and connect to the same
+        // validated public address; never follow redirects into private/internal services.
+        using var handler = new SocketsHttpHandler
+        {
+            AllowAutoRedirect = false,
+            UseProxy = false,
+            ConnectCallback = async (context, cancellationToken) =>
+            {
+                var addresses = await System.Net.Dns.GetHostAddressesAsync(context.DnsEndPoint.Host, cancellationToken);
+                var address = addresses.FirstOrDefault(IsPublicLogoAddress)
+                    ?? throw new HttpRequestException("Logo host is not public.");
+                var socket = new System.Net.Sockets.Socket(address.AddressFamily, System.Net.Sockets.SocketType.Stream, System.Net.Sockets.ProtocolType.Tcp);
+                try
+                {
+                    await socket.ConnectAsync(address, context.DnsEndPoint.Port, cancellationToken);
+                    return new System.Net.Sockets.NetworkStream(socket, ownsSocket: true);
+                }
+                catch { socket.Dispose(); throw; }
+            }
+        };
+        using var client = new HttpClient(handler) { Timeout = TimeSpan.FromSeconds(5) };
+        using var request = new HttpRequestMessage(HttpMethod.Get, uri);
+        request.Headers.CacheControl = new System.Net.Http.Headers.CacheControlHeaderValue { NoCache = true, NoStore = true };
+        using var response = await client.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, ct);
+        if (!response.IsSuccessStatusCode || response.Content.Headers.ContentLength > MaxLogoBytes) return null;
+        await using var input = await response.Content.ReadAsStreamAsync(ct);
+        using var output = new MemoryStream();
+        var buffer = new byte[8192];
+        int read;
+        while ((read = await input.ReadAsync(buffer.AsMemory(), ct)) > 0)
+        {
+            if (output.Length + read > MaxLogoBytes) return null;
+            await output.WriteAsync(buffer.AsMemory(0, read), ct);
+        }
+        return output.ToArray();
+    }
+
+    private static bool IsPublicLogoAddress(System.Net.IPAddress address)
+    {
+        if (address.IsIPv4MappedToIPv6) address = address.MapToIPv4();
+        var bytes = address.GetAddressBytes();
+        if (bytes.Length == 16) return (bytes[0] & 0xE0) == 0x20; // Global IPv6 unicast only.
+        return bytes[0] is not (0 or 10 or 127) && bytes[0] < 224
+            && !(bytes[0] == 169 && bytes[1] == 254)
+            && !(bytes[0] == 172 && bytes[1] >= 16 && bytes[1] <= 31)
+            && !(bytes[0] == 192 && bytes[1] == 168)
+            && !(bytes[0] == 100 && bytes[1] >= 64 && bytes[1] <= 127)
+            && !(bytes[0] == 198 && (bytes[1] == 18 || bytes[1] == 19));
+    }
+
     public string? GetDisplayUrl(string? logoBlobName)
     {
         if (_container is null || string.IsNullOrWhiteSpace(logoBlobName))

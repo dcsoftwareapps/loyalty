@@ -29,6 +29,8 @@ public sealed class StampCashierRenderTests
         Assert.Contains("Agregar sello", html);
         Assert.Contains("10 de 10 sellos", html);
         Assert.DoesNotContain("¡Recompensa desbloqueada!", html);
+        Assert.DoesNotContain("Sello agregado correctamente", html);
+        Assert.DoesNotContain("Agregar sello extra", html);
         Assert.DoesNotMatch("<button[^>]*disabled[^>]*>Agregar sello</button>", html);
     }
 
@@ -82,8 +84,8 @@ public sealed class StampCashierRenderTests
         Assert.Contains("¡Tarjeta completada!", html);
         Assert.Contains("Escanear cliente", html); Assert.DoesNotContain("Escanear otro cliente", html);
         Assert.Contains("Cancelar último sello", html);
-        Assert.Contains("Agregar sello", html);
-        Assert.DoesNotMatch("<button[^>]*disabled[^>]*>Agregar sello</button>", html);
+        Assert.Contains("Agregar sello extra", html);
+        Assert.DoesNotMatch("<button[^>]*stamp-extra-earn[^>]*disabled", html);
         Assert.DoesNotContain("<strong>0 de 10 sellos", html);
     }
 
@@ -127,17 +129,53 @@ public sealed class StampCashierRenderTests
 
     [Theory]
     [InlineData(false)] [InlineData(true)]
-    public async Task Earn_feedback_follows_earn_and_reset_precedes_secondary_reversal(bool mobile)
+    public async Task Earn_feedback_precedes_optional_extra_earn_and_reset_precedes_reversal(bool mobile)
     {
         var state = new CashierStampState("KB-TEST", "Daniel Sellos", Guid.NewGuid(), 1, 2, 10, false, [], true);
-        var flow = new StampCashierFlow(new Api(state), new Store(), "a"); await flow.LookupAsync("KB-TEST"); await flow.BeginAsync("Earn");
+        var flow = new StampCashierFlow(new Api(state), new Store(), "a"); await flow.AcceptScanAsync("KB-TEST");
         var html = System.Net.WebUtility.HtmlDecode(await RenderAsync(flow, mobile));
         Assert.Contains("CLIENTE", html); Assert.Contains("Daniel Sellos", html); Assert.Contains("role=\"status\"", html);
-        Assert.True(html.IndexOf("Agregar sello", StringComparison.Ordinal) < html.IndexOf("Sello agregado", StringComparison.Ordinal));
+        Assert.True(html.IndexOf("Sello agregado correctamente", StringComparison.Ordinal) < html.IndexOf("Agregar sello extra", StringComparison.Ordinal));
+        Assert.Single(System.Text.RegularExpressions.Regex.Matches(html, "Sello agregado correctamente").Cast<System.Text.RegularExpressions.Match>());
+        Assert.Matches(mobile ? "<button[^>]*secondary-button stamp-extra-earn[^>]*>" : "<button[^>]*kb-btn--ghost[^>]*stamp-extra-earn[^>]*>", html);
+        Assert.DoesNotMatch("<button[^>]*stamp-extra-earn[^>]*disabled", html);
         Assert.True(html.IndexOf("Sello agregado", StringComparison.Ordinal) < html.IndexOf("Escanear cliente", StringComparison.Ordinal));
         Assert.True(html.IndexOf("Escanear cliente", StringComparison.Ordinal) < html.IndexOf("Cancelar último sello", StringComparison.Ordinal));
         Assert.DoesNotContain("<h3 role=\"status\">", html);
         Assert.Matches(mobile ? "<button[^>]*secondary-button[^>]*>Cancelar último sello</button>" : "<button[^>]*kb-btn--ghost[^>]*>Cancelar último sello</button>", html);
+        var renderedAgain = System.Net.WebUtility.HtmlDecode(await RenderAsync(flow, mobile));
+        Assert.Contains("Sello agregado correctamente", renderedAgain);
+        Assert.Contains("Agregar sello extra", renderedAgain);
+    }
+
+    [Theory]
+    [InlineData(false)] [InlineData(true)]
+    public async Task Failed_earn_does_not_render_success_or_extra_earn(bool mobile)
+    {
+        var state = new CashierStampState("KB-TEST", "Ana", Guid.NewGuid(), 1, 2, 10, false, []);
+        var flow = new StampCashierFlow(new Api(state, error: "No se pudo agregar el sello."), new Store(), "a");
+        await flow.AcceptScanAsync("KB-TEST");
+        var html = System.Net.WebUtility.HtmlDecode(await RenderAsync(flow, mobile));
+        Assert.Contains("No se pudo agregar el sello.", html);
+        Assert.DoesNotContain("Sello agregado correctamente", html);
+        Assert.DoesNotContain("Agregar sello extra", html);
+        Assert.Contains(">Agregar sello</button>", html);
+    }
+
+    [Theory]
+    [InlineData(false)] [InlineData(true)]
+    public async Task Looking_up_another_customer_clears_earn_confirmation(bool mobile)
+    {
+        var state = new CashierStampState("KB-TEST", "Ana", Guid.NewGuid(), 1, 2, 10, false, []);
+        var flow = new StampCashierFlow(new Api(state), new Store(), "a");
+        await flow.AcceptScanAsync("KB-TEST");
+        Assert.Contains("Sello agregado correctamente", await RenderAsync(flow, mobile));
+        flow.PrepareNextScan();
+        await flow.LookupAsync("KB-OTHER");
+        var html = System.Net.WebUtility.HtmlDecode(await RenderAsync(flow, mobile));
+        Assert.DoesNotContain("Sello agregado correctamente", html);
+        Assert.DoesNotContain("Agregar sello extra", html);
+        Assert.Contains(">Agregar sello</button>", html);
     }
 
     [Fact]
@@ -147,9 +185,9 @@ public sealed class StampCashierRenderTests
         var state = new CashierStampState("KB-TEST", "Daniel", Guid.NewGuid(), 1, 5, 10, false, [reward]);
         var flow = new StampCashierFlow(new Api(state, [reward]), new Store(), "a"); await flow.AcceptScanAsync("KB-TEST"); await flow.BeginAsync("Earn");
         var html = System.Net.WebUtility.HtmlDecode(await RenderAsync(flow, shortNames: new Dictionary<Guid,string> { [reward.Id] = "Café gratis" }));
-        Assert.Contains("Café gratis", html); Assert.Contains("¡Recompensa desbloqueada!", html); Assert.DoesNotContain("Sello agregado", html);
+        Assert.Contains("Café gratis", html); Assert.Contains("¡Recompensa desbloqueada!", html); Assert.Contains("Sello agregado correctamente", html);
         Assert.Single(System.Text.RegularExpressions.Regex.Matches(html, ">Canjear recompensa</button>").Cast<System.Text.RegularExpressions.Match>());
-        Assert.True(html.IndexOf("Agregar sello", StringComparison.Ordinal) < html.IndexOf("¡Recompensa desbloqueada!", StringComparison.Ordinal));
+        Assert.True(html.IndexOf("¡Recompensa desbloqueada!", StringComparison.Ordinal) < html.IndexOf("Agregar sello extra", StringComparison.Ordinal));
     }
 
     [Fact]
@@ -217,13 +255,14 @@ public sealed class StampCashierRenderTests
             return result.ToHtmlString();
         });
     }
-    private sealed class Api(CashierStampState state, IReadOnlyList<CashierStampReward>? unlocked = null, CashierStampState? resultState = null) : IStampCashierApi
+    private sealed class Api(CashierStampState state, IReadOnlyList<CashierStampReward>? unlocked = null, CashierStampState? resultState = null, string? error = null) : IStampCashierApi
     {
         public int Calls { get; private set; }
         public Task<StampCall<CashierStampState>> ReadAsync(string serial) => Task.FromResult(new StampCall<CashierStampState>(state));
         public Task<StampCall<CashierStampResult>> ExecuteAsync(PendingStampOperation operation)
         {
             Calls++;
+            if (error is not null) return Task.FromResult(new StampCall<CashierStampResult>(null, error));
             return Task.FromResult(new StampCall<CashierStampResult>(new(resultState ?? state, unlocked ?? [])));
         }
     }

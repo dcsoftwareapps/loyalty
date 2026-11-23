@@ -31,6 +31,7 @@ builder.Services.AddScoped<IStampWalletRefreshService, AdminStampWalletRefreshSe
 builder.Services.AddScoped<AdminCurrentUserService>();
 builder.Services.AddScoped<LoyaltyCloud.Common.Services.ICurrentUserService>(services => services.GetRequiredService<AdminCurrentUserService>());
 builder.Services.AddScoped<AdminTenantContextInitializer>();
+builder.Services.AddScoped<RegistrationQrCodeGenerator>();
 builder.Services.AddScoped<CircuitHandler, AdminTenantCircuitHandler>();
 builder.Services.AddScoped(typeof(IPipelineBehavior<,>), typeof(AdminTenantContextBehavior<,>));
 

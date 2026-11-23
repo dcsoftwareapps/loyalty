@@ -60,7 +60,7 @@ public class Customer : Entity, ITenantOwned
         TenantId = tenantId;
         FullName = fullName.Trim();
         Email = email.Trim().ToLowerInvariant();
-        Phone = phone?.Trim();
+        Phone = string.IsNullOrWhiteSpace(phone) ? null : phone.Trim();
         NormalizedPhone = NormalizePhone(phone);
         DateOfBirth = dateOfBirth;
         ReferredBy = referredBy;
@@ -75,7 +75,7 @@ public class Customer : Entity, ITenantOwned
             throw new ArgumentException("Nombre requerido.", nameof(fullName));
 
         FullName = fullName.Trim();
-        Phone = phone?.Trim();
+        Phone = string.IsNullOrWhiteSpace(phone) ? null : phone.Trim();
         NormalizedPhone = NormalizePhone(phone);
     }
 

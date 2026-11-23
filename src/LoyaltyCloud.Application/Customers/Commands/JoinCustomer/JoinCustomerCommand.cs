@@ -6,12 +6,12 @@ namespace LoyaltyCloud.Application.Customers.Commands.JoinCustomer;
 public sealed record JoinCustomerCommand(
     string FirstName,
     string LastName,
-    string Phone, int? BirthdayDay = null, int? BirthdayMonth = null) : IRequest<Result<JoinCustomerResponse>>;
+    string? Phone = null, int? BirthdayDay = null, int? BirthdayMonth = null) : IRequest<Result<JoinCustomerResponse>>;
 
 public sealed record JoinCustomerResponse(
     Guid CustomerId,
     string SerialNumber,
     string FullName,
-    string Phone,
+    string? Phone,
     bool AlreadyExists,
     string Message);

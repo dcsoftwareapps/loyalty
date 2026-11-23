@@ -56,6 +56,34 @@ public sealed class GoogleStampWalletIntegrationTests : IntegrationTestBase
     }
 
     [Fact]
+    public async Task Public_stamp_registration_without_phone_can_create_and_update_google_wallet()
+    {
+        using var joined = await Client.PostAsJsonAsync($"/api/public/{TenantSlug}/join", new { FirstName = "Ana", LastName = "Optional" });
+        joined.EnsureSuccessStatusCode();
+        using var json = System.Text.Json.JsonDocument.Parse(await joined.Content.ReadAsStringAsync());
+        var serial = json.RootElement.GetProperty("serialNumber").GetString();
+        Assert.Equal(System.Text.Json.JsonValueKind.Null, json.RootElement.GetProperty("phone").ValueKind);
+        using var save = await Client.PostAsync($"/api/customers/{serial}/wallets/google/save-link", null);
+        save.EnsureSuccessStatusCode();
+        using (var scope = Factory.Services.CreateScope())
+        {
+            scope.ServiceProvider.GetRequiredService<IMutableTenantContext>().SetTenant(TenantId, TenantSlug);
+            var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+            var card = await db.LoyaltyCards.SingleAsync(c => c.SerialNumber == serial);
+            Assert.Null((await db.Customers.SingleAsync(c => c.Id == card.CustomerId)).Phone);
+            var cycle = await db.StampCycles.SingleAsync(c => c.LoyaltyCardSerialNumber == serial);
+            var program = await db.StampProgramVersions.SingleAsync(p => p.Id == cycle.StampProgramVersionId);
+            cycle.Earn(program, DateTime.UtcNow);
+            await db.SaveChangesAsync();
+        }
+        using var request = SignedSyncRequest($"/api/internal/stamps/google/{serial}/sync", TenantSlug);
+        using var response = await Client.SendAsync(request);
+        response.EnsureSuccessStatusCode();
+        Assert.True((await response.Content.ReadFromJsonAsync<GoogleStampWalletSyncResponse>())!.Synchronized);
+        Assert.Equal(3, Factory.GoogleWallet.StampObjects.Last().CurrentStamps);
+    }
+
+    [Fact]
     public async Task Customer_detail_shows_google_sync_without_counting_it_as_an_apple_device()
     {
         Guid customerId;

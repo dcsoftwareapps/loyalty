@@ -1226,7 +1226,7 @@ public sealed class AdminRoutingTests : IClassFixture<AdminRoutingTests.AdminWeb
         Assert.Contains("Configuration[\"Admin:PublicBaseUrl\"]", source);
         Assert.Contains("GetPublicAdminBaseUri()", source);
         Assert.Contains("{tenantSlug.Trim().ToLowerInvariant()}/join", source);
-        Assert.Contains("QrCodeSvgGenerator.GenerateDataUri(registrationUrl", source);
+        Assert.Contains("RegistrationQr.GenerateDataUriAsync(registrationUrl)", source);
         Assert.Contains("PrintQrAsync", source);
         Assert.Contains("window.print", source);
         Assert.Contains("BusinessName", source);

@@ -24,11 +24,11 @@ public sealed class JoinCustomerHandler : IRequestHandler<JoinCustomerCommand, R
 
     public async Task<Result<JoinCustomerResponse>> Handle(JoinCustomerCommand command, CancellationToken ct)
     {
-        var phone = CustomerPhoneNormalizer.Normalize(command.Phone);
-        if (string.IsNullOrWhiteSpace(phone))
-            return Result.Fail<JoinCustomerResponse>("El telefono es obligatorio.");
+        var phone = string.IsNullOrWhiteSpace(command.Phone) ? null : CustomerPhoneNormalizer.Normalize(command.Phone);
+        if (phone is not null && (phone.Length < 8 || command.Phone!.Length > 30))
+            return Result.Fail<JoinCustomerResponse>("El telefono debe incluir al menos 8 digitos y no exceder 30 caracteres.");
 
-        var existingCustomer = await _customers.GetByNormalizedPhoneAsync(phone, ct);
+        var existingCustomer = phone is null ? null : await _customers.GetByNormalizedPhoneAsync(phone, ct);
         if (existingCustomer is not null)
         {
             if (!existingCustomer.IsActive)
@@ -51,9 +51,11 @@ public sealed class JoinCustomerHandler : IRequestHandler<JoinCustomerCommand, R
         }
 
         var fullName = $"{command.FirstName.Trim()} {command.LastName.Trim()}".Trim();
+        // Anonymous registrations still need the existing internal email identity, never a fake phone.
+        var internalEmail = phone is null ? $"customer-{Guid.NewGuid():N}@loyaltycloud.local" : BuildInternalEmail(phone);
         var registerResult = await _sender.Send(new RegisterCustomerCommand(
             FullName: fullName,
-            Email: BuildInternalEmail(phone),
+            Email: internalEmail,
             DateOfBirth: command.BirthdayDay.HasValue && command.BirthdayMonth.HasValue
                 ? new DateTime(2000, command.BirthdayMonth.Value, command.BirthdayDay.Value) : Customer.BirthdayNotCaptured,
             Phone: phone,
@@ -61,13 +63,15 @@ public sealed class JoinCustomerHandler : IRequestHandler<JoinCustomerCommand, R
 
         if (registerResult.IsFailure)
         {
-            var recoveryResult = await TryRecoverExistingCustomerAsync(phone, command, ct);
+            var recoveryResult = phone is null ? null : await TryRecoverExistingCustomerAsync(phone, command, ct);
             return recoveryResult ?? Result.Fail<JoinCustomerResponse>(registerResult.Errors);
         }
 
-        var createdCustomer = await _customers.GetByNormalizedPhoneAsync(phone, ct);
+        var createdCustomer = phone is null
+            ? await _customers.GetByEmailAsync(internalEmail, ct)
+            : await _customers.GetByNormalizedPhoneAsync(phone, ct);
         if (createdCustomer is null)
-            return Result.Fail<JoinCustomerResponse>("El cliente fue registrado pero no pudo recuperarse por telefono.");
+            return Result.Fail<JoinCustomerResponse>("El cliente fue registrado pero no pudo consultarse.");
 
         return Result.Ok(new JoinCustomerResponse(
             CustomerId: createdCustomer.Id,

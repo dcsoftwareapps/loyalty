@@ -19,14 +19,16 @@ public sealed class GoogleWalletIntegrationTests : IntegrationTestBase
 
     public GoogleWalletIntegrationTests(CustomWebApplicationFactory factory) : base(factory) { }
 
-    [Fact]
-    public async Task SaveLink_ShouldCreateWalletIdempotently_AndAddPointsShouldSynchronizeObject()
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task SaveLink_ShouldCreateWalletIdempotently_AndAddPointsShouldSynchronizeObject(bool withoutPhone)
     {
         var registerResponse = await Client.PostAsJsonAsync($"/api/public/{TenantSlug}/join", new
         {
             firstName = "Google",
             lastName = "Wallet",
-            phone = "+52646" + Random.Shared.Next(1000000, 9999999)
+            phone = withoutPhone ? null : "+52646" + Random.Shared.Next(1000000, 9999999)
         });
         Assert.Equal(HttpStatusCode.OK, registerResponse.StatusCode);
 

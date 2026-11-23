@@ -1,0 +1,28 @@
+warning: in the working copy of 'src/LoyaltyCloud.Application/Customers/CustomerPhoneNormalizer.cs', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/LoyaltyCloud.Domain/Entities/Customer.cs', LF will be replaced by CRLF the next time Git touches it
+ .../Controllers/PublicJoinController.cs            |  4 [32m+[m[31m-[m
+ src/LoyaltyCloud.Admin/Pages/Join.razor            | 21 [32m++++[m[31m--[m
+ src/LoyaltyCloud.Admin/Pages/QuickHelp.razor       |  3 [32m+[m[31m-[m
+ src/LoyaltyCloud.Admin/Program.cs                  |  1 [32m+[m
+ .../Shared/StampCashierPanel.razor                 | 17 [32m+++[m[31m--[m
+ .../Interfaces/ITenantBrandingLogoService.cs       |  3 [32m+[m
+ .../Commands/JoinCustomer/JoinCustomerCommand.cs   |  4 [32m+[m[31m-[m
+ .../Commands/JoinCustomer/JoinCustomerHandler.cs   | 20 [32m+++[m[31m--[m
+ .../Commands/JoinCustomer/JoinCustomerValidator.cs |  4 [32m+[m[31m-[m
+ .../Customers/CustomerPhoneNormalizer.cs           |  3 [32m+[m[31m-[m
+ .../Components/Pages/Home.razor                    | 32 [32m+++++++[m[31m-[m
+ .../LoyaltyCloud.Cashier.csproj                    |  1 [32m+[m
+ src/LoyaltyCloud.Cashier/wwwroot/css/app.css       | 28 [32m+++++++[m
+ src/LoyaltyCloud.Domain/Entities/Customer.cs       |  4 [32m+[m[31m-[m
+ .../Repositories/CustomerRepository.cs             |  1 [32m+[m
+ .../Services/TenantBrandingLogoService.cs          | 86 [32m++++++++++++++++++++++[m
+ .../Application/JoinCustomerHandlerTests.cs        | 17 [32m+++++[m
+ .../Application/MemberWalletDataServiceTests.cs    |  2 [32m+[m
+ .../Integration/AdminRoutingTests.cs               |  2 [32m+[m[31m-[m
+ .../GoogleStampWalletIntegrationTests.cs           | 28 [32m+++++++[m
+ .../Integration/GoogleWalletIntegrationTests.cs    |  8 [32m+[m[31m-[m
+ .../Integration/PublicJoinTenantRoutingTests.cs    | 25 [32m++++++[m[31m-[m
+ .../Integration/StampCashierRenderTests.cs         | 55 [32m++++++++++++[m[31m--[m
+ .../Integration/StampSignedPassTests.cs            |  7 [32m+[m[31m-[m
+ .../WalletPassJsonUpdateStructureTests.cs          | 15 [32m++++[m
+ 25 files changed, 343 insertions(+), 48 deletions(-)

@@ -40,20 +40,24 @@
                     Este cliente tiene recompensas pendientes. Puedes canjear una recompensa o agregar un sello.
                 </div>
             }
-            var earnIntent = Flow.EarnIntentKey;
-            <button @key="earnIntent" class="@PrimaryClass" disabled="@(Flow.Busy || Flow.Pending is not null || scanning || confirmation is not null)" @onclick="@(() => EarnAsync(earnIntent))">Agregar sello</button>
-            @if (Flow.Unlocked.Count > 0)
+            @if (EarnSucceeded && Flow.Unlocked.Count > 0)
             {
                 <div class="kb-form-success stamp-unlock" role="status" aria-live="polite" aria-atomic="true">
+                    <strong><span aria-hidden="true">✓ </span>Sello agregado correctamente</strong>
                     <strong>🎁 ¡Recompensa desbloqueada!</strong>
                     @foreach (var reward in Flow.Unlocked) { <p>@UnlockName(reward)</p> }
                     @if (Flow.Message == "¡Tarjeta completada!") { <p>@Flow.Message</p> }
                 </div>
             }
-            else if (Flow.Message is not null)
+            else if (Flow.Message is not null && Flow.Error is null)
             {
-                <div class="kb-form-success stamp-feedback" role="status" aria-live="polite" aria-atomic="true"><span aria-hidden="true">✓ </span>@Flow.Message</div>
+                <div class="kb-form-success stamp-feedback" role="status" aria-live="polite" aria-atomic="true">
+                    <span aria-hidden="true">✓ </span>@(EarnSucceeded ? "Sello agregado correctamente" : Flow.Message)
+                    @if (EarnSucceeded && Flow.Message == "¡Tarjeta completada!") { <p>@Flow.Message</p> }
+                </div>
             }
+            var earnIntent = Flow.EarnIntentKey;
+            <button @key="earnIntent" class="@(EarnSucceeded ? $"{SecondaryClass} stamp-extra-earn" : PrimaryClass)" disabled="@(Flow.Busy || Flow.Pending is not null || scanning || confirmation is not null)" @onclick="@(() => EarnAsync(earnIntent))">@if (EarnSucceeded) { <span aria-hidden="true">+</span> }@(EarnSucceeded ? "Agregar sello extra" : "Agregar sello")</button>
             @if (Flow.State.AvailableRewards.Count > 0 || Flow.State.CycleRewards?.Count > 0) { <h3>Recompensas</h3> }
             @foreach (var group in Flow.State.AvailableRewards.GroupBy(r => new { r.Name, r.Description, r.RequiredStamps }))
             {
@@ -122,6 +126,7 @@
 .operation-section > h2 { font:inherit; font-size:1.08rem; font-weight:800; }
 .operation-section .stamp-manual-entry .input { width:100%; box-sizing:border-box; }
 .operation-section > button { margin-top:14px; }
+button.stamp-extra-earn { display:inline-flex; align-items:center; justify-content:center; gap:8px; width:auto; max-width:100%; min-height:48px; margin-top:14px; padding:12px 18px; font-size:1rem; justify-self:start; }
 </style>
 
 @code {
@@ -137,6 +142,8 @@
     private string PrimaryClass => Mobile ? "primary-button" : "kb-btn kb-btn--primary kb-btn--large kb-btn--block";
     private string SecondaryClass => Mobile ? "secondary-button" : "kb-btn kb-btn--ghost kb-btn--large";
     private string InputClass => Mobile ? "input" : "";
+    private bool EarnSucceeded => Flow.Error is null && Flow.Pending is null &&
+        (Flow.Message is "Sello agregado" or "¡Recompensa desbloqueada!" or "¡Tarjeta completada!");
     private string serial = "";
     private string? confirmation;
     private Guid? rewardId;

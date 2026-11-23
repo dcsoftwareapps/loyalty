@@ -18,6 +18,21 @@ namespace LoyaltyCloud.Tests.Integration;
 public sealed class WalletPassJsonUpdateStructureTests
 {
     [Fact]
+    public void Apple_pass_creation_and_updated_points_do_not_require_a_phone()
+    {
+        var now = DateTime.UtcNow;
+        var customer = new Customer(Guid.NewGuid(), Guid.NewGuid(), "Ana Lopez", "ana@example.test",
+            Customer.BirthdayNotCaptured, now);
+        var card = new LoyaltyCard(Guid.NewGuid(), customer.TenantId, customer.Id, "KB-NOPHONE", now);
+        var before = BuildPassJson(card, customer);
+        card.EarnPoints(10, TransactionType.Purchase, ProgramConfigSnapshot.FromEntries([]), new FixedClock(now));
+        var after = BuildPassJson(card, customer);
+        Assert.Null(customer.Phone);
+        Assert.Equal(before["serialNumber"]!.GetValue<string>(), after["serialNumber"]!.GetValue<string>());
+        Assert.Equal("10 pts", SingleField(after, "points")["value"]!.GetValue<string>());
+    }
+
+    [Fact]
     [Trait("Category", "WalletProductionUpdate")]
     public void Pass_json_keeps_identity_and_points_key_stable_when_points_change()
     {

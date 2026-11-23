@@ -19,9 +19,9 @@ public sealed class JoinCustomerValidator : AbstractValidator<JoinCustomerComman
                 && x.BirthdayDay <= DateTime.DaysInMonth(2000, x.BirthdayMonth.Value)))
             .WithMessage("Selecciona un día y mes de cumpleaños válidos o deja ambos vacíos.");
         RuleFor(x => x.Phone)
-            .NotEmpty().WithMessage("El telefono es obligatorio.")
             .Must(phone => CustomerPhoneNormalizer.Normalize(phone).Length >= 8)
             .WithMessage("El telefono debe incluir al menos 8 digitos.")
-            .MaximumLength(30);
+            .MaximumLength(30)
+            .When(x => !string.IsNullOrWhiteSpace(x.Phone));
     }
 }

@@ -12,6 +12,23 @@ namespace LoyaltyCloud.Tests.Application;
 
 public sealed class JoinCustomerHandlerTests
 {
+    [Theory]
+    [InlineData(null)] [InlineData("")] [InlineData("   ")]
+    public async Task Handle_without_phone_never_looks_up_a_phone_or_recovers_on_failure(string? phone)
+    {
+        var customers = new Mock<ICustomerRepository>(MockBehavior.Strict);
+        var cards = new Mock<ILoyaltyCardRepository>(MockBehavior.Strict);
+        var sender = new Mock<ISender>();
+        sender.Setup(s => s.Send(It.Is<RegisterCustomerCommand>(c => c.Phone == null), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(Result.Fail<RegisterCustomerResponse>("Registro no disponible."));
+        var handler = new JoinCustomerHandler(customers.Object, cards.Object, sender.Object);
+        var result = await handler.Handle(new JoinCustomerCommand("Ana", "Lopez", phone), CancellationToken.None);
+        Assert.True(result.IsFailure);
+        Assert.Equal("Registro no disponible.", result.Error);
+        customers.VerifyNoOtherCalls();
+        cards.VerifyNoOtherCalls();
+    }
+
     [Fact]
     public async Task Handle_ShouldRecoverExistingCustomer_WhenRegisterHitsConcurrentPhoneDuplicateAndNameMatches()
     {

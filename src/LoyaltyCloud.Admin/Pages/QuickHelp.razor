@@ -9,6 +9,7 @@
 @using Microsoft.Extensions.Configuration
 @inject AuthenticationStateProvider AuthenticationStateProvider
 @inject ITenantBrandingReadService Branding
+@inject RegistrationQrCodeGenerator RegistrationQr
 @inject ITenantProgramReadService Programs
 @inject AdminTenantContextInitializer TenantInitializer
 @inject IConfiguration Configuration
@@ -242,7 +243,7 @@
         if (!string.IsNullOrWhiteSpace(tenantSlug))
         {
             registrationUrl = new Uri(GetPublicAdminBaseUri(), $"{tenantSlug.Trim().ToLowerInvariant()}/join").ToString();
-            registrationQrDataUri = QrCodeSvgGenerator.GenerateDataUri(registrationUrl, scale: 7);
+            registrationQrDataUri = await RegistrationQr.GenerateDataUriAsync(registrationUrl);
             branding = await Branding.GetCurrentAsync();
         }
     }

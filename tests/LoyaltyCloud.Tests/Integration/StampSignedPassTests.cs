@@ -23,12 +23,13 @@ namespace LoyaltyCloud.Tests.Integration;
 public sealed class StampSignedPassTests
 {
     [Theory]
-    [InlineData(2, false)] [InlineData(10, false)] [InlineData(3, true)]
-    public async Task Production_generator_signs_complete_stamps_package_without_any_points_reads(int progress, bool hasMessage)
+    [InlineData(2, false, "6465550001")] [InlineData(10, false, "6465550001")] [InlineData(3, true, "6465550001")]
+    [InlineData(2, false, null)] [InlineData(10, false, null)] [InlineData(3, true, null)]
+    public async Task Production_generator_signs_complete_stamps_package_without_any_points_reads(int progress, bool hasMessage, string? phone)
     {
         var id = Guid.NewGuid(); var now = DateTime.UtcNow;
         var context = new TenantContext(); context.SetTenant(id, "test-stamps");
-        var customer = new Customer(Guid.NewGuid(), id, "Ana Test", "internal@example.local", new DateTime(1990, 1, 1), now, "6465550001");
+        var customer = new Customer(Guid.NewGuid(), id, "Ana Test", "internal@example.local", new DateTime(1990, 1, 1), now, phone);
         var card = new LoyaltyCard(Guid.NewGuid(), id, customer.Id, "ST-TEST0001", now);
         var branding = new TenantWalletBrandingDto(id, "test-stamps", "Test", "Test", "Tarjeta de sellos",
             "rgb(255,255,255)", "rgb(0,0,0)", "rgb(45,58,64)", "#FFFFFF", null, null, 100, "CustomerName", null,
