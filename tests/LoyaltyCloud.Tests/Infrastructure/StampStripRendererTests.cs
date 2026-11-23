@@ -23,8 +23,7 @@ public sealed class StampStripRendererTests
         for (var i = 0; i < 3; i++) Assert.Equal(unmodified[i].Bytes, custom[i].Bytes);
         var fallback = StampStripRenderer.Render(state with { Rewards = [reward with { UpcomingImage = null }] }, "#FFFFFF");
         using var gray = Image.Load<Rgba32>(fallback[0].Bytes);
-        Assert.Equal(gray[318, 104].R, gray[318, 104].G);
-        Assert.Equal(gray[318, 104].G, gray[318, 104].B);
+        Assert.True(HasMutedArtwork(gray));
         Assert.NotEqual(custom[0].Bytes, fallback[0].Bytes);
         foreach (var status in new[] { StampWalletRewardState.Available, StampWalletRewardState.Redeemed })
         {
@@ -35,35 +34,92 @@ public sealed class StampStripRendererTests
     }
 
     [Theory]
-    [InlineData(false)]
-    [InlineData(true)]
-    public void Ten_stamp_grid_uses_normal_art_except_at_explicit_reward_milestones(bool intermediateReward)
+    [InlineData(9, 0, false)] [InlineData(9, 3, false)] [InlineData(9, 9, false)]
+    [InlineData(5, 0, false)] [InlineData(5, 3, false)] [InlineData(5, 5, false)]
+    [InlineData(9, 4, true)] [InlineData(5, 2, true)] [InlineData(12, 6, true)]
+    public void Every_stamp_has_its_own_artwork_and_rewards_are_additional_milestone_cells(int total, int progress, bool intermediate)
+    {
+        AssertIndependentCells(total, progress, intermediate ? [total / 2, total] : [total]);
+    }
+
+    [Theory]
+    [InlineData(2)] [InlineData(3)] [InlineData(4)] [InlineData(5)] [InlineData(6)]
+    [InlineData(7)] [InlineData(8)] [InlineData(9)] [InlineData(10)] [InlineData(11)] [InlineData(12)]
+    public void All_supported_totals_fit_even_with_a_reward_at_every_milestone(int total)
+    {
+        AssertIndependentCells(total, total / 2, Enumerable.Range(1, total).ToArray());
+    }
+
+    private static void AssertIndependentCells(int total, int progress, int[] thresholds)
     {
         var filled = new Rgba32(20, 70, 220);
         var empty = new Rgba32(30, 180, 60);
         var reward = new Rgba32(220, 40, 80);
-        var rewards = new List<StampWalletReward> { new(10, Guid.NewGuid(), Integration.StampVisualAssetsTests.Png(50, 50, reward), StampWalletRewardState.Upcoming) };
-        if (intermediateReward) rewards.Add(new(5, Guid.NewGuid(), null, StampWalletRewardState.Upcoming));
-        var state = new StampWalletProjection(Guid.NewGuid(), Guid.NewGuid(), 4, 10,
+        var art = Integration.StampVisualAssetsTests.Png(50, 50, reward);
+        var rewards = thresholds.Select(n => new StampWalletReward(n, Guid.NewGuid(), art,
+            progress >= n ? StampWalletRewardState.Available : StampWalletRewardState.Upcoming, art)).ToList();
+        var state = new StampWalletProjection(Guid.NewGuid(), Guid.NewGuid(), progress, total,
             Integration.StampVisualAssetsTests.Png(50, 50, empty), Integration.StampVisualAssetsTests.Png(50, 50, filled), rewards);
-
-        foreach (var asset in StampStripRenderer.Render(state, "#FFFFFF").Select((asset, index) => (asset, scale: index + 1)))
+        var before = System.Text.Json.JsonSerializer.Serialize(state);
+        foreach (var asset in StampStripRenderer.Render(state, "#FFFFFF"))
         {
-            using var png = Image.Load<Rgba32>(asset.asset.Bytes);
-            // Centers of the fixed 5-column/two-row grid for MaxStamps=10.
-            for (var position = 1; position <= 10; position++)
+            using var png = Image.Load<Rgba32>(asset.Bytes);
+            // Count connected solid-color images, independently of the renderer's grid arithmetic.
+            var filledCells = ColorRegions(png, filled);
+            var emptyCells = ColorRegions(png, empty);
+            var rewardCells = ColorRegions(png, reward);
+            Assert.Equal(progress, filledCells.Count);
+            Assert.Equal(total - progress, emptyCells.Count);
+            Assert.Equal(thresholds.Length, rewardCells.Count);
+            Assert.Equal(total + thresholds.Length, filledCells.Count + emptyCells.Count + rewardCells.Count);
+            var ordered = filledCells.Concat(emptyCells).Select(p => (Position: p, IsReward: false))
+                .Concat(rewardCells.Select(p => (Position: p, IsReward: true)))
+                .OrderBy(x => x.Position.Y).ThenBy(x => x.Position.X).ToList();
+            var stampsSeen = 0; var rewardIndex = 0;
+            foreach (var cell in ordered)
+                if (cell.IsReward) Assert.Equal(thresholds[rewardIndex++], stampsSeen);
+                else stampsSeen++;
+        }
+        Assert.Equal(before, System.Text.Json.JsonSerializer.Serialize(state));
+    }
+
+    private static List<Point> ColorRegions(Image<Rgba32> image, Rgba32 color)
+    {
+        var regions = new List<Point>();
+        var visited = new bool[image.Width * image.Height];
+        var queue = new Queue<Point>();
+        for (var y = 0; y < image.Height; y++)
+        for (var x = 0; x < image.Width; x++)
+        {
+            if (visited[y * image.Width + x] || image[x, y] != color) continue;
+            regions.Add(new Point(x, y));
+            Visit(x, y);
+            while (queue.TryDequeue(out var point))
             {
-                var x = (int)Math.Round((57.5 + ((position - 1) % 5) * 65) * asset.scale);
-                var y = (int)Math.Round((39.5 + ((position - 1) / 5) * 65) * asset.scale);
-                var pixel = png[x, y];
-                if (position == 10 || intermediateReward && position == 5)
-                {
-                    Assert.Equal(pixel.R, pixel.G); Assert.Equal(pixel.G, pixel.B);
-                    Assert.NotEqual(new Rgba32(255, 255, 255), pixel);
-                }
-                else Assert.Equal(position <= 4 ? filled : empty, pixel);
+                Visit(point.X - 1, point.Y); Visit(point.X + 1, point.Y);
+                Visit(point.X, point.Y - 1); Visit(point.X, point.Y + 1);
             }
         }
+        return regions;
+        void Visit(int x, int y)
+        {
+            if (x < 0 || y < 0 || x >= image.Width || y >= image.Height) return;
+            var index = y * image.Width + x;
+            if (visited[index] || image[x, y] != color) return;
+            visited[index] = true;
+            queue.Enqueue(new Point(x, y));
+        }
+    }
+
+    private static bool HasMutedArtwork(Image<Rgba32> image)
+    {
+        for (var y = 0; y < image.Height; y++)
+        for (var x = 0; x < image.Width; x++)
+        {
+            var p = image[x, y];
+            if (p.R == p.G && p.G == p.B && p.R < 200 && p.A == 255) return true;
+        }
+        return false;
     }
 
     [Theory]
@@ -112,14 +168,14 @@ public sealed class StampStripRendererTests
         {
             var scale = n + 1;
             using var next = Image.Load<Rgba32>(upcoming[n].Bytes); using var ready = Image.Load<Rgba32>(available[n].Bytes); using var used = Image.Load<Rgba32>(redeemed[n].Bytes);
-            var gray = next[145 * scale, 60 * scale]; Assert.Equal(gray.R, gray.G); Assert.Equal(gray.G, gray.B);
-            Assert.Equal(new Rgba32(220, 40, 80), ready[145 * scale, 60 * scale]);
-            Assert.Equal(gray, used[145 * scale, 60 * scale]);
+            var gray = next[187 * scale, 60 * scale]; Assert.Equal(gray.R, gray.G); Assert.Equal(gray.G, gray.B);
+            Assert.Equal(new Rgba32(220, 40, 80), ready[187 * scale, 60 * scale]);
+            Assert.Equal(gray, used[187 * scale, 60 * scale]);
             var differences = 0;
             for (var y = 0; y < next.Height; y++) for (var x = 0; x < next.Width; x++) if (next[x, y] != used[x, y]) differences++;
             Assert.InRange(differences, 30 * scale * scale, 350 * scale * scale);
             // No lock or other overlay anywhere within the upcoming reward's uniform art.
-            for (var y = 50 * scale; y < 94 * scale; y++) for (var x = 130 * scale; x < 170 * scale; x++) Assert.Equal(gray, next[x, y]);
+            for (var y = 50 * scale; y < 70 * scale; y++) for (var x = 175 * scale; x < 190 * scale; x++) Assert.Equal(gray, next[x, y]);
         }
     }
 

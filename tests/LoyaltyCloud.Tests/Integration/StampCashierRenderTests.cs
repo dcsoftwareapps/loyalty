@@ -12,6 +12,46 @@ namespace LoyaltyCloud.Tests.Integration;
 [Trait("Category", "StampCashier")]
 public sealed class StampCashierRenderTests
 {
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Scanned_pending_reward_shows_redeem_and_explicit_earn_in_web_and_mobile(bool mobile)
+    {
+        var reward = new CashierStampReward(Guid.NewGuid(), "Bebida gratis", null, 10, DateTime.UtcNow);
+        var state = new CashierStampState("KB-TEST", "Ana", Guid.NewGuid(), 1, 10, 10, true, [reward]);
+        var api = new Api(state);
+        var flow = new StampCashierFlow(api, new Store(), "a");
+        await flow.AcceptScanAsync("KB-TEST");
+        var html = System.Net.WebUtility.HtmlDecode(await RenderAsync(flow, mobile));
+        Assert.Equal(0, api.Calls);
+        Assert.Contains("recompensas pendientes", html);
+        Assert.Contains("Canjear recompensa", html);
+        Assert.Contains("Agregar sello", html);
+        Assert.Contains("10 de 10 sellos", html);
+        Assert.DoesNotContain("¡Recompensa desbloqueada!", html);
+        Assert.DoesNotMatch("<button[^>]*disabled[^>]*>Agregar sello</button>", html);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Final_redeem_renders_zero_progress_from_backend_without_issuing_earn(bool mobile)
+    {
+        var reward = new CashierStampReward(Guid.NewGuid(), "Bebida", null, 10, DateTime.UtcNow);
+        var before = new CashierStampState("KB-TEST", "Ana", Guid.NewGuid(), 1, 10, 10, true, [reward]);
+        var after = before with { CycleId = Guid.NewGuid(), CycleSequence = 2, CurrentStamps = 0,
+            CycleCompleted = false, AvailableRewards = [] };
+        var api = new Api(before, resultState: after);
+        var flow = new StampCashierFlow(api, new Store(), "a");
+        await flow.AcceptScanAsync("KB-TEST");
+        await flow.BeginAsync("Redeem", reward.Id);
+        var html = System.Net.WebUtility.HtmlDecode(await RenderAsync(flow, mobile));
+        Assert.Equal(1, api.Calls);
+        Assert.Contains("0 de 10 sellos", html);
+        Assert.Contains("Recompensa canjeada", html);
+        Assert.DoesNotContain("stamp-dot filled", html);
+    }
+
     [Fact]
     public async Task Shared_panel_renders_grouped_rewards_progress_and_backend_reversal_permission()
     {
@@ -66,7 +106,7 @@ public sealed class StampCashierRenderTests
         var reward = new CashierStampReward(Guid.NewGuid(), "Café", null, 5, DateTime.UtcNow);
         var state = new CashierStampState("KB-TEST", "Ana", Guid.NewGuid(), 1, 5, 10, false, [reward], true,
             [new(Guid.NewGuid(), "Bebida", null, 10, false), new(Guid.NewGuid(), "Galleta", null, 3, true)]);
-        var flow = new StampCashierFlow(new Api(state, [reward]), new Store(), "a"); await flow.AcceptScanAsync("KB-TEST");
+        var flow = new StampCashierFlow(new Api(state, [reward]), new Store(), "a"); await flow.AcceptScanAsync("KB-TEST"); await flow.BeginAsync("Earn");
         var html = System.Net.WebUtility.HtmlDecode(await RenderAsync(flow));
         Assert.Contains("¡Recompensa desbloqueada!", html); Assert.Contains("Café", html);
         Assert.Contains("Al llegar a 10 sellos", html); Assert.Contains("Ya utilizada", html);
@@ -105,10 +145,10 @@ public sealed class StampCashierRenderTests
     {
         var reward = new CashierStampReward(Guid.NewGuid(), "Nombre largo histórico", null, 5, DateTime.UtcNow);
         var state = new CashierStampState("KB-TEST", "Daniel", Guid.NewGuid(), 1, 5, 10, false, [reward]);
-        var flow = new StampCashierFlow(new Api(state, [reward]), new Store(), "a"); await flow.AcceptScanAsync("KB-TEST");
+        var flow = new StampCashierFlow(new Api(state, [reward]), new Store(), "a"); await flow.AcceptScanAsync("KB-TEST"); await flow.BeginAsync("Earn");
         var html = System.Net.WebUtility.HtmlDecode(await RenderAsync(flow, shortNames: new Dictionary<Guid,string> { [reward.Id] = "Café gratis" }));
         Assert.Contains("Café gratis", html); Assert.Contains("¡Recompensa desbloqueada!", html); Assert.DoesNotContain("Sello agregado", html);
-        Assert.Single(System.Text.RegularExpressions.Regex.Matches(html, ">Canjear</button>").Cast<System.Text.RegularExpressions.Match>());
+        Assert.Single(System.Text.RegularExpressions.Regex.Matches(html, ">Canjear recompensa</button>").Cast<System.Text.RegularExpressions.Match>());
         Assert.True(html.IndexOf("Agregar sello", StringComparison.Ordinal) < html.IndexOf("¡Recompensa desbloqueada!", StringComparison.Ordinal));
     }
 
@@ -121,7 +161,7 @@ public sealed class StampCashierRenderTests
         var flow = new StampCashierFlow(new Api(state), new Store(), "a"); await flow.LookupAsync("KB-TEST");
         var html = System.Net.WebUtility.HtmlDecode(await RenderAsync(flow));
         Assert.Contains("2 de 10 sellos", html); Assert.Contains("Disponible", html); Assert.Contains("Al llegar a 5 sellos", html); Assert.Contains("Al llegar a 10 sellos", html);
-        Assert.Single(System.Text.RegularExpressions.Regex.Matches(html, ">Canjear</button>").Cast<System.Text.RegularExpressions.Match>());
+        Assert.Single(System.Text.RegularExpressions.Regex.Matches(html, ">Canjear recompensa</button>").Cast<System.Text.RegularExpressions.Match>());
         Assert.DoesNotContain("Cancelar último sello", html);
     }
 
@@ -177,10 +217,15 @@ public sealed class StampCashierRenderTests
             return result.ToHtmlString();
         });
     }
-    private sealed class Api(CashierStampState state, IReadOnlyList<CashierStampReward>? unlocked = null) : IStampCashierApi
+    private sealed class Api(CashierStampState state, IReadOnlyList<CashierStampReward>? unlocked = null, CashierStampState? resultState = null) : IStampCashierApi
     {
+        public int Calls { get; private set; }
         public Task<StampCall<CashierStampState>> ReadAsync(string serial) => Task.FromResult(new StampCall<CashierStampState>(state));
-        public Task<StampCall<CashierStampResult>> ExecuteAsync(PendingStampOperation operation) => Task.FromResult(new StampCall<CashierStampResult>(new(state, unlocked ?? [])));
+        public Task<StampCall<CashierStampResult>> ExecuteAsync(PendingStampOperation operation)
+        {
+            Calls++;
+            return Task.FromResult(new StampCall<CashierStampResult>(new(resultState ?? state, unlocked ?? [])));
+        }
     }
     private sealed class Store : IStampPendingStore
     {

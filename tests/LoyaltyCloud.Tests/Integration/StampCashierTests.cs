@@ -7,6 +7,54 @@ namespace LoyaltyCloud.Tests.Integration;
 public sealed class StampCashierTests
 {
     [Fact]
+    public async Task Scan_without_available_rewards_automatically_earns_once()
+    {
+        var api = new FakeApi();
+        var flow = new StampCashierFlow(api, new Store(), "a");
+        await flow.AcceptScanAsync("KB-TEST");
+        Assert.Equal("Earn", Assert.Single(api.Calls).Operation);
+        Assert.Equal("Sello agregado", flow.Message);
+    }
+
+    [Theory]
+    [InlineData(1)]
+    [InlineData(2)]
+    public async Task Scan_with_available_rewards_only_reads_and_allows_explicit_earn(int count)
+    {
+        var rewards = Enumerable.Range(0, count).Select(_ =>
+            new CashierStampReward(Guid.NewGuid(), "Bebida gratis", null, 10, DateTime.UtcNow)).ToList();
+        var api = new FakeApi { Completed = true, Available = rewards };
+        var flow = new StampCashierFlow(api, new Store(), "a");
+        await flow.AcceptScanAsync("KB-TEST");
+        await flow.AcceptScanAsync("KB-TEST");
+        Assert.Empty(api.Calls);
+        Assert.Equal(10, flow.State!.CurrentStamps);
+        Assert.Equal(rewards, flow.State.AvailableRewards);
+        Assert.Empty(flow.Unlocked);
+        Assert.Null(flow.Message);
+        Assert.Null(flow.Pending);
+        Assert.True(flow.ScanConsumed);
+        var intent = flow.EarnIntentKey;
+        await flow.BeginEarnAsync(intent);
+        await flow.BeginEarnAsync(intent);
+        Assert.Equal("Earn", Assert.Single(api.Calls).Operation);
+    }
+
+    [Fact]
+    public async Task Scanned_reward_can_be_redeemed_without_an_implicit_earn()
+    {
+        var reward = new CashierStampReward(Guid.NewGuid(), "Bebida", null, 5, DateTime.UtcNow);
+        var api = new FakeApi { Available = [reward] };
+        var flow = new StampCashierFlow(api, new Store(), "a");
+        await flow.AcceptScanAsync("KB-TEST");
+        await flow.BeginAsync("Redeem", reward.Id);
+        var call = Assert.Single(api.Calls);
+        Assert.Equal("Redeem", call.Operation);
+        Assert.Equal(reward.Id, call.RewardId);
+        Assert.Equal("Recompensa canjeada", flow.Message);
+    }
+
+    [Fact]
     public async Task Concurrent_callbacks_are_ignored_while_customer_is_resolving()
     {
         var pause = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
@@ -180,6 +228,7 @@ public sealed class StampCashierTests
     }
     private sealed class FakeApi : IStampCashierApi
     {
+        public IReadOnlyList<CashierStampReward> Available { get; set; } = [];
         public bool Uncertain { get; set; }
         public bool Completed { get; set; }
         public bool Unlock { get; set; }
@@ -188,7 +237,7 @@ public sealed class StampCashierTests
         public Task? PauseExecute { get; set; }
         public List<PendingStampOperation> Calls { get; } = [];
         private CashierStampState State(string serial) => new(serial, "Cliente", Guid.NewGuid(), 1,
-            Completed ? 10 : 5, 10, Completed, [], true);
+            Completed ? 10 : 5, 10, Completed, Available, true);
         public async Task<StampCall<CashierStampState>> ReadAsync(string serial)
         {
             if (PauseRead is not null) await PauseRead;

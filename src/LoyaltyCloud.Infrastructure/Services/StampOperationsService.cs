@@ -131,6 +131,16 @@ internal sealed class StampOperationsService(AppDbContext db, ITenantContext ten
                 if (reward is null) return Result.Fail<StampOperationResult>("Recompensa no disponible para este cliente.");
                 if (reward.Status != EarnedStampRewardStatus.Available)
                     return Result.Fail<StampOperationResult>("Conflict: La recompensa ya no esta disponible.");
+                // Only the final reward of the latest completed cycle opens a fresh card.
+                // Historical/intermediate rewards must never reset legitimate later progress.
+                if (reward.StampCycleId == cycle.Id && cycle.CompletedAt.HasValue
+                    && reward.RequiredStamps == rules.MaxStamps)
+                {
+                    var active = await db.StampProgramVersions.SingleOrDefaultAsync(x => x.IsActive, ct);
+                    if (active is null) return Result.Fail<StampOperationResult>("El programa no tiene configuracion activa.");
+                    cycle = new StampCycle(Guid.NewGuid(), card, active, now, checked(cycle.Sequence + 1));
+                    db.Add(cycle); // Sequence > 1 starts at zero; no Earn or Welcome is issued.
+                }
                 reward.Redeem(userId, now);
                 eventContext?.Suppress();
             }

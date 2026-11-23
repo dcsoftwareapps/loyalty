@@ -1,6 +1,7 @@
 using System.Net;
 using System.Net.Http.Json;
 using LoyaltyCloud.Application.Common.Interfaces;
+using LoyaltyCloud.Application.Stamps;
 using LoyaltyCloud.Application.Common.Wallet;
 using LoyaltyCloud.Common.Security;
 using LoyaltyCloud.Domain.Entities;
@@ -147,7 +148,16 @@ public sealed class GoogleStampWalletIntegrationTests : IntegrationTestBase
         var progressResponse = await Client.GetAsync(progressUri.PathAndQuery);
         Assert.Equal(HttpStatusCode.OK, progressResponse.StatusCode);
         Assert.Equal("image/png", progressResponse.Content.Headers.ContentType?.MediaType);
-        Assert.NotEmpty(await progressResponse.Content.ReadAsByteArrayAsync());
+        var progressBytes = await progressResponse.Content.ReadAsByteArrayAsync();
+        Assert.NotEmpty(progressBytes);
+        using (var renderScope = Factory.Services.CreateScope())
+        {
+            renderScope.ServiceProvider.GetRequiredService<IMutableTenantContext>().SetTenant(TenantId, TenantSlug);
+            var renderer = renderScope.ServiceProvider.GetRequiredService<IStampWalletProjectionService>();
+            var projection = await renderer.ReadAsync(Serial);
+            var branding = await renderScope.ServiceProvider.GetRequiredService<ITenantWalletBrandingReadService>().GetCurrentAsync();
+            Assert.Equal(renderer.Render(projection, branding.BackgroundHex).Single(x => x.Name == "strip@3x.png").Bytes, progressBytes);
+        }
 
         using (var scope = Factory.Services.CreateScope())
         {

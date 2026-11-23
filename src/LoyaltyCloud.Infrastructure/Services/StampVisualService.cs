@@ -81,22 +81,25 @@ internal sealed class StampVisualService(AppDbContext db, ITenantContext tenantC
             StampImageKind.Filled => config?.FilledStampBlobName,
             _ => config?.EmptyStampBlobName
         };
-        if (png is null && currentBlob is null) return Result.Ok();
-        if (png is not null && currentBlob is not null)
+        var unchanged = png is null && currentBlob is null;
+        if (!unchanged && png is not null && currentBlob is not null)
         {
             var currentImage = await assets.ReadAsync(tenantId, currentBlob, ct);
-            if (currentImage is not null && png.AsSpan().SequenceEqual(currentImage)) return Result.Ok();
+            unchanged = currentImage is not null && png.AsSpan().SequenceEqual(currentImage);
         }
-        var blob = png is null ? null : await assets.UploadAsync(tenantId, png, ct);
-        if (identity is not null)
+        if (!unchanged)
         {
-            if (kind == StampImageKind.UpcomingReward) identity.SetUpcomingImage(blob);
-            else identity.SetImage(blob);
-        }
-        else
-        {
-            if (config is null) { config = new(tenantId); db.Add(config); }
-            config.SetImage(kind == StampImageKind.Filled, blob);
+            var blob = png is null ? null : await assets.UploadAsync(tenantId, png, ct);
+            if (identity is not null)
+            {
+                if (kind == StampImageKind.UpcomingReward) identity.SetUpcomingImage(blob);
+                else identity.SetImage(blob);
+            }
+            else
+            {
+                if (config is null) { config = new(tenantId); db.Add(config); }
+                config.SetImage(kind == StampImageKind.Filled, blob);
+            }
         }
         await db.Database.CreateExecutionStrategy().ExecuteAsync(async () =>
         {
@@ -106,6 +109,8 @@ internal sealed class StampVisualService(AppDbContext db, ITenantContext tenantC
             await db.SaveChangesAsync(ct);
             await tx.CommitAsync(ct);
         });
+        // An unchanged image still suppresses stale Wallet event context, as before this fix.
+        if (unchanged) return Result.Ok();
         // The visual change is committed before either Wallet provider is contacted.
         try
         {

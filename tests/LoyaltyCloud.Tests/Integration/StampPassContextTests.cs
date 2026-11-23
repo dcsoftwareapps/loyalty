@@ -39,6 +39,42 @@ public sealed class StampPassContextTests
         sp => sp.GetRequiredService<IStampWalletProjectionService>().ReadAsync(serial), authenticate: false);
 
     [Fact]
+    public async Task Final_redemption_projects_empty_next_cycle_and_retains_redeemed_history_without_earn_event()
+    {
+        var clock = new Clock(); await using var env = await Create(clock);
+        var (id, serial) = await Setup(env, welcome: 1);
+        await env.SendAsOperatorAsync(id, Slug, new EarnStampCommand(serial, "two"));
+        var completed = await env.SendAsOperatorAsync(id, Slug, new EarnStampCommand(serial, "three"));
+        var reward = Assert.Single(completed.Value.UnlockedRewards);
+        var command = new RedeemStampRewardCommand(serial, reward.Id, "final-redeem");
+        var redeemed = await env.SendAsOperatorAsync(id, Slug, command);
+        Assert.True(redeemed.IsSuccess, redeemed.Error);
+        for (var read = 0; read < 2; read++)
+        {
+            var pass = await Read(env, id, serial);
+            Assert.Equal(0, pass.CurrentStamps);
+            Assert.Equal(2, pass.CycleSequence);
+            Assert.Null(pass.Event);
+            Assert.All(pass.Rewards, x => Assert.Equal(StampWalletRewardState.Upcoming, x.State));
+            Assert.Contains(pass.EarnedRewards!, x => x.Id == reward.Id && x.CycleSequence == 1 && x.State == StampWalletRewardState.Redeemed);
+        }
+        await env.SendAsOperatorAsync(id, Slug, command);
+        Assert.Equal(0, (await Read(env, id, serial)).CurrentStamps);
+        await env.TenantReadAsync(id, Slug, async db =>
+        {
+            Assert.Equal(2, await db.StampCycles.CountAsync());
+            Assert.False(await db.StampTransactions.AnyAsync(x => x.StampCycleId == redeemed.Value.State.CycleId));
+            return true;
+        });
+        var earned = await env.SendAsOperatorAsync(id, Slug, new EarnStampCommand(serial, "next"));
+        Assert.True(earned.IsSuccess, earned.Error);
+        var next = await Read(env, id, serial);
+        Assert.Equal(1, next.CurrentStamps);
+        Assert.Equal("Earn", next.Event!.Operation);
+        Assert.Equal(redeemed.Value.State.CycleId, next.CycleId);
+    }
+
+    [Fact]
     public async Task Earn_unlock_reversal_expiration_and_repeated_gets_use_authoritative_event()
     {
         var clock = new Clock(); await using var env = await Create(clock); var (id, serial) = await Setup(env);

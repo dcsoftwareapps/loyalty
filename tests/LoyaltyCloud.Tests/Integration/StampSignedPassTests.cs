@@ -99,7 +99,9 @@ public sealed class StampSignedPassTests
         foreach (var name in new[] { "icon.png", "icon@2x.png", "icon@3x.png", "logo.png", "logo@2x.png", "logo@3x.png" }) Assert.NotNull(zip.GetEntry(name));
         for (var scale = 1; scale <= 3; scale++)
         {
-            using var image = Image.Load(Read(scale == 1 ? "strip.png" : $"strip@{scale}x.png"));
+            var name = scale == 1 ? "strip.png" : $"strip@{scale}x.png";
+            Assert.Equal(StampStripRenderer.Render(projection, branding.BackgroundColor).Single(x => x.Name == name).Bytes, Read(name));
+            using var image = Image.Load(Read(name));
             Assert.Equal(375 * scale, image.Width); Assert.Equal(144 * scale, image.Height);
         }
         pointsNotifications.Verify(x => x.GetActiveContextAsync(card.Id, It.IsAny<CancellationToken>()), Times.Once);

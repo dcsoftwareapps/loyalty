@@ -124,6 +124,36 @@ public sealed class StampVisualAssetsTests
     }
 
     [Fact]
+    public async Task Rendering_extra_reward_cells_does_not_modify_any_persisted_tenant_state()
+    {
+        await using var env = await EnvironmentAsync(new MemoryAssets(), new RecordingRefresh());
+        const string slug = "visual-cells";
+        var provisioned = await env.ProvisionAsync(slug, "Visual", "owner", "Owner123!", programType: LoyaltyProgramType.Stamps);
+        Assert.True(provisioned.IsSuccess, provisioned.Error);
+        var id = provisioned.Value.TenantId;
+        var rules = await env.SendAsOperatorAsync(id, slug, new SetStampProgramCommand(9, 0, StampReversalPolicy.AdminOnly,
+            [new(4, "Intermedia"), new(9, "Bebida gratis")]));
+        Assert.True(rules.IsSuccess, rules.Error);
+        var joined = await env.JoinAsync(id, slug, "Ana", "Visual", "6465550091");
+        Assert.True(joined.IsSuccess, joined.Error);
+        var serial = joined.Value.SerialNumber;
+        for (var i = 0; i < 3; i++)
+            Assert.True((await env.SendAsOperatorAsync(id, slug, new EarnStampCommand(serial, "visual-" + i))).IsSuccess);
+        var before = await StampTenantDeletionTests.CaptureAsync(env, id);
+        var projection = await Projection(env, id, slug, serial);
+        Assert.Equal(9, projection.MaxStamps);
+        Assert.Equal(3, projection.CurrentStamps);
+        Assert.Equal(new[] { 4, 9 }, projection.Rewards.Select(x => x.RequiredStamps).Order());
+        await env.InTenantScopeAsync(id, slug, sp =>
+        {
+            var service = sp.GetRequiredService<IStampWalletProjectionService>();
+            Assert.Equal(3, service.Render(projection, "#FFFFFF").Count);
+            return Task.FromResult(true);
+        });
+        StampTenantDeletionTests.AssertSnapshotsEqual(before, await StampTenantDeletionTests.CaptureAsync(env, id));
+    }
+
+    [Fact]
     public async Task Optional_upcoming_upload_and_removal_preserve_available_art_and_historical_rules()
     {
         var store = new MemoryAssets(); var refresh = new RecordingRefresh();

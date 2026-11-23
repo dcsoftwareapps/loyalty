@@ -18,6 +18,25 @@ namespace LoyaltyCloud.Tests.Infrastructure;
 public sealed class StampPassJsonTests
 {
     [Theory]
+    [InlineData(9, 0)] [InlineData(9, 3)] [InlineData(9, 9)]
+    [InlineData(5, 3)] [InlineData(5, 5)]
+    public void Additional_reward_cell_does_not_change_apple_or_google_progress_counter(int total, int current)
+    {
+        var projection = new StampWalletProjection(Guid.NewGuid(), Guid.NewGuid(), current, total, null, null,
+            [new(total, Guid.NewGuid(), null)]);
+        var before = JsonSerializer.Serialize(projection);
+        StampStripRenderer.Render(projection, "#FFFFFF");
+        var apple = Build(null, projection: projection);
+        var field = Assert.Single(apple.GetProperty("storeCard").GetProperty("auxiliaryFields").EnumerateArray());
+        Assert.Equal($"{current} / {total}", field.GetProperty("value").GetString());
+        var google = new LoyaltyCloud.Infrastructure.Services.GoogleWallet.GoogleStampWalletMapper()
+            .ToObjectData("test.object", "test.class", "Ana", "ST-JSON", true, DateTime.UnixEpoch, projection, null);
+        Assert.Equal($"{current} de {total} sellos", google.ProgressText);
+        Assert.Equal(current, google.CurrentStamps);
+        Assert.Equal(before, JsonSerializer.Serialize(projection));
+    }
+
+    [Theory]
     [InlineData("Earn", false)] [InlineData("Earn", true)] [InlineData("Reversal", false)] [InlineData("Rollover", false)] [InlineData("Rollover", true)]
     public void Context_uses_one_stable_progress_field_and_valid_placeholder(string operation, bool unlocked)
     {
@@ -56,7 +75,7 @@ public sealed class StampPassJsonTests
         Assert.DoesNotContain("NOVEDAD", root.GetRawText());
     }
 
-    private static JsonElement Build(StampWalletEvent? stampEvent, WalletCustomMessage? message = null, bool recent = false, DateTime? date = null)
+    private static JsonElement Build(StampWalletEvent? stampEvent, WalletCustomMessage? message = null, bool recent = false, DateTime? date = null, StampWalletProjection? projection = null)
     {
         var now = date ?? DateTime.UtcNow; var id = Guid.NewGuid();
         var tenant = new TenantContext(); tenant.SetTenant(id, "test");
@@ -68,7 +87,7 @@ public sealed class StampPassJsonTests
             new Mock<ITenantWalletBrandingReadService>().Object, new Mock<ITenantWalletAssetProvider>().Object, new Mock<ITenantLoyaltyLevelReadService>().Object,
             tenant, new Mock<IPointTransactionRepository>().Object, new Mock<ILevelProgressService>().Object, clock.Object,
             Options.Create(new ApplePassOptions { PassTypeIdentifier = "pass.test", TeamIdentifier = "TEST", OrganizationName = "Test", WebServiceURL = "https://test.local" }), NullLogger<PassGeneratorService>.Instance);
-        var projection = new StampWalletProjection(Guid.Empty, Guid.Empty, 5, 10, null, null, [], stampEvent);
+        projection ??= new StampWalletProjection(Guid.Empty, Guid.Empty, 5, 10, null, null, [], stampEvent);
         var notifications = new WalletNotificationContext(null, null, null, null, null, null, message, null,
             recent && message is not null ? new WalletRecentVisibleEvent(message.NotificationId, NotificationType.Custom, now, now, message.DisplayUntilUtc) : null);
         return JsonSerializer.SerializeToElement(generator.BuildStampsPassJson(card, customer, brand, projection, notifications));
