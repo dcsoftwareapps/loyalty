@@ -34,6 +34,12 @@
                     <span class="@(stamp <= Flow.State.CurrentStamps ? "stamp-dot filled" : "stamp-dot")" aria-hidden="true">@(stamp <= Flow.State.CurrentStamps ? "✓" : stamp.ToString())</span>
                 }
             </div>
+            @if (Flow.State.AvailableRewards.Count > 0)
+            {
+                <div class="stamp-feedback" role="status">
+                    Este cliente tiene recompensas pendientes. Puedes canjear una recompensa o agregar un sello.
+                </div>
+            }
             var earnIntent = Flow.EarnIntentKey;
             <button @key="earnIntent" class="@PrimaryClass" disabled="@(Flow.Busy || Flow.Pending is not null || scanning || confirmation is not null)" @onclick="@(() => EarnAsync(earnIntent))">Agregar sello</button>
             @if (Flow.Unlocked.Count > 0)
@@ -55,7 +61,7 @@
                     <div><span class="stamp-reward-label">Disponible</span><strong>@group.Key.Name @(group.Count() > 1 ? $"×{group.Count()}" : "")</strong>
                         @if (!string.IsNullOrWhiteSpace(group.Key.Description)) { <p>@group.Key.Description</p> }
                     </div>
-                    <button class="@SecondaryClass" disabled="@(Flow.Busy || confirmation is not null)" @onclick="@(() => ConfirmReward(group.First().Id))">Canjear</button>
+                    <button class="@SecondaryClass" disabled="@(Flow.Busy || confirmation is not null)" @onclick="@(() => ConfirmReward(group.First().Id))">Canjear recompensa</button>
                 </div>
             }
             @foreach (var reward in Flow.State.CycleRewards ?? [])

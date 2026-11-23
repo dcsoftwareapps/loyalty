@@ -44,6 +44,168 @@ public sealed class StampOperationsTests
         env.SendAsOperatorAsync(id, Slug, new ReverseLastStampCommand(serial, key));
 
     [Fact]
+    public async Task Final_redeem_opens_zero_cycle_with_active_rules_and_preserves_ledger_on_retry()
+    {
+        await using var env = await Env.CreateAsync();
+        var (id, serial) = await SetupAsync(env, 9);
+        var completed = await Earn(env, id, serial, "complete-final");
+        Assert.True(completed.IsSuccess, completed.Error);
+        var reward = Assert.Single(completed.Value.UnlockedRewards);
+        // Final detection uses the historical cycle's max (10), not the new active max (8).
+        var configured = await env.ConfigureStampsAsync(id, Slug, welcome: 3, max: 8);
+        Assert.True(configured.IsSuccess, configured.Error);
+        var command = new RedeemStampRewardCommand(serial, reward.Id, "redeem-final");
+        var redeemed = await env.SendAsOperatorAsync(id, Slug, command);
+        Assert.True(redeemed.IsSuccess, redeemed.Error);
+        Assert.Equal(0, redeemed.Value.State.CurrentStamps);
+        Assert.Equal(8, redeemed.Value.State.MaxStamps);
+        Assert.Equal(2, redeemed.Value.State.CycleSequence);
+        Assert.False(redeemed.Value.State.CycleCompleted);
+        Assert.False(redeemed.Value.State.CanReverseLastEarn);
+        Assert.Empty(redeemed.Value.UnlockedRewards);
+        var replay = await env.SendAsOperatorAsync(id, Slug, command);
+        Assert.Equal(JsonSerializer.Serialize(redeemed.Value), JsonSerializer.Serialize(replay.Value));
+        await env.TenantReadAsync(id, Slug, async db =>
+        {
+            Assert.Equal(2, await db.StampCycles.CountAsync());
+            var old = await db.StampCycles.SingleAsync(x => x.Id == completed.Value.State.CycleId);
+            Assert.Equal(10, old.CurrentStamps); Assert.NotNull(old.CompletedAt);
+            var next = await db.StampCycles.SingleAsync(x => x.Sequence == 2);
+            Assert.Equal(configured.Value.Id, next.StampProgramVersionId);
+            Assert.Equal(0, next.CurrentStamps);
+            Assert.False(await db.StampTransactions.AnyAsync(x => x.StampCycleId == next.Id));
+            Assert.Equal(1, await db.StampTransactions.CountAsync(x => x.Type == StampTransactionType.Welcome));
+            Assert.Equal(1, await db.StampTransactions.CountAsync(x => x.Type == StampTransactionType.Earn));
+            Assert.Equal(EarnedStampRewardStatus.Redeemed, (await db.EarnedStampRewards.SingleAsync()).Status);
+            Assert.Equal(1, await db.StampOperationReceipts.CountAsync(x => x.Operation == "Redeem"));
+            return true;
+        });
+        var earn = await Earn(env, id, serial, "explicit-next-earn");
+        Assert.True(earn.IsSuccess, earn.Error);
+        Assert.Equal(redeemed.Value.State.CycleId, earn.Value.State.CycleId);
+        Assert.Equal(1, earn.Value.State.CurrentStamps);
+        await env.SendAsOperatorAsync(id, Slug, command); // A stale retry must not reset the live cycle.
+        var current = await env.SendAsOperatorAsync(id, Slug, new GetStampStateQuery(serial));
+        Assert.Equal(1, current.Value.CurrentStamps);
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task Concurrent_final_redemption_creates_only_one_empty_cycle(bool sameKey)
+    {
+        await using var env = await Env.CreateAsync(); var (id, serial) = await SetupAsync(env, 9);
+        var completed = await Earn(env, id, serial, "complete");
+        var reward = Assert.Single(completed.Value.UnlockedRewards);
+        var results = await Task.WhenAll(
+            env.SendAsOperatorAsync(id, Slug, new RedeemStampRewardCommand(serial, reward.Id, "redeem-a")),
+            env.SendAsOperatorAsync(id, Slug, new RedeemStampRewardCommand(serial, reward.Id, sameKey ? "redeem-a" : "redeem-b")));
+        Assert.Equal(sameKey ? 2 : 1, results.Count(x => x.IsSuccess));
+        Assert.All(results.Where(x => x.IsSuccess), x => Assert.Equal(0, x.Value.State.CurrentStamps));
+        await env.TenantReadAsync(id, Slug, async db =>
+        {
+            Assert.Equal(2, await db.StampCycles.CountAsync());
+            Assert.Equal(0, (await db.StampCycles.SingleAsync(x => x.Sequence == 2)).CurrentStamps);
+            Assert.Equal(1, await db.StampTransactions.CountAsync(x => x.Type == StampTransactionType.Earn));
+            return true;
+        });
+    }
+
+    [Fact]
+    public async Task Concurrent_final_redeem_and_earn_keep_the_one_legitimate_stamp()
+    {
+        await using var env = await Env.CreateAsync(); var (id, serial) = await SetupAsync(env, 9);
+        var completed = await Earn(env, id, serial, "complete");
+        var reward = Assert.Single(completed.Value.UnlockedRewards);
+        var results = await Task.WhenAll(Earn(env, id, serial, "next-earn"),
+            env.SendAsOperatorAsync(id, Slug, new RedeemStampRewardCommand(serial, reward.Id, "redeem")));
+        Assert.All(results, x => Assert.True(x.IsSuccess, x.Error));
+        await env.TenantReadAsync(id, Slug, async db =>
+        {
+            Assert.Equal(2, await db.StampCycles.CountAsync());
+            var cycle = await db.StampCycles.SingleAsync(x => x.Sequence == 2);
+            Assert.Equal(1, cycle.CurrentStamps);
+            Assert.Equal(1, await db.StampTransactions.CountAsync(x => x.StampCycleId == cycle.Id));
+            return true;
+        });
+    }
+
+    [Fact]
+    public async Task Final_redeem_is_tenant_isolated_and_does_not_reset_an_intermediate_reward_cycle()
+    {
+        await using var env = await Env.CreateAsync(); var (id, serial) = await SetupAsync(env, 4);
+        var intermediate = await Earn(env, id, serial, "intermediate");
+        var reward = Assert.Single(intermediate.Value.UnlockedRewards);
+        var other = await env.ProvisionAsync("other-redemption", "Other", "owner", "Owner123!", programType: LoyaltyProgramType.Stamps);
+        Assert.True(other.IsSuccess, other.Error);
+        Assert.True((await env.ConfigureStampsAsync(other.Value.TenantId, "other-redemption", 9)).IsSuccess);
+        var joined = await env.JoinAsync(other.Value.TenantId, "other-redemption", "Otra", "Persona", "6465550002");
+        Assert.True(joined.IsSuccess, joined.Error);
+        var otherEarn = await env.SendAsOperatorAsync(other.Value.TenantId, "other-redemption", new EarnStampCommand(joined.Value.SerialNumber, "complete"));
+        var foreignReward = Assert.Single(otherEarn.Value.UnlockedRewards);
+        var denied = await env.SendAsOperatorAsync(id, Slug, new RedeemStampRewardCommand(serial, foreignReward.Id, "foreign"));
+        Assert.True(denied.IsFailure);
+        // Even when the latest cycle is complete, redeeming its intermediate reward does not roll it.
+        for (var i = 0; i < 5; i++) Assert.True((await Earn(env, id, serial, "finish-" + i)).IsSuccess);
+        var redeemed = await env.SendAsOperatorAsync(id, Slug, new RedeemStampRewardCommand(serial, reward.Id, "intermediate-redeem"));
+        Assert.True(redeemed.IsSuccess, redeemed.Error);
+        Assert.Equal(10, redeemed.Value.State.CurrentStamps);
+        Assert.Equal(1, redeemed.Value.State.CycleSequence);
+        var finalReward = redeemed.Value.State.AvailableRewards.Single(x => x.RequiredStamps == 10);
+        var final = await env.SendAsOperatorAsync(id, Slug, new RedeemStampRewardCommand(serial, finalReward.Id, "owned-final"));
+        Assert.True(final.IsSuccess, final.Error);
+        Assert.Equal(0, final.Value.State.CurrentStamps);
+        Assert.Equal(2, final.Value.State.CycleSequence);
+        await env.TenantReadAsync(other.Value.TenantId, "other-redemption", async db =>
+        {
+            Assert.Single(await db.StampCycles.ToListAsync());
+            Assert.Equal(10, (await db.StampCycles.SingleAsync()).CurrentStamps);
+            Assert.Equal(EarnedStampRewardStatus.Available, (await db.EarnedStampRewards.SingleAsync()).Status);
+            Assert.False(await db.StampOperationReceipts.AnyAsync(x => x.Operation == "Redeem"));
+            return true;
+        });
+    }
+
+    [Fact]
+    public async Task Final_redeem_and_new_cycle_roll_back_together_when_receipt_save_fails()
+    {
+        var failure = new FailRedeemReceiptSave();
+        await using var env = await Env.CreateAsync(configure: services =>
+            services.ConfigureDbContext<LoyaltyCloud.Infrastructure.Persistence.AppDbContext>(o => o.AddInterceptors(failure)));
+        var (id, serial) = await SetupAsync(env, 9);
+        var completed = await Earn(env, id, serial, "complete");
+        var reward = Assert.Single(completed.Value.UnlockedRewards);
+        var command = new RedeemStampRewardCommand(serial, reward.Id, "redeem");
+        failure.Enabled = true;
+        await Assert.ThrowsAsync<InvalidOperationException>(() => env.SendAsOperatorAsync(id, Slug, command));
+        failure.Enabled = false;
+        await env.TenantReadAsync(id, Slug, async db =>
+        {
+            Assert.Single(await db.StampCycles.ToListAsync());
+            Assert.Equal(EarnedStampRewardStatus.Available, (await db.EarnedStampRewards.SingleAsync()).Status);
+            Assert.False(await db.StampOperationReceipts.AnyAsync(x => x.Operation == "Redeem"));
+            return true;
+        });
+        var retry = await env.SendAsOperatorAsync(id, Slug, command);
+        Assert.True(retry.IsSuccess, retry.Error);
+        Assert.Equal(0, retry.Value.State.CurrentStamps);
+        Assert.Equal(2, retry.Value.State.CycleSequence);
+    }
+
+    private sealed class FailRedeemReceiptSave : SaveChangesInterceptor
+    {
+        public bool Enabled { get; set; }
+        public override ValueTask<InterceptionResult<int>> SavingChangesAsync(DbContextEventData eventData,
+            InterceptionResult<int> result, CancellationToken cancellationToken = default)
+        {
+            if (Enabled && eventData.Context!.ChangeTracker.Entries<StampOperationReceipt>()
+                .Any(x => x.State == EntityState.Added && x.Entity.Operation == "Redeem"))
+                throw new InvalidOperationException("Simulated failure saving redemption receipt.");
+            return base.SavingChangesAsync(eventData, result, cancellationToken);
+        }
+    }
+
+    [Fact]
     public async Task Prior_cycle_reward_remains_available_at_two_of_ten_and_current_rewards_are_future()
     {
         await using var env = await Env.CreateAsync(); var (id, serial) = await SetupAsync(env);

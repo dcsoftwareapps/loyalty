@@ -12,25 +12,32 @@ internal static class StampStripRenderer
     {
         if (state.MaxStamps is < 2 or > 12 || state.CurrentStamps < 0 || state.CurrentStamps > state.MaxStamps)
             throw new InvalidOperationException("Unsupported Stamps visual configuration.");
+        // Every milestone retains its stamp; its reward is an additional adjacent cell.
+        var cells = new List<(int Position, StampWalletReward? Reward)>();
+        for (var position = 1; position <= state.MaxStamps; position++)
+        {
+            cells.Add((position, null));
+            var reward = state.Rewards.SingleOrDefault(x => x.RequiredStamps == position);
+            if (reward is not null) cells.Add((position, reward));
+        }
         var result = new List<StampStripAsset>();
         for (var scale = 1; scale <= 3; scale++)
         {
             using var canvas = new Image<Rgba32>(375 * scale, 144 * scale, ParseColor(backgroundColor));
-            var rows = state.MaxStamps <= 5 ? 1 : 2;
-            var columns = (int)Math.Ceiling(state.MaxStamps / (double)rows);
+            var rows = cells.Count <= 5 ? 1 : 2;
+            var columns = (int)Math.Ceiling(cells.Count / (double)rows);
             const double gap = 10;
             var size = Math.Min(60, Math.Min((375d - 40 - gap * (columns - 1)) / columns,
                 (144d - 24 - gap * (rows - 1)) / rows));
             var gridHeight = rows * size + (rows - 1) * gap;
-            for (var index = 0; index < state.MaxStamps; index++)
+            for (var index = 0; index < cells.Count; index++)
             {
                 var row = index / columns;
-                var rowCount = Math.Min(columns, state.MaxStamps - row * columns);
+                var rowCount = Math.Min(columns, cells.Count - row * columns);
                 var rowWidth = rowCount * size + (rowCount - 1) * gap;
                 var left = (375 - rowWidth) / 2 + index % columns * (size + gap);
                 var top = (144 - gridHeight) / 2 + row * (size + gap);
-                var position = index + 1;
-                var reward = state.Rewards.SingleOrDefault(x => x.RequiredStamps == position);
+                var (position, reward) = cells[index];
                 var filled = position <= state.CurrentStamps;
                 var kind = reward is not null ? StampImageKind.Reward : filled ? StampImageKind.Filled : StampImageKind.Empty;
                 var rewardState = reward?.State ?? (filled ? StampWalletRewardState.Available : StampWalletRewardState.Upcoming);

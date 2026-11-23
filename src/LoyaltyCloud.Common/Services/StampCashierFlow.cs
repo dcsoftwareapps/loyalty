@@ -78,6 +78,8 @@ public sealed class StampCashierFlow(IStampCashierApi api, IStampPendingStore st
             var read = await api.ReadAsync(serial);
             State = read.Value;
             if (State is null) { Error = read.Error; return; }
+            // A scan can be for redemption only. Pending rewards require an explicit Earn.
+            if (State.AvailableRewards.Count > 0) return;
             await BeginCoreAsync("Earn", State.SerialNumber, null);
         }
         finally { Volatile.Write(ref gate, 0); }
