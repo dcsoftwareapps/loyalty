@@ -21,6 +21,23 @@ public sealed class GoogleWalletIdGenerator
         ArgumentNullException.ThrowIfNull(options);
         return $"{RequireIssuerId(options)}.{NormalizeSuffix(options.ClassSuffix, "ClassSuffix")}";
     }
+
+    public string BuildStampClassId(GoogleWalletOptions options, Guid tenantId)
+    {
+        ArgumentNullException.ThrowIfNull(options);
+        if (tenantId == Guid.Empty) throw new ArgumentException("TenantId requerido.", nameof(tenantId));
+        return $"{RequireIssuerId(options)}.{NormalizeSuffix(options.ClassSuffix, "ClassSuffix")}-stamps-{tenantId:N}";
+    }
+
+    public string BuildStampObjectId(GoogleWalletOptions options, Guid tenantId, string serialNumber)
+    {
+        ArgumentNullException.ThrowIfNull(options);
+        if (tenantId == Guid.Empty) throw new ArgumentException("TenantId requerido.", nameof(tenantId));
+        if (string.IsNullOrWhiteSpace(serialNumber)) throw new ArgumentException("Serial requerido.", nameof(serialNumber));
+        var tenant = NormalizeSuffix(tenantId.ToString("N")[..12], nameof(tenantId));
+        var serial = NormalizeSuffix(serialNumber, nameof(serialNumber));
+        return $"{RequireIssuerId(options)}.{NormalizeSuffix(options.ObjectIdPrefix, "ObjectIdPrefix")}-stamps-{tenant}-{serial}";
+    }
     public string BuildObjectId(GoogleWalletOptions options, Guid tenantId, string serialNumber)
     {
         ArgumentNullException.ThrowIfNull(options);
@@ -52,7 +69,7 @@ public sealed class GoogleWalletIdGenerator
         var builder = new StringBuilder(value.Trim().Length);
         foreach (var ch in value.Trim())
         {
-            if (char.IsLetterOrDigit(ch))
+            if (ch is >= 'A' and <= 'Z' or >= 'a' and <= 'z' or >= '0' and <= '9')
             {
                 builder.Append(char.ToLowerInvariant(ch));
             }

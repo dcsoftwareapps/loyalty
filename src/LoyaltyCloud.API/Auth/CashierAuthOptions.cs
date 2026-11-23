@@ -7,5 +7,6 @@ public sealed class CashierAuthOptions
     public string Issuer { get; set; } = "LoyaltyCloud";
     public string Audience { get; set; } = "LoyaltyCloud.Cashier";
     public int AccessTokenMinutes { get; set; } = 60;
+    public int RememberMeRefreshTokenDays { get; set; } = 90;
     public string? SigningKey { get; set; }
 }

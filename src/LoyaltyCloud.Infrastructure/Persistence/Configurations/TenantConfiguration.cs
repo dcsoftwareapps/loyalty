@@ -1,5 +1,7 @@
 using LoyaltyCloud.Domain.Entities;
+using LoyaltyCloud.Domain.Enums;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Metadata;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 
 namespace LoyaltyCloud.Infrastructure.Persistence.Configurations;
@@ -10,6 +12,13 @@ internal sealed class TenantConfiguration : IEntityTypeConfiguration<Tenant>
     {
         builder.ToTable("Tenants");
         builder.HasKey(t => t.Id);
+
+        builder.Property(t => t.ProgramType)
+            .HasConversion<string>()
+            .HasMaxLength(30)
+            .HasDefaultValue(LoyaltyProgramType.Points)
+            .IsRequired()
+            .Metadata.SetAfterSaveBehavior(PropertySaveBehavior.Throw);
 
         builder.Property(t => t.Slug)
             .HasMaxLength(100)

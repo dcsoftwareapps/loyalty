@@ -33,6 +33,7 @@ public static class DependencyInjection
             // después — Validation queda como el behavior más interno.
             cfg.AddOpenBehavior(typeof(LoggingBehavior<,>));
             cfg.AddOpenBehavior(typeof(ValidationBehavior<,>));
+            cfg.AddOpenBehavior(typeof(PointsProgramBehavior<,>));
         });
 
         services.AddValidatorsFromAssembly(assembly, includeInternalTypes: true);
@@ -40,6 +41,7 @@ public static class DependencyInjection
         services.AddScoped<ILevelProgressService, LevelProgressService>();
         services.AddScoped<IPointCampaignSelector, PointCampaignSelector>();
         services.AddScoped<IMemberWalletDataService, MemberWalletDataService>();
+        services.AddScoped<ITenantProgramReadService, TenantProgramReadService>();
 
         return services;
     }

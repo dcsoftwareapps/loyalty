@@ -1,4 +1,5 @@
 using LoyaltyCloud.Admin.Auth;
+using LoyaltyCloud.Application.Common.Interfaces;
 
 namespace LoyaltyCloud.Admin.Middleware;
 
@@ -11,8 +12,19 @@ public sealed class AdminTenantContextMiddleware
         _next = next;
     }
 
-    public async Task InvokeAsync(HttpContext context, AdminAuthService auth)
+    public async Task InvokeAsync(
+        HttpContext context,
+        AdminAuthService auth,
+        IMutableTenantContext tenantContext)
     {
+        if (context.Request.Path.Equals("/signup", StringComparison.OrdinalIgnoreCase))
+        {
+            // Signup provisions a new tenant, even when another tenant's cookie is present.
+            tenantContext.Clear();
+            await _next(context);
+            return;
+        }
+
         if (context.Request.Path.StartsWithSegments("/platform", StringComparison.OrdinalIgnoreCase))
         {
             await _next(context);

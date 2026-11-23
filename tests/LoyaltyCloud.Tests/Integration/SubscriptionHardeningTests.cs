@@ -42,6 +42,53 @@ public sealed class SubscriptionHardeningTests
         Assert.True(subscription.IsOperational(FixedNow));
     }
 
+    [Theory]
+    [Trait("Category", "SubscriptionHardening")]
+    [InlineData(-1, true, false)]
+    [InlineData(0, false, true)]
+    [InlineData(1, false, true)]
+    public void Trial_boundary_controls_operational_and_billing_access(
+        int nowOffsetTicks,
+        bool expectedOperational,
+        bool expectedBillingEligible)
+    {
+        var trialEnd = FixedNow;
+        var now = trialEnd.AddTicks(nowOffsetTicks);
+        var subscription = new TenantSubscription(
+            Guid.NewGuid(),
+            TenantSubscriptionStatus.Trial,
+            "trial",
+            currentPeriodStart: trialEnd.AddMonths(-1),
+            currentPeriodEnd: trialEnd);
+
+        Assert.Equal(expectedOperational, subscription.IsOperational(now));
+        Assert.Equal(expectedBillingEligible, subscription.IsBillingEligible(now));
+    }
+
+    [Theory]
+    [Trait("Category", "SubscriptionHardening")]
+    [InlineData(TenantSubscriptionStatus.PastDue, null, true)]
+    [InlineData(TenantSubscriptionStatus.Suspended, TenantSuspensionReason.PaymentPastDue, true)]
+    [InlineData(TenantSubscriptionStatus.Suspended, TenantSuspensionReason.TrialExpired, true)]
+    [InlineData(TenantSubscriptionStatus.Suspended, TenantSuspensionReason.Administrative, false)]
+    [InlineData(TenantSubscriptionStatus.Cancelled, null, false)]
+    [InlineData(TenantSubscriptionStatus.Active, null, false)]
+    public void Billing_eligibility_distinguishes_allowed_and_forbidden_states(
+        TenantSubscriptionStatus status,
+        TenantSuspensionReason? reason,
+        bool expected)
+    {
+        var subscription = new TenantSubscription(
+            Guid.NewGuid(),
+            status,
+            "plan",
+            paidThroughUtc: status == TenantSubscriptionStatus.Active ? FixedNow.AddDays(1) : null,
+            gracePeriodEndsAt: status == TenantSubscriptionStatus.PastDue ? FixedNow.AddDays(1) : null,
+            suspensionReason: reason);
+
+        Assert.Equal(expected, subscription.IsBillingEligible(FixedNow));
+    }
+
     [Fact]
     [Trait("Category", "SubscriptionHardening")]
     public async Task Expired_trial_suspends_with_trial_expired_reason()
@@ -100,6 +147,9 @@ public sealed class SubscriptionHardeningTests
         var subscription = await env.GetSubscriptionAsync(tenantId);
         Assert.Equal(TenantSubscriptionStatus.Active, subscription.Status);
         Assert.Null(subscription.SuspensionReason);
+        Assert.NotNull(subscription.PaidThroughUtc);
+        Assert.True(subscription.PaidThroughUtc > FixedNow);
+        Assert.True(subscription.IsOperational(FixedNow));
     }
 
     [Fact]
@@ -194,6 +244,31 @@ public sealed class SubscriptionHardeningTests
 
         Assert.Equal(1, first.PastDueSuspended);
         Assert.Equal(0, second.PastDueSuspended);
+    }
+
+    [Fact]
+    [Trait("Category", "SubscriptionHardening")]
+    public async Task Expired_trial_remains_billing_eligible_before_and_after_idempotent_maintenance()
+    {
+        await using var env = await HardeningEnvironment.CreateAsync();
+        var tenantId = await env.AddTenantAsync(
+            "trial-maintenance-idempotent",
+            TenantSubscriptionStatus.Trial,
+            trialEnd: FixedNow);
+
+        var before = await env.GetSubscriptionAsync(tenantId);
+        Assert.False(before.IsOperational(FixedNow));
+        Assert.True(before.IsBillingEligible(FixedNow));
+
+        var first = await env.RunMaintenanceAsync();
+        var second = await env.RunMaintenanceAsync();
+        var after = await env.GetSubscriptionAsync(tenantId);
+
+        Assert.Equal(1, first.TrialsSuspended);
+        Assert.Equal(0, second.TrialsSuspended);
+        Assert.Equal(TenantSubscriptionStatus.Suspended, after.Status);
+        Assert.Equal(TenantSuspensionReason.TrialExpired, after.SuspensionReason);
+        Assert.True(after.IsBillingEligible(FixedNow));
     }
 
     [Fact]

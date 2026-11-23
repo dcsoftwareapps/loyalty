@@ -23,7 +23,7 @@ public sealed class GiftCardIssuanceCoordinator(
     private static string StorageKey(string account) => "loyaltycloud.cashier.gift.issue.pending.v1." +
         Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(account)));
     private bool IsCurrent(CashierSession session) => currentSession() is { } active
-        && active == session && !active.IsExpired(DateTimeOffset.UtcNow);
+        && active.IsSameSession(session) && (!active.IsExpired(DateTimeOffset.UtcNow) || active.RefreshToken is not null);
 
     public async Task<PendingGiftCardIssuance?> LoadAsync()
     {

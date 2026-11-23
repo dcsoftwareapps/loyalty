@@ -33,6 +33,23 @@ public sealed class PublicJoinTenantRoutingTests : IClassFixture<CustomWebApplic
 
     public Task DisposeAsync() => Task.CompletedTask;
 
+    [Theory]
+    [InlineData(null, null)] [InlineData(29, 2)]
+    public async Task Public_join_accepts_optional_birthday_and_recovers_same_customer(int? day, int? month)
+    {
+        var phone = UniquePhone();
+        using var response = await _client.PostAsJsonAsync("/api/public/kbeauty/join", new { FirstName = "Ana", LastName = "Birthday", Phone = phone, BirthdayDay = day, BirthdayMonth = month });
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        using var first = System.Text.Json.JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        using var retry = await _client.PostAsJsonAsync("/api/public/kbeauty/join", new { FirstName = "Ana", LastName = "Birthday", Phone = phone });
+        Assert.Equal(HttpStatusCode.OK, retry.StatusCode);
+        using var recovered = System.Text.Json.JsonDocument.Parse(await retry.Content.ReadAsStringAsync());
+        Assert.Equal(first.RootElement.GetProperty("serialNumber").GetString(), recovered.RootElement.GetProperty("serialNumber").GetString());
+        using var scope = _factory.Services.CreateScope(); var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        var rows = await db.Customers.IgnoreQueryFilters().Where(x => x.TenantId == TenantSeed.KBeautyTenantId && x.NormalizedPhone == phone).ToListAsync();
+        Assert.Equal(day.HasValue ? new DateTime(2000, month!.Value, day.Value) : Customer.BirthdayNotCaptured, Assert.Single(rows).DateOfBirth);
+    }
+
     [Fact]
     [Trait("Category", "PublicJoin")]
     [Trait("Category", "NoDefaultTenant")]

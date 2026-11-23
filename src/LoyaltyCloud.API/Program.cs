@@ -33,6 +33,7 @@ builder.Services.AddHostedService<LoyaltyNotificationBackgroundService>();
 builder.Services.Configure<CashierAuthOptions>(
     builder.Configuration.GetSection(CashierAuthOptions.SectionName));
 builder.Services.AddScoped<CashierAccessTokenService>();
+builder.Services.AddScoped<CashierRefreshTokenService>();
 builder.Services
     .AddAuthentication(CashierAuthDefaults.AuthenticationScheme)
     .AddScheme<AuthenticationSchemeOptions, CashierBearerAuthenticationHandler>(

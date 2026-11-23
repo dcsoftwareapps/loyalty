@@ -1,6 +1,7 @@
 @inject NavigationManager Nav
 @inject AuthenticationStateProvider AuthenticationStateProvider
 @using LoyaltyCloud.Admin.Auth
+@inject AdminAuthService Auth
 @code {
     protected override async Task OnInitializedAsync()
     {
@@ -8,7 +9,7 @@
         var authenticated = principal.Identity?.IsAuthenticated == true;
         if (authenticated)
         {
-            var destination = principal.IsInRole(TenantUserRoles.Cashier) ? "/cashier" : "/dashboard";
+            var destination = await Auth.GetAuthenticatedLandingPathAsync(principal);
             Nav.NavigateTo(destination);
             return;
         }

@@ -250,23 +250,27 @@ public sealed class AdminAuthService
         context.User = principal;
     }
 
-    public string GetAuthenticatedLandingPath(ClaimsPrincipal principal)
+    public async Task<string> GetAuthenticatedLandingPathAsync(ClaimsPrincipal principal)
     {
-        var role = principal.FindFirstValue(ClaimTypes.Role);
-        return string.Equals(role, TenantUserRoles.Cashier, StringComparison.Ordinal)
-            ? "/cashier"
-            : "/dashboard";
+        if (principal.IsInRole(TenantUserRoles.Cashier)) return "/cashier";
+        return await ReadPrincipalProgramAsync(principal) == LoyaltyProgramType.Stamps ? "/cashier" : "/dashboard";
     }
 
-    public string GetPostLoginDestination(HttpContext context, string tenantSlug, bool billingOnly, string? returnUrl)
+    public async Task<string> GetPostLoginDestinationAsync(HttpContext context, string tenantSlug, bool billingOnly, string? returnUrl)
     {
-        if (string.Equals(context.User.FindFirstValue(ClaimTypes.Role), TenantUserRoles.Cashier, StringComparison.Ordinal))
-            return "/cashier";
+        if (context.User.IsInRole(TenantUserRoles.Cashier)) return "/cashier";
+        if (billingOnly) return $"/{tenantSlug}/billing";
+        var program = await ReadPrincipalProgramAsync(context.User);
+        if (IsLocalReturnUrl(returnUrl) && (program == LoyaltyProgramType.Points || LoyaltyCloud.Admin.Services.AdminProgramNavigation.IsAllowed(program, returnUrl!))) return returnUrl!;
+        return program == LoyaltyProgramType.Stamps ? "/cashier" : "/dashboard";
+    }
 
-        if (billingOnly)
-            return $"/{tenantSlug}/billing";
-
-        return IsLocalReturnUrl(returnUrl) ? returnUrl! : "/dashboard";
+    private async Task<LoyaltyProgramType> ReadPrincipalProgramAsync(ClaimsPrincipal principal)
+    {
+        if (!Guid.TryParse(principal.FindFirstValue(AdminClaimTypes.TenantId), out var tenantId)) return LoyaltyProgramType.Points;
+        await using var db = await _dbContextFactory.CreateDbContextAsync();
+        return await db.Tenants.AsNoTracking().Where(x => x.Id == tenantId)
+            .Select(x => x.ProgramType).SingleOrDefaultAsync();
     }
 
     public static bool IsLocalReturnUrl(string? value) =>
@@ -315,9 +319,10 @@ public sealed class AdminAuthService
         && tenant.Subscription is not null
         && tenant.Subscription.IsOperational(_clock.UtcNow);
 
-    private static bool CanAccessBilling(Tenant tenant) => tenant.IsActive && tenant.Subscription is not null &&
-        (tenant.Subscription.Status == TenantSubscriptionStatus.PastDue ||
-         tenant.Subscription.Status == TenantSubscriptionStatus.Suspended && tenant.Subscription.SuspensionReason is TenantSuspensionReason.PaymentPastDue or TenantSuspensionReason.TrialExpired);
+    private bool CanAccessBilling(Tenant tenant) =>
+        tenant.IsActive
+        && tenant.Subscription is not null
+        && tenant.Subscription.IsBillingEligible(_clock.UtcNow);
 
     private void Reject(CookieValidatePrincipalContext context, object? tenantId, object? adminUserId, string reason)
     {

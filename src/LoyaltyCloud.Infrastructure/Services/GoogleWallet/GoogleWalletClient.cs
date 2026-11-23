@@ -21,6 +21,7 @@ internal sealed class GoogleWalletClient : IGoogleWalletClient
     private readonly IGoogleWalletCredentialsProvider _credentialsProvider;
     private readonly GoogleWalletJwtFactory _jwtFactory;
     private readonly GoogleWalletObjectMapper _mapper;
+    private readonly GoogleStampWalletMapper _stampMapper;
     private readonly GoogleWalletOptions _options;
     private readonly IDateTimeProvider _dt;
     private readonly ILogger<GoogleWalletClient> _logger;
@@ -32,6 +33,7 @@ internal sealed class GoogleWalletClient : IGoogleWalletClient
         IGoogleWalletCredentialsProvider credentialsProvider,
         GoogleWalletJwtFactory jwtFactory,
         GoogleWalletObjectMapper mapper,
+        GoogleStampWalletMapper stampMapper,
         IOptions<GoogleWalletOptions> options,
         IDateTimeProvider dt,
         ILogger<GoogleWalletClient> logger)
@@ -40,6 +42,7 @@ internal sealed class GoogleWalletClient : IGoogleWalletClient
         _credentialsProvider = credentialsProvider;
         _jwtFactory = jwtFactory;
         _mapper = mapper;
+        _stampMapper = stampMapper;
         _options = options.Value;
         _dt = dt;
         _logger = logger;
@@ -124,6 +127,49 @@ internal sealed class GoogleWalletClient : IGoogleWalletClient
         }
 
         throw await CreateExceptionAsync("actualizar LoyaltyObject", updated, ct);
+    }
+
+    public Task EnsureStampLoyaltyClassAsync(GoogleStampWalletClassData walletClass, CancellationToken ct = default) =>
+        EnsureLoyaltyClassCoreAsync(walletClass.Id, _stampMapper.ToClassPayload(walletClass), ct);
+
+    public Task CreateOrUpdateStampObjectAsync(GoogleStampWalletObjectData walletObject, bool notifyOnUpdate = false, CancellationToken ct = default) =>
+        CreateOrUpdateStampObjectCoreAsync(walletObject, notifyOnUpdate, ct);
+
+    private async Task EnsureLoyaltyClassCoreAsync(string classId, Dictionary<string, object?> payload, CancellationToken ct)
+    {
+        var existing = await SendAsync(HttpMethod.Get, $"loyaltyClass/{Uri.EscapeDataString(classId)}", null, ct);
+        if (existing.StatusCode == HttpStatusCode.OK)
+        {
+            var patched = await SendAsync(new HttpMethod("PATCH"), $"loyaltyClass/{Uri.EscapeDataString(classId)}", payload, ct);
+            if (patched.StatusCode == HttpStatusCode.OK) return;
+            throw await CreateExceptionAsync("actualizar LoyaltyClass de Sellos", patched, ct);
+        }
+        if (existing.StatusCode != HttpStatusCode.NotFound)
+            throw await CreateExceptionAsync("consultar LoyaltyClass de Sellos", existing, ct);
+        var created = await SendAsync(HttpMethod.Post, "loyaltyClass", payload, ct);
+        if (created.StatusCode is HttpStatusCode.OK or HttpStatusCode.Created or HttpStatusCode.Conflict) return;
+        throw await CreateExceptionAsync("crear LoyaltyClass de Sellos", created, ct);
+    }
+
+    private async Task CreateOrUpdateStampObjectCoreAsync(GoogleStampWalletObjectData value, bool notifyOnUpdate, CancellationToken ct)
+    {
+        var path = $"loyaltyObject/{Uri.EscapeDataString(value.Id)}";
+        var existing = await SendAsync(HttpMethod.Get, path, null, ct);
+        var payload = _stampMapper.ToObjectPayload(value);
+        if (existing.StatusCode == HttpStatusCode.NotFound)
+        {
+            var created = await SendAsync(HttpMethod.Post, "loyaltyObject", payload, ct);
+            if (created.StatusCode is HttpStatusCode.OK or HttpStatusCode.Created) return;
+            if (created.StatusCode != HttpStatusCode.Conflict)
+                throw await CreateExceptionAsync("crear LoyaltyObject de Sellos", created, ct);
+        }
+        else if (existing.StatusCode != HttpStatusCode.OK)
+            throw await CreateExceptionAsync("consultar LoyaltyObject de Sellos", existing, ct);
+
+        if (notifyOnUpdate) payload["notifyPreference"] = NotifyOnUpdate;
+        var updated = await SendAsync(new HttpMethod("PATCH"), path, payload, ct);
+        if (updated.StatusCode != HttpStatusCode.OK)
+            throw await CreateExceptionAsync("actualizar LoyaltyObject de Sellos", updated, ct);
     }
 
     public async Task EnsureGiftCardClassAsync(GoogleGiftCardClassData walletClass, CancellationToken ct = default)

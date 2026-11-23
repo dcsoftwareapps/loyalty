@@ -35,7 +35,7 @@ public sealed class RewardRedemptionCoordinator(
         + Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(account)));
 
     private bool IsCurrent(CashierSession session) => currentSession() is { } active
-        && active == session && !active.IsExpired(DateTimeOffset.UtcNow);
+        && active.IsSameSession(session) && (!active.IsExpired(DateTimeOffset.UtcNow) || active.RefreshToken is not null);
 
     public async Task<PendingRewardRedemption?> LoadAsync()
     {

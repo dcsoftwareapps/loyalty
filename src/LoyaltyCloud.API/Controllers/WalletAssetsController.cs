@@ -1,6 +1,8 @@
 using Microsoft.AspNetCore.Mvc;
 using LoyaltyCloud.Application.Common.Interfaces;
 using LoyaltyCloud.Infrastructure.Services;
+using LoyaltyCloud.Application.Stamps;
+using LoyaltyCloud.Infrastructure.Services.GoogleWallet;
 
 namespace LoyaltyCloud.API.Controllers;
 
@@ -19,15 +21,61 @@ public sealed class WalletAssetsController : ControllerBase
     private readonly ILogger<WalletAssetsController> _logger;
     private readonly ITenantWalletBrandingReadService _branding;
     private readonly ITenantWalletAssetProvider _assets;
+    private readonly GoogleStampWalletAssetTokenService _stampTokens;
+    private readonly IMutableTenantContext _tenantContext;
+    private readonly IOperationalTenantReadService _operationalTenants;
+    private readonly IStampWalletProjectionService _stampProjection;
 
     public WalletAssetsController(
         ILogger<WalletAssetsController> logger,
         ITenantWalletBrandingReadService branding,
-        ITenantWalletAssetProvider assets)
+        ITenantWalletAssetProvider assets,
+        GoogleStampWalletAssetTokenService stampTokens,
+        IMutableTenantContext tenantContext,
+        IOperationalTenantReadService operationalTenants,
+        IStampWalletProjectionService stampProjection)
     {
         _logger = logger;
         _branding = branding;
         _assets = assets;
+        _stampTokens = stampTokens;
+        _tenantContext = tenantContext;
+        _operationalTenants = operationalTenants;
+        _stampProjection = stampProjection;
+    }
+
+    [HttpGet("google/stamps/progress/{token}.png")]
+    [ResponseCache(NoStore = true, Location = ResponseCacheLocation.None)]
+    [Produces("image/png")]
+    public async Task<IActionResult> GetGoogleStampProgress(string token, CancellationToken ct)
+    {
+        if (!_stampTokens.TryRead(token, out var payload)) return NotFound();
+        var tenant = (await _operationalTenants.ListTenantsForExecutionAsync(ct))
+            .SingleOrDefault(x => x.TenantId == payload.TenantId
+                && string.Equals(x.Slug, payload.TenantSlug, StringComparison.OrdinalIgnoreCase));
+        if (tenant is null || !tenant.IsOperational) return NotFound();
+        if (_tenantContext.HasTenant && _tenantContext.TenantId != payload.TenantId) return NotFound();
+
+        var ownsContext = !_tenantContext.HasTenant;
+        if (ownsContext) _tenantContext.SetTenant(payload.TenantId, payload.TenantSlug);
+        try
+        {
+            var projection = await _stampProjection.ReadAsync(payload.SerialNumber, ct);
+            var branding = await _branding.GetCurrentAsync(ct);
+            var rendered = _stampProjection.Render(projection, branding.BackgroundHex);
+            var image = rendered.First(x => x.Name == "strip@3x.png");
+            Response.Headers.CacheControl = "no-store";
+            Response.Headers.XContentTypeOptions = "nosniff";
+            return File(image.Bytes, "image/png");
+        }
+        catch (InvalidOperationException)
+        {
+            return NotFound();
+        }
+        finally
+        {
+            if (ownsContext) _tenantContext.Clear();
+        }
     }
 
     [HttpGet("google/{tenantId:guid}/logo.png")]

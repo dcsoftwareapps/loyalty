@@ -9,6 +9,8 @@
 @using Microsoft.Extensions.Configuration
 @inject AuthenticationStateProvider AuthenticationStateProvider
 @inject ITenantBrandingReadService Branding
+@inject ITenantProgramReadService Programs
+@inject AdminTenantContextInitializer TenantInitializer
 @inject IConfiguration Configuration
 @inject IJSRuntime JS
 @inject NavigationManager Navigation
@@ -80,7 +82,7 @@
                     <div class="kb-poster-brand">@BusinessName</div>
                 }
                 <div class="kb-poster-kicker">Programa de lealtad</div>
-                <h2>Regístrate y empieza a acumular puntos</h2>
+                <h2>@(isStamps ? "Regístrate y empieza a acumular sellos" : "Regístrate y empieza a acumular puntos")</h2>
                 <p>Escanea el código QR para crear tu cuenta y agregar tu tarjeta de lealtad.</p>
                 <img src="@registrationQrDataUri" alt="QR de registro" />
                 <strong>Escanéame</strong>
@@ -106,33 +108,61 @@
         <article class="kb-card kb-help-card">
             <div class="kb-help-number">2</div>
             <div>
-                <h2>Sumar puntos</h2>
-                <ol>
-                    <li>Busca o escanea el ID del cliente.</li>
-                    <li>Confirma que sea el cliente correcto.</li>
-                    <li>Captura el monto de la compra.</li>
-                    <li>Confirma la compra.</li>
-                    <li>Los puntos aparecen en su tarjeta Wallet.</li>
-                </ol>
-                <p class="kb-muted">Si existe una campaña aplicable, LoyaltyCloud calcula automáticamente el beneficio correspondiente.</p>
-                <a class="kb-btn kb-btn--primary" href="/scan">Ir a Sumar puntos</a>
+                @if (isStamps)
+                {
+                    <h2>Agregar sellos</h2>
+                    <ol>
+                        <li>Abre Operaciones y escanea el QR de Wallet del cliente.</li>
+                        <li>Al escanear se agrega un sello. Confirma el cliente y su progreso.</li>
+                        <li>Si buscas por ID, revisa el cliente y toca Agregar sello.</li>
+                        <li>Si se desbloquea una recompensa, avisa al cliente.</li>
+                        <li>Toca Escanear cliente para comenzar otra operación.</li>
+                    </ol>
+                    <a class="kb-btn kb-btn--primary" href="/cashier">Ir a Operaciones</a>
+                }
+                else
+                {
+                    <h2>Sumar puntos</h2>
+                    <ol>
+                        <li>Busca o escanea el ID del cliente.</li>
+                        <li>Confirma que sea el cliente correcto.</li>
+                        <li>Captura el monto de la compra.</li>
+                        <li>Confirma la compra.</li>
+                        <li>Los puntos aparecen en su tarjeta Wallet.</li>
+                    </ol>
+                    <p class="kb-muted">Si existe una campaña aplicable, LoyaltyCloud calcula automáticamente el beneficio correspondiente.</p>
+                    <a class="kb-btn kb-btn--primary" href="/scan">Ir a Sumar puntos</a>
+                }
             </div>
         </article>
 
         <article class="kb-card kb-help-card">
             <div class="kb-help-number">3</div>
             <div>
-                <h2>Canjear puntos</h2>
-                <ol>
-                    <li>Busca o escanea el ID del cliente.</li>
-                    <li>Selecciona Descuento en dinero.</li>
-                    <li>Captura los puntos a canjear.</li>
-                    <li>LoyaltyCloud calcula automáticamente el descuento.</li>
-                    <li>Aplica ese importe manualmente en la caja/POS.</li>
-                    <li>Confirma el canje.</li>
-                    <li>El saldo se actualiza automáticamente.</li>
-                </ol>
-                <a class="kb-btn kb-btn--primary" href="/redeem">Ir a Canjear puntos</a>
+                @if (isStamps)
+                {
+                    <h2>Entregar una recompensa</h2>
+                    <ol>
+                        <li>Busca al cliente por ID en Operaciones.</li>
+                        <li>Revisa las recompensas disponibles y toca Canjear.</li>
+                        <li>Confirma el canje y entrega la recompensa al cliente.</li>
+                    </ol>
+                    <a class="kb-btn kb-btn--primary" href="/cashier">Ir a Operaciones</a>
+                }
+                else
+                {
+                    <h2>Canjear puntos</h2>
+                    <ol>
+                        <li>Busca o escanea el ID del cliente.</li>
+                        <li>Selecciona Descuento en dinero.</li>
+                        <li>Captura los puntos a canjear.</li>
+                        <li>LoyaltyCloud calcula automáticamente el descuento.</li>
+                        <li>Aplica ese importe manualmente en la caja/POS.</li>
+                        <li>Confirma el canje.</li>
+                        <li>El saldo se actualiza automáticamente.</li>
+                    </ol>
+                    <a class="kb-btn kb-btn--primary" href="/redeem">Ir a Canjear puntos</a>
+                }
             </div>
         </article>
 
@@ -142,7 +172,8 @@
                 <h2>Buscar o escanear cliente</h2>
                 <ul>
                     <li>En Clientes puedes buscar por nombre o ID del cliente.</li>
-                    <li>En Sumar puntos y Canjear puntos puedes escanear el QR de Wallet.</li>
+                    @if (isStamps) { <li>En Operaciones puedes buscar por ID o escanear el QR de Wallet. Escanear agrega un sello.</li> }
+                    else { <li>En Sumar puntos y Canjear puntos puedes escanear el QR de Wallet.</li> }
                     <li>También puedes escribir manualmente el ID del cliente si la cámara no está disponible.</li>
                 </ul>
             </div>
@@ -161,12 +192,27 @@
                 <p>Abre nuevamente el enlace de registro del tenant. Si el cliente ya existe, LoyaltyCloud mostrará el botón para agregar su tarjeta a Apple Wallet.</p>
             </div>
             <div>
-                <h3>No tiene puntos suficientes</h3>
-                <p>No realices el canje. Revisa saldo y recompensas disponibles desde Canjear puntos.</p>
+                @if (isStamps)
+                {
+                    <h3>La recompensa aún no está disponible</h3>
+                    <p>Revisa en Operaciones cuántos sellos faltan para obtenerla. No realices el canje hasta que aparezca el botón Canjear.</p>
+                }
+                else
+                {
+                    <h3>No tiene puntos suficientes</h3>
+                    <p>No realices el canje. Revisa saldo y recompensas disponibles desde Canjear puntos.</p>
+                }
             </div>
             <div>
                 <h3>Canje equivocado</h3>
-                <p>Ve a Canjes, busca el canje pendiente y usa Cancelar si todavía no fue confirmado.</p>
+                @if (isStamps)
+                {
+                    <p>Revisa la recompensa antes de confirmar el canje. Un canje confirmado no se puede cancelar desde Operaciones.</p>
+                }
+                else
+                {
+                    <p>Ve a Canjes, busca el canje pendiente y usa Cancelar si todavía no fue confirmado.</p>
+                }
             </div>
         </div>
     </section>
@@ -177,6 +223,7 @@
     private string? registrationQrDataUri;
     private string? copyMessage;
     private TenantBrandingInfo? branding;
+    private bool isStamps;
 
     private string BusinessName => branding?.DisplayName ?? "LoyaltyCloud";
 
@@ -187,6 +234,8 @@
 
     protected override async Task OnInitializedAsync()
     {
+        await TenantInitializer.EnsureTenantContextAsync();
+        isStamps = await Programs.GetCurrentAsync() == LoyaltyCloud.Domain.Enums.LoyaltyProgramType.Stamps;
         var auth = await AuthenticationStateProvider.GetAuthenticationStateAsync();
         var tenantSlug = auth.User.FindFirstValue(AdminClaimTypes.TenantSlug);
 

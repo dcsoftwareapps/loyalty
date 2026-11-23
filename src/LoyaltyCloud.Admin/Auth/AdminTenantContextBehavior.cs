@@ -1,4 +1,5 @@
 using MediatR;
+using LoyaltyCloud.Application.SelfServiceSignup;
 
 namespace LoyaltyCloud.Admin.Auth;
 
@@ -23,6 +24,12 @@ public sealed class AdminTenantContextBehavior<TRequest, TResponse>
         RequestHandlerDelegate<TResponse> next,
         CancellationToken cancellationToken)
     {
+        // Public signup creates the tenant boundary, so there is no tenant context
+        // to restore before its handler runs. It can also execute from a regular
+        // HTTP endpoint, where Blazor's NavigationManager is intentionally absent.
+        if (request is SelfServiceSignupCommand)
+            return await next();
+
         await _initializer.EnsureTenantContextAsync(cancellationToken);
         return await next();
     }

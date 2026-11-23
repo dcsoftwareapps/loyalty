@@ -1,5 +1,6 @@
 using System.Text.RegularExpressions;
 using FluentValidation;
+using LoyaltyCloud.Domain.Entities;
 
 namespace LoyaltyCloud.Application.Provisioning;
 
@@ -7,6 +8,27 @@ internal sealed partial class ProvisionTenantValidator : AbstractValidator<Provi
 {
     public ProvisionTenantValidator()
     {
+        RuleFor(c => c.SupportPhone)
+            .Must(value => OptionalLength(value, TenantBranding.SupportPhoneMaxLength))
+            .WithMessage($"Soporte: máximo {TenantBranding.SupportPhoneMaxLength} caracteres.");
+        RuleFor(c => c.PrimaryColor)
+            .Must(value => OptionalLength(value, TenantBranding.ColorMaxLength))
+            .WithMessage($"Color primario: máximo {TenantBranding.ColorMaxLength} caracteres.");
+        RuleFor(c => c.SecondaryColor)
+            .Must(value => OptionalLength(value, TenantBranding.ColorMaxLength))
+            .WithMessage($"Color secundario: máximo {TenantBranding.ColorMaxLength} caracteres.");
+        RuleFor(c => c.WhatsAppUrl)
+            .Must(OptionalUrlLength)
+            .WithMessage($"WhatsApp URL: máximo {TenantBranding.UrlMaxLength} caracteres.");
+        RuleFor(c => c.InstagramUrl)
+            .Must(OptionalUrlLength)
+            .WithMessage($"Instagram URL: máximo {TenantBranding.UrlMaxLength} caracteres.");
+        RuleFor(c => c.TermsUrl)
+            .Must(OptionalUrlLength)
+            .WithMessage($"Términos URL: máximo {TenantBranding.UrlMaxLength} caracteres.");
+
+        RuleFor(c => c.ProgramType).IsInEnum();
+
         RuleFor(c => c.Slug)
             .Cascade(CascadeMode.Stop)
             .NotEmpty()
@@ -22,6 +44,9 @@ internal sealed partial class ProvisionTenantValidator : AbstractValidator<Provi
             .WithMessage("DisplayName no puede exceder 200 caracteres.");
 
         RuleFor(c => c.TimeZoneId)
+            .Cascade(CascadeMode.Stop)
+            .Must(value => OptionalLength(value, 100))
+            .WithMessage("Zona horaria: máximo 100 caracteres.")
             .Must(BeValidTimeZone)
             .When(c => !string.IsNullOrWhiteSpace(c.TimeZoneId))
             .WithMessage("TimeZoneId no es valido en este runtime.");
@@ -35,6 +60,17 @@ internal sealed partial class ProvisionTenantValidator : AbstractValidator<Provi
         RuleFor(c => c.AdminPassword)
             .NotEmpty()
             .MinimumLength(8);
+
+        RuleFor(c => c.AdminEmail)
+            .Cascade(CascadeMode.Stop)
+            .Must(value => value!.Trim().Length <= 254)
+            .WithMessage("AdminEmail no puede exceder 254 caracteres.")
+            .EmailAddress()
+            .WithMessage("AdminEmail debe ser un email valido.")
+            .When(c => !string.IsNullOrWhiteSpace(c.AdminEmail));
+
+        RuleFor(c => c.TrialPolicy)
+            .IsInEnum();
 
         RuleFor(c => c.WhatsAppUrl)
             .Must(BeSafeOptionalUrl)
@@ -51,6 +87,15 @@ internal sealed partial class ProvisionTenantValidator : AbstractValidator<Provi
             .When(c => !string.IsNullOrWhiteSpace(c.TermsUrl))
             .WithMessage("TermsUrl debe ser una URL absoluta http o https.");
     }
+
+    private static bool OptionalLength(string? value, int maximum) =>
+        string.IsNullOrWhiteSpace(value) || value.Trim().Length <= maximum;
+
+    private static bool OptionalUrlLength(string? value) =>
+        OptionalLength(value, TenantBranding.UrlMaxLength)
+        // Provisioning stores Uri.ToString(); canonicalization can add characters.
+        && (!Uri.TryCreate(value?.Trim(), UriKind.Absolute, out var uri)
+            || OptionalLength(uri.ToString(), TenantBranding.UrlMaxLength));
 
     private static bool BeValidTimeZone(string? value)
     {

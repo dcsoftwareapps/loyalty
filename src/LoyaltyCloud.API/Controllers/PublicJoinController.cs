@@ -53,7 +53,7 @@ public sealed class PublicJoinController : ControllerBase
         var result = await _sender.Send(new JoinCustomerCommand(
             body.FirstName,
             body.LastName,
-            body.Phone), ct);
+            body.Phone, body.BirthdayDay, body.BirthdayMonth), ct);
 
         if (result.IsFailure)
             return BadRequest(new ProblemDetails { Title = $"Alta {tenant.Info!.DisplayName}", Detail = result.Error });
@@ -150,7 +150,7 @@ public sealed class PublicJoinController : ControllerBase
     public sealed record PublicJoinRequest(
         string FirstName,
         string LastName,
-        string Phone);
+        string Phone, int? BirthdayDay = null, int? BirthdayMonth = null);
 
     public sealed record PublicJoinResponse(
         Guid CustomerId,

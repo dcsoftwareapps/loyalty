@@ -1,10 +1,245 @@
 # LoyaltyCloud - AI Handoff
 
-Last updated: 2026-09-08
+Last updated: 2026-10-01
 
-Branch: `feature/cashier-mobile-points`
+Branch: `feature/stamps-wallet-prototype`
 
-Last task worked: Cashier mobile app Phase 4B customer lookup and points.
+Last task worked: Stamps stable reward identities, visual assets/Admin and Apple Wallet.
+
+## 2026-10-01 - Stamps visual assets and productive Apple projection
+
+- Continued the existing partial working tree on feature/stamps-wallet-prototype;
+  no branch recreation, commit/push/merge/PR/deploy or STG/PROD database update.
+- Stable StampRewardIdentity is independent of immutable StampRewardDefinition.
+  Editor/contract transports explicit RewardIdentityId. Edits retain it; remove/add
+  creates another even for identical content. No name/threshold/description heuristics.
+  EarnedStampReward snapshots and historical cycle version thresholds stay unchanged.
+- Tenant visual config: empty/filled assets; reward image lives on the identity.
+  /stamps appearance section has previews/upload/reset independently of rule save.
+  Existing shared upload/preview CSS reused. New rewards receive upload controls
+  after saving their economic version and server-issued identities.
+  Page/upload callbacks refresh AdminCurrentUserService from authenticated circuit
+  state like existing WebStampCashierApi, rather than relying on callback HttpContext.
+- Private Blob storage reuses existing tenant prefix and PassContainer with random
+  stamps PNG paths. Actual decoding validates PNG/JPEG, 2 MB, dimensions <=4096;
+  normalizes one frame to PNG, max 1024, preserving aspect ratio. No credentials
+  reach UI. Old blobs/identities are retained rather than deleting historical assets.
+- Production renderer draws native 1x/2x/3x strips, maximum two rows; defaults are
+  deterministic ImageSharp artwork. Rewards occupy their threshold cells. Locked
+  image is grayscale/reduced contrast/brightness plus integrated in-cell lock.
+- Apple generator branches by persisted ProgramType before levels/Points reads.
+  Existing signing/package and identity are shared. Stamps front shows only SELLOS,
+  grid and QR; customer is on back. No accumulated reward history/count is rendered.
+  Existing public/PassKit routes serve Stamps; registration can generate its pass.
+- Wallet projection does not mutate cycles: latest cycle, own version, current
+  identity assets. Completed card stays N/N until backend Earn rolls it to 1/N.
+- Existing Apple refresh after committed Earn/Reversal; visuals refresh installed
+  tenant passes after save. APNs errors cannot undo economic writes. Redeem does not
+  refresh. No Google Wallet changes, new polling or automatic Stamps notifications.
+- Migration 20261002010407_AddStampRewardIdentityAndVisualAssets is unchanged in
+  model scope and not deployed. Its backfill creates independent identities per
+  prior definition. SQL LocalDB test applies the older migration, seeds two identical
+  historical definitions, then applies this migration and verifies separate IDs.
+- Final combined validation: 221/221 passed, covering StampVisualAssets,
+  StampFoundation/Operations/Admin/Cashier, TenantProgramType, WalletProductionUpdate,
+  TenantBranding, AdminCustomerPoints/AdminRedemptionFlow and CashierAuth.
+  After the final circuit-identity/busy-state UI adjustment, focused
+  StampVisualAssets + StampAdmin passed again: 43/43, with no compilation warnings.
+- Two complete pkpass ZIPs signed with test-only certificate generated under ignored
+  artifacts/stamps-wallet-production-tests. Verified detached PKCS#7, all manifest
+  hashes, icon/logo/strip entries, exact dimensions and serial/auth token/QR. These
+  are NOT installable passes signed with a real Apple-issued Pass certificate.
+- PNG examples cover all requested 5/10/12 progress states, defaults, intermediate
+  and final rewards, custom extreme-aspect artwork; files stay under ignored artifacts.
+- Remaining physical QA: real Blob upload/reset and previews in Admin, installed
+  iPhone pass grid/SELLOS/QR and locked state, welcome/completion/rollover, APNs after
+  Earn/Reversal and visual changes, historical thresholds/current image, Points pass
+  non-regression. Do not merge or release before integrated QA.
+
+Validation commands:
+
+```powershell
+dotnet test .\tests\LoyaltyCloud.Tests\LoyaltyCloud.Tests.csproj --filter "Category=StampVisualAssets|Category=StampFoundation|Category=StampOperations|Category=StampAdmin|Category=StampCashier|Category=TenantProgramType|Category=WalletProductionUpdate|Category=TenantBranding|Category=AdminCustomerPoints|Category=AdminRedemptionFlow|Category=CashierAuth"
+dotnet build .\src\LoyaltyCloud.API\LoyaltyCloud.API.csproj -c Release
+dotnet build .\src\LoyaltyCloud.Admin\LoyaltyCloud.Admin.csproj -c Release
+dotnet build .\src\LoyaltyCloud.Tools\LoyaltyCloud.Tools.csproj -c Release
+dotnet ef migrations has-pending-model-changes --project .\src\LoyaltyCloud.Infrastructure\LoyaltyCloud.Infrastructure.csproj --startup-project .\src\LoyaltyCloud.API\LoyaltyCloud.API.csproj
+git diff --check
+```
+
+Final results: API, Admin and Tools Release builds each passed with zero warnings
+and errors. EF reports no model changes since the last migration. `git diff --check`
+passed; Git prints only normal LF/CRLF notices. MAUI was not built or modified.
+Working tree contains 19 modified tracked files and 12 new files for this phase;
+generated examples/test pkpass files are ignored and are not staged.
+
+The older dated sections below describe scope at their own completion, not the
+current implementation.
+
+## 2026-10-01 - Cashier Stamps UX
+
+- Shared Razor panel (linked into MAUI) and platform-independent StampCashierFlow;
+  Web `/cashier` selects by persisted Tenant.ProgramType; mobile login/session now
+  includes ProgramType. Old mobile sessions without this property require new login.
+- QR pauses/closes through existing scanners before state lookup and automatic +1.
+  Local gate ignores repeated callbacks. Only explicit next-scan action opens camera.
+  Manual lookup is read-only; Agregar sello is explicit. Completion stays N/N.
+- Available rewards group by name/description/threshold while preserving individual
+  IDs. Redeem and reversal require confirmation. Backend CanReverseLastEarn reflects
+  original cycle policy, actual active operator role and non-redeemed last-Earn rewards.
+- Earn/Redeem/Reversal persist one request/key before sending; uncertain responses
+  retain it for retry/restoration. Keys are scoped by environment, tenant and user.
+  MAUI reuses SecureStorage; Web uses sessionStorage (tab lifetime limitation).
+- Web operator identity is refreshed from authenticated circuit state rather than
+  depending on HttpContext during callbacks; SQL operator/tenant checks are unchanged.
+- No schema changes, migration, database update, commit or deployment. Wallet/assets/
+  Stamps notifications/reports are not implemented. Physical Android/iPhone QA remains.
+- Validate with StampCashier plus StampOperations/Foundation/Admin, CashierMobile/Auth,
+  Points and GiftCards regressions; API/Admin Release and MAUI Windows Debug target.
+- Final validation: 332/332 tests passed, including tenant/platform auth, staff and
+  Wallet Points regressions. API and Admin Release: zero warnings/errors. MAUI
+  `net9.0-windows10.0.19041.0`, Debug, Staging: zero warnings/errors. No iOS/store
+  package generated. `git diff --check` passed with only Git LF/CRLF notices.
+
+## 2026-10-01 - Stamps Admin configuration
+
+- `/stamps` uses TenantAdmin authorization and existing Application commands/services.
+  Supports initial configuration and versioned edits, MaxStamps 2..12, welcome below
+  maximum, final reward and Spanish reversal options. No assets or Wallet integration.
+- Service compares normalized rules/rewards under the existing tenant transaction
+  lock. Unchanged or reordered equivalent rewards do not create another version.
+- MainLayout prevents rendering incompatible program pages. Stamps retains Customers,
+  Messages, enabled Gift Cards, general configuration, billing and staff; Points keeps
+  its navigation. Anonymous layout rendering must not query unresolved tenant rules.
+- Points dashboard/operations/reports are unavailable for Stamps; no Stamps reports
+  were introduced. Config hides Points benefits and Points preview only for Stamps.
+- No model/migration, deployment or database update in this phase. Cashier, visual
+  assets, Wallet and Stamps reports remain pending. Validation results are reported
+  in the task close-out; no production/mobile validation is implied here.
+
+## 2026-10-01 - Stamps operational engine
+
+- Foundation phase was committed before this phase. Continued the same branch from
+  a clean tree; no checkout/new branch, commit/push/merge/PR/deploy.
+- Added EarnedStampReward with economic snapshot and Available/Redeemed/Voided audit.
+  Redemption lives on this entity (specific reward ID, operator and timestamp), not
+  in Points Redemption or Gift Cards and not a separate StampRewardRedemption table.
+- Added StampOperationReceipt for tenant-wide key uniqueness and stored original
+  result. Cycle-scoped ledger uniqueness alone cannot protect a retry after rollover.
+  Fingerprint includes operation, normalized serial, reward ID and authenticated
+  operator; changed fingerprint is a conflict. Operational ledger keys hash the key
+  so they cannot collide with the system Welcome key. Client must persist its key
+  before sending and reuse it after timeouts; future Cashier UI is not implemented.
+- Earn always +1, unlocks threshold snapshots and completes at N/N in one SQL unit.
+  Next earn alone creates the next cycle with active rules, no welcome, then 1/N.
+- Reversal selects latest unreversed Earn in the latest cycle, never Welcome/old cycle;
+  applies that cycle's reversal policy, rejects redeemed source rewards atomically,
+  voids available source rewards and writes -1 referencing the original Earn. Final
+  reversal clears CompletedAt. No physical deletion of ledger/earned rewards.
+- SQL execution strategy + transaction + common tenant UPDLOCK/HOLDLOCK serializes
+  Earn/Reversal/Redemption/configuration across instances. This deliberately coarse
+  tenant lock favors correctness for V1; no in-memory concurrency locks.
+- New API routes use existing bearer/CashierOperations pattern like GiftCardsController:
+  GET /api/stamps/{serialNumber}; POST suffixes /earn, /reverse-last and
+  /rewards/{rewardId}/redeem. No client-supplied quantity/user/tenant is accepted.
+  Current operator is rechecked against tenant-owned active staff. Points rejected.
+- Migration `20261001192907_AddStampOperations` creates two Stamps tables and ledger
+  sequence/unique reversal indexes. Only disposable SQL LocalDB test DBs migrated;
+  no STG/PROD database changes.
+- No Admin/Cashier UI, scanner, assets, productive Wallet, reports or notifications.
+  Next phase is Cashier Stamps UX consuming these operations with persistent retry keys.
+
+Validation for this phase:
+
+- Final combined run: 184/184 passed. Categories: StampOperations, StampFoundation,
+  TenantProgramType, TenantProvisioning, RegisterCustomerHandlerTests,
+  AdminCustomerPoints, AdminRedemptionFlow, MonetaryRedemption,
+  WalletProductionUpdate, GiftCards and CashierAuth.
+- Operational concurrency/rollover/redemption/reversal/receipt tests use real SQL
+  Server LocalDB disposable databases. HTTP authentication and unknown-field tests
+  use the existing TestServer fixture; they do not substitute for SQL transaction tests.
+- One intermediate run exhausted the fixture's shared login rate limiter after an
+  extra login. New HTTP test now uses the real token service plus bearer validation
+  without consuming a login; product authentication/rate-limit configuration unchanged.
+- Release API/Admin builds: zero warnings/errors; no MAUI build.
+- EF pending check: no changes since last migration. Git diff check passed with
+  normal CRLF normalization warnings. No STG/PROD migration or deployment.
+
+
+## 2026-10-01 - Stamps domain foundation
+
+- Previous ProgramType/provisioning phase was committed before this work; started
+  with a clean tree on the same `feature/stamps-wallet-prototype` branch.
+- Added StampProgramVersion, StampRewardDefinition, StampCycle and StampTransaction.
+  No Points/Gift Card table changes. Card relationship reuses the existing composite
+  tenant/serial key; new Stamps relationships preserve tenant IDs in SQL FKs.
+- V1 configuration uses MaxStamps 2..12 (minimum 2 distinguishes a stamp-collection
+  goal from an immediate one-step reward); domain/DB permit larger values.
+  Welcome must be below max, reward thresholds unique and final reward required.
+- SetStampProgramCommand handles initial setup and edits by creating a new version.
+  Active same-tenant Admin is checked through current identity and SQL; no endpoint
+  or UI added. GetActiveStampProgramQuery provides the tenant-scoped configuration.
+- Serializable SQL transaction inside CreateExecutionStrategy, tenant UPDLOCK/HOLDLOCK,
+  monotonic version number and unique active index protect concurrent writers.
+  Stable version ID and cleared tracking recognize an ambiguously acknowledged commit.
+  No external side effects in this transaction.
+- Customer registration fails before creating entities if Stamps has no active rules.
+  Otherwise Customer/Card/cycle/welcome ledger commit in one SaveChanges. Welcome
+  is system-generated (null operator), cycle #1 only; zero welcome has no ledger row.
+- Existing cycles retain old rules. No earn, reversal, earned reward, redemption,
+  automatic next cycle, visual assets, Wallet integration or Cashier Stamps implemented.
+- Migration: `20261001180152_AddStampProgramFoundation`. Only new Stamps structures;
+  migration execution is limited to disposable SQL LocalDB tests, not STG/PROD.
+- Next phase at foundation completion was earn/cycle transition (now implemented above). Completed
+  cycles must stay N/N until the next earn creates a cycle with current rules.
+- No commit/push/merge/PR/deploy. This phase remains in the working tree.
+
+Validation:
+
+- Focused foundation/provisioning/registration run: 48/48 passed before the two
+  additional concurrency/authorization and SQL cross-tenant FK tests.
+- Combined foundation and Points/Wallet regression run: 140/140 passed (SQL LocalDB
+  tests, not just InMemory). Filters include StampFoundation, TenantProgramType,
+  TenantProvisioning, RegisterCustomerHandlerTests, AdminCustomerPoints,
+  AdminRedemptionFlow, MonetaryRedemption, WalletProductionUpdate and MTLevel6.
+- Release API/Admin builds: zero warnings/errors; no MAUI build.
+- EF pending model check: no changes since last migration. Diff check passed.
+
+## 2026-10-01 - ProgramType and provisioning
+
+- Wallet prototype was completed and committed before this phase. Keep all Stamps
+  phases on this branch; do not PR/merge into staging until the complete feature is validated.
+- Added immutable `Tenant.ProgramType` (Points/Stamps), default Points; Platform
+  provisioning offers Puntos/Sellos and Tools accepts `--program-type`.
+- EF string conversion follows the tenant Role convention. Migration
+  `20261001134125_AddTenantProgramType` only adds the required Tenants column with
+  default Points; existing rows are backfilled. No STG/PROD database update.
+- Points provisioning remains unchanged. Stamps gets tenant/admin/branding/trial
+  subscription, without point config/levels. Registration creates Customer and
+  LoyaltyCard identity without point bonuses or a Points Wallet pass.
+- MediatR Points writes are guarded; direct level management has its own guard.
+  Auth, lookup, QR identity, branding and Gift Cards remain independent.
+- Regression coverage includes SQL LocalDB migration backfill, provisioning both
+  types, login/registration, immutability including EF update rejection, Points
+  writes rejected for Stamps, Points earn/catalog/monetary redemption retained,
+  and Gift Card issuance/redemption for both types.
+- Stamps business entities, rules, cycles, rewards, earn/reversal, Cashier and
+  Apple/Google Wallet production integration are not implemented in this phase.
+- Next phase should implement the approved Stamps rules/version model. This phase
+  was subsequently committed by the user; no push/merge/deploy was performed during that task.
+
+Validation completed:
+
+- Final focused run: `Category=TenantProgramType|Category=TenantProvisioning|FullyQualifiedName~RegisterCustomerHandlerTests`, 35/35 passed.
+- Regression run including WalletProductionUpdate, AdminRedemptionFlow,
+  MonetaryRedemption and MTLevel6: 114/114 passed before the final additional
+  cross-program tenant-isolation test; that test passed in the final focused run.
+- Release builds of API and Admin: 0 warnings, 0 errors. Test compilation also
+  covers Tools and the affected non-MAUI dependencies.
+- EF `has-pending-model-changes`: no changes since the last migration.
+- Backfill/migration tests run only against disposable SQL LocalDB test databases.
+  No Azure database migration, database update or deploy was executed.
+- `git diff --check` passed (Git reports normal LF/CRLF normalization warnings).
 
 ## 2026-09-08 - Cashier mobile app Phase 4B customer + points
 

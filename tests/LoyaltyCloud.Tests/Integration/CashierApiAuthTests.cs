@@ -237,6 +237,43 @@ public sealed class CashierApiAuthTests : IClassFixture<CustomWebApplicationFact
             password
         });
 
+    [Theory]
+    [Trait("Category", "StampOperations")]
+    [InlineData("/api/stamps/TEST/earn")]
+    [InlineData("/api/stamps/TEST/reverse-last")]
+    [InlineData("/api/stamps/TEST/rewards/aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa/redeem")]
+    public async Task Stamp_writes_require_bearer_authentication(string path)
+    {
+        using var response = await _client.PostAsJsonAsync(path, new { idempotencyKey = "test" });
+        Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+    }
+
+    [Fact]
+    [Trait("Category", "StampOperations")]
+    public async Task Stamp_state_requires_auth_and_bearer_requests_reject_quantity_and_points_program()
+    {
+        using var anonymous = await _client.GetAsync("/api/stamps/TEST");
+        Assert.Equal(HttpStatusCode.Unauthorized, anonymous.StatusCode);
+        // Exercise real bearer validation without consuming the shared login rate-limit budget.
+        using var scope = _factory.Services.CreateScope();
+        scope.ServiceProvider.GetRequiredService<IMutableTenantContext>().SetTenant(TenantSeed.KBeautyTenantId, TenantSeed.KBeautySlug);
+        var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        var tenant = await db.Tenants.SingleAsync(x => x.Id == TenantSeed.KBeautyTenantId);
+        var user = await db.TenantAdminUsers.SingleAsync(x => x.Id == CashierUserId);
+        var token = scope.ServiceProvider.GetRequiredService<CashierAccessTokenService>().CreateToken(tenant, user).AccessToken;
+        using var quantityRequest = new HttpRequestMessage(HttpMethod.Post, "/api/stamps/TEST/earn")
+        { Content = JsonContent.Create(new { idempotencyKey = "test", quantity = 100, userId = "untrusted" }) };
+        quantityRequest.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
+        using var quantity = await _client.SendAsync(quantityRequest);
+        Assert.Equal(HttpStatusCode.BadRequest, quantity.StatusCode);
+        using var pointsRequest = new HttpRequestMessage(HttpMethod.Post, "/api/stamps/TEST/earn")
+        { Content = JsonContent.Create(new { idempotencyKey = "test" }) };
+        pointsRequest.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
+        using var points = await _client.SendAsync(pointsRequest);
+        Assert.Equal(HttpStatusCode.BadRequest, points.StatusCode);
+        Assert.Contains("Sellos", await points.Content.ReadAsStringAsync());
+    }
+
     private async Task<string> LoginAndGetTokenAsync(string username, string password, string tenantSlug = TenantSeed.KBeautySlug)
     {
         using var response = await LoginAsync(username, password, tenantSlug);

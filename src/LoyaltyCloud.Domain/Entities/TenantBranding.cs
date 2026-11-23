@@ -4,6 +4,10 @@ using LoyaltyCloud.Domain.Enums;
 
 public sealed class TenantBranding
 {
+    public const int SupportPhoneMaxLength = 50;
+    public const int UrlMaxLength = 1000;
+    public const int ColorMaxLength = 20;
+
     public const int DefaultWalletLogoScalePercent = 100;
     public const int MinWalletLogoScalePercent = 60;
     public const int MaxWalletLogoScalePercent = 100;
@@ -46,10 +50,10 @@ public sealed class TenantBranding
         LogoBlobName = null;
         PrimaryColor = NormalizeColor(primaryColor, "#1C1C1C", nameof(primaryColor));
         SecondaryColor = NormalizeColor(secondaryColor, "#E8668E", nameof(secondaryColor));
-        SupportPhone = NormalizeOptional(supportPhone, 50);
-        WhatsAppUrl = NormalizeOptional(whatsAppUrl, 1000);
-        InstagramUrl = NormalizeOptional(instagramUrl, 1000);
-        TermsUrl = NormalizeOptional(termsUrl, 1000);
+        SupportPhone = NormalizeOptional(supportPhone, SupportPhoneMaxLength);
+        WhatsAppUrl = NormalizeOptional(whatsAppUrl, UrlMaxLength);
+        InstagramUrl = NormalizeOptional(instagramUrl, UrlMaxLength);
+        TermsUrl = NormalizeOptional(termsUrl, UrlMaxLength);
     }
 
     public void SetLogo(string? logoUrl, string logoBlobName)
@@ -116,8 +120,8 @@ public sealed class TenantBranding
     private static string NormalizeColor(string? value, string fallback, string paramName)
     {
         var color = string.IsNullOrWhiteSpace(value) ? fallback : value.Trim();
-        if (color.Length > 20)
-            throw new ArgumentException($"{paramName} no puede exceder 20 caracteres.", paramName);
+        if (color.Length > ColorMaxLength)
+            throw new ArgumentException($"{paramName} no puede exceder {ColorMaxLength} caracteres.", paramName);
 
         return color;
     }

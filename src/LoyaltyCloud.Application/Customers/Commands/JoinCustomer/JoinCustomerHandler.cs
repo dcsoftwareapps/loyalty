@@ -54,7 +54,8 @@ public sealed class JoinCustomerHandler : IRequestHandler<JoinCustomerCommand, R
         var registerResult = await _sender.Send(new RegisterCustomerCommand(
             FullName: fullName,
             Email: BuildInternalEmail(phone),
-            DateOfBirth: Customer.BirthdayNotCaptured,
+            DateOfBirth: command.BirthdayDay.HasValue && command.BirthdayMonth.HasValue
+                ? new DateTime(2000, command.BirthdayMonth.Value, command.BirthdayDay.Value) : Customer.BirthdayNotCaptured,
             Phone: phone,
             ReferredBySerialNumber: null), ct);
 
