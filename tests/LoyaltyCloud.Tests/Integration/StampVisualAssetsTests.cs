@@ -1,12 +1,15 @@
 using System.Collections.Concurrent;
 using LoyaltyCloud.Application.Common.Interfaces;
 using LoyaltyCloud.Application.Stamps;
+using LoyaltyCloud.Domain.Entities;
 using LoyaltyCloud.Domain.Enums;
 using LoyaltyCloud.Infrastructure.Persistence;
 using LoyaltyCloud.Infrastructure.Services;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
+using Microsoft.Extensions.Logging;
+using Moq;
 using SixLabors.ImageSharp;
 using SixLabors.ImageSharp.PixelFormats;
 using Xunit;
@@ -17,6 +20,109 @@ namespace LoyaltyCloud.Tests.Integration;
 [Trait("Category", "StampVisualAssets")]
 public sealed class StampVisualAssetsTests
 {
+    [Fact]
+    public async Task Stamp_icon_change_refreshes_installed_cards_and_is_tenant_scoped_without_duplicate_updates()
+    {
+        var store = new MemoryAssets(); var apple = new RecordingRefresh();
+        var google = new Mock<IGoogleStampWalletService>();
+        google.Setup(x => x.SynchronizeBySerialNumberIfExistsAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .Returns(Task.CompletedTask);
+        await using var env = await EnvironmentAsync(store, apple, google);
+        var a = (await env.ProvisionAsync("art-refresh-a", "A", "owner", "Owner123!", programType: LoyaltyProgramType.Stamps)).Value.TenantId;
+        var b = (await env.ProvisionAsync("art-refresh-b", "B", "owner", "Owner123!", programType: LoyaltyProgramType.Stamps)).Value.TenantId;
+        await env.ConfigureStampsAsync(a, "art-refresh-a");
+        await env.ConfigureStampsAsync(b, "art-refresh-b");
+        var serialA = (await env.JoinAsync(a, "art-refresh-a", "A", "Member", "6465550031")).Value.SerialNumber;
+        var serialB = (await env.JoinAsync(b, "art-refresh-b", "B", "Member", "6465550032")).Value.SerialNumber;
+        var cardA = await RegisterGoogleAsync(env, a, "art-refresh-a", serialA);
+        await env.TenantReadAsync(a, "art-refresh-a", async db =>
+        {
+            db.DeviceRegistrations.Add(new DeviceRegistration(Guid.NewGuid(), a, "device-a", "pass.test.loyalty",
+                serialA, "push-a", DateTime.UtcNow));
+            await db.SaveChangesAsync(); return true;
+        });
+        await RegisterGoogleAsync(env, b, "art-refresh-b", serialB);
+        var before = StampStripRenderer.Render(await Projection(env, a, "art-refresh-a", serialA), "#FFFFFF")[0].Bytes;
+        var newImage = Png(80, 80, new Rgba32(17, 91, 219));
+        var result = await env.InTenantScopeAsync(a, "art-refresh-a", sp =>
+            sp.GetRequiredService<IStampVisualService>().UpdateAsync(StampImageKind.Empty, null, newImage));
+        Assert.True(result.IsSuccess, result.Error);
+        var after = await Projection(env, a, "art-refresh-a", serialA);
+        Assert.Equal(StampVisualService.NormalizeImage(newImage), after.EmptyImage);
+        Assert.NotEqual(before, StampStripRenderer.Render(after, "#FFFFFF")[0].Bytes);
+        Assert.Contains(apple.CardCalls, call => call.Id == cardA && call.Reason == PassUpdateReason.BrandingUpdated);
+        google.Verify(x => x.SynchronizeBySerialNumberIfExistsAsync(serialA, It.IsAny<CancellationToken>()), Times.Once);
+        google.Verify(x => x.SynchronizeBySerialNumberIfExistsAsync(serialB, It.IsAny<CancellationToken>()), Times.Never);
+
+        var uploads = store.Count;
+        result = await env.InTenantScopeAsync(a, "art-refresh-a", sp =>
+            sp.GetRequiredService<IStampVisualService>().UpdateAsync(StampImageKind.Empty, null, newImage));
+        Assert.True(result.IsSuccess, result.Error);
+        Assert.Equal(uploads, store.Count);
+        Assert.Single(apple.CardCalls, call => call.Reason == PassUpdateReason.BrandingUpdated);
+        google.Verify(x => x.SynchronizeBySerialNumberIfExistsAsync(serialA, It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    [Fact]
+    public async Task Reward_image_change_refreshes_only_cards_whose_current_cycle_uses_the_identity()
+    {
+        var apple = new RecordingRefresh(); var google = new Mock<IGoogleStampWalletService>();
+        google.Setup(x => x.SynchronizeBySerialNumberIfExistsAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .Returns(Task.CompletedTask);
+        await using var env = await EnvironmentAsync(new MemoryAssets(), apple, google);
+        const string slug = "reward-refresh";
+        var tenant = (await env.ProvisionAsync(slug, "Rewards", "owner", "Owner123!", programType: LoyaltyProgramType.Stamps)).Value.TenantId;
+        var old = await env.SendAsOperatorAsync(tenant, slug, new SetStampProgramCommand(3, 0, StampReversalPolicy.None, [new(3, "Old", null)]));
+        var oldSerial = (await env.JoinAsync(tenant, slug, "Old", "Member", "6465550041")).Value.SerialNumber;
+        await RegisterGoogleAsync(env, tenant, slug, oldSerial);
+        var current = await env.SendAsOperatorAsync(tenant, slug, new SetStampProgramCommand(3, 0, StampReversalPolicy.None, [new(3, "New", null)]));
+        var currentIdentity = current.Value.Rewards.Single().RewardIdentityId!.Value;
+        var currentSerial = (await env.JoinAsync(tenant, slug, "New", "Member", "6465550042")).Value.SerialNumber;
+        var currentCard = await RegisterGoogleAsync(env, tenant, slug, currentSerial);
+        var image = Png(72, 72, new Rgba32(19, 186, 87));
+        var result = await env.InTenantScopeAsync(tenant, slug, sp =>
+            sp.GetRequiredService<IStampVisualService>().UpdateAsync(StampImageKind.Reward, currentIdentity, image));
+        Assert.True(result.IsSuccess, result.Error);
+        Assert.Equal(old.Value.Id, (await Projection(env, tenant, slug, oldSerial)).VersionId);
+        Assert.Null((await Projection(env, tenant, slug, oldSerial)).Rewards.Single().Image);
+        Assert.Equal(StampVisualService.NormalizeImage(image), (await Projection(env, tenant, slug, currentSerial)).Rewards.Single().Image);
+        Assert.Contains(apple.CardCalls, call => call.Id == currentCard && call.Reason == PassUpdateReason.BrandingUpdated);
+        google.Verify(x => x.SynchronizeBySerialNumberIfExistsAsync(currentSerial, It.IsAny<CancellationToken>()), Times.Once);
+        google.Verify(x => x.SynchronizeBySerialNumberIfExistsAsync(oldSerial, It.IsAny<CancellationToken>()), Times.Never);
+
+        var upcoming = Png(72, 72, new Rgba32(70, 31, 177));
+        result = await env.InTenantScopeAsync(tenant, slug, sp =>
+            sp.GetRequiredService<IStampVisualService>().UpdateAsync(StampImageKind.UpcomingReward, currentIdentity, upcoming));
+        Assert.True(result.IsSuccess, result.Error);
+        Assert.Equal(StampVisualService.NormalizeImage(upcoming),
+            (await Projection(env, tenant, slug, currentSerial)).Rewards.Single().UpcomingImage);
+        google.Verify(x => x.SynchronizeBySerialNumberIfExistsAsync(currentSerial, It.IsAny<CancellationToken>()), Times.Exactly(2));
+        google.Verify(x => x.SynchronizeBySerialNumberIfExistsAsync(oldSerial, It.IsAny<CancellationToken>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task Wallet_failure_does_not_undo_saved_art_and_is_logged()
+    {
+        var logs = new RecordingLogProvider();
+        await using var env = await Env.CreateAsync(configure: services =>
+        {
+            services.RemoveAll<IStampVisualAssetStore>(); services.AddSingleton<IStampVisualAssetStore>(new MemoryAssets());
+            services.RemoveAll<IStampWalletRefreshService>(); services.AddSingleton<IStampWalletRefreshService>(new ThrowingRefresh());
+            services.AddLogging(builder => builder.AddProvider(logs));
+        });
+        const string slug = "art-failure";
+        var tenant = (await env.ProvisionAsync(slug, "Failure", "owner", "Owner123!", programType: LoyaltyProgramType.Stamps)).Value.TenantId;
+        await env.ConfigureStampsAsync(tenant, slug);
+        var serial = (await env.JoinAsync(tenant, slug, "A", "Member", "6465550051")).Value.SerialNumber;
+        await RegisterGoogleAsync(env, tenant, slug, serial);
+        var image = Png(60, 60, new Rgba32(190, 60, 30));
+        var result = await env.InTenantScopeAsync(tenant, slug, sp =>
+            sp.GetRequiredService<IStampVisualService>().UpdateAsync(StampImageKind.Filled, null, image));
+        Assert.True(result.IsSuccess, result.Error);
+        Assert.Equal(StampVisualService.NormalizeImage(image), (await Projection(env, tenant, slug, serial)).FilledImage);
+        Assert.Contains(logs.Messages, message => message.Contains("Stamps visual refresh failed after saving assets"));
+    }
+
     [Fact]
     public async Task Optional_upcoming_upload_and_removal_preserve_available_art_and_historical_rules()
     {
@@ -69,7 +175,7 @@ public sealed class StampVisualAssetsTests
             var row = await db.StampRewardIdentities.SingleAsync(); Assert.Null(row.UpcomingImageBlobName); Assert.Equal(availablePath, row.ImageBlobName);
             Assert.Equal(2, await db.StampProgramVersions.CountAsync()); Assert.Empty(await db.StampPassEventContexts.ToListAsync()); return true;
         });
-        Assert.Equal(3, refresh.TenantCalls.Count);
+        Assert.Empty(refresh.TenantCalls);
     }
 
     [Fact]
@@ -175,6 +281,14 @@ public sealed class StampVisualAssetsTests
             cycle.Earn(old, DateTime.UtcNow);
             db.Add(customer); db.Add(card); db.Add(cycle); await db.SaveChangesAsync(); return card.SerialNumber;
         });
+        await env.TenantReadAsync(a, "visual-a", async db =>
+        {
+            db.DeviceRegistrations.Add(new DeviceRegistration(Guid.NewGuid(), a, "device-old", "pass.test.loyalty",
+                historicalSerial, "push-old", DateTime.UtcNow));
+            db.DeviceRegistrations.Add(new DeviceRegistration(Guid.NewGuid(), a, "device-new", "pass.test.loyalty",
+                serial2, "push-new", DateTime.UtcNow));
+            await db.SaveChangesAsync(); return true;
+        });
         var bytes = Png(80, 160);
         var upload = await env.InTenantScopeAsync(a, "visual-a", sp => sp.GetRequiredService<IStampVisualService>()
             .UpdateAsync(StampImageKind.Reward, identity, bytes));
@@ -200,8 +314,10 @@ public sealed class StampVisualAssetsTests
             [new(8, "Regalo", "Editada")]));
         Assert.NotEqual(identity, readded.Value.Rewards.Single().RewardIdentityId);
         Assert.Equal(p1.Rewards.Single().Image, (await Projection(env, a, "visual-a", historicalSerial)).Rewards.Single().Image);
-        Assert.Single(refresh.TenantCalls);
-        Assert.All(refresh.CardCalls, c => Assert.Equal(PassUpdateReason.StampEarned, c.Reason));
+        Assert.Empty(refresh.TenantCalls);
+        Assert.Equal(2, refresh.CardCalls.Count(c => c.Reason == PassUpdateReason.BrandingUpdated));
+        Assert.All(refresh.CardCalls.Where(c => c.Reason != PassUpdateReason.BrandingUpdated),
+            c => Assert.Equal(PassUpdateReason.StampEarned, c.Reason));
         Assert.DoesNotContain((await Projection(env, a, "visual-a", historicalSerial)).Rewards, r => r.RequiredStamps == 8);
     }
 
@@ -237,8 +353,7 @@ public sealed class StampVisualAssetsTests
                 .UpdateAsync(kind, null, Png(160, 40)))).IsSuccess);
         Assert.True((await env.InTenantScopeAsync(a, "asset-a", sp => sp.GetRequiredService<IStampVisualService>()
             .UpdateAsync(StampImageKind.Empty, null, null))).IsSuccess);
-        Assert.Equal(3, refresh.TenantCalls.Count);
-        Assert.All(refresh.TenantCalls, x => Assert.Equal(a, x));
+        Assert.Empty(refresh.TenantCalls);
         Assert.Equal(1, await env.TenantReadAsync(a, "asset-a", db => db.StampProgramVersions.CountAsync()));
         await env.TenantReadAsync(a, "asset-a", async db =>
         {
@@ -271,10 +386,26 @@ public sealed class StampVisualAssetsTests
         Assert.Equal(6, (await Projection(env, id, "refresh-stamp", serial)).CurrentStamps);
     }
 
-    private static Task<Env> EnvironmentAsync(MemoryAssets store, RecordingRefresh refresh) => Env.CreateAsync(configure: services =>
+    private static async Task<Guid> RegisterGoogleAsync(Env env, Guid tenantId, string slug, string serial) =>
+        await env.TenantReadAsync(tenantId, slug, async db =>
+        {
+            var card = await db.LoyaltyCards.SingleAsync(x => x.SerialNumber == serial);
+            db.MemberDigitalWallets.Add(new MemberDigitalWallet(Guid.NewGuid(), tenantId, card.CustomerId, card.Id,
+                DigitalWalletProvider.Google, $"issuer.{tenantId:N}", $"issuer.{card.Id:N}", DateTime.UtcNow));
+            await db.SaveChangesAsync();
+            return card.Id;
+        });
+
+    private static Task<Env> EnvironmentAsync(MemoryAssets store, RecordingRefresh refresh,
+        Mock<IGoogleStampWalletService>? google = null) => Env.CreateAsync(configure: services =>
     {
         services.RemoveAll<IStampVisualAssetStore>(); services.AddSingleton<IStampVisualAssetStore>(store);
         services.RemoveAll<IAppleWalletPassRefreshService>(); services.AddSingleton<IAppleWalletPassRefreshService>(refresh);
+        if (google is not null)
+        {
+            services.RemoveAll<IGoogleStampWalletService>();
+            services.AddSingleton(google.Object);
+        }
     });
     private static Task<StampWalletProjection> Projection(Env env, Guid id, string slug, string serial) => env.InTenantScopeAsync(id, slug,
         sp => sp.GetRequiredService<IStampWalletProjectionService>().ReadAsync(serial), authenticate: false);
@@ -305,5 +436,32 @@ public sealed class StampVisualAssetsTests
         { TenantCalls.Add(tenantId); return Result(tenantId); }
         private Task<AppleWalletPassRefreshResult> Result(Guid id) => Fail ? throw new IOException("APNs unavailable")
             : Task.FromResult(new AppleWalletPassRefreshResult(id, [], 0, 0, 0, 0, 0, false, ApnPushFailureType.None, null));
+    }
+
+    private sealed class ThrowingRefresh : IStampWalletRefreshService
+    {
+        public Task RefreshCardAsync(Guid tenantId, Guid loyaltyCardId, string serialNumber,
+            PassUpdateReason reason, CancellationToken ct = default) => throw new IOException("Wallet unavailable");
+    }
+
+    private sealed class RecordingLogProvider : ILoggerProvider
+    {
+        public ConcurrentQueue<string> Messages { get; } = new();
+        public ILogger CreateLogger(string categoryName) => new RecordingLogger(Messages);
+        public void Dispose() { }
+
+        private sealed class RecordingLogger(ConcurrentQueue<string> messages) : ILogger
+        {
+            public IDisposable BeginScope<TState>(TState state) where TState : notnull => NoopScope.Instance;
+            public bool IsEnabled(LogLevel logLevel) => true;
+            public void Log<TState>(LogLevel logLevel, EventId eventId, TState state, Exception? exception,
+                Func<TState, Exception?, string> formatter) => messages.Enqueue(formatter(state, exception));
+        }
+
+        private sealed class NoopScope : IDisposable
+        {
+            public static readonly NoopScope Instance = new();
+            public void Dispose() { }
+        }
     }
 }

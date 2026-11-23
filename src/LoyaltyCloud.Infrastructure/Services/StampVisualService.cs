@@ -16,7 +16,7 @@ namespace LoyaltyCloud.Infrastructure.Services;
 
 internal sealed class StampVisualService(AppDbContext db, ITenantContext tenantContext,
     ITenantProgramReadService programs, ICurrentUserService user, IStampVisualAssetStore assets,
-    IAppleWalletPassRefreshService refresh, ILogger<StampVisualService> logger) : IStampVisualService
+    IStampWalletRefreshService refresh, ILogger<StampVisualService> logger) : IStampVisualService
 {
     public const int MaxImageBytes = 2 * 1024 * 1024;
 
@@ -64,6 +64,7 @@ internal sealed class StampVisualService(AppDbContext db, ITenantContext tenantC
         if (rewardImage && (identity is null || !await db.StampRewardDefinitions.AnyAsync(d =>
             d.RewardIdentityId == identity.Id && db.StampProgramVersions.Any(v => v.Id == d.StampProgramVersionId && v.IsActive), ct)))
             return Result.Fail("Recompensa no disponible en la configuración activa.");
+        var config = rewardImage ? null : await db.StampVisualConfigurations.SingleOrDefaultAsync(ct);
         byte[]? png = null;
         if (image is not null)
         {
@@ -73,6 +74,19 @@ internal sealed class StampVisualService(AppDbContext db, ITenantContext tenantC
             { return Result.Fail("Usa una imagen PNG o JPG válida, de hasta 4096 × 4096 px."); }
         }
         var tenantId = tenantContext.RequireTenantId();
+        var currentBlob = kind switch
+        {
+            StampImageKind.Reward => identity!.ImageBlobName,
+            StampImageKind.UpcomingReward => identity!.UpcomingImageBlobName,
+            StampImageKind.Filled => config?.FilledStampBlobName,
+            _ => config?.EmptyStampBlobName
+        };
+        if (png is null && currentBlob is null) return Result.Ok();
+        if (png is not null && currentBlob is not null)
+        {
+            var currentImage = await assets.ReadAsync(tenantId, currentBlob, ct);
+            if (currentImage is not null && png.AsSpan().SequenceEqual(currentImage)) return Result.Ok();
+        }
         var blob = png is null ? null : await assets.UploadAsync(tenantId, png, ct);
         if (identity is not null)
         {
@@ -81,7 +95,6 @@ internal sealed class StampVisualService(AppDbContext db, ITenantContext tenantC
         }
         else
         {
-            var config = await db.StampVisualConfigurations.SingleOrDefaultAsync(ct);
             if (config is null) { config = new(tenantId); db.Add(config); }
             config.SetImage(kind == StampImageKind.Filled, blob);
         }
@@ -93,10 +106,51 @@ internal sealed class StampVisualService(AppDbContext db, ITenantContext tenantC
             await db.SaveChangesAsync(ct);
             await tx.CommitAsync(ct);
         });
-        // SQL is committed before external best-effort APNs work; no economic version is created.
-        try { await refresh.RefreshTenantInstalledPassesAsync(tenantId, PassUpdateReason.BrandingUpdated, ct); }
-        catch (Exception ex) { logger.LogWarning(ex, "Stamps visual refresh failed after saving assets. TenantId={TenantId}", tenantId); }
+        // The visual change is committed before either Wallet provider is contacted.
+        try
+        {
+            var cards = await AffectedInstalledCardsAsync(tenantId, rewardIdentityId, ct);
+            foreach (var card in cards)
+            {
+                try { await refresh.RefreshCardAsync(tenantId, card.Id, card.SerialNumber, PassUpdateReason.BrandingUpdated, ct); }
+                catch (Exception ex)
+                {
+                    logger.LogWarning(ex, "Stamps visual refresh failed after saving assets. TenantId={TenantId}, Serial={Serial}", tenantId, card.SerialNumber);
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            logger.LogWarning(ex, "Stamps visual refresh could not enumerate installed passes. TenantId={TenantId}", tenantId);
+        }
         return Result.Ok();
+    }
+
+    private async Task<List<(Guid Id, string SerialNumber)>> AffectedInstalledCardsAsync(
+        Guid tenantId, Guid? rewardIdentityId, CancellationToken ct)
+    {
+        var cards = db.LoyaltyCards.AsNoTracking().Where(card => card.TenantId == tenantId && card.IsActive
+            && db.Customers.Any(customer => customer.Id == card.CustomerId && customer.IsActive)
+            && (db.DeviceRegistrations.Any(device => device.TenantId == tenantId && device.SerialNumber == card.SerialNumber)
+                || db.MemberDigitalWallets.Any(wallet => wallet.TenantId == tenantId
+                    && wallet.LoyaltyCardId == card.Id && wallet.Provider == DigitalWalletProvider.Google
+                    && wallet.Status != DigitalWalletStatus.Inactive)));
+
+        if (rewardIdentityId is Guid identityId)
+            cards = cards.Where(card => db.StampCycles.Any(cycle => cycle.TenantId == tenantId
+                && cycle.LoyaltyCardSerialNumber == card.SerialNumber
+                && !db.StampCycles.Any(newer => newer.TenantId == tenantId
+                    && newer.LoyaltyCardSerialNumber == card.SerialNumber && newer.Sequence > cycle.Sequence)
+                && db.StampRewardDefinitions.Any(reward => reward.TenantId == tenantId
+                    && reward.StampProgramVersionId == cycle.StampProgramVersionId
+                    && reward.RewardIdentityId == identityId)));
+        else
+            cards = cards.Where(card => db.StampCycles.Any(cycle => cycle.TenantId == tenantId
+                && cycle.LoyaltyCardSerialNumber == card.SerialNumber));
+
+        var affected = await cards.OrderBy(card => card.SerialNumber)
+            .Select(card => new { card.Id, card.SerialNumber }).ToListAsync(ct);
+        return affected.Select(card => (card.Id, card.SerialNumber)).ToList();
     }
 
     internal static byte[] NormalizeImage(byte[] bytes)
