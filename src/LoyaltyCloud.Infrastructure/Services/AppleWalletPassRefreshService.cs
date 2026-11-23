@@ -115,12 +115,12 @@ internal sealed class AppleWalletPassRefreshService : IAppleWalletPassRefreshSer
         if (suppressStampContext) await SuppressStampContextAsync(tenantId, normalizedSerials, reason, ct);
         var devices = await _db.DeviceRegistrations
             .AsNoTracking()
-            .Where(d => d.TenantId == tenantId && normalizedSerials.Contains(d.SerialNumber))
+            .Where(d => d.TenantId == tenantId && Enumerable.Contains(normalizedSerials, d.SerialNumber))
             .Select(d => new { d.SerialNumber, d.PushToken })
             .ToListAsync(ct);
 
         var cards = await _db.LoyaltyCards
-            .Where(c => c.TenantId == tenantId && c.IsActive && normalizedSerials.Contains(c.SerialNumber))
+            .Where(c => c.TenantId == tenantId && c.IsActive && Enumerable.Contains(normalizedSerials, c.SerialNumber))
             .ToListAsync(ct);
 
         foreach (var card in cards)
@@ -251,7 +251,7 @@ internal sealed class AppleWalletPassRefreshService : IAppleWalletPassRefreshSer
             await using var tx = await _db.Database.BeginTransactionAsync(ct);
             await _db.Database.ExecuteSqlInterpolatedAsync($"SELECT Id FROM Tenants WITH (UPDLOCK, HOLDLOCK) WHERE Id = {tenantId}", ct);
             var contexts = _db.StampPassEventContexts.Where(x => x.TenantId == tenantId && x.AnnouncementEnabled);
-            if (serials is not null) contexts = contexts.Where(x => serials.Contains(x.SerialNumber));
+            if (serials is not null) contexts = contexts.Where(x => Enumerable.Contains(serials, x.SerialNumber));
             await contexts.ExecuteUpdateAsync(s => s.SetProperty(x => x.AnnouncementEnabled, false), ct);
             await tx.CommitAsync(ct);
         });
