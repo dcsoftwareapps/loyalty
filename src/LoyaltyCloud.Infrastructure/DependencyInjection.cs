@@ -252,6 +252,7 @@ public static class DependencyInjection
 
     private static void AddApnHttpClient(IServiceCollection services)
     {
+        services.AddSingleton<ApnProviderTokenCache>();
         services
             .AddHttpClient<IApnService, ApnService>(client =>
             {
